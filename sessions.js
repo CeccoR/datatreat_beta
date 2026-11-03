@@ -754,6 +754,7 @@ const TECH_INFO = {
   epr:  'Electron Paramagnetic Resonance. Spectra comparison, smoothing and normalization.',
   sem:  'Scanning Electron Microscopy. Tescan images read with their metadata (pixel size, magnification, beam, detector), cropped, normalised in intensity, grouped by scale and laid out into figures with scale bars.',
   fig:  'Custom plots of your own data: CSV and text files of columns, each column given a role (x, y, their errors), plotted as XY plots, bar charts and box plots and composed into figures.',
+  iodo: 'Iodometry: iodide oxidised to triiodide by H₂O₂, followed as the absorbance of the triiodide band against time. Each trace is aligned on the injection of its analyte and read at a fixed time after it, as an absorbance or, with a calibration (typed in or fitted to standards), a concentration.',
 };
 const projectBar = document.getElementById('projectBar');
 const barInfoBtn = projectBar.querySelector('.pbar-info');

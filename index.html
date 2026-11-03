@@ -131,6 +131,13 @@
               <p>Plots of your own CSV and text files: columns as x, y and their errors, XY plots, bar charts and box plots, composed into figures.</p>
             </div>
           </div>
+          <div class="home-card" data-go="iodo">
+            <div class="home-card-icon"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 22 H12 L13.5 13 L15 20 C 21 11, 29 7, 42 6"/></svg></div>
+            <div class="home-card-text">
+              <h3 class="txt-tile">Iodometry</h3>
+              <p>Iodide to triiodide by H₂O₂, followed as absorbance against time: each trace aligned on its injection and read at a fixed time after it, as an absorbance or, calibrated, a concentration.</p>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -476,7 +483,86 @@
       </div>
     </section>
 
-    <footer>DataTreat <span class="app-version">v532</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
+    <!-- ============ IODOMETRY ============ -->
+    <section class="tab" id="tab-iodo" role="tabpanel" tabindex="0">
+      <div class="card">
+        <h3 class="txt-head" style="margin:0 0 12px">File</h3>
+        <div class="instr-block" style="max-width:100%">Compatible with the Cary 60 (Kinetics). Its CSV export: the traces' names on the first line, one over each pair of columns, "Time (sec)" and "Abs" on the second, the data from the third, then each trace's details under its name (its collection time and wavelength, shown in the trace's tooltip and written in the readings' CSV). Each pair of columns is a trace, named as the file names it. The separator, the decimal mark and the quotes are found from the file.</div>
+        <div class="dropzone" id="iodoDropzone">
+          <div class="dz-icon">⤒</div>
+          <div class="dz-title">Drag here your files, or click to select them.</div>
+          <div class="txt-meta">.csv (Cary Kinetics)</div>
+          <input type="file" id="iodoFiles" multiple accept=".csv,.txt,.CSV,.TXT" style="display:none">
+        </div>
+        <div id="iodoAlerts"></div>
+        <div id="iodoFileTableWrap"></div>
+      </div>
+      <!-- The trace on show and its injection; the parameters beside it (iodo.js). -->
+      <div class="card" id="iodoAnalysis" style="display:none">
+        <h3 class="txt-head" style="margin:0 0 12px">Analysis</h3>
+        <div class="instr-block">Each trace is the absorbance of triiodide against time, the H₂O₂ oxidising the iodide; the small spike in it marks the injection of the analyte. The arrows step through the traces included. <b>Click the plot</b> to set the trace's injection at the point nearest in time (the guide over the plot shows that point); the results follow at once. On loading, and when <b>✦ Suggest</b> is pressed (for every trace), the injection is the highest local maximum of the trace whose prominence is the <b>minimum prominence</b> at least (the prominence: how far the peak stands over the higher of the two valleys beside it); a trace with none has no injection until one is clicked. Each trace is then aligned: its time counted from the injection, its absorbance less the least it has from the injection on (its background, dashed). Its <b>reading</b> is that aligned absorbance at the <b>reading time</b> after the injection, linearly interpolated between the two points around it (none when the trace ends before). <b>Calibration…</b> turns the readings into concentrations: a line typed in (slope and intercept) or fitted by least squares to standards (concentration, absorbance), with its R², and the unit of the concentrations; it is kept in the project.</div>
+        <div class="row" style="align-items:flex-start">
+          <div class="col mw520" style="flex:2">
+            <div class="plot-nav-row">
+              <div class="plot-nav-left">
+                <button class="btn nav-arrow" id="iodoPrev" aria-label="Previous trace" title="Previous trace (&#8592;)">‹</button>
+                <span id="iodoIdx" class="pill nav-count" style="margin:0">1/1</span>
+                <button class="btn nav-arrow" id="iodoNext" aria-label="Next trace" title="Next trace (&#8594;)">›</button>
+                <span class="txt-caption" id="iodoCurrentLabel">—</span>
+              </div>
+            </div>
+            <div class="plot-wrap">
+              <svg class="plot iodo-pick" id="iodoSvg"></svg>
+              <button class="btn plot-dl-btn" data-dl-svg="iodoSvg" data-dl-name="Trace.svg" data-dl-legend="iodoLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+            </div>
+            <div id="iodoLegend" class="legend"></div>
+            <div id="iodoNone" class="txt-meta" style="display:none">No injection found in this trace at this minimum prominence: click the plot to set it.</div>
+          </div>
+          <div class="col mw280" style="align-self:flex-start">
+            <div class="txt-mini param-head aligned">Parameters</div>
+            <div class="param-grid">
+              <label class="txt-label" for="iodoTRead">Reading time after the injection (s)</label>
+              <input type="text" inputmode="decimal" class="pg-field" id="iodoTRead" autocomplete="off">
+              <label class="txt-label" for="iodoProm">Injection search: minimum prominence</label>
+              <input type="text" inputmode="decimal" class="pg-field" id="iodoProm" autocomplete="off" title="The least prominence (absorbance) of the peak taken for the injection, by Suggest and as files load">
+              <div class="pg-stat" id="iodoCalSum"></div>
+              <div class="pg-result">
+                <div class="pg-stat">Injection at: <b id="iodoInj">-</b></div>
+                <div class="pg-stat">Background: <b id="iodoBg">-</b></div>
+                <div class="pg-stat"><span id="iodoATitle">Absorbance at 240 s:</span> <b id="iodoA">-</b></div>
+                <div class="pg-stat" id="iodoCRow" style="display:none">Concentration: <b id="iodoC">-</b></div>
+              </div>
+            </div>
+            <button class="btn plot-action-btn" id="iodoSuggest" type="button" title="Find every trace's injection again, at the minimum prominence">&#10022; Suggest</button>
+            <button class="btn plot-action-btn" id="iodoCalBtn" type="button" title="The calibration line: typed in, or fitted to standards">Calibration…</button>
+          </div>
+        </div>
+      </div>
+      <!-- The traces aligned on their injections, and their readings (iodo.js). -->
+      <div class="card" id="iodoResults" style="display:none">
+        <h3 class="txt-head" style="margin:0 0 12px">Results</h3>
+        <div class="row cap-row">
+          <div class="col">
+            <p class="txt-caption">Traces aligned on their injection</p>
+            <div class="plot-wrap">
+              <svg class="plot" id="iodoAlignSvg"></svg>
+              <button class="btn plot-dl-btn" data-dl-svg="iodoAlignSvg" data-csv-mod="iodo" data-csv-names="aligned.csv" data-dl-name="Aligned.svg" data-dl-legend="iodoAlignLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+            </div>
+            <div><div id="iodoAlignLegend" class="legend"></div><div id="iodoAlignNote" class="txt-meta"></div></div>
+          </div>
+          <div class="col">
+            <p class="txt-caption" id="iodoReadCap">Readings</p>
+            <div class="plot-wrap">
+              <svg class="plot" id="iodoReadSvg"></svg>
+              <button class="btn plot-dl-btn" data-dl-svg="iodoReadSvg" data-csv-mod="iodo" data-csv-names="readings.csv" data-dl-name="Readings.svg" data-dl-legend=""><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+            </div>
+            <div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer>DataTreat <span class="app-version">v533</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
   </main>
 
   <!-- Save project as… dialog -->
@@ -502,6 +588,7 @@
         <button class="newproj-card" type="button" data-new-module="epr"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 14 H15 L20 5 L24 21 L29 14 H42"/></svg><span class="txt-tile">EPR</span></button>
         <button class="newproj-card" type="button" data-new-module="sem"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="13" r="7"/><circle cx="24" cy="9" r="5"/><circle cx="34" cy="15" r="6"/><path d="M27 24 H41"/></svg><span class="txt-tile">SEM</span></button>
         <button class="newproj-card" type="button" data-new-module="fig"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2 V24 H42"/><path d="M8 19 L16 11 L23 15 L32 5 L40 8"/></svg><span class="txt-tile">Custom</span></button>
+        <button class="newproj-card" type="button" data-new-module="iodo"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 22 H12 L13.5 13 L15 20 C 21 11, 29 7, 42 6"/></svg><span class="txt-tile">Iodometry</span></button>
       </div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px">
         <button class="btn" type="button" data-new-cancel>Cancel</button>
@@ -522,6 +609,7 @@
   <script type="module" src="gc.js"></script>
   <script type="module" src="sem.js"></script>
   <script type="module" src="fig.js"></script>
+  <script type="module" src="iodo.js"></script>
   <script type="module" src="tabs.js"></script>
   <script type="module" src="sessions.js"></script>
   <!-- PWA update prompt: shown when a new service-worker version is ready -->

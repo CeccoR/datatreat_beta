@@ -1,6 +1,6 @@
 # DataTreat
 
-A browser-based scientific data analysis tool for spectroscopy and chromatography data, and for figures of your own CSV files. No installation or account required — all processing runs in your browser; no data is ever sent to any server.
+A browser-based scientific data analysis tool for spectroscopy and chromatography data, for figures of your own CSV files and for iodometric kinetics. No installation or account required — all processing runs in your browser; no data is ever sent to any server.
 
 ## Getting Started
 
@@ -228,6 +228,22 @@ New in v527 (named *Figure* to v530): figures of your own CSV and text files, fr
 From v529 (the user's corrections to v527): the Data card's file arrows and layout, the titles' line, the Add series window, one normalisation a plot in place of each series' own, and no crop in x (From, To). From v531 the module is named *Custom* wherever it shows (the home and New project cards, the tab, the window's title, its help); its projects and their files keep the key `fig`, so those saved before open as they were. A project saved by v527–v528 opens with each plot's normalisation *local* where every one of its series was normalised, else *none*, and its crops dropped. The trace list hides the traces' colours (a plot gives its series their colours), their place kept empty so the names stand where the other modules' do; SEM's list, whose images have no colour, keeps that place too.
 
 Not yet: plots brought in from the other modules' projects; the error bars of an XY plot are not carried into the composer.
+
+### 7. Iodometry (H₂O₂ by iodide oxidation)
+
+New in v533: iodide oxidised to triiodide by H₂O₂, followed as the absorbance of the triiodide band against time at one wavelength; a small spike in each trace marks the injection of the analyte, and each trace is read at a fixed time after its injection. A module of its own, as the others (live tabs, projects keeping the CSV's bytes, undo and redo, the view kept).
+
+**Instrument compatibility**: Cary 60 (Kinetics)  
+**File format**: the Kinetics CSV export: the traces' names on the first line, one over each pair of columns, `Time (sec)` and `Abs` on the second (a time in `min` is read in seconds), the data from the third (a shorter trace leaves its cells empty), then each trace's details under its name (`Collection Time: …`, `Wavelength (nm)  350.0`). The separator, the decimal mark, the quotes and the encoding are found from the file, as DRS finds its own. A file with no pair of columns of numbers is refused, and a file already loaded is said.
+
+**How to use**:
+
+1. **Upload the CSV.** Each pair of columns is a trace in the trace list, named as the file names it, its CSV under File; its tooltip gives its wavelength and collection time. Rename, include or leave out (a trace left out is left out everywhere), reorder and colour the traces as in every module.
+2. **Analysis card.** The trace on show, stepped through by its arrows (← → too; a view, no undo step), with its injection, its background (dashed) and its reading marked. **Click the plot** to set the trace's injection at the point nearest in time (a guide reads that point out as the pointer moves); the results follow at once. On loading, and for every trace when **✦ Suggest** is pressed, the injection is the highest local maximum whose prominence is the **minimum prominence** at least (0.01 by default; changing it moves nothing until Suggest); a trace with none has no injection until one is clicked. On the right, on the 3/5–2/5 grid: the **reading time** (240 s by default), the minimum prominence, the calibration in use, and the trace's injection, background, reading and concentration.
+3. **Alignment and reading.** Each trace's time is counted from its injection and its absorbance taken less the least it has from the injection on (its background). Its **reading** is that aligned absorbance at the reading time, linearly interpolated between the two points around it; *n/a* when the trace ends before.
+4. **Calibration…** opens a window: *None* (the readings are absorbances), *Slope and intercept* typed in, or *Standards* (concentration, absorbance) fitted by least squares, the fit and its R² shown as they are typed; both ways are kept, the one chosen used, with the unit typed for the concentrations, c = (A − intercept) / slope. It is kept in the project.
+5. **Results card.** The aligned traces overlaid, the reading time marked, and the readings: a point a trace included, in the trace list's order, as concentrations (in the unit typed) with a calibration, else as absorbances. Each plot's toolbar opens the figure composer.
+6. **Export** `aligned.csv` (each trace's time from its injection and absorbance less its background) and `readings.csv` (each trace's file, wavelength, collection time, injection, background, reading time, reading and, calibrated, concentration).
 
 ---
 

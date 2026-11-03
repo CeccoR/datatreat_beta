@@ -3362,3 +3362,34 @@ table.fig-cols .fig-names th:last-child { border-right: none; }
 .fig-pick input[type="checkbox"]:indeterminate { background: var(--panel2); border-color: var(--accent); }
 .fig-pick input[type="checkbox"]:indeterminate::before { transform: scale(1); width: 7px; height: 7px; border-radius: 1px; background: var(--accent); clip-path: none; }
 .fig-pick input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* The Iodometry module (iodo.js). The Analysis card's plot is clicked to set the trace's
+   injection: a crosshair over it (a pan or zoom tool sets its own). Its two actions under
+   the parameters, one under the other. The calibration's window, as the XRPD standard's:
+   a head with its ×, what is under it scrolling, the answers at its foot. */
+svg.plot.iodo-pick { cursor: crosshair; }
+#iodoSuggest + #iodoCalBtn { margin-top: 8px; }
+.iodo-cal-box {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  width: min(560px, 96vw); max-height: 94vh; overflow: hidden;
+  display: flex; flex-direction: column;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+}
+.iodo-cal-box:focus { outline: none; }
+.iodo-cal-head { flex: none; display: flex; align-items: center; gap: 8px; padding: 12px 16px 12px 18px; border-bottom: 1px solid var(--line); }
+.iodo-cal-head > h3 { flex: 1 1 auto; margin: 0; }
+.iodo-cal-head .an-ic { margin-right: -4px; }
+.iodo-cal-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 14px 18px 4px; }
+.iodo-cal-about { margin: 0 0 12px; line-height: 1.5; }
+.iodo-cal-scroll > .param-grid + .param-grid, .iodo-cal-std { margin-top: 12px; }
+table.iodo-std { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+table.iodo-std th { text-align: left; color: var(--muted); font-weight: 600; padding: 4px 6px; }
+table.iodo-std th:last-child, table.iodo-std td:last-child { width: 34px; }
+table.iodo-std td { padding: 3px 6px; }
+table.iodo-std input { width: 100%; min-width: 0; margin: 0; }
+.iodo-cal-std > .btn { margin-top: 8px; }
+.iodo-cal-fit { margin-top: 10px; font-size: 13px; color: var(--text); }
+.iodo-cal-fit b { color: var(--accent); }
+.iodo-cal-msg:not(:empty) { margin-top: 10px; color: var(--bad); font-size: 13px; }
+.iodo-cal-foot { flex: none; margin: 0; padding: 12px 18px 16px; }
+@media (max-width: 600px){ .iodo-cal-box { width: 100vw; max-height: 100vh; border-radius: 0; } .iodo-cal-head { padding: 10px 10px 10px 12px; } .iodo-cal-scroll { padding: 12px 12px 4px; } }

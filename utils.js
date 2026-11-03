@@ -840,7 +840,9 @@ function moveFileTo(all, from, to, slots){
    callbacks: {onRemove(i), onReorder(from,to), onRemoveAll(), onLabelChange(i,newLabel)
                (on leaving the field, not while typing),
                onColorChange(i,color), onPaletteChange(colors), onInclude(i,on),
-               onIncludeAll(on), noColor}
+               onIncludeAll(on), noColor, tip}
+               tip: optional (trace, i) => plain text, the trace's tooltip over its name
+               (Iodometry: the wavelength and collection time its file states)
                noColor: the traces' colours not shown (Custom: a plot gives its series
                their colours); a trace with no colour (SEM) has none shown either. Either
                way the swatch's place and the palette's stay, empty, so the names keep
@@ -886,7 +888,8 @@ function renderUnifiedFileList(container, files, callbacks, note, noteHead){
     html += `<tr class="file-row${on ? '' : ' is-excluded'}" data-i="${i}">`;
     html += `<td class="drag-cell"><span class="drag-handle" title="Drag to reorder">${grip}</span></td>`;
     html += `<td class="incl-cell"><input type="checkbox" class="file-incl" data-i="${i}"${on ? ' checked' : ''} title="Include in the analysis"></td>`;
-    html += `<td class="trace-cell"><span class="trace-inner">${swatch}<input type="text" class="label-input file-label" data-i="${i}" value="${esc(f.label)}" aria-label="Trace name"></span></td>`;
+    const tip = callbacks.tip ? callbacks.tip(f, i) : '';
+    html += `<td class="trace-cell"${tip ? ` title="${esc(tip)}"` : ''}><span class="trace-inner">${swatch}<input type="text" class="label-input file-label" data-i="${i}" value="${esc(f.label)}" aria-label="Trace name"></span></td>`;
     html += `<td class="fname" title="${esc(file)}"><span class="fname-inner"><span class="fname-text">${esc(file)}</span></span></td>`;
     html += `<td class="note-cell">${note ? note(f, i) : ''}</td>`;
     html += `<td class="row-acts" style="text-align:right;white-space:nowrap"><button class="dl-file del-bare dl-bare idle-dim" data-i="${i}" title="Download its file">${dlIcon}</button><button class="del del-bare row-del is-danger idle-dim" data-i="${i}" title="Remove">${xIcon}</button></td>`;
@@ -1365,11 +1368,11 @@ function redrawAll(){
   const fn = _tabRedraw[shownKey()];
   if (fn){ try{ fn(); }catch(e){} }
 }
-const VALID_TABS = ['home','tauc','xrd','gc','epr','sem','fig','projects','settings'];
+const VALID_TABS = ['home','tauc','xrd','gc','epr','sem','fig','iodo','projects','settings'];
 // The sections that keep a URL hash. Module sections are reached through an open
 // project tab, so they are deliberately not addressable.
 const HASH_TABS = ['home','projects','settings'];
-const TAB_TITLES = { home:'DataTreat', tauc:'DataTreat · UV-Vis DRS', xrd:'DataTreat · XRPD', gc:'DataTreat · GC', epr:'DataTreat · EPR', sem:'DataTreat · SEM', fig:'DataTreat · Custom', projects:'DataTreat · Projects', settings:'DataTreat · Settings' };
+const TAB_TITLES = { home:'DataTreat', tauc:'DataTreat · UV-Vis DRS', xrd:'DataTreat · XRPD', gc:'DataTreat · GC', epr:'DataTreat · EPR', sem:'DataTreat · SEM', fig:'DataTreat · Custom', iodo:'DataTreat · Iodometry', projects:'DataTreat · Projects', settings:'DataTreat · Settings' };
 let _activeTab = 'home';
 function goTab(tab, fromHash){
   if (!VALID_TABS.includes(tab)) tab = 'home';
@@ -1787,7 +1790,7 @@ document.addEventListener('keydown', e=>{
 // ← / → navigate samples in the active module (mirror the on-screen ‹ › buttons).
 // Selectors: the Tauc cards are built at run time, each with its own pair, and the
 // first one on show is the one pressed (every card steps the same sample).
-const SAMPLE_NAV = { tauc:['#tab-tauc .an-prev','#tab-tauc .an-next'], xrd:['#tab-xrd .an-prev','#tab-xrd .an-next'], sem:['#semPrev','#semNext'] };
+const SAMPLE_NAV = { tauc:['#tab-tauc .an-prev','#tab-tauc .an-next'], xrd:['#tab-xrd .an-prev','#tab-xrd .an-next'], sem:['#semPrev','#semNext'], iodo:['#iodoPrev','#iodoNext'] };
 document.addEventListener('keydown', e=>{
   if (e.key!=='ArrowLeft' && e.key!=='ArrowRight') return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -2032,8 +2035,8 @@ function applyTheme(theme, persist){
 
 /* Module state access for the session manager: reuse each module's registered
    undo snapshot()/restore() as the canonical serialize/deserialize. */
-const MODULES = ['tauc','xrd','gc','epr','sem','fig'];
-const MODULE_LABELS = { tauc:'UV-Vis DRS', xrd:'XRPD', gc:'GC', epr:'EPR', sem:'SEM', fig:'Custom' };
+const MODULES = ['tauc','xrd','gc','epr','sem','fig','iodo'];
+const MODULE_LABELS = { tauc:'UV-Vis DRS', xrd:'XRPD', gc:'GC', epr:'EPR', sem:'SEM', fig:'Custom', iodo:'Iodometry' };
 // (k: an instance's key, or a module's name for the instance of it on show: K)
 function getModuleState(k){
   const st = _histories[K(k)];
