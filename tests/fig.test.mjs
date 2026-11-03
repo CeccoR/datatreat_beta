@@ -26,7 +26,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { start, openModule, loadFiles, settle, undo, moduleState, history, saveAs, openProject, exportProject, importProject, projectFile } from './helpers.mjs';
+import { start, openModule, loadFiles, settle, undo, moduleState, history, saveAs, openProject, exportProject, importProject, projectFile, download } from './helpers.mjs';
 
 let env, dir;
 before(async ()=>{
@@ -87,6 +87,8 @@ const split = (page, sel)=> page.$$eval(sel, gs=> gs.flatMap(g=>{
   return [...g.querySelectorAll(':scope > .pg-field, :scope > .fig-ops')].map(f=>{ const q = f.getBoundingClientRect(); return [+((q.left - r.left)/r.width*5).toFixed(2), +(q.width/r.width*5).toFixed(2)]; });
 }));
 const r2 = a => a.map(v=> +v.toFixed(6));
+// The trace list's rows: each trace's name, its file, whether it is included.
+const traceRows = page => page.$$eval('#figFileTableWrap tr.file-row', rs=> rs.map(r=> [r.querySelector('.file-label').value, r.querySelector('td.fname').textContent, r.querySelector('.file-incl').checked]));
 
 test('Figure: three CSVs, the Data card, titles, roles, names, XY / bar / box cards, Add series, normalization, composer, project, sleep, a file removed', async ()=>{
   const { page, errors, close } = await env.page();
@@ -95,11 +97,13 @@ test('Figure: three CSVs, the Data card, titles, roles, names, XY / bar / box ca
     assert.equal(await page.locator('#figDataCard').isVisible(), false, 'no Data card before a file');
     await loadFiles(page, 'fig', [path.join(dir, 'a.csv'), path.join(dir, 'b.csv'), path.join(dir, 'c.csv')]);
     assert.equal(await page.locator('#tab-fig .an-card').count(), 0, 'no plot card at the start');
-    // The file list: no colour shown, its place kept (the names where the swatches leave them).
+    // The trace list: a row a series (v532), no colour shown, its place kept (the names where the swatches leave them).
     assert.equal(await page.locator('#figFileTableWrap button.color-swatch, #figFileTableWrap button.palette-pick-btn').count(), 0, 'no colour');
-    assert.equal(await page.locator('#figFileTableWrap span.color-swatch.swatch-gap').count(), 3);
+    assert.equal(await page.locator('#figFileTableWrap span.color-swatch.swatch-gap').count(), 8);
     assert.deepEqual(await page.$$eval('#figFileTableWrap span.swatch-gap', s=> s.map(e=> [e.getBoundingClientRect().width, getComputedStyle(e).visibility])),
-      [[14, 'hidden'], [14, 'hidden'], [14, 'hidden'], [14, 'hidden']], 'the palette\'s and the swatches\' places, empty');
+      Array(9).fill([14, 'hidden']), 'the palette\'s and the swatches\' places, empty');
+    assert.deepEqual(await traceRows(page), [['Signal', 'a.csv', true], ['err', 'a.csv', true], ['Ref', 'a.csv', true], ['Series 1', 'b.csv', true], ['Series 2', 'b.csv', true],
+      ['series 1 – A', 'c.csv', true], ['series 1 – B', 'c.csv', true], ['series 2', 'c.csv', true]]);
     // The Data card: the arrows, the number in the middle, the name on the right; the head on
     // the left, the series' list and the roles' box on the right, from the head's top.
     assert.equal(await page.textContent('#figFileIdx'), '1/3');
@@ -296,12 +300,15 @@ test('Figure: three CSVs, the Data card, titles, roles, names, XY / bar / box ca
     assert.equal(await page.textContent('#figFileIdx'), '2/3', 'the file it showed');
     assert.equal((await stored(page, 3, 'box'))[1].med, 90);
 
-    // A file removed: its series leave the plots and their lists.
-    await page.click('#figFileTableWrap tr.file-row:nth-child(1) .row-del'); await settle(page);
+    // A file removed (its traces removed, its last taking the file): its series leave the plots and their lists.
+    let steps = 0;
+    while ((await traceRows(page))[0][1] === 'a.csv'){ await page.click('#figFileTableWrap tr.file-row:nth-child(1) .row-del'); await settle(page); steps++; }
+    assert.ok(steps > 0);
+    assert.ok((await traceRows(page)).every(r=> r[1] !== 'a.csv'), 'the file gone');
     assert.deepEqual(await cardSeries(page), [['b.csv#1'], ['b.csv#1'], ['b.csv#1', 'c.csv#4']]);
     assert.deepEqual((await stored(page, 1, 'line')).map(l=> l.label), ['Series 1']);
     assert.deepEqual(await page.$$eval('#fig1List .fig-ser-name', s=> s.map(e=> e.textContent)), ['Series 1']);
-    await undo(page);
+    for (let k = 0; k < steps; k++) await undo(page);
     assert.deepEqual(await cardSeries(page), S.cards.map(c=> c.series.map(r=> `${r.file}#${r.col}`)));
     assert.deepEqual(errors, []);
   } finally { await close(); }
@@ -391,4 +398,65 @@ test('Custom: the table whole and scrolling, the lists of series in their boxes,
       assert.deepEqual(errors, []);
     } finally { await close(); }
   }
+});
+
+// v532: each series a trace in the trace list, its File its CSV; one name in the list and the
+// Data card; a role changed updates the list at once; a trace left out leaves the plots and
+// Add series; the list's order is Add series'; a trace removed sets its column to —; the
+// file's download its bytes.
+test('Custom: the series are the trace list\'s traces: one name, live roles, left out, order, removed, the file\'s bytes', async ()=>{
+  const { page, errors, close } = await env.page();
+  try {
+    await openModule(page, 'fig');
+    await loadFiles(page, 'fig', [path.join(dir, 'a.csv'), path.join(dir, 'b.csv')]);
+    assert.deepEqual(await traceRows(page), [['Signal', 'a.csv', true], ['err', 'a.csv', true], ['Ref', 'a.csv', true], ['Series 1', 'b.csv', true], ['Series 2', 'b.csv', true]]);
+    // Renamed in the list: the Data card's name too; renamed there: the list's.
+    const lab = page.locator('#figFileTableWrap .file-label').nth(0);
+    await lab.fill('Volt'); await lab.press('Enter'); await settle(page);
+    assert.deepEqual(await names(page), ['Volt', 'err', 'Ref']);
+    const sn = page.locator('#figSeries input').nth(2);
+    await sn.fill('Reference'); await sn.press('Enter'); await settle(page);
+    assert.deepEqual((await traceRows(page)).map(r=> r[0]), ['Volt', 'err', 'Reference', 'Series 1', 'Series 2']);
+    // A role changed in the Data card: the list at once (err an error of Signal: no trace of its own).
+    await role(page, 2, 'ey');
+    assert.deepEqual((await traceRows(page)).map(r=> r[0]), ['Volt', 'Reference', 'Series 1', 'Series 2']);
+    // Left out: out of the plot and of Add series, kept in the list.
+    await addCard(page, 'xy');
+    await pick(page, 1, [['a', 'Volt'], ['b', 'Series 1']]);
+    assert.deepEqual((await stored(page, 1, 'line')).map(l=> l.label), ['Volt', 'Series 1']);
+    await page.locator('#figFileTableWrap .file-incl').nth(2).click(); await settle(page);
+    assert.deepEqual(await traceRows(page), [['Volt', 'a.csv', true], ['Reference', 'a.csv', true], ['Series 1', 'b.csv', false], ['Series 2', 'b.csv', true]]);
+    assert.deepEqual((await stored(page, 1, 'line')).map(l=> l.label), ['Volt']);
+    await page.click('#fig1Add'); await page.waitForSelector(PICK);
+    const listed = ()=> page.$$eval(`${PICK} .fig-pick-name`, s=> s.map(e=> e.textContent));
+    assert.deepEqual(await listed(), ['Volt', 'Reference', 'Series 2'], 'Add series: the traces included');
+    await page.click(`${PICK} [data-cancel]`); await settle(page);
+    // Moved in the list (Series 2 to the top): Add series' order follows.
+    const rows = page.locator('#figFileTableWrap tr.file-row');
+    await page.locator('#figFileTableWrap').scrollIntoViewIfNeeded();
+    const from = await rows.nth(3).locator('.drag-handle').boundingBox(), to = await rows.nth(0).boundingBox();
+    await page.mouse.move(from.x + from.width/2, from.y + from.height/2); await page.mouse.down();
+    await page.mouse.move(from.x + from.width/2, to.y + 3, { steps: 8 }); await page.mouse.up(); await settle(page);
+    assert.deepEqual((await traceRows(page)).map(r=> r[0]), ['Series 2', 'Volt', 'Reference', 'Series 1']);
+    await page.click('#fig1Add'); await page.waitForSelector(PICK);
+    assert.deepEqual(await listed(), ['Series 2', 'Volt', 'Reference']);
+    await page.click(`${PICK} [data-cancel]`); await settle(page);
+    // Kept with the project, through an undo too.
+    const st = await moduleState(page, 'fig');
+    assert.deepEqual(st.order.slice(0, 4), ['b.csv\n2', 'a.csv\n1', 'a.csv\n3', 'b.csv\n1']);
+    assert.deepEqual(st.files[1].out, [1]);
+    // Its download: the CSV's own bytes.
+    const d = await download(page, ()=> page.locator('#figFileTableWrap .dl-file').nth(1).click());
+    assert.equal(d.name, 'a.csv');
+    assert.ok(d.buf.equals(fs.readFileSync(path.join(dir, 'a.csv'))));
+    // Removed: its column (and its error's) no longer used; the plot lets it go.
+    await page.locator('#figFileTableWrap .row-del').nth(1).click(); await settle(page);
+    assert.deepEqual((await traceRows(page)).map(r=> r[0]), ['Series 2', 'Reference', 'Series 1']);
+    assert.deepEqual(await heads(page), ['x', '', '', 'y']);
+    assert.equal(await page.locator('#fig1List .fig-ser').count(), 0);
+    await undo(page);
+    assert.deepEqual((await traceRows(page)).map(r=> r[0]), ['Series 2', 'Volt', 'Reference', 'Series 1']);
+    assert.deepEqual(await heads(page), ['x', 'y', 'ey', 'y']);
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
 });

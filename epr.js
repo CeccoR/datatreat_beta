@@ -109,7 +109,8 @@ async function processPair(stem, dtaFile, dscFile){
   const a = s.map((v, i) => v - (s[0] + slope * (b[i] - b[0])));
 
   // Whether the field was rescaled to 9.5 GHz: with no MWFQ it is the one measured.
-  return { name: stem, label: stem, b, a, rescaled: parseFloat(p.MWFQ) > 0,
+  // (named as its .DSC names it, TITL, from v532; with none, as its files are)
+  return { name: stem, label: dscWord(p.TITL) || stem, b, a, rescaled: parseFloat(p.MWFQ) > 0,
            rawFiles: [ { name: dscFile.name, bytes: dscBytes },
                        { name: dtaFile.name, bytes: new Uint8Array(dtaBuf) } ] };
 }

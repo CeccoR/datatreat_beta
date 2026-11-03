@@ -49,7 +49,8 @@ async function drop(page, mod, files, n){
 }
 
 test('DRS: every encoding and dialect loads to the numbers of the fixture', async ()=>{
-  const ref = drsCsv({ Eg: 3.2 }).toString('utf8');
+  // (a sample's name on its first line, as the Cary writes it, in every dialect)
+  const ref = drsCsv({ Eg: 3.2, name: 'Sample' }).toString('utf8');
   const vs = variants(ref, R=>{ const data = R.slice(2);
     return {
       'spaces.txt': Buffer.from('Sample\n  Wavelength (nm)   F(R)\n' + data.map(r=> '  ' + r[0] + '   ' + r[1]).join('\n')),

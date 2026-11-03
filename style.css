@@ -1132,6 +1132,7 @@ footer a:hover {
 .incl-cell input[type="checkbox"] { width: auto; margin: 0; vertical-align: middle; cursor: pointer; }
 .file-row.is-excluded td.fname,
 .file-row.is-excluded .file-label,
+.file-row.is-excluded .color-swatch,
 .file-row.is-excluded td.note-cell { opacity: 0.4; }
 .file-none { margin: 8px 0 0; }
 .file-row.dragging { opacity: 0.45; }
@@ -1171,7 +1172,10 @@ td.fname {
   font-size: 12px;
   overflow: hidden;
 }
-/* Flex-center the colour swatch with the filename so it sits on the row centre */
+/* The trace's cell (v532): its colour's swatch, then its name's field filling the rest,
+   centred on the row. */
+.trace-inner { display: flex; align-items: center; min-width: 0; }
+.trace-inner input.label-input { flex: 1 1 0; width: auto; min-width: 0; }
 .fname-inner {
   display: flex;
   align-items: center;
@@ -3239,18 +3243,20 @@ button.an-add.is-drop { border-color: var(--accent); }
    other modules): muted, small, one line cut short
    with an ellipsis. To v501 a 40px column left of the label, centred, DRS's alone. */
 .file-row td.note-cell { color: var(--muted); font-size: 0.78rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* A phone: FILE and LABEL with half the cells' side padding, the note with a
-   quarter (so that "F(R)" shows whole down to 320px), the label field with less of its own,
-   and the field, while typed in, laid over the note beside it, so that a label of a dozen
-   characters shows whole: its cell's width, then the note's column (2/3 of the label's,
-   the cell's and its padding), less that column's right padding. The note under it is
-   hidden meanwhile: an excluded file's field, dimmed, let it show through what is typed. */
+/* A phone: TRACE and FILE with half the cells' side padding, the note with a
+   quarter (so that "F(R)" shows whole down to 320px), the name's field with less of its
+   own, and the field, while typed in, laid over FILE and the note right of it, so that a
+   name of two dozen characters shows whole: from its place (the cell's padding and the
+   swatch's 19px in) to the note's right padding: with u a part of the 3 : 3 : 2, its box
+   (the cell less its padding) is 3u − 8px, and the field is made 8u − 25px. FILE and the note under it are
+   hidden meanwhile: an excluded trace's field, dimmed, let them show through what is
+   typed. (To v531 LABEL was right of FILE, and its field went over the note alone.) */
 @media (max-width: 600px) {
   .file-table :is(th, td):nth-child(n+3):nth-last-child(n+3) { padding-left: 4px; padding-right: 4px; }
   .file-table .note-cell { padding-left: 2px; padding-right: 2px; }
   .file-table input.label-input { padding-left: 6px; padding-right: 6px; }
-  .file-table input.label-input:focus { position: relative; z-index: 1; width: calc(100% * 5 / 3 + 22px / 3); }
-  .file-table tr:has(input.label-input:focus) td.note-cell { visibility: hidden; }
+  .file-table .trace-inner input.label-input:focus { position: relative; z-index: 1; flex: none; width: calc(100% * 8 / 3 - 11px / 3); }
+  .file-table tr:has(input.label-input:focus) :is(td.fname, td.note-cell) { visibility: hidden; }
 }
 /* GC's Sample column (gc.js REPLICATES): its select fills the note's cell, as tall as the
    label field beside it, in the field's type. A phone: the header cut short with an

@@ -68,22 +68,31 @@ async function readFile(f){
   // (kept by its bytes, as readAgain keeps its readings: up to v490 the first restore
   // after a file was loaded, an undo, read it again)
   reread.set(rawBytes, scans);
-  return patternsOf(f.name, rawBytes, scans);
+  return patternsOf(f.name, rawBytes, scans, sampleName(xml));
+}
+/* The sample's name the file gives (XRDML: <sample>'s <name>, else its <id>), or '': the
+   name its traces are loaded under (v532; to v531 the file's, which a file of none still
+   gives). */
+function sampleName(xml){
+  const s = [...(xml.documentElement ? xml.documentElement.children : [])].find(e=> e.localName === 'sample');
+  const t = k => { const e = s && [...s.children].find(c=> c.localName === k); return e ? e.textContent.trim() : ''; };
+  return t('name') || t('id');
 }
 /* A file's scans, each a pattern of its own: one scan, the file as it was read up to
-   v483; several (a series measured in one go), "<file> (scan k)" each, k counting every
+   v483; several (a series measured in one go), "<file> (scan k)" each (labelled with the
+   sample's name the file gives in place of the file's, v532), k counting every
    scan of the file, its name the file's with " (scan k)" before the extension (a key of
    the cards' results: one per pattern), the file's bytes shared, and scan (k − 1) and
    src (the file's name) kept for reading it again and for the "already loaded" test (to
    v483 the first scan alone was read, the others never seen). A scan that cannot be read
    is left out (skipped says why); none readable, the file is refused with the reasons.
    → { pats: [{ f, k, notes }], skipped, n } or { error } */
-function patternsOf(name, rawBytes, scans){
-  const n = scans.length, base = name.replace(/\.[^.]+$/, ''), ext = name.slice(base.length);
+function patternsOf(name, rawBytes, scans, sample = ''){
+  const n = scans.length, base = name.replace(/\.[^.]+$/, ''), ext = name.slice(base.length), own = sample || base;
   const ok = scans.map((sc, k)=> ({ sc, k })).filter(q=> !q.sc.error);
   if (!ok.length) return { error: n > 1 ? scans.map((sc, k)=> `scan ${k+1}: ${sc.error}`).join('; ') : scans[0].error };
   const pats = ok.map(({ sc, k })=>{ const a = scanArrays(sc);
-    return { k, notes: sc.notes, f: { name: n > 1 ? `${base} (scan ${k+1})${ext}` : name, label: n > 1 ? `${base} (scan ${k+1})` : base,
+    return { k, notes: sc.notes, f: { name: n > 1 ? `${base} (scan ${k+1})${ext}` : name, label: n > 1 ? `${own} (scan ${k+1})` : own,
       x: a.x, y: a.y, rawBytes, ...(n > 1 ? { src: name, scan: k } : {}), ...(sc.meas ? { meas: sc.meas } : {}), ...(a.varMul ? { varMul: a.varMul } : {}) } }; });
   return { pats, n, skipped: scans.map((sc, k)=> sc.error ? `scan ${k+1} not read (${sc.error})` : null).filter(Boolean) };
 }

@@ -8,7 +8,8 @@ import { decodeText } from './textdata.js';
    - its files: `all`, every file loaded, in list order, and `files`, the included ones,
      which the analysis sees (utils: INCLUDED FILES). Both arrays stay the same objects,
      changed in place, so a module names them once;
-   - the file list and its steps (remove, move, include, label, colour, palette, remove
+   - the trace list (the file list to v531: a row a file, here, unless `traces` says
+     otherwise) and its steps (remove, move, include, label, colour, palette, remove
      all), the per-sample arrays (`slots`) kept aligned with the included files;
    - the alerts under the drop zone, each dismissed by its button;
    - text files dropped, decoded and read (textdata.js), and those not readable or
@@ -32,7 +33,10 @@ import { decodeText } from './textdata.js';
                        (to v501 `cols`, columns of the module's own, a lead one left of
                        the label)
      noteHead          that column's header, plain text (GC: SAMPLE); none: no header
-     noColor           the files' colours not shown in the list (Figure), their place kept
+     noColor           the files' colours not shown in the list (Custom), their place kept
+     traces(cb)        the trace list's rows and callbacks, { rows, cb }, where a file is
+                       not one trace (Custom: a row a series): `cb` the kit's, for the
+                       module to keep or override; none, a row a file with the kit's
      noteChange(i, v, again)  a select in a file's note changed (GC's Sample): file
                        all[i], `v` its value; the module takes it, then the list is drawn
                        again (the other rows' choices may follow) and redraw('note'), a step
@@ -103,7 +107,8 @@ export function moduleKit(mod, o){
   kit.showFiles = ()=>{
     files.splice(0, files.length, ...includedOf(all));
     setTabLoaded(key, all.length);
-    renderUnifiedFileList($(mod + 'FileTableWrap'), all, cb, o.note, o.noteHead);
+    const list = o.traces ? o.traces(cb) : { rows: all, cb };
+    renderUnifiedFileList($(mod + 'FileTableWrap'), list.rows, list.cb, o.note, o.noteHead);
     kit.drawAlerts();
   };
   /* (on the list's box, which stays: the list inside is drawn anew at each change, its

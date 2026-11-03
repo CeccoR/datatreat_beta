@@ -71,10 +71,11 @@ export function gcCsv({ start = 9, n = 24, h2 = [0.05, 0.12], o2 = null, seed = 
   return Buffer.from(rows.join('\n') + '\n', 'utf8');
 }
 
-/* UV-Vis DRS: Kubelka–Munk F(R) from 250 to 800 nm, an indirect gap at Eg (the Tauc
+/* UV-Vis DRS: Kubelka–Munk F(R) from 250 to 800 nm, its first line the sample's name
+   (`name`; none by default, so that the trace is named after its file), an indirect gap at Eg (the Tauc
    (F·hν)^½ straight above it), an Urbach tail under it and a flat baseline. */
-export function drsCsv({ Eg = 3.2, A = 60, seed = 3 } = {}){
-  const r = rng(seed), rows = ['Sample,', 'Wavelength (nm),F(R)'];
+export function drsCsv({ Eg = 3.2, A = 60, seed = 3, name = '' } = {}){
+  const r = rng(seed), rows = [name + ',', 'Wavelength (nm),F(R)'];
   for (let w = 250; w <= 800; w++){
     const e = 1239.842/w;
     const F = 0.05 + (e > Eg ? A*(e - Eg)*(e - Eg)/e : 0) + 0.02*Math.exp(Math.min(0, e - Eg)/0.08) + 0.0005*r.n();

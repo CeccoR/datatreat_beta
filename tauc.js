@@ -458,7 +458,15 @@ function readDrs(text){
   if (c.error) return { error: c.error };
   const { wl, FR, left } = drsPoints(c.t, c.R);
   if (!wl.length) return { error: Object.keys(left).length ? `no point with a physical value: ${leftText(left)}` : NO_DATA };
-  return { wl, FR, warn: !std, ...(c.R ? { read: 'R%' } : std ? {} : { head: true }), ...(Object.keys(left).length ? { left } : {}) };
+  const label = std ? sampleName(lines[0], t.sep) : '';
+  return { wl, FR, warn: !std, ...(label ? { label } : {}), ...(c.R ? { read: 'R%' } : std ? {} : { head: true }), ...(Object.keys(left).length ? { left } : {}) };
+}
+/* The sample's name the standard format writes on its first line (the Cary's "S1,,"),
+   the trace's name as it is loaded (v532; to v531 the file's, which a line with no name,
+   or with more than one field, still gives). */
+function sampleName(line, sep){
+  const f = (sep[0] === ' ' ? [line.replace(/"/g, '')] : splitFields(line, sep)).map(v=> v.trim()).filter(Boolean);
+  return f.length === 1 ? f[0] : '';
 }
 /* The standard format, the Cary 5000's export, as the user's own files are: the sample's
    name on the first line, the columns' header on the second, "Wavelength (nm)" then "%R"

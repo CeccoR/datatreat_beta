@@ -30,7 +30,8 @@ before(async ()=>{
   // An edge as a step at 3.2 eV, F(R) rising 20 per eV from 3.1 above it, the tail below,
   // every nm from 250 to 800 and no noise: the lobes of its curvature narrower than the run
   // of 25 points the suggestion asks for.
-  const rows = ['Sample,', 'Wavelength (nm),F(R)'];
+  // (its first line the sample's name, which names its trace, v532)
+  const rows = ['step,', 'Wavelength (nm),F(R)'];
   for (let w = 250; w <= 800; w++){ const e = 1239.842/w; rows.push(w + ',' + (e > 3.2 ? 20*(e - 3.1) : 0.05 + 0.02*Math.exp((e - 3.2)/0.12)).toFixed(5)); }
   step = env.fx.put('step.csv', rows.join('\n') + '\n');
 });

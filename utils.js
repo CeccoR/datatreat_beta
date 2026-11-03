@@ -794,6 +794,8 @@ function setupDropzone(dropzone, inputEl, onFiles){
    one held or, given undefined, a new one.
 ========================================================= */
 const isIncluded = f => f.included !== false;
+// The name of the file a trace comes from (the trace list's FILE).
+const fileOf = f => typeof f.src === 'string' && f.src ? f.src : f.name;
 const includedOf = all => all.filter(isIncluded);
 // Where all[j] stands, or would stand, among the included files.
 function includedIndex(all, j){ let n = 0; for (let k = 0; k < j; k++) if (isIncluded(all[k])) n++; return n; }
@@ -827,18 +829,23 @@ function moveFileTo(all, from, to, slots){
 }
 
 /* =========================================================
-   UNIFIED FILE LIST RENDERER
-   files: array of objects with at least {name, label} — every file loaded, included
-   or not (see INCLUDED FILES)
+   UNIFIED TRACE LIST RENDERER (the file list to v531)
+   Each row is a TRACE: what a module plots and analyses, named (its label) and drawn in
+   its colour; its FILE the file it was read from, whose original bytes its download gives.
+   A file of several traces (an XRPD file of several scans, a Custom CSV of several series)
+   gives a row each, every one showing that file and sharing its bytes (kept once: db.js).
+   files: array of objects with at least {name, label} — every trace loaded, included
+   or not (see INCLUDED FILES); `src`, when it has one, the name of the file it comes from
+   (else `name` is that file's)
    callbacks: {onRemove(i), onReorder(from,to), onRemoveAll(), onLabelChange(i,newLabel)
                (on leaving the field, not while typing),
                onColorChange(i,color), onPaletteChange(colors), onInclude(i,on),
                onIncludeAll(on), noColor}
-               noColor: the files' colours not shown (Figure: a file's colour is no
-               series'); a file with no colour (SEM) has none shown either. Either way the
-               swatch's place and the palette's stay, empty, so the names keep their places
-               (to v528 SEM's names stood where the swatches are in the other modules)
-   note: optional (file, i) => markup, the file's note, in the column right of its label
+               noColor: the traces' colours not shown (Custom: a plot gives its series
+               their colours); a trace with no colour (SEM) has none shown either. Either
+               way the swatch's place and the palette's stay, empty, so the names keep
+               their places
+   note: optional (file, i) => markup, the trace's note, in the column right of its file
          (DRS: how its second column was read; GC: the sample's select); none, that
          column is left empty
    noteHead: optional, the note column's header, plain text (GC: SAMPLE); none, it has
@@ -857,43 +864,41 @@ function renderUnifiedFileList(container, files, callbacks, note, noteHead){
 
   /* The columns, the same in every module: drag and include box fixed 26px each, side by
      side at the left edge; actions fixed 58px (a fixed width guarantees the download+remove
-     icons fit even on narrow phones); FILE, LABEL and the note, with no header but the
-     module's (GC's SAMPLE), share what those leave as 3 : 3 : 2. Their percentages add up
-     to 100%, more than is left, and a fixed table layout scales them to it, the px columns
-     kept. A drag column in % was too narrow for its grip on a phone, and the box sat on it.
-     To v501 FILE and the label shared it equally, with DRS's note (extraCols, its only
-     use) a 40px column left of the label, and the other modules had none. The label's
-     header was SAMPLE LABEL (to v511). */
+     icons fit even on narrow phones); TRACE (its colour and its name's field), FILE and the
+     note, with no header but the module's (GC's SAMPLE), share what those leave as
+     3 : 3 : 2. Their percentages add up to 100%, more than is left, and a fixed table
+     layout scales them to it, the px columns kept. To v531 the list was of files: FILE
+     (the colour, the name) then LABEL. */
   const colgroup = `<colgroup><col style="width:26px"><col style="width:26px"><col style="width:37.5%"><col style="width:37.5%"><col style="width:25%"><col style="width:58px"></colgroup>`;
   const grip = `<svg class="grip-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><line x1="2.5" y1="5" x2="13.5" y2="5"/><line x1="2.5" y1="8" x2="13.5" y2="8"/><line x1="2.5" y1="11" x2="13.5" y2="11"/></svg>`;
   const nIn = files.filter(isIncluded).length;
   const colorOf = f => callbacks.noColor ? '' : f.color, anyColor = files.some(colorOf);
 
-  let html = `<div class="table-wrap-box"><table class="file-table">${colgroup}<thead><tr><th></th><th class="incl-cell"><input type="checkbox" class="incl-all"${nIn ? ' checked' : ''} title="Include all files in the analysis, or none"></th><th><div class="file-head">${anyColor ? '<button class="palette-pick-btn" title="Apply color palette"></button>' : '<span class="palette-pick-btn swatch-gap" aria-hidden="true"></span>'}<span>FILE</span></div></th>`;
-  html += `<th>LABEL</th><th class="note-cell"${noteHead ? ` title="${esc(noteHead)}"` : ''}>${noteHead ? esc(noteHead) : ''}</th>`;
+  let html = `<div class="table-wrap-box"><table class="file-table">${colgroup}<thead><tr><th></th><th class="incl-cell"><input type="checkbox" class="incl-all"${nIn ? ' checked' : ''} title="Include all traces in the analysis, or none"></th><th><div class="file-head">${anyColor ? '<button class="palette-pick-btn" title="Apply color palette"></button>' : '<span class="palette-pick-btn swatch-gap" aria-hidden="true"></span>'}<span>TRACE</span></div></th>`;
+  html += `<th>FILE</th><th class="note-cell"${noteHead ? ` title="${esc(noteHead)}"` : ''}>${noteHead ? esc(noteHead) : ''}</th>`;
   const dlIcon = DL_SVG(15);
   const xIcon = X_SVG(15);
-  html += `<th class="row-acts" style="text-align:right;white-space:nowrap"><button class="download-all del-bare dl-bare" title="Download all (zip)">${dlIcon}</button><button class="remove-all del-bare is-danger" title="Remove all">${xIcon}</button></th></tr></thead><tbody>`;
+  html += `<th class="row-acts" style="text-align:right;white-space:nowrap"><button class="download-all del-bare dl-bare" title="Download all files (zip)">${dlIcon}</button><button class="remove-all del-bare is-danger" title="Remove all">${xIcon}</button></th></tr></thead><tbody>`;
 
   files.forEach((f, i)=>{
     const swatch = colorOf(f) ? `<button class="color-swatch" data-i="${i}" data-color="${esc(f.color)}" style="background:${esc(f.color)}" title="Pick color"></button>` : '<span class="color-swatch swatch-gap" aria-hidden="true"></span>';
-    const on = isIncluded(f);
+    const on = isIncluded(f), file = fileOf(f);
     html += `<tr class="file-row${on ? '' : ' is-excluded'}" data-i="${i}">`;
     html += `<td class="drag-cell"><span class="drag-handle" title="Drag to reorder">${grip}</span></td>`;
     html += `<td class="incl-cell"><input type="checkbox" class="file-incl" data-i="${i}"${on ? ' checked' : ''} title="Include in the analysis"></td>`;
-    html += `<td class="fname" title="${esc(f.name)}"><span class="fname-inner">${swatch}<span class="fname-text">${esc(f.name)}</span></span></td>`;
-    html += `<td><input type="text" class="label-input file-label" data-i="${i}" value="${esc(f.label)}"></td>`;
+    html += `<td class="trace-cell"><span class="trace-inner">${swatch}<input type="text" class="label-input file-label" data-i="${i}" value="${esc(f.label)}" aria-label="Trace name"></span></td>`;
+    html += `<td class="fname" title="${esc(file)}"><span class="fname-inner"><span class="fname-text">${esc(file)}</span></span></td>`;
     html += `<td class="note-cell">${note ? note(f, i) : ''}</td>`;
-    html += `<td class="row-acts" style="text-align:right;white-space:nowrap"><button class="dl-file del-bare dl-bare idle-dim" data-i="${i}" title="Download file">${dlIcon}</button><button class="del del-bare row-del is-danger idle-dim" data-i="${i}" title="Remove">${xIcon}</button></td>`;
+    html += `<td class="row-acts" style="text-align:right;white-space:nowrap"><button class="dl-file del-bare dl-bare idle-dim" data-i="${i}" title="Download its file">${dlIcon}</button><button class="del del-bare row-del is-danger idle-dim" data-i="${i}" title="Remove">${xIcon}</button></td>`;
     html += `</tr>`;
   });
   html += `</tbody></table></div>`;
-  // With every file left out nothing is analysed, and no card follows the list: this
+  // With every trace left out nothing is analysed, and no card follows the list: this
   // says why.
-  if (!nIn) html += `<p class="txt-meta file-none">No file is included in the analysis.</p>`;
+  if (!nIn) html += `<p class="txt-meta file-none">No trace is included in the analysis.</p>`;
   wrap.innerHTML = html;
 
-  // The header box: ticked with every file in, empty with none, the dash with some.
+  // The header box: ticked with every trace in, empty with none, the dash with some.
   // A press includes them all, or, when all are in already, leaves them all out.
   const inclAll = wrap.querySelector('.incl-all');
   inclAll.indeterminate = nIn > 0 && nIn < files.length;
@@ -907,7 +912,7 @@ function renderUnifiedFileList(container, files, callbacks, note, noteHead){
   // Removing files (all or one) is treated as an ordinary edit to the project — it
   // updates the draft rather than discarding it — so this only confirms the action.
   wrap.querySelector('.remove-all').addEventListener('click', async ()=>{
-    if (!await confirmBanner('Are you sure to remove all files?')) return;
+    if (!await confirmBanner('Are you sure to remove all traces?')) return;
     if (callbacks.onRemoveAll) callbacks.onRemoveAll();
   });
   const palBtn = wrap.querySelector('button.palette-pick-btn');
@@ -955,11 +960,12 @@ function renderUnifiedFileList(container, files, callbacks, note, noteHead){
   // A part of a list with neither bytes nor text (its bytes not stored in this browser any
   // more, v517) is not available, as a file of no bytes is: to v516 it went into the zip
   // as an empty file, with no word.
+  // (a trace's file: under its own name, `src`, where the trace has a name of its own)
   const originalsOf = f => {
     if (f.rawFiles && f.rawFiles.length)
       return f.rawFiles.map(rf=> rf.bytes != null ? { name:rf.name, bytes:rf.bytes } : { name:rf.name, text:rf.data ?? rf.text });
-    if (f.rawBytes != null) return [{ name:f.name, bytes:f.rawBytes }];
-    if (f.raw != null) return [{ name:f.name, text:f.raw }];
+    if (f.rawBytes != null) return [{ name:fileOf(f), bytes:f.rawBytes }];
+    if (f.raw != null) return [{ name:fileOf(f), text:f.raw }];
     return [];
   };
   const lostOf = f => originalsOf(f).filter(o=> o.bytes == null && o.text == null).map(o=> o.name);
@@ -972,13 +978,15 @@ function renderUnifiedFileList(container, files, callbacks, note, noteHead){
       if (orig.length === 1){
         if (orig[0].bytes != null) downloadBytes(orig[0].name, orig[0].bytes);
         else downloadBlob(orig[0].name, orig[0].text);
-      } else downloadZip((f.label||f.name)+'.zip', orig);
+      } else downloadZip(fileOf(f)+'.zip', orig);
     });
   });
   // Download all originals as a single zip
   const dlAll = wrap.querySelector('.download-all');
   if (dlAll) dlAll.addEventListener('click', ()=>{
-    const entries = files.filter(f=> !lostOf(f).length).flatMap(originalsOf);
+    // (a file once, however many of its traces are listed: by its bytes, or its name)
+    const seen = new Set(), entries = files.filter(f=> !lostOf(f).length).flatMap(originalsOf)
+      .filter(o=>{ const k = o.bytes != null ? o.bytes : 'name:' + o.name; if (seen.has(k)) return false; seen.add(k); return true; });
     if (!entries.length){ alert('No original files are available to download.'); return; }
     downloadZip('files.zip', entries);
   });

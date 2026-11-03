@@ -1,5 +1,5 @@
 /* GC replicates (gc.js REPLICATES, v512):
-   - the file list: LABEL over the label in every module (SAMPLE LABEL to v511), and in GC
+   - the trace list: TRACE and FILE in every module (v532; LABEL to v531, SAMPLE LABEL to v511), and in GC
      alone a SAMPLE column, a select in each row of FILE NAMES: each file its own sample at
      first; a row offers its own file and the heads (the files linked to none), never a
      file linked to another (no chains); a head set to another takes its group along; a
@@ -75,7 +75,7 @@ test('the Sample column: each file its own, a select of its own name and the hea
   const { page, errors, close } = await env.page();
   try {
     await open4(page);
-    assert.deepEqual(await page.$$eval('#gcFileTableWrap thead th', ts=> ts.map(t=> t.textContent.trim())), ['', '', 'FILE', 'LABEL', 'SAMPLE', '']);
+    assert.deepEqual(await page.$$eval('#gcFileTableWrap thead th', ts=> ts.map(t=> t.textContent.trim())), ['', '', 'TRACE', 'FILE', 'SAMPLE', '']);
     assert.deepEqual(await sels(page), NAMES.map(n=> [n, NAMES]), 'each file its own sample, every file a head');
     assert.deepEqual(await links(page), [null, null, null, null]);
     assert.deepEqual((await bars(page)).map(b=> [b.name, b.key, b.errs.length]), NAMES.map(n=> [n.replace('.csv', ''), n, 0]), 'a bar per file, no error bar');

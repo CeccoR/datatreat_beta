@@ -1,4 +1,4 @@
-import { esc, registerModule, keeper, fixed, objId, exactKey, colorOf, settings, flashFieldInvalid, boxStats, meanArr, stdArr, barNames, X_SVG } from './utils.js';
+import { esc, registerModule, keeper, fixed, objId, exactKey, colorOf, settings, flashFieldInvalid, boxStats, meanArr, stdArr, barNames, X_SVG, removeFileAt } from './utils.js';
 import { Plot } from './plot.js';
 import { cardInfo, fileSafe, nameDownloads } from './cards.js';
 import { moduleKit, wideCsv, isObj, ownKey, cardList } from './modkit.js';
@@ -26,6 +26,10 @@ import { decodeText, textLines, readColumns, parseNum, isNum, nameUnit } from '.
    file's line; the lists of series scrolling in their boxes, beside the table or the plot
    from its top to its foot (+ Add series under its list, its bottom on the plot's); a
    series' scale and offset beside its name.
+   v532: the trace list (the file list to v531) a row a series, its trace: named as the
+   series (one name, the Data card's and the list's), its File the CSV it comes from;
+   included, left out and moved there, which the Add series window follows. A file with no
+   series has a row of its own (its name), for it to be removed.
 
    MADE PER TAB, as every module (utils.js registerModule): createFig is the module's
    factory, each open Custom tab that is awake an instance of its own, made of its copy of
@@ -173,7 +177,7 @@ const headOf = (t, c)=> c < 0 ? { name: 'Row', unit: '' } : t.heads && t.heads[c
 
 /* ---- A card's kinds, instructions and markup ---- */
 const KINDS = { xy: 'XY plot', bar: 'Bar chart', box: 'Box plot' };
-const FIG_INFO = `A plot of the series chosen under <b>Series</b>, from any of the files: <b>+ Add series</b> opens the list of the series of every file included (the Data card sets which columns are y), by file, each named as the Data card names it: those ticked are in the plot (a file's box ticks or clears all its series). <b>Normalization</b> is the plot's: <b>none</b>, <b>local</b> (each series divided by its own largest |y|) or <b>global</b> (all divided by the largest of them); then each series is multiplied by its scale (×) and, in an XY plot, its offset (+) added. An <b>XY plot</b> draws each series against its x (the row number where it has none), with its error bars. A <b>bar chart</b> takes the series' x as categories (text, or numbers as they read: 1,0 is 1), its y as the bar and its error of y as the error bar; a category shared by series has their bars side by side. A <b>box plot</b> takes each series as a group, its values down the rows (its x not used), named as the series. A series whose file is removed, or whose column is no longer a y, leaves the plot. The figure composer of the plot's toolbar composes its figure, kept with the card in the project. ${cardInfo(true, false)}`;
+const FIG_INFO = `A plot of the series chosen under <b>Series</b>, from any of the files: <b>+ Add series</b> opens the list of the series included in the trace list (each y the Data card sets is a trace), by file, each named as the Data card names it: those ticked are in the plot (a file's box ticks or clears all its series). <b>Normalization</b> is the plot's: <b>none</b>, <b>local</b> (each series divided by its own largest |y|) or <b>global</b> (all divided by the largest of them); then each series is multiplied by its scale (×) and, in an XY plot, its offset (+) added. An <b>XY plot</b> draws each series against its x (the row number where it has none), with its error bars. A <b>bar chart</b> takes the series' x as categories (text, or numbers as they read: 1,0 is 1), its y as the bar and its error of y as the error bar; a category shared by series has their bars side by side. A <b>box plot</b> takes each series as a group, its values down the rows (its x not used), named as the series. A series whose file is removed, or whose column is no longer a y, leaves the plot. The figure composer of the plot's toolbar composes its figure, kept with the card in the project. ${cardInfo(true, false)}`;
 const P = a => 'fig' + a.id;
 /* (v531: as the Data card, a .pside: the plot on the left under its row of tools, the column
    beside it spanning the plot's height exactly: its head and normalisation at the top, the
@@ -226,16 +230,22 @@ function createFig({ key, root, layer, shown }){
      the roles of the file on show go to every file (`same`). */
   let same = false;
   let shownName = null, fileNext = null;   // the file the Data card shows (and a wake's: showNext)
+  // The trace list's order, by the series' keys (keyOf; a file of no series by keyOf(name,
+  // -1)), set as the list is reordered (none: the files' order, each its columns'); a
+  // series not in it goes after those that are. A file's series left out of the analysis
+  // are its record's `out`, by column.
+  let order = [];
   const kit = moduleKit('fig', {
     root, key, layer,
     // (a file's colour is no series': the list keeps its place, empty)
     noColor: true,
+    traces: cb => traceList(cb),
     alerts: p =>{ $('figAlerts').innerHTML = p.invalid + p.upload; },
     refresh: afterFilesChange,
     // A label or a colour changed: the Data card's list and the series' files say it anew.
     redraw: ()=>{ renderData(); cards().forEach(a=> paintPanel(a)); updateAll(true); },
-    cleared: ()=>{ shownName = null; },
-    snapshot: ()=> ({ same, cards: cards().map(a=> ({ ...deck.saved(a), series: a.series.map(r=> ({ ...r })), norm: a.norm, fig: a.fig })) }),
+    cleared: ()=>{ shownName = null; order = []; },
+    snapshot: ()=> ({ same, ...(order.length ? { order: order.slice() } : {}), cards: cards().map(a=> ({ ...deck.saved(a), series: a.series.map(r=> ({ ...r })), norm: a.norm, fig: a.fig })) }),
     // A file as a restore takes it: its table read from its bytes (none: left out), its
     // roles one a column (else the defaults) made to hold, its names by column.
     file: f =>{
@@ -244,10 +254,16 @@ function createFig({ key, root, layer, shown }){
       const roles = Array.isArray(f.roles) && f.roles.length === t.n && f.roles.every(r=> ownKey(ROLES, r)) ? fixRoles(f.roles) : firstRoles(t);
       const names = {};
       if (isObj(f.names)) for (const k of Object.keys(f.names)) if (/^\d+$/.test(k) && +k < t.n && typeof f.names[k] === 'string' && f.names[k].trim()) names[k] = f.names[k];
-      return { ...f, roles, names };
+      // (a file left out by v531, the list's row its own: each of its series left out)
+      const out = f.included === false ? seriesCols(roles).map(c=> c.col)
+        : Array.isArray(f.out) ? [...new Set(f.out.filter(c=> Number.isInteger(c) && c >= 0 && c < t.n))] : [];
+      const g = { ...f, roles, names };
+      delete g.included; delete g.held; delete g.out;
+      return out.length ? { ...g, out } : g;
     },
     restore: s =>{
       same = s.same === true;
+      order = Array.isArray(s.order) ? s.order.filter(k=> typeof k === 'string') : [];
       if (fileNext){ if (allFiles.some(f=> f.name === fileNext)) shownName = fileNext; fileNext = null; }
       deck.load(cardList(s.cards, KINDS) || [], c=> ({ series: refsIn(c.series), norm: normIn(c), fig: figIn(c.fig) }), a=> paintPanel(a));
     },
@@ -260,7 +276,7 @@ function createFig({ key, root, layer, shown }){
     // One CSV a plot with series, named after it: what it plots.
     csv: ()=> cards().map(a=> ({ a, text: cardCsv(a) })).filter(c=> c.text).map(({ a, text })=> ({ name: `${fileSafe(a.name)} - fig_plot.csv`, text })),
   });
-  const { all: allFiles, files } = kit;
+  const { all: allFiles } = kit;
 
   // Files dropped: each read as a table (textdata.js), its roles its titles' or the
   // defaults (firstRoles), or the file on show's with `same`; the table kept by the file's bytes.
@@ -297,11 +313,61 @@ function createFig({ key, root, layer, shown }){
       return { ...s, f, t, fi, m, key: keyOf(f.name, s.col), auto, cols, def, name: given || def };
     });
   }
-  // The series of the files included, by key.
+  const isOut = (f, col)=> Array.isArray(f.out) && f.out.includes(col);
+  // The series included in the analysis, by key, in the trace list's order.
   function seriesMap(){
     const m = new Map();
-    allFiles.forEach((f, fi)=>{ if (files.includes(f)) seriesOfFile(f, fi).forEach(s=> m.set(s.key, s)); });
+    traces().forEach(t=>{ if (t.s && !isOut(t.f, t.s.col)) m.set(t.s.key, t.s); });
     return m;
+  }
+  /* ---- The trace list: a row a series (its trace), in `order`; a file of none a row of
+     its own (its name: renamed, the file's label). ---- */
+  function traces(){
+    const ts = allFiles.flatMap((f, fi)=>{ const ss = seriesOfFile(f, fi); return ss.length ? ss.map(s=> ({ f, s, key: s.key })) : [{ f, s: null, key: keyOf(f.name, -1) }]; });
+    if (!order.length) return ts;
+    const at = new Map(order.map((k, i)=> [k, i])), rank = t => at.has(t.key) ? at.get(t.key) : Infinity;
+    return ts.map((t, i)=> [t, i]).sort((a, b)=> rank(a[0]) - rank(b[0]) || a[1] - b[1]).map(e=> e[0]);
+  }
+  function traceList(cb){
+    const ts = traces();
+    const rows = ts.map(({ f, s })=> ({ name: s ? `${f.name} (${s.cols})` : f.name, src: f.name, label: s ? s.name : f.label, rawBytes: f.rawBytes,
+      ...(s && isOut(f, s.col) ? { included: false } : {}) }));
+    const setOut = (t, on)=>{ if (!t.s) return; const o = new Set(t.f.out || []); if (on) o.delete(t.s.col); else o.add(t.s.col); if (o.size) t.f.out = [...o]; else delete t.f.out; };
+    return { rows, cb: { ...cb,
+      onInclude(i, on){ if (ts[i]){ setOut(ts[i], on); afterFilesChange(); } },
+      onIncludeAll(on){ ts.forEach(t=> setOut(t, on)); afterFilesChange(); },
+      onReorder(from, to){ const k = ts.map(t=> t.key), [m] = k.splice(from, 1); k.splice(to, 0, m); order = k; afterFilesChange(); },
+      // (a series renamed as in the Data card: empty, or as its header names it, back to that name)
+      onLabelChange(i, v){
+        const t = ts[i];
+        if (!t) return;
+        if (!t.s){ t.f.label = v; afterFilesChange(); return; }
+        rename(t.f, t.s.col, v, t.s.def);
+      },
+      /* A trace removed: its column, and its error's, no longer used (the Data card's roles,
+         —); its file's last, or a file of none, the file removed. */
+      onRemove(i){
+        const t = ts[i];
+        if (!t) return;
+        if (!t.s || seriesCols(t.f.roles).length < 2){ removeFileAt(allFiles, allFiles.indexOf(t.f), []); if (!allFiles.length) cb.onRemoveAll(); else afterFilesChange(); return; }
+        const r = t.f.roles.slice();
+        r[t.s.col] = '';
+        if (t.s.ey >= 0) r[t.s.ey] = '';
+        t.f.roles = fixRoles(r);
+        if (isOut(t.f, t.s.col)) setOut(t, true);
+        afterFilesChange();
+      },
+    } };
+  }
+  function rename(f, col, v0, def){
+    const v = v0.trim(), names = { ...f.names };
+    if (!v || v === def) delete names[col]; else names[col] = v;
+    f.names = names;
+    kit.showFiles();
+    renderData();
+    cards().forEach(a=> paintPanel(a));
+    updateAll(true);
+    kit.commit();
   }
   /* A plot keeps the series that still are (a y of a file loaded, included or not) and lets
      the others go, without a word: a file removed, a column no longer a y. */
@@ -369,6 +435,7 @@ function createFig({ key, root, layer, shown }){
     const src = shownFile();
     if (same && src) allFiles.forEach(g=>{ if (g !== src) g.roles = rolesLike(src.roles, tableOf(g).n); });
     prune();
+    kit.showFiles();
     renderData();
     cards().forEach(a=> paintPanel(a));
     updateAll(true);
@@ -389,19 +456,13 @@ function createFig({ key, root, layer, shown }){
   $('figSeries').addEventListener('change', e=>{
     const inp = e.target.closest('input[data-col]'), f = shownFile();
     if (!inp || !f) return;
-    const col = +inp.dataset.col, v = inp.value.trim(), def = inp.placeholder, names = { ...f.names };
-    if (!v || v === def) delete names[col]; else names[col] = v;
-    f.names = names;
-    renderData();
-    cards().forEach(a=> paintPanel(a));
-    updateAll(true);
-    kit.commit();
+    rename(f, +inp.dataset.col, inp.value, inp.placeholder);
   });
   $('figSeries').addEventListener('keydown', e=>{ if (e.key === 'Enter' && e.target.matches('input')) e.target.blur(); });
 
   /* ---- The Plot cards (cards.js): each its kind, its series (by file and column, each with
      its scale and offset), its normalisation and its figure ---- */
-  // A card's series that are plotted (their files included), with their names made unique
+  // A card's series that are plotted (included in the trace list), with their names made unique
   // in it (a name two files' series share: with the file's label) and their colours.
   function plotted(a, map = seriesMap()){
     const used = new Set();
@@ -418,7 +479,7 @@ function createFig({ key, root, layer, shown }){
     if (!card) return;
     const list = plotted(a), ops = OPS[a.type];
     card.querySelector('#' + P(a) + 'Norm').value = a.norm;
-    card.querySelector('#' + P(a) + 'Add').disabled = !files.some(f=> seriesCols(f.roles).length);
+    card.querySelector('#' + P(a) + 'Add').disabled = !seriesMap().size;
     // (a row each, as the parameters': the name on three fifths, the scale and offset on two)
     card.querySelector('#' + P(a) + 'List').innerHTML = list.map(({ r, s, name })=> `
           <div class="fig-ser" data-key="${esc(s.key)}">
@@ -426,7 +487,7 @@ function createFig({ key, root, layer, shown }){
               <span class="fig-ser-name" title="${esc(`${s.f.label}: ${s.auto} (${s.cols})`)}">${esc(name)}</span></div>
             <div class="fig-ops">${ops.includes('scale') ? opField('scale', '×', r.scale, 'Scale: every value multiplied by it, after the normalization') : ''}${
               ops.includes('offset') ? opField('offset', '+', r.offset, 'Offset: added to every y, after the scale') : ''}</div>
-          </div>`).join('') + (a.series.length > list.length ? `<div class="txt-meta fig-ser-out">${a.series.length - list.length} series of files left out not shown.</div>` : '');
+          </div>`).join('') + (a.series.length > list.length ? `<div class="txt-meta fig-ser-out">${a.series.length - list.length} series left out of the analysis not shown.</div>` : '');
   }
   function buildCard(a, card){
     const list = card.querySelector('#' + P(a) + 'List');
@@ -482,7 +543,10 @@ function createFig({ key, root, layer, shown }){
     pickFor = a; pickFrom = document.activeElement;
     const on = new Set(a.series.map(r=> keyOf(r.file, r.col)));
     pick.querySelector('.fig-pick-for').textContent = `Ticked: the series of ${a.name}.`;
-    pickBody.innerHTML = allFiles.map((f, fi)=> files.includes(f) ? [f, seriesOfFile(f, fi)] : null).filter(g=> g && g[1].length).map(([f, ss])=> `
+    // (by file, in the order of the trace list, a file where its first series is)
+    const by = new Map();
+    for (const s of seriesMap().values()){ if (!by.has(s.f)) by.set(s.f, []); by.get(s.f).push(s); }
+    pickBody.innerHTML = [...by].map(([f, ss])=> `
         <div class="fig-pick-file">
           <label class="fig-pick-row fig-pick-head"><input type="checkbox" data-file aria-label="All the series of ${esc(f.label)}"><b>${esc(f.label)}</b></label>
           ${ss.map(s=> `<label class="fig-pick-row"><input type="checkbox" data-key="${esc(s.key)}"${on.has(s.key) ? ' checked' : ''}><span>${esc(s.auto)} <span class="txt-meta">(${esc(s.cols)})</span></span><span class="fig-pick-name">${esc(s.name)}</span></label>`).join('')}
