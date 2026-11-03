@@ -1,4 +1,4 @@
-import { esc, registerModule, keeper, fixed, objId, exactKey, colorOf, settings, flashFieldInvalid, boxStats, meanArr, stdArr, barNames, X_SVG, removeFileAt } from './utils.js';
+import { esc, registerModule, keeper, fixed, objId, exactKey, colorOf, isColor, settings, flashFieldInvalid, boxStats, meanArr, stdArr, barNames, X_SVG, removeFileAt } from './utils.js';
 import { Plot } from './plot.js';
 import { cardInfo, fileSafe, nameDownloads } from './cards.js';
 import { moduleKit, wideCsv, isObj, ownKey, cardList } from './modkit.js';
@@ -30,6 +30,10 @@ import { decodeText, textLines, readColumns, parseNum, isNum, nameUnit } from '.
    series (one name, the Data card's and the list's), its File the CSV it comes from;
    included, left out and moved there, which the Add series window follows. A file with no
    series has a row of its own (its name), for it to be removed.
+   v534: the series' colours back in the trace list (a swatch each, the palette), the plots
+   drawing each series in its trace's colour (to v533 by its place in the plot); the Data
+   card's list of series gone, the table across the card (as tall as a Plot card's chart)
+   and the series named in place in its line over their columns.
 
    MADE PER TAB, as every module (utils.js registerModule): createFig is the module's
    factory, each open Custom tab that is awake an instance of its own, made of its copy of
@@ -237,8 +241,6 @@ function createFig({ key, root, layer, shown }){
   let order = [];
   const kit = moduleKit('fig', {
     root, key, layer,
-    // (a file's colour is no series': the list keeps its place, empty)
-    noColor: true,
     traces: cb => traceList(cb),
     alerts: p =>{ $('figAlerts').innerHTML = p.invalid + p.upload; },
     refresh: afterFilesChange,
@@ -257,8 +259,12 @@ function createFig({ key, root, layer, shown }){
       // (a file left out by v531, the list's row its own: each of its series left out)
       const out = f.included === false ? seriesCols(roles).map(c=> c.col)
         : Array.isArray(f.out) ? [...new Set(f.out.filter(c=> Number.isInteger(c) && c >= 0 && c < t.n))] : [];
-      const g = { ...f, roles, names };
+      // (v534: its series' colours, by column, those picked; the others their place's)
+      const colors = {};
+      if (isObj(f.colors)) for (const k of Object.keys(f.colors)) if (/^\d+$/.test(k) && +k < t.n && isColor(f.colors[k])) colors[k] = f.colors[k];
+      const g = { ...f, roles, names, colors };
       delete g.included; delete g.held; delete g.out;
+      if (!Object.keys(colors).length) delete g.colors;
       return out.length ? { ...g, out } : g;
     },
     restore: s =>{
@@ -302,15 +308,20 @@ function createFig({ key, root, layer, shown }){
 
   /* ---- The series: every y of every file, by its file and column. Its number in its file
      ("Series M (Cols a,b)": its x's column and its own) follows the roles; its name is
-     the one typed, else its title's (titleName), its header's, or "Series M". ---- */
+     the one typed, else its title's (titleName), its header's, or "Series M". Its colour
+     (v534) the one picked in the trace list (its file's `colors`, by column), else the
+     palette's at its place among the series of all files, in the files' order. ---- */
   const keyOf = (name, col)=> name + '\n' + col;
   function seriesOfFile(f, fi){
     const t = tableOf(f);
+    let k = 0;
+    for (let j = 0; j < fi; j++) k += seriesCols(allFiles[j].roles).length;
     return seriesCols(f.roles).map((s, m)=>{
       const auto = `Series ${m + 1}`, cols = s.x >= 0 ? `Cols ${s.x + 1},${s.col + 1}` : `Col ${s.col + 1}`;
       const given = Object.prototype.hasOwnProperty.call(f.names, s.col) ? f.names[s.col] : '';
       const def = titleName(t, s.col) || headOf(t, s.col).name || auto;
-      return { ...s, f, t, fi, m, key: keyOf(f.name, s.col), auto, cols, def, name: given || def };
+      const color = f.colors && ownKey(f.colors, String(s.col)) ? f.colors[s.col] : colorOf(k + m);
+      return { ...s, f, t, fi, m, key: keyOf(f.name, s.col), auto, cols, def, name: given || def, color };
     });
   }
   const isOut = (f, col)=> Array.isArray(f.out) && f.out.includes(col);
@@ -330,12 +341,22 @@ function createFig({ key, root, layer, shown }){
   }
   function traceList(cb){
     const ts = traces();
-    const rows = ts.map(({ f, s })=> ({ name: s ? `${f.name} (${s.cols})` : f.name, src: f.name, label: s ? s.name : f.label, rawBytes: f.rawBytes,
+    // (a series' colour its own; a file of none has none, nor a swatch)
+    const rows = ts.map(({ f, s })=> ({ name: s ? `${f.name} (${s.cols})` : f.name, src: f.name, label: s ? s.name : f.label, color: s ? s.color : '', rawBytes: f.rawBytes,
       ...(s && isOut(f, s.col) ? { included: false } : {}) }));
     const setOut = (t, on)=>{ if (!t.s) return; const o = new Set(t.f.out || []); if (on) o.delete(t.s.col); else o.add(t.s.col); if (o.size) t.f.out = [...o]; else delete t.f.out; };
     return { rows, cb: { ...cb,
       onInclude(i, on){ if (ts[i]){ setOut(ts[i], on); afterFilesChange(); } },
       onIncludeAll(on){ ts.forEach(t=> setOut(t, on)); afterFilesChange(); },
+      // A series' colour picked, or the palette's given to all in the list's order: the
+      // plots' lines, bars and boxes, and their legends, follow (a step).
+      onColorChange(i, c){ const t = ts[i]; if (t && t.s && isColor(c)){ t.f.colors = { ...(t.f.colors || {}), [t.s.col]: c }; repaint(); } },
+      onPaletteChange(colors){
+        const cs = colors.filter(isColor);
+        if (!cs.length) return;
+        ts.filter(t=> t.s).forEach((t, k)=>{ t.f.colors = { ...(t.f.colors || {}), [t.s.col]: cs[k % cs.length] }; });
+        repaint();
+      },
       onReorder(from, to){ const k = ts.map(t=> t.key), [m] = k.splice(from, 1); k.splice(to, 0, m); order = k; afterFilesChange(); },
       // (a series renamed as in the Data card: empty, or as its header names it, back to that name)
       onLabelChange(i, v){
@@ -359,12 +380,23 @@ function createFig({ key, root, layer, shown }){
       },
     } };
   }
-  function rename(f, col, v0, def){
+  /* A series renamed, in the trace list or in place over its columns in the Data card (one
+     name). From the Data card (`inPlace`) its fields there take the name and the head is
+     not drawn anew, so the focus, gone on to another field, stays there. */
+  function rename(f, col, v0, def, inPlace){
     const v = v0.trim(), names = { ...f.names };
     if (!v || v === def) delete names[col]; else names[col] = v;
     f.names = names;
+    if (inPlace) $('figHead').querySelectorAll(`thead input[data-col="${col}"]`).forEach(inp=>{ inp.value = v || def; });
     kit.showFiles();
-    renderData();
+    if (!inPlace) renderData();
+    cards().forEach(a=> paintPanel(a));
+    updateAll(true);
+    kit.commit();
+  }
+  // The colours changed: the list, the plots and their legends drawn again, a step.
+  function repaint(){
+    kit.showFiles();
     cards().forEach(a=> paintPanel(a));
     updateAll(true);
     kit.commit();
@@ -377,12 +409,13 @@ function createFig({ key, root, layer, shown }){
   }
 
   /* ---- The Data card: the file on show (its arrows, as the other modules' samples: a view,
-     no step of the history), its head with a role over each column, and beside it its
-     series' names and the roles of all files alike ---- */
+     no step of the history), the roles of all files alike on its line, and the file's
+     table across the card, a role over each column and its series' names over them ---- */
   /* The line of the series' names over the head: each series' name over its columns (its
-     x, its y, their errors), one cell across them; a column no series has, or an x (or its
-     error) that several share, blank. A series whose columns another's split has its name
-     over each of its runs. */
+     x, its y, their errors), one cell across them, a field where it is typed over (v534:
+     to v533 the names were also listed beside the table); a column no series has, or an x
+     (or its error) that several share, blank. A series whose columns another's split has
+     its name over each of its runs. */
   function nameCells(ss, n){
     const by = Array.from({ length: n }, ()=> new Set());
     ss.forEach((s, k)=> [s.x, s.ex, s.col, s.ey].forEach(c=>{ if (c >= 0 && c < n) by[c].add(k); }));
@@ -392,7 +425,10 @@ function createFig({ key, root, layer, shown }){
       while (e < n && own[e] === own[c]) e++;
       const span = e - c > 1 ? ` colspan="${e - c}"` : '';
       if (own[c] < 0) out.push(`<th${span}></th>`);
-      else { const s = ss[own[c]]; out.push(`<th${span} class="fig-name" title="${esc(`${s.auto} (${s.cols})`)}">${esc(s.name)}</th>`); }
+      else {
+        const s = ss[own[c]], tip = `${s.auto} (${s.cols})`;
+        out.push(`<th${span} class="fig-name"><input type="text" class="fig-name-in" data-col="${s.col}" value="${esc(s.name)}" placeholder="${esc(s.def)}" title="${esc(tip)}" aria-label="${esc(`Name of ${tip}`)}" autocomplete="off" spellcheck="false"></th>`);
+      }
       c = e;
     }
     return out.join('');
@@ -423,9 +459,6 @@ function createFig({ key, root, layer, shown }){
         + t.rows.map(r=> `<tr>${r.map(c=> `<td>${esc(c)}</td>`).join('')}</tr>`).join('') + `</tbody></table>`;
       box.scrollTop = 0; box.scrollLeft = 0;
     }
-    $('figSeries').innerHTML = ss.length ? `<div class="param-grid">${ss.map(s=> `<label class="txt-label" for="figSN${s.col}" title="${esc(s.x >= 0 ? `x: column ${s.x + 1}, y: column ${s.col + 1}` : `y: column ${s.col + 1}, x: the row number`)}">${esc(`${s.auto} (${s.cols})`)}</label>`
-      + `<input type="text" class="pg-field" id="figSN${s.col}" data-col="${s.col}" value="${esc(s.name)}" placeholder="${esc(s.def)}" autocomplete="off" spellcheck="false">`).join('')}</div>`
-      : '<div class="txt-meta">No column of this file is a y: it has no series.</div>';
     // (the roles of all files alike: a file with fewer columns than the one on show said)
     const short = same ? allFiles.filter(g=> g !== f && tableOf(g).n < t.n) : [];
     $('figWarn').innerHTML = short.length ? `<div class="alert warn">⚠ Same roles for all files: ${short.map(g=> esc(`${g.label} has ${tableOf(g).n} column${tableOf(g).n > 1 ? 's' : ''}`)).join(', ')}, fewer than the ${t.n} of ${esc(f.label)}; the roles of the columns past its own do not apply to it.</div>` : '';
@@ -452,26 +485,35 @@ function createFig({ key, root, layer, shown }){
     f.roles = setRole(f.roles, +sel.dataset.col, sel.value);
     rolesChanged();
   });
-  // A series renamed: empty, or as its header names it, it goes back to that name.
-  $('figSeries').addEventListener('change', e=>{
+  /* A series renamed over its columns, taken as the field is left (or on Enter): empty, or
+     as its header names it, it goes back to that name; Escape puts back the one it had. */
+  $('figHead').addEventListener('focusin', e=>{ if (e.target.matches('input[data-col]')) e.target.dataset.was = e.target.value; });
+  $('figHead').addEventListener('change', e=>{
     const inp = e.target.closest('input[data-col]'), f = shownFile();
-    if (!inp || !f) return;
-    rename(f, +inp.dataset.col, inp.value, inp.placeholder);
+    if (!inp || !f || inp.value === inp.dataset.was) return;
+    inp.dataset.was = inp.value;
+    rename(f, +inp.dataset.col, inp.value, inp.placeholder, true);
   });
-  $('figSeries').addEventListener('keydown', e=>{ if (e.key === 'Enter' && e.target.matches('input')) e.target.blur(); });
+  $('figHead').addEventListener('keydown', e=>{
+    const inp = e.target.closest('input[data-col]');
+    if (!inp) return;
+    if (e.key === 'Enter'){ e.preventDefault(); inp.blur(); }
+    else if (e.key === 'Escape' && inp.dataset.was != null){ e.preventDefault(); e.stopPropagation(); inp.value = inp.dataset.was; inp.blur(); }
+  });
 
   /* ---- The Plot cards (cards.js): each its kind, its series (by file and column, each with
      its scale and offset), its normalisation and its figure ---- */
   // A card's series that are plotted (included in the trace list), with their names made unique
-  // in it (a name two files' series share: with the file's label) and their colours.
+  // in it (a name two files' series share: with the file's label) and their colours (v534:
+  // the trace list's; to v533 by their place in the plot).
   function plotted(a, map = seriesMap()){
     const used = new Set();
-    return a.series.map(r=> ({ r, s: map.get(keyOf(r.file, r.col)) })).filter(e=> e.s).map((e, k)=>{
+    return a.series.map(r=> ({ r, s: map.get(keyOf(r.file, r.col)) })).filter(e=> e.s).map(e=>{
       let name = e.s.name, n = 2;
       if (used.has(name)) name = `${e.s.name} (${e.s.f.label})`;
       while (used.has(name)) name = `${e.s.name} (${n++})`;
       used.add(name);
-      return { ...e, name, color: colorOf(k) };
+      return { ...e, name, color: e.s.color };
     });
   }
   // The card's normalisation and list of series (drawn whether or not on show).

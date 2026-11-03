@@ -350,7 +350,7 @@ test('DRS: a Cary %R export loads with no alert, the file list says how each fil
       ['ref', 'ref.csv', 'F(R)', 'second column read as F(R)', true],
       ['nonstd', 'nonstd.csv', 'F(R)', 'the F(R) column its header names, read as F(R); not a standard format', true]]);
     const heads = await page.$$eval('#taucFileTableWrap thead th', ts=> ts.map(t=> t.textContent.trim()));
-    assert.deepEqual(heads.slice(2, 5), ['TRACE', 'FILE', '']);
+    assert.deepEqual(heads.slice(2, 5), ['LABEL', 'FILE', '']);
     // The Results' top: the pair side by side, the log plot under both, across the card at 2φ : 1.
     const box = await page.$$eval('#taucResults svg.plot', ss=> Object.fromEntries(ss.slice(0, 3).map(s=>{ const r = s.getBoundingClientRect(); return [s.id, [r.left, r.top, r.width, r.bottom]]; })));
     const [f0, rr, lg] = ['taucResSvg0', 'taucResSvgR', 'taucResSvgLog'].map(k=> box[k]);

@@ -33,7 +33,6 @@ import { decodeText } from './textdata.js';
                        (to v501 `cols`, columns of the module's own, a lead one left of
                        the label)
      noteHead          that column's header, plain text (GC: SAMPLE); none: no header
-     noColor           the files' colours not shown in the list (Custom), their place kept
      tip(f, i)         a trace's tooltip over its name, plain text (Iodometry: its metadata)
      traces(cb)        the trace list's rows and callbacks, { rows, cb }, where a file is
                        not one trace (Custom: a row a series): `cb` the kit's, for the
@@ -98,7 +97,6 @@ export function moduleKit(mod, o){
     onInclude(i, on){ setIncluded(all, i, on, slots()); changed('include'); },
     onIncludeAll(on){ all.forEach((_, j)=> setIncluded(all, j, on, slots())); changed('include'); },
     onLabelChange(i, v){ all[i].label = v; o.redraw('label'); kit.commit(); },
-    noColor: o.noColor,
     tip: o.tip,
     onColorChange(i, v){ all[i].color = v; o.redraw('color'); kit.commit(); },
     onPaletteChange(colors){ all.forEach((f, i)=>{ f.color = colors[i % colors.length]; }); changed('palette'); },

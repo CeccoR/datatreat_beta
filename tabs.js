@@ -23,7 +23,7 @@
 import { MODULES, MODULE_LABELS, goTab, getModuleState, restoreModuleState,
          getModuleHistory, setModuleHistory, confirmBanner, moduleHasData, X_SVG,
          onSectionChange, moduleBusy, stopModule, makeInstance, attachInstance,
-         detachInstance, dropKey, settings, saveSettings, onBusyChange, onAnyChange, dropsBytes, asleep, vacate, shownOf, showAgain } from './utils.js';
+         detachInstance, dropKey, settings, saveSettings, onBusyChange, onAnyChange, dropsBytes, asleep, vacate, shownOf, showAgain, orderModuleCards } from './utils.js';
 import { allTabStates, putTabRec, deleteTabRec, uid, encode, park, decode, unload, load, unread, refsIn } from './db.js';
 
 const UNTITLED = 'Untitled project';
@@ -808,8 +808,10 @@ async function requestClose(id){
   closeTab(id);
 }
 
-// Home technique cards: each opens a blank project of that technique in a new tab.
+// Home technique cards: each opens a blank project of that technique in a new tab. They,
+// and the "+" new project's, in the modules' order (utils.js orderModuleCards: Custom last).
 function initHomeCards(){
+  orderModuleCards();
   document.querySelectorAll('.home-card[data-go]').forEach(c=>{
     c.addEventListener('click', ()=> openTab({ module: c.dataset.go }));
   });

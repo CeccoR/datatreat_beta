@@ -1,5 +1,5 @@
 /* The trace list (utils.js renderUnifiedFileList; the file list to v531), the same in every
-   module (DRS, XRPD, GC, EPR, SEM): the grip and the include box 26 px each, then TRACE (the
+   module (DRS, XRPD, GC, EPR, SEM): the grip and the include box 26 px each, then LABEL (the
    colour's swatch and the name's field), FILE and a note with no header but GC's (SAMPLE)
    sharing what is left as 3 : 3 : 2, then the actions 58 px, measured in the browser at
    several widths, a phone's among them (no horizontal scroll, the name's field inside its
@@ -11,7 +11,9 @@
    traces showing the same file, each named after the sample the file names, each one's
    download the file's own bytes, the head's zip the file once; a GC file one trace, a
    sample with both its gases; a project of v531 (a Custom file left out, labels, an order)
-   opening as it was. */
+   opening as it was.
+   v534: the names' column headed LABEL again (TRACE v532–v533), in Custom's list too, its
+   series each with its colour's swatch and the palette's button. */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -60,7 +62,7 @@ const NAMES = {
   sem: [1, 2, 3].map(k=> [`S${k}`, `img${k}.tif`]),
 };
 for (const [vw, vh] of [[1400, 900], [800, 800], [375, 740]]){
-  test(`the trace list at ${vw} px: TRACE, FILE and the note at 3 : 3 : 2 in every module, the note right of the file`, async ()=>{
+  test(`the trace list at ${vw} px: LABEL, FILE and the note at 3 : 3 : 2 in every module, the note right of the file`, async ()=>{
     const { page, errors, close } = await env.page({ viewport: { width: vw, height: vh } });
     try {
       let at = null;
@@ -68,7 +70,7 @@ for (const [vw, vh] of [[1400, 900], [800, 800], [375, 740]]){
         await openModule(page, mod);
         await loadFiles(page, mod, env.fx.files[mod]);
         const m = await measure(page, mod), left = m.table - 26 - 26 - 58;
-        assert.deepEqual(m.heads, ['', '', 'TRACE', 'FILE', mod === 'gc' ? 'SAMPLE' : '', ''], mod + ': the heads, the note with none but GC\'s');
+        assert.deepEqual(m.heads, ['', '', 'LABEL', 'FILE', mod === 'gc' ? 'SAMPLE' : '', ''], mod + ': the heads, the note with none but GC\'s');
         assert.equal(m.rows.length, ROWS[mod], mod);
         assert.equal(m.lead, 0, mod + ': no column left of the trace');
         assert.deepEqual(m.rows.map(r=> [r.label, r.file]), NAMES[mod], mod + ': each trace\'s name and file');
@@ -81,10 +83,10 @@ for (const [vw, vh] of [[1400, 900], [800, 800], [375, 740]]){
           assert.equal(r.note, (NOTES[mod] || [])[i] || '', `${mod} row ${i}: its note`);
           assert.ok(r.inCell, `${mod} row ${i}: the name field inside its cell`);
         });
-        // (the name fields and TRACE where the swatches leave them: those of the first module)
+        // (the name fields and LABEL where the swatches leave them: those of the first module)
         at = at || { name: m.rows[0].nameAt, head: m.headAt };
         m.rows.forEach((r, i)=> assert.ok(Math.abs(r.nameAt - at.name) < 0.6, `${mod} row ${i}: its field at ${r.nameAt} px in its cell, for ${at.name}`));
-        assert.ok(Math.abs(m.headAt - at.head) < 0.6, `${mod}: TRACE at ${m.headAt} px, for ${at.head}`);
+        assert.ok(Math.abs(m.headAt - at.head) < 0.6, `${mod}: LABEL at ${m.headAt} px, for ${at.head}`);
         assert.equal(m.boxScroll, 0, mod + ': the list does not scroll sideways');
         assert.equal(m.pageScroll, 0, mod + ': nor the page');
       }
@@ -221,6 +223,8 @@ test('a project of v531 opens as it was: labels, inclusion, order; Custom\'s fil
     fs0.files[0] = { ...fs0.files[0], names: { 1: 'Mine' } };
     await put('fig', fs0);
     assert.deepEqual(await rows(page, 'fig'), [['Mine', 'a.csv', true], ['err', 'a.csv', true], ['Ref', 'a.csv', true], ['Series 1', 'b.csv', false], ['Series 2', 'b.csv', false]]);
+    assert.deepEqual(await page.$$eval('#figFileTableWrap thead th', ts=> ts.map(t=> t.textContent.trim())), ['', '', 'LABEL', 'FILE', '', ''], 'Custom: LABEL');
+    assert.deepEqual([await page.locator('#figFileTableWrap button.color-swatch').count(), await page.locator('#figFileTableWrap button.palette-pick-btn').count()], [5, 1], 'Custom: a colour a series, the palette');
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });

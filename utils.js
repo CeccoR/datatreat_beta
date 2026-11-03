@@ -840,13 +840,13 @@ function moveFileTo(all, from, to, slots){
    callbacks: {onRemove(i), onReorder(from,to), onRemoveAll(), onLabelChange(i,newLabel)
                (on leaving the field, not while typing),
                onColorChange(i,color), onPaletteChange(colors), onInclude(i,on),
-               onIncludeAll(on), noColor, tip}
+               onIncludeAll(on), tip}
                tip: optional (trace, i) => plain text, the trace's tooltip over its name
                (Iodometry: the wavelength and collection time its file states)
-               noColor: the traces' colours not shown (Custom: a plot gives its series
-               their colours); a trace with no colour (SEM) has none shown either. Either
-               way the swatch's place and the palette's stay, empty, so the names keep
-               their places
+               a trace with no colour (SEM, a Custom file of no series) has none shown:
+               the swatch's place stays, empty, so the names keep their places (so does
+               the palette's with no colour at all). Custom's series have theirs again
+               from v534 (v529–v533 hid them)
    note: optional (file, i) => markup, the trace's note, in the column right of its file
          (DRS: how its second column was read; GC: the sample's select); none, that
          column is left empty
@@ -866,17 +866,18 @@ function renderUnifiedFileList(container, files, callbacks, note, noteHead){
 
   /* The columns, the same in every module: drag and include box fixed 26px each, side by
      side at the left edge; actions fixed 58px (a fixed width guarantees the download+remove
-     icons fit even on narrow phones); TRACE (its colour and its name's field), FILE and the
+     icons fit even on narrow phones); LABEL (its colour and its name's field), FILE and the
      note, with no header but the module's (GC's SAMPLE), share what those leave as
      3 : 3 : 2. Their percentages add up to 100%, more than is left, and a fixed table
      layout scales them to it, the px columns kept. To v531 the list was of files: FILE
-     (the colour, the name) then LABEL. */
+     (the colour, the name) then LABEL; v532–v533 headed the names TRACE, LABEL again
+     from v534. */
   const colgroup = `<colgroup><col style="width:26px"><col style="width:26px"><col style="width:37.5%"><col style="width:37.5%"><col style="width:25%"><col style="width:58px"></colgroup>`;
   const grip = `<svg class="grip-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><line x1="2.5" y1="5" x2="13.5" y2="5"/><line x1="2.5" y1="8" x2="13.5" y2="8"/><line x1="2.5" y1="11" x2="13.5" y2="11"/></svg>`;
   const nIn = files.filter(isIncluded).length;
-  const colorOf = f => callbacks.noColor ? '' : f.color, anyColor = files.some(colorOf);
+  const colorOf = f => f.color || '', anyColor = files.some(colorOf);
 
-  let html = `<div class="table-wrap-box"><table class="file-table">${colgroup}<thead><tr><th></th><th class="incl-cell"><input type="checkbox" class="incl-all"${nIn ? ' checked' : ''} title="Include all traces in the analysis, or none"></th><th><div class="file-head">${anyColor ? '<button class="palette-pick-btn" title="Apply color palette"></button>' : '<span class="palette-pick-btn swatch-gap" aria-hidden="true"></span>'}<span>TRACE</span></div></th>`;
+  let html = `<div class="table-wrap-box"><table class="file-table">${colgroup}<thead><tr><th></th><th class="incl-cell"><input type="checkbox" class="incl-all"${nIn ? ' checked' : ''} title="Include all traces in the analysis, or none"></th><th><div class="file-head">${anyColor ? '<button class="palette-pick-btn" title="Apply color palette"></button>' : '<span class="palette-pick-btn swatch-gap" aria-hidden="true"></span>'}<span>LABEL</span></div></th>`;
   html += `<th>FILE</th><th class="note-cell"${noteHead ? ` title="${esc(noteHead)}"` : ''}>${noteHead ? esc(noteHead) : ''}</th>`;
   const dlIcon = DL_SVG(15);
   const xIcon = X_SVG(15);
@@ -2035,7 +2036,20 @@ function applyTheme(theme, persist){
 
 /* Module state access for the session manager: reuse each module's registered
    undo snapshot()/restore() as the canonical serialize/deserialize. */
-const MODULES = ['tauc','xrd','gc','epr','sem','fig','iodo'];
+/* The modules, in the order they are offered (the home page, the "+" new project's
+   chooser, the projects' filter): Custom, the module of no technique, always the last,
+   whatever modules come after it is written (v534), by this rule and not by its place in
+   a list (customLast; orderModuleCards puts the page's cards in that order). */
+const LAST_MODULE = 'fig';
+const customLast = mods => mods.map((m, i)=> [m, i]).sort((a, b)=> (a[0] === LAST_MODULE) - (b[0] === LAST_MODULE) || a[1] - b[1]).map(e=> e[0]);
+const MODULES = customLast(['tauc','xrd','gc','epr','sem','fig','iodo']);
+function orderModuleCards(root = document){
+  for (const [sel, key] of [['.home-card[data-go]', 'go'], ['[data-new-module]', 'newModule']]){
+    const cards = [...root.querySelectorAll(sel)], last = cards[cards.length - 1];
+    const c = cards.find(e=> e.dataset[key] === LAST_MODULE);
+    if (c && last && c !== last) last.after(c);
+  }
+}
 const MODULE_LABELS = { tauc:'UV-Vis DRS', xrd:'XRPD', gc:'GC', epr:'EPR', sem:'SEM', fig:'Custom', iodo:'Iodometry' };
 // (k: an instance's key, or a module's name for the instance of it on show: K)
 function getModuleState(k){
@@ -2663,5 +2677,5 @@ export {
   getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, guardNumericInput,
   guardNumberInputs, createDateTimeField, flashFieldInvalid, tiltFits, barNames, barChipYmax, confirmBanner, confirmModal, normalizeProjIcons, refreshProjBar, saveSettings, registerModule,
   makeInstance, attachInstance, detachInstance, dropKey, withState, onAnyChange, onBusyChange, busyChanged, shownOf, showAgain, zoomAgain, keeper, kept, objId, exactKey, dropsBytes, asleep, vacate,
-  fixed
+  fixed, isColor, customLast, orderModuleCards
 };

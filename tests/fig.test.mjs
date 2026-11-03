@@ -20,13 +20,18 @@
    line, at the table's right; the lists of series in scrolling boxes, their heads and the
    normalisation above them, + Add series under the Plot card's, its bottom on the chart's, the
    list ending just above it and the Data card's at the table's foot; a series' scale and
-   offset beside its name; the parameters' three fifths and two fifths. */
+   offset beside its name; the parameters' three fifths and two fifths.
+   v534: the trace list's colours back (a swatch a series, the palette), the plots' colours
+   theirs; the Data card's table across the card, as tall as a Plot card's chart, with no
+   list of series beside it, the series' names typed over in place in the line over their
+   columns (one name with the trace list's, both ways); the page scrolling on at the table's
+   end and outside it; the scrollbars of the theme. */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { start, openModule, loadFiles, settle, undo, moduleState, history, saveAs, openProject, exportProject, importProject, projectFile, download } from './helpers.mjs';
+import { start, openModule, loadFiles, settle, undo, moduleState, history, saveAs, openProject, exportProject, importProject, projectFile, download, tabLabels } from './helpers.mjs';
 
 let env, dir;
 before(async ()=>{
@@ -43,8 +48,11 @@ const tick = (page, ms)=> page.evaluate(async ms=> (await import('./tabs.js')).s
 const awake = async page => (await page.evaluate(async ()=> (await import('./tabs.js')).tabsNow())).map(t=> t.awake);
 const roles = async page => (await moduleState(page, 'fig')).files.map(f=> f.roles);
 const heads = page => page.$$eval('#figHead thead select', s=> s.map(e=> e.value));
-const names = page => page.$$eval('#figSeries input', s=> s.map(e=> e.value));
-const labels = page => page.$$eval('#figSeries label', s=> s.map(e=> e.textContent));
+// The series' names, in place over their columns (v534; a series once, its first field), and
+// "Series N (Cols x,y)" in their tooltips.
+const nameIns = (page, attr)=> page.$$eval('#figHead thead tr.fig-names input[data-col]', (s, attr)=>{ const seen = new Set(); return s.filter(e=> !seen.has(e.dataset.col) && seen.add(e.dataset.col)).map(e=> attr ? e.getAttribute(attr) : e.value); }, attr);
+const names = page => nameIns(page);
+const labels = page => nameIns(page, 'title');
 async function role(page, col, v){ await page.selectOption(`#figHead select[data-col="${col}"]`, v); await settle(page); }
 // The file i shown, by the Data card's arrows.
 async function showFile(page, i){
@@ -80,7 +88,7 @@ const cardSeries = async page => (await moduleState(page, 'fig')).cards.map(c=> 
 const top = (page, sel)=> page.$eval(sel, e=> e.getBoundingClientRect().top);
 const box = (page, sel)=> page.$eval(sel, e=>{ const r = e.getBoundingClientRect(); return { l: r.left, r: r.right, t: r.top, b: r.bottom, w: r.width, h: r.height }; });
 // The line of the series' names over the head: each cell's text and span.
-const nameRow = page => page.$$eval('#figHead thead tr.fig-names th', t=> t.map(e=> [e.textContent, e.colSpan]));
+const nameRow = page => page.$$eval('#figHead thead tr.fig-names th', t=> t.map(e=>{ const i = e.querySelector('input'); return [i ? i.value : e.textContent, e.colSpan]; }));
 // A grid's rows' split: where each field starts and how wide it is, in fifths of the grid's width.
 const split = (page, sel)=> page.$$eval(sel, gs=> gs.flatMap(g=>{
   const r = g.getBoundingClientRect();
@@ -97,23 +105,24 @@ test('Figure: three CSVs, the Data card, titles, roles, names, XY / bar / box ca
     assert.equal(await page.locator('#figDataCard').isVisible(), false, 'no Data card before a file');
     await loadFiles(page, 'fig', [path.join(dir, 'a.csv'), path.join(dir, 'b.csv'), path.join(dir, 'c.csv')]);
     assert.equal(await page.locator('#tab-fig .an-card').count(), 0, 'no plot card at the start');
-    // The trace list: a row a series (v532), no colour shown, its place kept (the names where the swatches leave them).
-    assert.equal(await page.locator('#figFileTableWrap button.color-swatch, #figFileTableWrap button.palette-pick-btn').count(), 0, 'no colour');
-    assert.equal(await page.locator('#figFileTableWrap span.color-swatch.swatch-gap').count(), 8);
-    assert.deepEqual(await page.$$eval('#figFileTableWrap span.swatch-gap', s=> s.map(e=> [e.getBoundingClientRect().width, getComputedStyle(e).visibility])),
-      Array(9).fill([14, 'hidden']), 'the palette\'s and the swatches\' places, empty');
+    // The trace list: a row a series (v532), each with its colour (v534: hidden v529–v533) and the palette's button.
+    assert.equal(await page.locator('#figFileTableWrap button.color-swatch').count(), 8, 'a swatch a series');
+    assert.equal(await page.locator('#figFileTableWrap button.palette-pick-btn').count(), 1, 'the palette');
+    assert.equal(await page.locator('#figFileTableWrap .swatch-gap').count(), 0);
+    assert.equal(new Set(await page.$$eval('#figFileTableWrap button.color-swatch', s=> s.map(e=> e.dataset.color))).size, 8, 'each its own');
     assert.deepEqual(await traceRows(page), [['Signal', 'a.csv', true], ['err', 'a.csv', true], ['Ref', 'a.csv', true], ['Series 1', 'b.csv', true], ['Series 2', 'b.csv', true],
       ['series 1 – A', 'c.csv', true], ['series 1 – B', 'c.csv', true], ['series 2', 'c.csv', true]]);
     // The Data card: the arrows, the number in the middle, the name on the right; the head on
     // the left, the series' list and the roles' box on the right, from the head's top.
     assert.equal(await page.textContent('#figFileIdx'), '1/3');
     assert.equal(await page.textContent('#figFileName'), 'a');
-    const hb = await box(page, '#figHead'), sb = await box(page, '#figSeries');
-    assert.ok(sb.l > hb.r, 'the series right of the head');
-    assert.ok(hb.w > sb.w, 'the head the wider');
-    assert.ok(Math.abs(await top(page, '#figDataCard .fig-side .param-head') - 5 - hb.t) < 1, 'the list from the head\'s top (5 px under it, as the analysis cards\' heads under their plots)');
+    // No list of series beside the table (v534): the table across the card.
+    const hb = await box(page, '#figHead');
+    assert.equal(await page.locator('#figSeries, #figDataCard .fig-side').count(), 0, 'no list of series');
+    const cw = await page.$eval('#figDataCard', e=>{ const r = e.getBoundingClientRect(), cs = getComputedStyle(e); return { l: r.left + parseFloat(cs.paddingLeft) + parseFloat(cs.borderLeftWidth), r: r.right - parseFloat(cs.paddingRight) - parseFloat(cs.borderRightWidth) }; });
+    assert.ok(Math.abs(hb.l - cw.l) < 1 && Math.abs(hb.r - cw.r) < 1, `the table the card's width (${hb.l}–${hb.r}, ${cw.l}–${cw.r})`);
     // The roles' box on the file's line, at the table's right.
-    assert.equal(await page.locator('#figDataCard .pside-nav #figSame').count(), 1, 'the roles\' box on the file\'s line');
+    assert.equal(await page.locator('#figDataCard .fig-data-nav #figSame').count(), 1, 'the roles\' box on the file\'s line');
     const sm = await box(page, '#figDataCard .fig-same'), ix = await box(page, '#figFileIdx');
     assert.ok(Math.abs((sm.t + sm.h/2) - (ix.t + ix.h/2)) < 2, 'level with the file\'s number');
     assert.ok(Math.abs(sm.r - hb.r) < 2, 'its right edge the table\'s');
@@ -169,7 +178,7 @@ test('Figure: three CSVs, the Data card, titles, roles, names, XY / bar / box ca
     assert.equal(await page.textContent('#figWarn'), '');
     await showFile(page, 2); await role(page, 3, 'x'); await showFile(page, 0);
     // A series renamed.
-    await page.fill('#figSeries input[data-col="1"]', 'Sig A'); await page.press('#figSeries input[data-col="1"]', 'Enter'); await settle(page);
+    await page.fill('#figHead input[data-col="1"]', 'Sig A'); await page.press('#figHead input[data-col="1"]', 'Enter'); await settle(page);
     assert.deepEqual(await names(page), ['Sig A', 'Ref']);
     assert.deepEqual(await nameRow(page), [['', 1], ['Sig A', 2], ['Ref', 1]], 'renamed over its columns');
 
@@ -179,7 +188,7 @@ test('Figure: three CSVs, the Data card, titles, roles, names, XY / bar / box ca
     assert.equal(await page.textContent('#tab-fig .an-card .an-type'), 'XY plot');
     assert.equal(await page.locator('#fig1Box .plot-wrap').isVisible(), false, 'empty: no plot');
     assert.equal(await page.locator('#fig1Empty').isVisible(), true);
-    assert.deepEqual(await box(page, '#fig1Empty').then(b=> [Math.round(b.w), Math.round(b.h)]), await box(page, '#figHead').then(b=> [Math.round(b.w), Math.round(b.h)]), 'its place the chart\'s size');
+    assert.equal(await box(page, '#fig1Empty').then(b=> Math.round(b.h)), await box(page, '#figHead').then(b=> Math.round(b.h)), 'its place the chart\'s height, the table\'s');
     // Add series: by file; a file's box ticks all its series, a square with some; Cancel nothing.
     const h1 = await history(page, 'fig');
     await page.click('#fig1Add'); await page.waitForSelector(PICK);
@@ -206,14 +215,14 @@ test('Figure: three CSVs, the Data card, titles, roles, names, XY / bar / box ca
     // (as DRS's cards: the svg under the toolbar's row, 36 px down, the column's head 41 px, by the plot's frame)
     const at = await top(page, '#tab-fig .an-card .pside-nav');
     assert.deepEqual([await top(page, '#fig1Svg') - at, await top(page, '#tab-fig .an-card .fig-side .param-head') - at], [36, 41], 'the list from the plot\'s top');
-    // The Data card's table the size of the chart.
+    // The Data card's table as tall as the chart, across the card.
     const sv = await box(page, '#fig1Svg'), tb = await box(page, '#figHead');
-    assert.ok(Math.abs(sv.w - tb.w) < 1.5 && Math.abs(sv.h - tb.h) < 1.5, `the table's box the chart's size (${tb.w}×${tb.h}, ${sv.w}×${sv.h})`);
+    assert.ok(Math.abs(sv.h - tb.h) < 1.5 && tb.w > sv.w + 100, `the table's box the chart's height, wider (${tb.w}×${tb.h}, ${sv.w}×${sv.h})`);
     // A series a row: its scale and offset beside its name; the parameters' 3/5 and 2/5.
     const nm = await box(page, '#fig1List .fig-ser >> nth=0 >> .fig-ser-name'), sc = await box(page, '#fig1List .fig-ser >> nth=0 >> [data-op="scale"]'), of = await box(page, '#fig1List .fig-ser >> nth=0 >> [data-op="offset"]');
     assert.ok(sc.l > nm.r && of.l > sc.r, 'scale and offset right of the name');
     assert.ok(Math.abs((nm.t + nm.h/2) - (sc.t + sc.h/2)) < 3 && Math.abs(sc.t - of.t) < 1, 'on its line');
-    for (const sel of ['#tab-fig .an-card .fig-side > .param-grid', '#fig1List .fig-ser', '#figSeries .param-grid'])
+    for (const sel of ['#tab-fig .an-card .fig-side > .param-grid', '#fig1List .fig-ser'])
       for (const [at, w] of await split(page, sel)) assert.ok(Math.abs(at - 3) < 0.02 && Math.abs(w - 2) < 0.02, `${sel}: the field at 3/5, 2/5 wide (${at}, ${w})`);
     // The window again: the plot's series ticked, a's box a square.
     await page.click('#fig1Add'); await page.waitForSelector(PICK);
@@ -369,15 +378,9 @@ test('Custom: the table whole and scrolling, the lists of series in their boxes,
       const hb = await box(page, '#figHead');
       assert.ok(Math.abs(await top(page, '#figHead thead tr.fig-names') - hb.t) < 2, 'the names\' line at the box\'s top, scrolled');
       assert.deepEqual(await history(page, 'fig'), h0, 'a scroll no step');
-      // The series of the file in their box: the head above it, its foot the table's.
-      const ls = await box(page, '#figSeries');
-      assert.ok(await page.$eval('#figSeries', e=> e.scrollHeight > e.clientHeight && getComputedStyle(e).overflowY === 'auto'), 'the 24 series scroll');
-      assert.ok(Math.abs(ls.b - hb.b) <= 2, `${width}: the list's foot the table's (${ls.b}, ${hb.b})`);
-      assert.ok(await top(page, '#figDataCard .fig-side > .param-head') < ls.t, 'the head above the list');
-      assert.equal(await page.locator('#figSeries .param-head').count(), 0);
-      const side = await box(page, '#figDataCard .fig-side'), grid = await box(page, '#figSeries .param-grid');
-      assert.ok(Math.abs(grid.w - side.w) < 1.5, `${width}: the rows the column's width, scrollbar or not (${grid.w}, ${side.w})`);
-      for (const [at, w] of await split(page, '#figSeries .param-grid')) assert.ok(Math.abs(at - 3) < 0.02 && Math.abs(w - 2) < 0.02, `the name at 3/5 (${at}, ${w})`);
+      // The 24 names in place over their columns, scrolling with the table (no list beside it, v534).
+      assert.equal((await names(page)).length, cols - 1);
+      assert.equal(await page.locator('#figSeries').count(), 0);
 
       // A Plot card of the 24: the list scrolls between the normalisation and + Add series.
       await addCard(page, 'xy');
@@ -391,7 +394,9 @@ test('Custom: the table whole and scrolling, the lists of series in their boxes,
       assert.ok(nb.b <= list.t, 'the normalisation above the list');
       assert.ok(await page.$eval('#fig1List', e=> e.scrollHeight > e.clientHeight), `the 24 series scroll (${JSON.stringify([sv, add, list])})`);
       assert.equal(await page.locator('#fig1List #fig1Add, #fig1List #fig1Norm, #fig1List .param-head').count(), 0, 'the head, the normalisation and the button outside the list');
-      assert.ok(Math.abs(sv.w - hb.w) < 1.5 && Math.abs(sv.h - hb.h) < 1.5, 'the table the chart\'s size');
+      assert.ok(Math.abs(sv.h - hb.h) < 1.5, `${width}: the table the chart's height (${hb.h}, ${sv.h})`);
+      const card = await box(page, '#figDataCard');
+      assert.ok(hb.w > sv.w + 100 && card.r - hb.r < 40 && hb.l - card.l < 40, `${width}: the table across the card`);
       for (const [at, w] of await split(page, '#fig1List .fig-ser')) assert.ok(Math.abs(at - 3) < 0.02 && Math.abs(w - 2) < 0.02, `a series' operations at 3/5 (${at}, ${w})`);
       // Nothing wider than its column (but the lists' boxes, whose thin scrollbar lies in the card's padding).
       assert.deepEqual(await page.$$eval('#tab-fig .fig-side', ss=> ss.flatMap(s=>{ const r = s.getBoundingClientRect(); return [...s.querySelectorAll('*')].filter(e=>{ const q = e.getBoundingClientRect(); return q.width && q.right > r.right + (e.classList.contains('fig-scroll') ? 11 : 1); }).map(e=> e.className || e.tagName); })), [], 'no overflow');
@@ -414,7 +419,7 @@ test('Custom: the series are the trace list\'s traces: one name, live roles, lef
     const lab = page.locator('#figFileTableWrap .file-label').nth(0);
     await lab.fill('Volt'); await lab.press('Enter'); await settle(page);
     assert.deepEqual(await names(page), ['Volt', 'err', 'Ref']);
-    const sn = page.locator('#figSeries input').nth(2);
+    const sn = page.locator('#figHead thead input[data-col="3"]');
     await sn.fill('Reference'); await sn.press('Enter'); await settle(page);
     assert.deepEqual((await traceRows(page)).map(r=> r[0]), ['Volt', 'err', 'Reference', 'Series 1', 'Series 2']);
     // A role changed in the Data card: the list at once (err an error of Signal: no trace of its own).
@@ -457,6 +462,163 @@ test('Custom: the series are the trace list\'s traces: one name, live roles, lef
     await undo(page);
     assert.deepEqual((await traceRows(page)).map(r=> r[0]), ['Series 2', 'Volt', 'Reference', 'Series 1']);
     assert.deepEqual(await heads(page), ['x', 'y', 'ey', 'y']);
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+/* v534: the trace list's colours: a swatch a series and the palette, the plots drawing each
+   series in its trace's colour (a colour picked, a palette given to all), kept with the
+   project and undone a step; the series' names typed over in place in the Data card's line
+   over their columns, the trace list's name the same both ways (Escape puts back the name);
+   a colour a change unsaved, the file shown and the table's scroll none (v528). */
+test('Custom v534: colours and palette in the trace list, the plots in them; the names in place, one with the list\'s', async ()=>{
+  const { page, errors, close } = await env.page();
+  try {
+    await openModule(page, 'fig');
+    await loadFiles(page, 'fig', [path.join(dir, 'a.csv'), path.join(dir, 'b.csv')]);
+    await addCard(page, 'xy');
+    await pick(page, 1, [['a', 'Signal'], ['b', 'Series 1']]);
+    const swatches = ()=> page.$$eval('#figFileTableWrap button.color-swatch', s=> s.map(e=> e.dataset.color));
+    const plotted = ()=> page.$eval('#fig1Svg', s=> s._plot._stored.filter(e=> e.type === 'line').map(e=> e.color));
+    const legend = ()=> page.$$eval('#fig1Legend i', is=> is.map(e=> getComputedStyle(e).backgroundColor));
+    const rgb = hex => `rgb(${[1, 3, 5].map(i=> parseInt(hex.slice(i, i + 2), 16)).join(', ')})`;
+    let sw = await swatches();
+    assert.equal(sw.length, 5);
+    assert.deepEqual(await plotted(), [sw[0], sw[3]], 'the lines in their traces\' colours');
+    assert.deepEqual(await legend(), [rgb(sw[0]), rgb(sw[3])], 'and the legend');
+    await saveAs(page, 'colours');
+    assert.ok(!(await tabLabels(page))[0].endsWith('*'));
+    // A view: the file shown, the table scrolled: no change unsaved.
+    await page.click('#figFileNext'); await settle(page);
+    await page.$eval('#figHead', e=>{ e.scrollTop = 30; }); await settle(page);
+    assert.ok(!(await tabLabels(page))[0].endsWith('*'), 'a view: no change');
+    await page.click('#figFilePrev'); await settle(page);
+    // A colour picked for Series 1 (b's): its line and its legend follow; a change, a step.
+    const h0 = await history(page, 'fig');
+    await page.click('#figFileTableWrap .color-swatch[data-i="3"]');
+    await page.click('.cp-popup .cp-preset >> nth=3');
+    await page.click('#figFileTableWrap thead th:nth-child(4)');
+    await settle(page);
+    sw = await swatches();
+    assert.equal(sw[3], '#f1c40f');
+    assert.deepEqual(await plotted(), [sw[0], '#f1c40f']);
+    assert.deepEqual(await legend(), [rgb(sw[0]), rgb('#f1c40f')]);
+    assert.deepEqual((await moduleState(page, 'fig')).files[1].colors, { 1: '#f1c40f' }, 'kept by its column');
+    assert.ok((await tabLabels(page))[0].endsWith('*'), 'a change unsaved');
+    assert.ok((await history(page, 'fig')).index > h0.index, 'a step');
+    await undo(page);
+    assert.notEqual((await swatches())[3], '#f1c40f', 'undone');
+    await undo(page, true);
+    // The palette: every series its colour, in the list's order.
+    await page.click('#figFileTableWrap button.palette-pick-btn');
+    const pal = await page.$$eval('.pp-popup .pp-row:nth-child(2) .pp-swatch', s=> s.map(e=> getComputedStyle(e).backgroundColor));
+    await page.click('.pp-popup .pp-row:nth-child(2)'); await settle(page);
+    sw = await swatches();
+    assert.deepEqual(sw.map(rgb), pal.slice(0, 5), 'the palette\'s colours in the list\'s order');
+    assert.deepEqual(await plotted(), [sw[0], sw[3]]);
+    // Kept with the project.
+    await page.click('.proj-save'); await page.waitForSelector('.proj-save.is-saved');
+    await openProject(page, 'fig', 'colours');
+    assert.deepEqual(await swatches(), sw, 'opened again with its colours');
+
+    // The names in place: typed over a's Ref, the trace list's too; renamed in the list, the field.
+    const field = page.locator('#figHead thead input[data-col="3"]');
+    assert.equal(await field.getAttribute('title'), 'Series 3 (Cols 1,4)');
+    await field.fill('Reference'); await field.press('Enter'); await settle(page);
+    assert.deepEqual((await traceRows(page)).map(r=> r[0]), ['Signal', 'err', 'Reference', 'Series 1', 'Series 2']);
+    const lab = page.locator('#figFileTableWrap .file-label').nth(1);
+    await lab.fill('Error'); await lab.press('Enter'); await settle(page);
+    assert.equal(await page.inputValue('#figHead thead input[data-col="2"]'), 'Error');
+    // Escape: the name it had; emptied: its own again.
+    await field.fill('xyz'); await field.press('Escape'); await settle(page);
+    assert.equal(await field.inputValue(), 'Reference');
+    await field.fill(''); await field.press('Enter'); await settle(page);
+    assert.equal(await field.inputValue(), 'Ref');
+    assert.equal((await traceRows(page))[2][0], 'Ref');
+    // Typed over, then a click on the next field: the name taken, the focus there.
+    await page.locator('#figHead thead input[data-col="1"]').fill('Volt');
+    await page.locator('#figHead thead input[data-col="2"]').click(); await settle(page);
+    assert.equal((await traceRows(page))[0][0], 'Volt');
+    assert.equal(await page.evaluate(()=> document.activeElement.dataset.col), '2', 'the focus on the field clicked');
+    assert.deepEqual((await stored(page, 1, 'line')).map(l=> l.label), ['Volt', 'Series 1'], 'the plot\'s names');
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+/* v534: the page scrolls on once the table's box is at its end (the wheel over it), and with
+   the pointer outside it; every box scrolling inside the page lets the wheel go on at its
+   end (only the windows, which hold the page still, keep it); the scrollbars of the theme. */
+test('Custom v534: the page scrolls past the table\'s end and outside it; the scrollbars follow the theme', async ()=>{
+  const { page, errors, close } = await env.page({ viewport: { width: 1400, height: 800 } });
+  try {
+    await openModule(page, 'fig');
+    fs.writeFileSync(path.join(dir, 'long.csv'), 'x,y\n' + Array.from({ length: 200 }, (_, i)=> `${i},${i*2}`).join('\n') + '\n');
+    await loadFiles(page, 'fig', [path.join(dir, 'long.csv')]);
+    await addCard(page, 'xy');
+    await page.$eval('#figHead', e=> window.scrollTo(0, e.getBoundingClientRect().top + scrollY - 100));
+    await settle(page);
+    const b = await box(page, '#figHead');
+    await page.mouse.move(b.l + b.w/2, b.t + b.h/2);
+    const y0 = await page.evaluate(()=> scrollY);
+    for (let i = 0; i < 30; i++){ await page.mouse.wheel(0, 300); await page.waitForTimeout(20); }
+    await page.waitForTimeout(300);
+    const inner = await page.$eval('#figHead', e=> e.scrollHeight - e.clientHeight - e.scrollTop);
+    assert.ok(inner < 2, 'the table scrolled to its end');
+    const y1 = await page.evaluate(()=> scrollY);
+    assert.ok(y1 > y0 + 50, `the wheel at the table's end scrolls the page (${y0} → ${y1})`);
+    // Outside it: the page, at once (up, from where it is).
+    await page.mouse.move(8, 400);
+    for (let i = 0; i < 3; i++){ await page.mouse.wheel(0, -200); await page.waitForTimeout(20); }
+    await page.waitForTimeout(300);
+    assert.ok(await page.evaluate(()=> scrollY) < y1 - 100, 'outside it, the page scrolls');
+    // Every rule that keeps the wheel in its box is a window's.
+    const contain = await page.evaluate(()=> [...document.styleSheets].flatMap(s=>{ try { return [...s.cssRules]; } catch(e){ return []; } })
+      .filter(r=> r.style && /contain|none/.test(r.style.overscrollBehavior || r.style.overscrollBehaviorY || '')).map(r=> r.selectorText));
+    assert.ok(contain.every(sel=> /modal|iodo-cal|xrd-std|xrd-cag/.test(sel)), 'only the windows\' boxes: ' + contain.join(' | '));
+    assert.deepEqual(await page.$$eval('#tab-fig *', es=> es.filter(e=> /auto|scroll/.test(getComputedStyle(e).overflowY) && getComputedStyle(e).overscrollBehaviorY !== 'auto').map(e=> e.id || e.className)), [], 'no box of the tab keeps the wheel');
+    // The scrollbars: the theme's colours, the dark's not the light's.
+    const bars = ()=> page.$eval('#figHead', e=> [getComputedStyle(e).scrollbarColor]);
+    const dark = await bars();
+    assert.equal(await page.evaluate(()=> document.documentElement.dataset.theme), 'dark');
+    await page.evaluate(async ()=> (await import('./utils.js')).applyTheme('light', false));
+    const light = await bars();
+    assert.notEqual(dark[0], light[0], `the scrollbars' colours differ (${dark[0]}, ${light[0]})`);
+    assert.notEqual(await page.$eval('#fig1List', e=> getComputedStyle(e).scrollbarColor), dark[0], 'a list\'s too');
+    await page.evaluate(async ()=> (await import('./utils.js')).applyTheme('dark', false));
+    assert.equal((await bars())[0], dark[0]);
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+/* v534: Custom the last module on the home page and in the "+" new project's chooser, by a
+   rule of its own (utils.js customLast, orderModuleCards), whatever module comes after it. */
+test('Custom last: the home page, the new project\'s chooser, the modules\' order', async ()=>{
+  const { page, errors, close } = await env.page();
+  try {
+    const order = ()=> page.evaluate(()=> [[...document.querySelectorAll('.home-card[data-go]')].map(e=> e.dataset.go), [...document.querySelectorAll('[data-new-module]')].map(e=> e.dataset.newModule)]);
+    const [home, pick] = await order();
+    assert.equal(home.at(-1), 'fig');
+    assert.equal(pick.at(-1), 'fig');
+    assert.deepEqual(home, pick);
+    // A module added after it in the page, and to a list: Custom still last.
+    const after = await page.evaluate(async ()=>{
+      const u = await import('./utils.js');
+      for (const [sel, attr] of [['.home-card[data-go="fig"]', 'data-go'], ['[data-new-module="fig"]', 'data-new-module']]){
+        const c = document.querySelector(sel), n = c.cloneNode(true);
+        n.setAttribute(attr, 'zzz');
+        c.after(n);
+      }
+      u.orderModuleCards();
+      return { mods: u.MODULES.at(-1), list: u.customLast(['fig', 'a', 'b']) };
+    });
+    assert.deepEqual(after, { mods: 'fig', list: ['a', 'b', 'fig'] });
+    const [home2, pick2] = await order();
+    assert.deepEqual([home2.slice(-2), pick2.slice(-2)], [['zzz', 'fig'], ['zzz', 'fig']]);
+    // The "+" chooser opened: Custom its last tile.
+    await page.evaluate(()=> document.querySelector('[data-new-module="zzz"]').remove());
+    await page.click('#tabBar .ptab-add');
+    assert.equal(await page.locator('#projNewModal .newproj-card').last().getAttribute('data-new-module'), 'fig');
+    assert.equal(await page.locator('#projNewModal .newproj-card').last().textContent(), 'Custom');
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });

@@ -124,18 +124,18 @@
               <p>Scanning Electron Microscopy. Tescan images read with their metadata (pixel size, magnification), cropped, normalised in intensity, grouped by scale and laid out into figures with scale bars.</p>
             </div>
           </div>
-          <div class="home-card" data-go="fig">
-            <div class="home-card-icon"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2 V24 H42"/><path d="M8 19 L16 11 L23 15 L32 5 L40 8"/></svg></div>
-            <div class="home-card-text">
-              <h3 class="txt-tile">Custom</h3>
-              <p>Plots of your own CSV and text files: columns as x, y and their errors, XY plots, bar charts and box plots, composed into figures.</p>
-            </div>
-          </div>
           <div class="home-card" data-go="iodo">
             <div class="home-card-icon"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 22 H12 L13.5 13 L15 20 C 21 11, 29 7, 42 6"/></svg></div>
             <div class="home-card-text">
               <h3 class="txt-tile">Iodometry</h3>
               <p>Iodide to triiodide by H₂O₂, followed as absorbance against time: each trace aligned on its injection and read at a fixed time after it, as an absorbance or, calibrated, a concentration.</p>
+            </div>
+          </div>
+          <div class="home-card" data-go="fig">
+            <div class="home-card-icon"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2 V24 H42"/><path d="M8 19 L16 11 L23 15 L32 5 L40 8"/></svg></div>
+            <div class="home-card-text">
+              <h3 class="txt-tile">Custom</h3>
+              <p>Plots of your own CSV and text files: columns as x, y and their errors, XY plots, bar charts and box plots, composed into figures.</p>
             </div>
           </div>
         </div>
@@ -456,11 +456,11 @@
       <!-- The Data card: a file's head and its columns' roles (fig.js). -->
       <div class="card" id="figDataCard" style="display:none">
         <h3 class="txt-head" style="margin:0 0 12px">Data</h3>
-        <div class="instr-block">The arrows step through the files. Each column of the file shown has a role, set over it: <b>x</b>, <b>y</b>, <b>err x</b>, <b>err y</b> or <b>—</b> (not used); by default the first column is x and the others y. A line of series' titles over the header ("series 1", , , "series 2") sets the first roles instead: each title opens a group, its first column the x and the next ones, up to the next title, its y. As in Origin, a file may have several x: each y belongs to the x before it (none: its x is the row number), each err y to the y before it and each err x to the x before it, one error at most a column. A column set to err y where its y has one already takes that one's place, which becomes a y (so does an err x). The table shows the whole file, scrolled inside its box; its first line names each series over its columns. Each y is a <b>series</b>, listed on the right as "Series N (Cols x,y)" (its x's column and its own) and named as its title names it (with the column's name when the title is over several y), else as the header names its column, else "Series N"; a name can be typed over (left empty, it goes back), and the column's unit, in the header as "Name (unit)", "[unit]" or "/ unit", titles the plots' axes. The roles are each file's own; <b>Same roles for all files</b> gives those of the file shown to every file, column by column. <b>+</b> under this card adds a plot.</div>
-        <!-- (as the Plot cards: the nav over the table, its box the size of their charts; the
-             series beside it from its top to its foot, scrolling in their box) -->
-        <div class="pside fig-pside">
-          <div class="plot-nav-row pside-nav">
+        <div class="instr-block">The arrows step through the files. Each column of the file shown has a role, set over it: <b>x</b>, <b>y</b>, <b>err x</b>, <b>err y</b> or <b>—</b> (not used); by default the first column is x and the others y. A line of series' titles over the header ("series 1", , , "series 2") sets the first roles instead: each title opens a group, its first column the x and the next ones, up to the next title, its y. As in Origin, a file may have several x: each y belongs to the x before it (none: its x is the row number), each err y to the y before it and each err x to the x before it, one error at most a column. A column set to err y where its y has one already takes that one's place, which becomes a y (so does an err x). The table, across the card, shows the whole file, scrolled inside its box; its first line names each series over its columns. Each y is a <b>series</b>, a trace of the trace list, "Series N (Cols x,y)" in its name's tooltip (its x's column and its own), named as its title names it (with the column's name when the title is over several y), else as the header names its column, else "Series N"; its name can be typed over in place, over its columns, or under <b>Label</b> in the trace list, one name in both (left empty, it goes back); its colour, picked in the trace list, or a palette given to all, is its colour in the plots; and the column's unit, in the header as "Name (unit)", "[unit]" or "/ unit", titles the plots' axes. The roles are each file's own; <b>Same roles for all files</b> gives those of the file shown to every file, column by column. <b>+</b> under this card adds a plot.</div>
+        <!-- (the file's line, with the roles of all files alike at its right; the table across
+             the card, its box as tall as the Plot cards' charts, scrolling both ways) -->
+        <div class="fig-data">
+          <div class="plot-nav-row fig-data-nav">
             <div class="plot-nav-left">
               <button type="button" class="btn nav-arrow" id="figFilePrev" aria-label="Previous file" title="Previous file">&#8249;</button>
               <span id="figFileIdx" class="pill nav-count" style="margin:0">1/1</span>
@@ -469,12 +469,8 @@
             </div>
             <label class="sem-check fig-same" title="The roles of the file shown given to every file, by the columns' places"><input type="checkbox" id="figSame"> Same roles for all files</label>
           </div>
-          <div class="pside-plot"><div class="fig-head-wrap" id="figHead" tabindex="0" role="region" aria-label="The file's columns and rows"></div></div>
-          <div class="pside-under"><div id="figWarn"></div></div>
-          <div class="pside-col fig-side">
-            <div class="txt-mini param-head">Series of this file</div>
-            <div class="fig-scroll" id="figSeries"></div>
-          </div>
+          <div class="fig-head-wrap" id="figHead" tabindex="0" role="region" aria-label="The file's columns and rows"></div>
+          <div id="figWarn"></div>
         </div>
       </div>
       <!-- The plot cards are built by fig.js, above the "+" bar. -->
@@ -562,7 +558,7 @@
       </div>
     </section>
 
-    <footer>DataTreat <span class="app-version">v533</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
+    <footer>DataTreat <span class="app-version">v534</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
   </main>
 
   <!-- Save project as… dialog -->
@@ -587,8 +583,8 @@
         <button class="newproj-card" type="button" data-new-module="gc"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 22 H10 C13 22 13 8 16 8 C19 8 19 22 22 22 H28 C32 22 31 14 34 14 C37 14 37 22 40 22 H42"/></svg><span class="txt-tile">GC</span></button>
         <button class="newproj-card" type="button" data-new-module="epr"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 14 H15 L20 5 L24 21 L29 14 H42"/></svg><span class="txt-tile">EPR</span></button>
         <button class="newproj-card" type="button" data-new-module="sem"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="13" r="7"/><circle cx="24" cy="9" r="5"/><circle cx="34" cy="15" r="6"/><path d="M27 24 H41"/></svg><span class="txt-tile">SEM</span></button>
-        <button class="newproj-card" type="button" data-new-module="fig"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2 V24 H42"/><path d="M8 19 L16 11 L23 15 L32 5 L40 8"/></svg><span class="txt-tile">Custom</span></button>
         <button class="newproj-card" type="button" data-new-module="iodo"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 22 H12 L13.5 13 L15 20 C 21 11, 29 7, 42 6"/></svg><span class="txt-tile">Iodometry</span></button>
+        <button class="newproj-card" type="button" data-new-module="fig"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2 V24 H42"/><path d="M8 19 L16 11 L23 15 L32 5 L40 8"/></svg><span class="txt-tile">Custom</span></button>
       </div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px">
         <button class="btn" type="button" data-new-cancel>Cancel</button>
