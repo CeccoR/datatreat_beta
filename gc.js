@@ -281,9 +281,9 @@ const resHtml = a => `
 // The analyses' kinds (cards.js), as the menu lists them.
 const KINDS = { rate: 'Production Rate' };
 // What T and p are (their columns' titles, and the card's instructions).
-const T_TITLE = 'the temperature at which the flow Q is measured — for a mass-flow controller, the reference temperature of its standard units (often 0 °C or 20 °C: see its datasheet), not the temperature of its body';
-const P_TITLE = 'the absolute pressure the flow Q refers to — for a mass-flow controller, the reference pressure of its standard units (usually 1 atm, 1.01325 bar: see its datasheet); for a flow measured as a volume, the absolute pressure of the gas where it is measured (ambient ≈ 1 atm)';
-const GC_INFO = `Set catalyst mass (m), carrier gas flow rate (Q), its temperature (T) and pressure (p), the light-on time and the integration interval for each sample to compute mean H₂ and O₂ production rates; the <b>H₂ / O₂</b> chips on each plot choose the gases drawn, for Analysis and for Results; the CSVs have every gas, whichever is drawn. An empty H₂ or O₂ cell leaves that injection out of that gas only, and the alert under the drop zone says how many were skipped. The injection dates are read month/day, as the instrument writes them, or day/month in a file where some do not exist so and every one does that way, its times going on as the rows do; a row whose date does not exist (2/30, 13/13, 13:00 PM) is left out, and the alert says either. Use the <b>all / one</b> toggles to share a value across samples or set it per sample. <b>T</b> is ${T_TITLE}. <b>p</b> is ${P_TITLE}; its unit (atm, bar, kPa, mbar, Torr = mmHg, psi) is chosen in its column's header, which converts the values shown, not the pressure. The flow is turned into moles with the molar volume of an ideal gas at that temperature and pressure, V<sub>m</sub> = RT/p (22.414 L/mol at 0 °C and 1 atm, 24.465 L/mol at 25 °C and 1 atm). A new analysis starts at 25 °C and 1 atm; a project saved before T existed keeps the 0 °C its rates were worked out at, and one saved before p, the 1 atm. The <b>injection delay</b> moves every injection on from its logged date to the moment the sample is actually injected; <b>Auto</b> uses 60.6 s. In per-sample interval mode the vertical lines are coloured by sample — hover or select a table row to highlight its interval on the plot (and vice-versa). <b>Replicates</b>: the <b>Sample</b> column of the file list says which sample each file is — its own (as it starts), or another file's, by that file's name (a label renamed changes nothing); a file that heads a group, set to another, takes its group along, and a head removed leaves its group to its next file. The time plots stay one per file; the mean-rate bar chart has one bar per sample, named after its head's label (the first included file's, the head left out), its height the mean of its included files' mean rates, each worked out with its own parameters, and its error bar the files' standard deviation (n − 1 under it; none for a single file); a file left out is out of the mean and of n. With replicates (a sample of more than one included file), mean_rates.csv has a row per sample (each gas's mean, ± and n) and mean_rates_by_file.csv a row per file, as mean_rates.csv has without them. ${cardInfo(false, true)}`;
+const T_TITLE = 'the temperature the flow Q refers to — for a mass-flow controller (sccm, slpm), the reference temperature of its standard units (Alicat: 25 °C), not that of the gas in the lines or the reactor; for a flow measured as a volume, the gas temperature where it is measured';
+const P_TITLE = 'the absolute pressure the flow Q refers to — for a mass-flow controller, the reference pressure of its standard units (Alicat: 14.696 psia = 1 atm), not that of the gas in the lines or the reactor; for a flow measured as a volume, the absolute pressure of the gas where it is measured (ambient ≈ 1 atm)';
+const GC_INFO = `Set catalyst mass (m), carrier gas flow rate (Q), its temperature (T) and pressure (p), the light-on time and the integration interval for each sample to compute mean H₂ and O₂ production rates; the <b>H₂ / O₂</b> chips on each plot choose the gases drawn, for Analysis and for Results; the CSVs have every gas, whichever is drawn. An empty H₂ or O₂ cell leaves that injection out of that gas only, and the alert under the drop zone says how many were skipped. The injection dates are read month/day, as the instrument writes them, or day/month in a file where some do not exist so and every one does that way, its times going on as the rows do; a row whose date does not exist (2/30, 13/13, 13:00 PM) is left out, and the alert says either. Use the <b>all / one</b> toggles to share a value across samples or set it per sample. <b>T</b> is ${T_TITLE}. <b>p</b> is ${P_TITLE}; its unit (atm, bar, kPa, mbar, Torr = mmHg, psi) is chosen in its column's header, which converts the values shown, not the pressure. A <b>mass-flow controller</b> (an Alicat MC, say) gives a mass flow as the volume it would take at its reference conditions (sccm, slpm), so the molar flow is n/t = p<sub>ref</sub>·Q/(R·T<sub>ref</sub>) with the controller's reference T and p: the real temperature and pressure of the gas, in the lines or in the reactor, do not enter. Set T and p to its standard conditions: Alicat's default is 25 °C and 14.696 psia (1 atm) for its standard units, 0 °C and 1 atm for its normal ones (NCCM, NLPM), and the device's STP/NTP menu can change them. Its reading is right for the gas it is set to: another gas or a mixture needs that gas chosen on the device, or its correction factor. The flow is turned into moles with the molar volume of an ideal gas at that temperature and pressure, V<sub>m</sub> = RT/p (22.414 L/mol at 0 °C and 1 atm, 24.465 L/mol at 25 °C and 1 atm). A new analysis starts at 25 °C and 1 atm; a project saved before T existed keeps the 0 °C its rates were worked out at, and one saved before p, the 1 atm. The <b>injection delay</b> moves every injection on from its logged date to the moment the sample is actually injected; <b>Auto</b> uses 60.6 s. In per-sample interval mode the vertical lines are coloured by sample — hover or select a table row to highlight its interval on the plot (and vice-versa). <b>Replicates</b>: the <b>Sample</b> column of the file list says which sample each file is — its own (as it starts), or another file's, named by that file's label (a label renamed shows at once and changes no link); a file that heads a group, set to another, takes its group along, and a head removed leaves its group to its next file. The time plots stay one per file; the mean-rate bar chart has one bar per sample, named after its head's label (the first included file's, the head left out), its height the mean of its included files' mean rates, each worked out with its own parameters, and its error bar the files' standard deviation (n − 1 under it; none for a single file); a file left out is out of the mean and of n. With replicates (a sample of more than one included file), mean_rates.csv has a row per sample (each gas's mean, ± and n) and mean_rates_by_file.csv a row per file, as mean_rates.csv has without them. ${cardInfo(false, true)}`;
 
 // A GC tab's instance (utils.js makeInstance: ctx { key, root, layer, shown }).
 function createGc({ key, root, layer, shown }){
@@ -319,7 +319,7 @@ function createGc({ key, root, layer, shown }){
     // A label or a colour changed: the zoom kept (the data are the same), a folded card not
     // drawn (to v494 it was, hidden, at no size, and lost its zoom). A file's sample: the
     // mean-rate bars alone, the only plot per sample.
-    redraw: what => what === 'note' ? each(c=> c.bars()) : each((c, a)=>{ if (what === 'label') c.renderTable(); if (!deck.isFolded(a)) c.compute(true); else c.computeQuiet(); }),
+    redraw: what => what === 'note' ? each(c=> c.bars()) : (what === 'label' && sampleNames(), each((c, a)=>{ if (what === 'label') c.renderTable(); if (!deck.isFolded(a)) c.compute(true); else c.computeQuiet(); })),
     cleared: ()=> each(c=> c.clear()),
     snapshot: ()=> ({ cards: cards().map(a=> ({ ...deck.saved(a), ...live.get(a.id).snapshot() })) }),
     /* A file as a restore takes it (modkit RESTORED): its injections, each with a date that
@@ -365,8 +365,9 @@ function createGc({ key, root, layer, shown }){
   /* ---- REPLICATES ----
      Each file is a sample of its own, or a replicate of another file's: its record's
      `sample`, the name of the file that heads the group, which the list's Sample column
-     chooses. Linked by the file's name, its identity in the list (the drop loads no name
-     twice), not by its label: a label renamed changes nothing. No chains: a file is linked
+     chooses, by the head's label (v535; its name to v534). Linked by the file's name, its
+     identity in the list (the drop loads no name twice), not by its label: a label renamed
+     changes no link, only the name shown. No chains: a file is linked
      to a head alone (a file linked to none), and a head linked to another takes its group
      along. Every plot and CSV stays per file but the mean-rate bars and mean_rates.csv,
      one per sample (samplesOf, sampleRates). */
@@ -394,12 +395,20 @@ function createGc({ key, root, layer, shown }){
   }
   // A file's head: the file it is linked to, or itself.
   const headOf = (f, by)=> (!isHead(f) && by.get(f.sample)) || f;
-  /* The file list's Sample column: a select of the file's own name and the heads', in list
-     order, on its head's; dimmed with the row when the file is left out, as its label is. */
+  /* The file list's Sample column: a select of the file itself and the heads, in list
+     order, on its head's; each option the file's name as its value (the link) and its label
+     as its text (to v534 its name), the name in its title; dimmed with the row when the
+     file is left out, as its label is. A label renamed is shown at once (sampleNames). */
+  const sampleOpt = (g, h)=> `<option value="${esc(g.name)}" title="${esc(g.name)}"${g === h ? ' selected' : ''}>${esc(g.label)}</option>`;
   function sampleCell(f, i){
     const h = headOf(f, byName().by);
-    return `<select class="file-sample" data-i="${i}" aria-label="Sample" title="The sample this file is: its own, or the one another file heads (its replicates)">${
-      allFiles.filter(g=> g === f || isHead(g)).map(g=> `<option value="${esc(g.name)}"${g === h ? ' selected' : ''}>${esc(g.name)}</option>`).join('')}</select>`;
+    return `<select class="file-sample" data-i="${i}" aria-label="Sample" title="The sample this trace is: its own, or the one another trace heads (its replicates), by its label">${
+      allFiles.filter(g=> g === f || isHead(g)).map(g=> sampleOpt(g, h)).join('')}</select>`;
+  }
+  // The Sample column's options after a label renamed: each its file's label again.
+  function sampleNames(){
+    const { by } = byName();
+    root.querySelectorAll('#gcFileTableWrap select.file-sample option').forEach(o=>{ const g = by.get(o.value); if (g && o.textContent !== g.label) o.textContent = g.label; });
   }
   /* File i's sample chosen (modkit noteChange): its own, it heads one again; a head's, it
      joins that one's, with the files it headed. A walk through its select's options

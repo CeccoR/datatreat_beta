@@ -1,10 +1,11 @@
 /* GC replicates (gc.js REPLICATES, v512):
    - the trace list: LABEL and FILE in every module (TRACE v532–v533; LABEL to v531, SAMPLE LABEL to v511), and in GC
-     alone a SAMPLE column, a select in each row of FILE NAMES: each file its own sample at
+     alone a SAMPLE column, a select in each row of the files, by LABEL (v535; their names to
+     v534, the names still the options' values, the links): each file its own sample at
      first; a row offers its own file and the heads (the files linked to none), never a
      file linked to another (no chains); a head set to another takes its group along; a
      head removed leaves its group to its next file in list order, the others linked to
-     that one; a label renamed changes no link; each choice a step of the history; the
+     that one; a label renamed changes no link, its options showing the new label at once; each choice a step of the history; the
      arrow keys through a select's options, the focus kept, one choice changed (a head's
      group along at each step, back with it to its own; the same links as the pick), the
      focus left and given back a new one;
@@ -45,6 +46,8 @@ const sels = page => page.$$eval('#gcFileTableWrap tr.file-row', rs=> rs.map(r=>
   const s = r.querySelector('td.note-cell select.file-sample');
   return [s.value, [...s.options].map(o=> o.value)];
 }));
+// Each row's options as shown: their labels.
+const texts = page => page.$$eval('#gcFileTableWrap select.file-sample', ss=> ss.map(s=> [...s.options].map(o=> o.textContent)));
 const pick = async (page, i, name)=>{ await page.selectOption(`#gcFileTableWrap select.file-sample[data-i="${i}"]`, name); await settle(page); };
 // File i's include box clicked: left out, or back in.
 const flip = async (page, i)=>{ await page.click(`#gcFileTableWrap tr.file-row:nth-child(${i + 1}) .file-incl`); await settle(page); };
@@ -77,6 +80,8 @@ test('the Sample column: each file its own, a select of its own name and the hea
     await open4(page);
     assert.deepEqual(await page.$$eval('#gcFileTableWrap thead th', ts=> ts.map(t=> t.textContent.trim())), ['', '', 'LABEL', 'FILE', 'SAMPLE', '']);
     assert.deepEqual(await sels(page), NAMES.map(n=> [n, NAMES]), 'each file its own sample, every file a head');
+    const LABELS = NAMES.map(n=> n.replace('.csv', ''));
+    assert.deepEqual(await texts(page), NAMES.map(()=> LABELS), 'the options named by their labels');
     assert.deepEqual(await links(page), [null, null, null, null]);
     assert.deepEqual((await bars(page)).map(b=> [b.name, b.key, b.errs.length]), NAMES.map(n=> [n.replace('.csv', ''), n, 0]), 'a bar per file, no error bar');
     // beta a replicate of alpha: a step of the history; beta no head, offered to no other row.
@@ -103,6 +108,10 @@ test('the Sample column: each file its own, a select of its own name and the hea
     await lab.fill('A1'); await lab.press('Enter'); await settle(page);
     assert.deepEqual(await links(page), [null, 'alpha.csv', 'alpha.csv', 'alpha.csv']);
     assert.deepEqual((await bars(page)).map(x=> x.name), ['A1']);
+    // The Sample column follows the rename at once: alpha's options show A1, the values the names.
+    assert.deepEqual(await texts(page), [['A1'], ['A1', 'beta'], ['A1', 'gamma'], ['A1', 'delta']]);
+    assert.deepEqual(await sels(page), [['alpha.csv', ['alpha.csv']], ['alpha.csv', ['alpha.csv', 'beta.csv']], ['alpha.csv', ['alpha.csv', 'gamma.csv']], ['alpha.csv', ['alpha.csv', 'delta.csv']]]);
+    assert.equal(await page.$eval('#gcFileTableWrap select.file-sample[data-i="1"]', s=> s.selectedOptions[0].textContent), 'A1', 'the selected sample shown by its label');
     // Its head left out: the bar named after its first included file; the head still offered.
     await flip(page, 0);
     assert.deepEqual((await bars(page)).map(x=> [x.name, x.key]), [['beta', 'alpha.csv']]);
@@ -117,10 +126,12 @@ test('the Sample column: each file its own, a select of its own name and the hea
     await undo(page);
     assert.deepEqual(await links(page), [null, 'alpha.csv', 'alpha.csv', 'alpha.csv'], 'undo: the head back with its group');
     assert.equal(await page.inputValue('#gcFileTableWrap .file-label >> nth=0'), 'A1');
+    assert.deepEqual((await texts(page))[1], ['A1', 'beta'], 'undo: the options by the label');
     await undo(page); await undo(page); await undo(page);   // its inclusion twice, its label
     await undo(page);
     assert.deepEqual(await links(page), [null, 'alpha.csv', null, 'gamma.csv'], 'undo: gamma heading delta again');
     assert.deepEqual((await bars(page)).map(x=> x.name), ['alpha', 'gamma']);
+    assert.deepEqual((await texts(page))[0], ['alpha', 'gamma'], 'undo: the label back in the options');
     await undo(page, true);
     assert.deepEqual(await links(page), [null, 'alpha.csv', 'alpha.csv', 'alpha.csv'], 'redo');
     // A member back to its own: a head again.
