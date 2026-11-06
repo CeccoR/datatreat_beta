@@ -27,7 +27,7 @@ npm run lint                       # ESLint over the app and the tests (eslint.c
 
 The lint needs ESLint 9 or later, installed apart (`npm i -g eslint`): it is no dependency.
 
-A full run takes about 15 min (246 tests, on the machine they were written on). Each
+A full run takes about 15 min (247 tests, on the machine they were written on). Each
 file opens its own server and browser; each test its own browser context, so IndexedDB,
 localStorage and the open tabs start empty every time.
 

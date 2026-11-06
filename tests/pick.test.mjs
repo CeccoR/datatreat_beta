@@ -1,10 +1,15 @@
 /* v536. DRS's Urbach Results: the plain plot and the subtracted one side by side (each
    φ : 1, plain on the left), each one's E_U chart under it as wide, no chips. And every
-   plot's traces (plot.js): one hovered drawn thicker and named in a square label of its
-   colour; clicked, locked, the crosshair in the lock's colour on the trace at the pointer's
-   x (its y interpolated); Esc or a click off it lets it go; nothing kept, no step. Where a
-   click is the plot's own already (XRPD's Scherrer peaks; Iodometry's injection, in
-   iodo.test.mjs) it does what it did. */
+   plot's traces (plot.js): one hovered drawn thicker and named in a square label;
+   clicked, locked, the crosshair in the lock's colour on the trace; Esc or a click off it
+   lets it go; nothing kept, no step. Where a click is the plot's own already (XRPD's
+   Scherrer peaks; Iodometry's injection, in iodo.test.mjs) it does what it did.
+   v538: the trace's line 1.5× as wide, nothing else; the crosshair on a data point of the
+   trace, never between two (a dense line: the point nearest the pointer's x; a scatter or
+   a sparse line: the point nearest the pointer on screen), hovered, clicked or locked; ←
+   and → move the lock one point along the trace, stopping at its ends, and step no
+   sample while it holds; the label read on the plot's background in both themes (a white
+   trace on a white plot: the background's colour, a dark border and text). */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { start, openModule, loadFiles, settle, history, moduleState } from './helpers.mjs';
@@ -81,34 +86,67 @@ test('a plot\'s trace: hovered, drawn out and named; clicked, locked, the crossh
     const hov = await page.$eval('#' + S, s=>{
       const hl = s.querySelector('.plot-cross .plot-pick-hl'), lb = s.querySelector('.plot-cross .plot-pick-label');
       return { hl: hl && [hl.getAttribute('stroke'), +hl.getAttribute('stroke-width')], rect: lb && lb.querySelector('rect').getAttribute('fill'), rx: lb && lb.querySelector('rect').getAttribute('rx'),
-        name: lb && lb.textContent, lock: s.querySelectorAll('.plot-lockcross').length };
+        name: lb && lb.textContent, lock: s.querySelectorAll('.plot-lockcross').length, n: s.querySelectorAll('.plot-cross .plot-pick-hl').length,
+        // the hover crosshair's x, in data: one of the trace's own
+        cx: s._plot.invX(+s.querySelector('.plot-crosshair').getAttribute('x1')) };
     });
-    assert.equal(hov.hl[0], p.color); assert.ok(hov.hl[1] >= 2*p.width, 'the trace drawn again, thicker');
+    const onData = await page.$eval('#' + S, (s, x)=>{
+      const P = s._plot, e = P._stored.filter(e=> e.type === 'line')[1], px = (P.xmax - P.xmin)/(P.size().w - P.margin.l - P.margin.r);
+      return e.xs.some(v=> Math.abs(v - x) <= 1e-6*px);
+    }, hov.cx);
+    assert.equal(hov.hl[0], p.color); assert.equal(hov.hl[1], 1.5*p.width, 'the trace drawn again, 1.5× as wide');
     assert.equal(hov.rect, p.color, 'its label in its colour');
     assert.equal(hov.rx, null, 'square-cornered');
     assert.equal(hov.name, p.label, 'named');
     assert.equal(hov.lock, 0, 'not locked');
+    assert.equal(hov.n, 1, 'one trace drawn out, nothing else');
+    assert.ok(onData, 'the hover crosshair on a data point of the trace');
     // Clicked: locked. The pointer moved off the trace, the crosshair stays on it at the pointer's x.
     await page.mouse.click(p.cx, p.cy);
     const lockColor = await page.evaluate(()=>{ const d = document.createElement('i'); d.style.color = 'var(--plot-lock)'; document.body.append(d); const c = getComputedStyle(d).color; d.remove(); return c; });
     const mx = p.cx + 40, my = p.cy - 60;
     await page.mouse.move(mx, my);
-    const lk = await page.$eval('#' + S, (s, [mx, my])=>{
+    // The lock's point: its index in the trace, and the point a dense line takes for the
+    // pointer (nearest its x, then its y).
+    const where = (mx, my)=> page.$eval('#' + S, (s, [mx, my])=>{
       const P = s._plot, r = s.getBoundingClientRect(), e = P._stored.filter(e=> e.type === 'line')[1];
       const dot = s.querySelector('.plot-lockdot'), line = s.querySelector('.plot-lockcross');
-      // (the pointer's x as the page has it, to the pixel; y interpolated at the dot's own x)
-      const x = P.invX(+dot.getAttribute('cx')), px = (P.xmax - P.xmin)/(P.size().w - P.margin.l - P.margin.r);
-      let y = NaN;
-      for (let i = 1; i < e.xs.length; i++){ const a = e.xs[i-1], b = e.xs[i]; if ((x - a)*(x - b) <= 0){ y = e.ys[i-1] + (e.ys[i] - e.ys[i-1])*(x - a)/(b - a); break; } }
-      return { x, y, px, mx: P.invX(mx - r.left), dx: P.invX(+dot.getAttribute('cx')), dy: P.invY(+dot.getAttribute('cy')), stroke: getComputedStyle(line).stroke,
-        hl: s.querySelector('.plot-pick-hl').getAttribute('stroke'), name: s.querySelector('.plot-pick-label').textContent, span: P.ymax - P.ymin,
-        readout: s.querySelector('.plot-readout').textContent };
+      const X = +dot.getAttribute('cx'), Y = +dot.getAttribute('cy');
+      const i = e.xs.findIndex((v, k)=> Math.abs(P.px(v) - X) < 1e-6 && Math.abs(P.py(e.ys[k]) - Y) < 1e-6);
+      let want = -1, bk = Infinity, bd = Infinity;
+      if (mx != null) e.xs.forEach((v, k)=>{
+        if (!isFinite(v) || !isFinite(e.ys[k]) || v < P.xmin || v > P.xmax) return;
+        const kk = Math.round(Math.abs(P.px(v) - (mx - r.left))*2), d = Math.abs(P.py(e.ys[k]) - (my - r.top));
+        if (kk < bk || (kk === bk && d < bd)){ bk = kk; bd = d; want = k; }
+      });
+      return { i, want, n: e.xs.length, x: e.xs[i], y: e.ys[i], dense: e.xs.filter(v=> v >= P.xmin && v <= P.xmax).length*6 > P.size().w - P.margin.l - P.margin.r,
+        stroke: getComputedStyle(line).stroke, hl: s.querySelector('.plot-pick-hl').getAttribute('stroke'), name: s.querySelector('.plot-pick-label').textContent,
+        readout: s.querySelector('.plot-readout').textContent, pick: s._pick && s._pick.i };
     }, [mx, my]);
+    const lk = await where(mx, my);
     assert.equal(lk.stroke, lockColor, 'the crosshair in the lock\'s colour');
     assert.equal(lk.hl, p.color); assert.equal(lk.name, p.label, 'the locked trace still drawn out and named');
-    assert.ok(Math.abs(lk.dx - lk.mx) <= lk.px, 'at the pointer\'s x');
-    assert.ok(Math.abs(lk.dy - lk.y) < 1e-9 * lk.span, `on the trace's y there (${lk.dy} vs ${lk.y})`);
+    assert.ok(lk.dense, 'a dense line');
+    assert.ok(lk.i >= 0, 'the dot on one of the trace\'s own points');
+    assert.equal(lk.i, lk.want, 'the point nearest the pointer\'s x');
     assert.match(lk.readout, /^Wavelength = [\d.]+ nmF\(R\) = /, 'the read-out of x and y');
+    // → and ←: one point along the trace each; the sample stays.
+    await page.keyboard.press('ArrowRight');
+    assert.equal((await where()).i, lk.i + 1, '→: the next point');
+    await page.keyboard.press('ArrowLeft'); await page.keyboard.press('ArrowLeft');
+    const back = await where();
+    assert.equal(back.i, lk.i - 1, '←, ←: the point before');
+    assert.equal(back.pick, lk.i - 1);
+    // The ends: no further.
+    await page.$eval('#' + S, s=>{ s._pick.i = s._plot._stored.filter(e=> e.type === 'line')[1].xs.length - 1; });
+    await page.keyboard.press('ArrowRight');
+    const end = await page.$eval('#' + S, s=> s._pick.i);
+    assert.equal(end, lk.n - 1, 'stops at the last point');
+    await page.$eval('#' + S, s=>{ s._pick.i = 0; });
+    await page.keyboard.press('ArrowLeft');
+    assert.equal(await page.$eval('#' + S, s=> s._pick.i), 0, 'stops at the first point');
+    assert.deepEqual(await history(page, 'tauc'), h0, 'the arrows stepped no sample');
+    assert.deepEqual(await moduleState(page, 'tauc'), st0, 'nor changed anything');
     // Esc: let go; the crosshair the pointer's again.
     await page.keyboard.press('Escape');
     await page.mouse.move(mx, my + 1);
@@ -137,6 +175,90 @@ test('a plot\'s trace: hovered, drawn out and named; clicked, locked, the crossh
     await settle(page);
     assert.deepEqual(await history(page, 'tauc'), h0, 'no step');
     assert.deepEqual(await moduleState(page, 'tauc'), st0, 'no change');
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+// A plot of its own in the app's page: a sparse line of 8 points and a scatter, white or
+// black, on the theme's panel colour.
+async function ownPlot(page, theme, color){
+  await page.evaluate(async ([theme, color])=>{
+    document.documentElement.setAttribute('data-theme', theme);
+    document.getElementById('ownPlot')?.remove();
+    const { Plot } = await import('./plot.js');
+    const box = document.createElement('div');
+    box.id = 'ownPlot';
+    box.style.cssText = 'position:fixed;left:20px;top:20px;width:600px;height:400px;z-index:99999;background:var(--panel)';
+    box.innerHTML = '<svg width="600" height="400" style="display:block;width:600px;height:400px"></svg>';
+    document.body.append(box);
+    const P = new Plot(box.querySelector('svg'), { xlabel: 'x (u)', ylabel: 'y' });
+    P.setRange(0, 7, 0, 10); P.drawAxes();
+    P.line([0, 1, 2, 3, 4, 5, 6, 7], [1, 3, 2, 5, 4, 7, 6, 8], color, 2, undefined, { label: 'sparse', key: 'sparse' });
+    P.points([0.5, 2.5, 4.5, 6.5], [9, 9, 9, 9], '#3a7bd5', 3);
+  }, [theme, color]);
+}
+// The pixel in the page of data (x, y) on it, and what its crosshair layer shows.
+const own = {
+  at: (page, x, y)=> page.evaluate(([x, y])=>{ const s = document.querySelector('#ownPlot svg'), r = s.getBoundingClientRect(); return { x: r.left + s._plot.px(x), y: r.top + s._plot.py(y) }; }, [x, y]),
+  cross: page => page.evaluate(()=>{
+    const s = document.querySelector('#ownPlot svg'), P = s._plot;
+    const v = s.querySelector('.plot-cross line'), dot = s.querySelector('.plot-lockdot'), lb = s.querySelector('.plot-pick-label');
+    const rgb = c =>{ const d = document.createElement('i'); d.style.color = c; document.body.append(d); const m = getComputedStyle(d).color.match(/[\d.]+/g).map(Number); d.remove(); return m.slice(0, 3); };
+    const lum = ([r, g, b])=>{ const f = v => (v /= 255) <= 0.03928 ? v/12.92 : ((v + 0.055)/1.055)**2.4; return 0.2126*f(r) + 0.7152*f(g) + 0.0722*f(b); };
+    const con = (a, b)=>{ const A = lum(a), B = lum(b); return (Math.max(A, B) + 0.05)/(Math.min(A, B) + 0.05); };
+    const bg = rgb(getComputedStyle(document.getElementById('ownPlot')).backgroundColor);
+    const rect = lb && lb.querySelector('rect'), text = lb && lb.querySelector('text');
+    return { x: v && P.invX(+v.getAttribute('x1')), y: v && P.invY(+s.querySelectorAll('.plot-cross line')[1].getAttribute('y1')), locked: !!dot,
+      hl: [...s.querySelectorAll('.plot-pick-hl')].map(h=> h.tagName === 'g' ? +h.querySelector('circle').getAttribute('stroke-width') : +h.getAttribute('stroke-width')),
+      name: lb && lb.textContent, readout: s.querySelector('.plot-readout')?.textContent,
+      // the label's box against the background (its fill, else its border), its text against its fill
+      boxCon: rect && Math.max(con(rgb(rect.getAttribute('fill')), bg), rect.getAttribute('stroke') ? con(rgb(rect.getAttribute('stroke')), bg) : 0),
+      textCon: rect && con(rgb(text.getAttribute('fill')), rgb(rect.getAttribute('fill'))), fill: rect && rect.getAttribute('fill'), i: s._pick && s._pick.i };
+  }),
+};
+
+test('a sparse line and a scatter: the crosshair on the data point nearest the pointer, hovered, clicked, locked; the arrows step it; the label readable in both themes', async ()=>{
+  const { page, errors, close } = await env.page();
+  try {
+    for (const [theme, color] of [['light', '#ffffff'], ['dark', '#ffffff'], ['light', '#000000'], ['dark', '#000000']]){
+      await ownPlot(page, theme, color);
+      const what = `${color} on ${theme}`;
+      // Near (3, 5), off the segments' interpolated y at the pointer's x: hovered, the
+      // crosshair on (3, 5) itself.
+      const a = await own.at(page, 3.15, 4.75);
+      await page.mouse.move(a.x, a.y);
+      let c = await own.cross(page);
+      assert.equal(c.name, 'sparse', what + ': hovered');
+      assert.deepEqual([+c.x.toFixed(9), +c.y.toFixed(9)], [3, 5], what + ': on the nearest point');
+      assert.match(c.readout, /^x = 3\.000 uy = 5\.000$/, what + ': its values read');
+      assert.deepEqual(c.hl, [3], what + ': drawn 1.5× as wide, alone');
+      assert.ok(c.boxCon >= 3, `${what}: the label's box reads on the background (${c.boxCon.toFixed(2)})`);
+      assert.ok(c.textCon >= 4.5, `${what}: its text on its box (${c.textCon.toFixed(2)})`);
+      // Clicked: locked on that point; the arrows along the line, to its ends.
+      await page.mouse.click(a.x, a.y);
+      c = await own.cross(page);
+      assert.deepEqual([c.locked, c.i, +c.x.toFixed(9), +c.y.toFixed(9)], [true, 3, 3, 5], what + ': locked on (3, 5)');
+      await page.keyboard.press('ArrowRight');
+      c = await own.cross(page);
+      assert.deepEqual([c.i, +c.x.toFixed(9), +c.y.toFixed(9)], [4, 4, 4], what + ': → (4, 4)');
+      for (let k = 0; k < 6; k++) await page.keyboard.press('ArrowRight');
+      assert.equal((await own.cross(page)).i, 7, what + ': stops at the last point');
+      for (let k = 0; k < 10; k++) await page.keyboard.press('ArrowLeft');
+      c = await own.cross(page);
+      assert.deepEqual([c.i, +c.x.toFixed(9), +c.y.toFixed(9)], [0, 0, 1], what + ': stops at the first');
+      // The pointer moved along: the lock on the point nearest it, (6, 6).
+      const b = await own.at(page, 5.8, 6.4);
+      await page.mouse.move(b.x, b.y);
+      c = await own.cross(page);
+      assert.deepEqual([c.i, +c.x.toFixed(9), +c.y.toFixed(9)], [6, 6, 6], what + ': follows the pointer, point by point');
+      await page.keyboard.press('Escape');
+    }
+    // The scatter: hovered near one of its points, the crosshair on that point; the circles' stroke 1.5×.
+    const d = await own.at(page, 2.55, 8.9);
+    await page.mouse.move(d.x, d.y);
+    const c = await own.cross(page);
+    assert.equal(c.name, 'Series 2');
+    assert.deepEqual([+c.x.toFixed(9), +c.y.toFixed(9), c.hl], [2.5, 9, [1.5]]);
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });

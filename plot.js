@@ -123,19 +123,29 @@ function near(from, id){
   for (let a = from && from.parentElement; a; a = a.parentElement){ const e = a.querySelector(sel); if (e) return e; }
   return document.getElementById(id);
 }
-/* ---- A trace picked out (v536) ----
-   Hovered, a curve or a scatter is drawn thicker and named, in a small square label of its
-   colour, by the pointer; clicked, it stays so (locked): the crosshair takes the lock's
-   colour and follows the trace, its point the trace's y at the pointer's x (interpolated
-   between the points either side), with the read-out of the two. A click off every trace,
-   or Esc, lets it go. All of it in the crosshair's layer (.plot-cross), which nothing
-   exports and nothing keeps: no project change, no step. Not where a click is the plot's
-   own already: a tool armed (pan, zoom), a module's pointer of its own (svg._suppressReadout:
-   XRPD's Add peak, Iodometry's injection), a plot that says so (svg._noPick: XRPD's
-   Scherrer peaks), what lies on the overlay (draggable lines), and bar charts (bars are no
-   trace: their crosshair as before). */
+/* ---- A trace picked out (v536; v538) ----
+   Hovered, a curve or a scatter is drawn 1.5× as thick (nothing else changes: no other
+   trace dimmed, no glow) and named in a small square label by it: in the trace's colour
+   where that reads on the plot's background (a luminance contrast of 3 or more), else in
+   the background's colour with a border and text that read on it (a white trace on a white
+   plot). The crosshair, and its read-out, sit on one of the trace's own data points, never
+   between two (v538; to v537 the y was interpolated at the pointer's x): on a scatter, or
+   on a line with under one point per SPARSE_PX px across the view, the point nearest the
+   pointer on screen; on a denser line the point nearest the pointer's x. Clicked, the
+   trace stays so (locked): the crosshair takes the lock's colour and follows the pointer
+   along the trace, and ← and → move it one data point along the trace, stopping at its
+   ends (the keys are the lock's only while it holds; else they step the samples as
+   before). A click off every trace, or Esc, lets it go. All of it in the crosshair's layer
+   (.plot-cross), which nothing exports and nothing keeps: no project change, no step. Not
+   where a click is the plot's own already: a tool armed (pan, zoom), a module's pointer of
+   its own (svg._suppressReadout: XRPD's Add peak, Iodometry's injection), a plot that says
+   so (svg._noPick: XRPD's Scherrer peaks), what lies on the overlay (draggable lines), and
+   bar charts (bars are no trace: their crosshair as before). */
 const PICK_TOL = 6;                 // px from a line, beyond its half width, that hovers it
-const _locked = new Set();          // the svgs with a trace locked, for Esc
+const SPARSE_PX = 6;                // px per point across the view under which a line is sparse
+const HL_FACTOR = 1.5;              // a picked trace's line width, × its own
+const _locked = new Set();          // the svgs with a trace locked, for Esc and the arrows
+let _lastLocked = null;             // the one locked last: the arrows' when several are
 const pickOff = P => !!(P._mode || P.svg._suppressReadout || P.svg._noPick || P._stored.some(e=> e.type === 'barpx' || e.type === 'box'));
 function legendOf(svg){
   const w = svg.closest('.plot-wrap'), d = w && w.querySelector('.plot-dl-btn');
@@ -146,37 +156,84 @@ function segDist(x, y, ax, ay, bx, by){
   const t = L ? Math.max(0, Math.min(1, ((x - ax)*dx + (y - ay)*dy) / L)) : 0;
   return Math.hypot(x - ax - t*dx, y - ay - t*dy);
 }
-/* The trace's point at x: its y interpolated between the two points either side (where it
-   passes x more than once, the one nearest yHint); x beyond its ends, its nearest end. */
-function traceAt(e, x, yHint){
-  const xs = e.xs, ys = e.ys;
-  let best = null, bd = Infinity, end = null, ed = Infinity, x0 = NaN, y0 = NaN;
+const finitePt = (e, i)=> isFinite(e.xs[i]) && isFinite(e.ys[i]);
+/* The index of trace e's data point the pointer at (cx, cy), px, stands for (see above):
+   the points in the view's x range only, unless it has none. -1: no finite point. */
+function nearestIndex(P, e, cx, cy){
+  const xs = e.xs, { w } = P.size(), m = P.margin, inView = i => xs[i] >= P.xmin && xs[i] <= P.xmax;
+  let n = 0;
+  for (let i = 0; i < xs.length; i++) if (finitePt(e, i) && inView(i)) n++;
+  const sparse = e.type === 'points' || n*SPARSE_PX <= w - m.l - m.r;
+  let best = -1, bk = Infinity, bd = Infinity;
   for (let i = 0; i < xs.length; i++){
-    const xi = xs[i], yi = ys[i];
-    if (!isFinite(xi) || !isFinite(yi)) continue;
-    const d0 = Math.abs(xi - x);
-    if (d0 < ed){ ed = d0; end = [xi, yi]; }
-    if (x0 === x0 && (x - x0)*(x - xi) <= 0){
-      const y = xi === x0 ? yi : y0 + (yi - y0)*(x - x0)/(xi - x0), d = Math.abs(y - yHint);
-      if (d < bd){ bd = d; best = [x, y]; }
-    }
-    x0 = xi; y0 = yi;
+    if (!finitePt(e, i) || (n && !inView(i))) continue;
+    const dx = Math.abs(P.px(xs[i]) - cx), dy = Math.abs(P.py(e.ys[i]) - cy);
+    // sparse: the distance on screen; dense: |dx| to the half pixel, then |dy|
+    const k = sparse ? Math.hypot(dx, dy) : Math.round(dx*2), d = sparse ? 0 : dy;
+    if (k < bk || (k === bk && d < bd)){ bk = k; bd = d; best = i; }
   }
-  return best || end;
+  return best;
 }
-// Black or white, whichever reads on the colour given (white when it cannot be read).
-function inkOn(c){
-  let m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(c).trim()), r, g, b;
-  if (m){ const h = m[1].length === 3 ? m[1].replace(/./g, '$&$&') : m[1]; [r, g, b] = [0, 2, 4].map(i=> parseInt(h.slice(i, i+2), 16)); }
-  else if ((m = /^rgba?\(\s*([\d.]+)[ ,]+([\d.]+)[ ,]+([\d.]+)/i.exec(String(c)))) [r, g, b] = [m[1], m[2], m[3]].map(Number);
-  else return '#ffffff';
-  return 0.299*r + 0.587*g + 0.114*b > 150 ? '#0b0f12' : '#ffffff';
+// The next finite point from i in direction dir (±1); i itself at the trace's end.
+function stepIndex(e, i, dir){
+  for (let j = i + dir; j >= 0 && j < e.xs.length; j += dir) if (finitePt(e, j)) return j;
+  return i;
 }
-document.addEventListener('keydown', e=>{
-  if (e.key !== 'Escape' || !_locked.size) return;
-  const list = [..._locked]; _locked.clear();
-  for (const svg of list){ svg._pick = null; if (svg._plot) svg._plot._repaintPick(); }
-});
+/* Colours, for the label's contrast: a CSS colour as [r, g, b] (what a canvas makes of it;
+   null when it cannot read it, a var() say, or it is transparent), its relative luminance
+   and the contrast of two (WCAG 2). */
+let _cctx;
+function rgbOf(c){
+  if (c == null) return null;
+  if (_cctx === undefined) _cctx = document.createElement('canvas').getContext('2d');
+  if (!_cctx) return null;
+  _cctx.fillStyle = '#010203'; _cctx.fillStyle = String(c).trim();
+  const s = _cctx.fillStyle;
+  if (s === '#010203' && !/^#010203$/i.test(String(c).trim())) return null;
+  let m = /^#([0-9a-f]{6})$/i.exec(s);
+  if (m) return [0, 2, 4].map(i=> parseInt(m[1].slice(i, i + 2), 16));
+  m = /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)(?:\s*,\s*([\d.]+))?/i.exec(s);
+  return m && !(m[4] != null && +m[4] < 0.5) ? [m[1], m[2], m[3]].map(Number) : null;
+}
+const luminance = rgb => { const f = v => (v /= 255) <= 0.03928 ? v/12.92 : ((v + 0.055)/1.055)**2.4; return 0.2126*f(rgb[0]) + 0.7152*f(rgb[1]) + 0.0722*f(rgb[2]); };
+const contrastOf = (a, b)=>{ const A = luminance(a), B = luminance(b); return (Math.max(A, B) + 0.05)/(Math.min(A, B) + 0.05); };
+const INK_DARK = '#0b0f12', INK_LIGHT = '#ffffff';
+// Black or white, whichever reads better on the colour given.
+const inkOn = rgb => contrastOf(rgb, [11, 15, 18]) >= contrastOf(rgb, [255, 255, 255]) ? INK_DARK : INK_LIGHT;
+// What lies behind the plot: the first of it and its ancestors with an opaque background.
+function backgroundOf(el){
+  for (let a = el; a && a.nodeType === 1; a = a.parentElement){
+    const c = rgbOf(getComputedStyle(a).backgroundColor);
+    if (c) return c;
+  }
+  return [255, 255, 255];
+}
+// Esc lets every lock go; ← and → move the lock one data point along its trace. Seen first
+// (the window, capturing), so that while a lock holds the arrows step it and not the
+// samples (utils.js); not from a field, nor under a window open over the plot.
+window.addEventListener('keydown', e=>{
+  if (!_locked.size) return;
+  if (e.key === 'Escape'){
+    const list = [..._locked]; _locked.clear();
+    for (const svg of list){ svg._pick = null; if (svg._plot) svg._plot._repaintPick(); }
+    return;
+  }
+  if ((e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+  const el = document.activeElement, tag = el && el.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (el && el.isContentEditable)) return;
+  for (const svg of [..._locked]) if (!svg.isConnected){ _locked.delete(svg); if (_lastLocked === svg) _lastLocked = null; }
+  const shown = svg => svg.getClientRects().length > 0 && svg._plot && !pickOff(svg._plot)
+    && ![...document.querySelectorAll('.modal-backdrop')].some(b=> b.getClientRects().length > 0 && !b.contains(svg));
+  const svg = _lastLocked && _locked.has(_lastLocked) && shown(_lastLocked) ? _lastLocked : [..._locked].reverse().find(shown);
+  if (!svg) return;
+  const P = svg._plot, st = svg._pick, t = st && P._traces().find(t=> t.id === st.lock);
+  if (!t) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  // (no point yet, the pointer off the plot since the click: the one at the view's middle)
+  const mid = ()=> nearestIndex(P, t.e, P.px((P.xmin + P.xmax)/2), P.py((P.ymin + P.ymax)/2));
+  st.i = stepIndex(t.e, st.i >= 0 && st.i < t.e.xs.length ? st.i : mid(), e.key === 'ArrowRight' ? 1 : -1);
+  P._paintPick(null, null, true);
+}, true);
 class Plot{
   constructor(svg, opts){
     this.svg = svg;
@@ -784,23 +841,27 @@ class Plot{
     }
     return best;
   }
-  // The trace drawn again over itself, thicker (clipped as the data are).
+  // The trace drawn again over itself, its line HL_FACTOR× as wide (clipped as the data are).
   _highlight(t){
     const el = t.e._el;
     if (!el || !el.isConnected) return;
     const c = el.cloneNode(true);
-    if (t.e.type === 'points') c.querySelectorAll('circle').forEach(ci=> ci.setAttribute('stroke-width', 2.5));
-    else c.setAttribute('stroke-width', Math.max(3, (t.e.width || 1.5)*2 + 0.5));
+    if (t.e.type === 'points') c.querySelectorAll('circle').forEach(ci=> ci.setAttribute('stroke-width', (+ci.getAttribute('stroke-width') || 1)*HL_FACTOR));
+    else c.setAttribute('stroke-width', (t.e.width || 1.5)*HL_FACTOR);
     c.setAttribute('class', 'plot-pick-hl');
     c.setAttribute('clip-path', `url(#${this._clipId})`);
     this.gCross.appendChild(c);
   }
-  // The trace's name in a small square label of its colour, by (x, y) px, kept in the plot.
+  /* The trace's name in a small square label by (x, y) px, kept in the plot: in its colour
+     where that reads on the background, else in the background's with a border. */
   _pickLabel(t, x, y){
     const {w,h}=this.size(); const m=this.margin;
+    const bg = backgroundOf(this.svg), col = rgbOf(t.e.color), own = col && contrastOf(col, bg) >= 3;
+    const ink = inkOn(own ? col : bg);
     const g = svgEl('g', {'class':'plot-pick-label'});
-    const r = svgEl('rect', {x:0, y:0, width:0, height:0, fill:t.e.color});
-    const tx = svgEl('text', {x:0, y:0, 'font-size':11, fill:inkOn(t.e.color), 'dominant-baseline':'central'});
+    const r = svgEl('rect', own ? {x:0, y:0, width:0, height:0, fill:t.e.color}
+                                : {x:0, y:0, width:0, height:0, fill:`rgb(${bg.join(',')})`, stroke:ink, 'stroke-width':1});
+    const tx = svgEl('text', {x:0, y:0, 'font-size':11, fill:ink, 'dominant-baseline':'central'});
     tx.textContent = t.name;
     g.append(r, tx); this.gCross.appendChild(g);
     const bw = (tx.getComputedTextLength() || t.name.length*6) + 10, bh = 17;
@@ -812,8 +873,9 @@ class Plot{
     tx.setAttribute('x', lx + 5); tx.setAttribute('y', ly + bh/2);
   }
   /* The pointer at (cx, cy), px (null: off the plot): the trace locked or hovered drawn out,
-     and the crosshair, snapped to the locked trace at the pointer's x. */
-  _paintPick(cx, cy){
+     and the crosshair on its data point (nearestIndex). `keep`: the locked point stays the
+     one it was (an arrow key, a redraw), whatever the pointer. */
+  _paintPick(cx, cy, keep){
     const g = this.gCross; if (!g) return;
     g.innerHTML = '';
     const {w,h}=this.size(); const m=this.margin;
@@ -823,22 +885,27 @@ class Plot{
     if (st && !lock){ this.svg._pick = null; _locked.delete(this.svg); }
     const hov = !lock && inside && !pickOff(this) ? this._hit(cx, cy) : null;
     if (lock || hov) this._highlight(lock || hov);
-    if (!inside) return;
+    // The crosshair on point i of trace t, when it is in the view.
+    const at = (t, i, locked)=>{
+      const xv = t.e.xs[i], yv = t.e.ys[i];
+      if (!(i >= 0) || !finitePt(t.e, i) || xv < this.xmin || xv > this.xmax || yv < this.ymin || yv > this.ymax) return false;
+      const X = this.px(xv), Y = this.py(yv);
+      this._crossAt(X, Y, xv, yv, locked);
+      this._pickLabel(t, X, Y);
+      return true;
+    };
     if (lock){
-      const p = traceAt(lock.e, Math.max(this.xmin, Math.min(this.xmax, this.invX(cx))), this.invY(cy));
-      if (!p) return;
-      const X = this.px(p[0]), Y = this.py(p[1]);
-      this._crossAt(X, Y, p[0], p[1], true);
-      this._pickLabel(lock, X, Y);
-    } else {
-      this._crossAt(cx, cy, this.invX(cx), this.invY(cy), false);
-      if (hov) this._pickLabel(hov, cx, cy);
+      if ((!keep && inside) || !(st.i >= 0 && st.i < lock.e.xs.length)) st.i = inside ? nearestIndex(this, lock.e, cx, cy) : -1;
+      at(lock, st.i, true);
+      return;
     }
+    if (!inside) return;
+    if (!(hov && at(hov, nearestIndex(this, hov.e, cx, cy), false))) this._crossAt(cx, cy, this.invX(cx), this.invY(cy), false);
   }
-  // Painted again where the pointer last was (a redraw, a release).
+  // Painted again where the pointer last was (a redraw, a release), a lock on its point.
   _repaintPick(){
     const l = this.svg._pickLast, r = l && this.svg.getBoundingClientRect();
-    this._paintPick(l ? l.x - r.left : null, l ? l.y - r.top : null);
+    this._paintPick(l ? l.x - r.left : null, l ? l.y - r.top : null, true);
   }
   // After a drawing, the lock painted again once the drawing is done.
   _pickSoon(){
@@ -846,15 +913,15 @@ class Plot{
     this._pickQ = true;
     requestAnimationFrame(()=>{ this._pickQ = false; if (this.svg._plot === this && this.svg._pick) this._repaintPick(); });
   }
-  // A click at (clientX, clientY): the trace there locked, or the lock let go.
+  // A click at (clientX, clientY): the trace there locked on its point there, or the lock let go.
   _pickClick(clientX, clientY){
     const r = this.svg.getBoundingClientRect(), cx = clientX - r.left, cy = clientY - r.top;
     const {w,h}=this.size(); const m=this.margin;
     const t = cx>=m.l && cx<=w-m.r && cy>=m.t && cy<=h-m.b ? this._hit(cx, cy) : null;
-    if (t){ this.svg._pick = { lock: t.id }; _locked.add(this.svg); }
+    if (t){ this.svg._pick = { lock: t.id, i: nearestIndex(this, t.e, cx, cy) }; _locked.add(this.svg); _lastLocked = this.svg; }
     else if (this.svg._pick){ this.svg._pick = null; _locked.delete(this.svg); }
     else return;
-    this._paintPick(cx, cy);
+    this._paintPick(cx, cy, true);
   }
   _initInteraction(){
     // View-only plots (e.g. the residual strip) get no pan/zoom interaction at all.
