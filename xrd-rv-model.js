@@ -29,7 +29,7 @@ function prepPhase(text, fileName){
   const own = cif.ops && cif.ops.length > 1;
   const atoms = expandAtoms(own ? cif.ops : [], cif.sites);
   const sc = structureCell(cif.cell, atoms), sym = sc.sym;
-  const comp = checkComposition(atoms, cif.formulaSum, cif.Z);
+  const comp = checkComposition(atoms, cif.formulaSum, cif.Z, { structural: cif.formulaStructural, sumAsCell: true });
   const notes = [], warnings = [...(cif.warnings || [])];
   if (sc.basis){
     const c = sc.cell, r = v => +v.toFixed(4), V = metric(c).V/metric(cif.cell).V;
