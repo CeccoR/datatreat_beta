@@ -130,6 +130,8 @@ test('Iodometry: a Cary Kinetics CSV, injections, the click, Suggest, readings, 
     const e1 = expected(0, 100.05, 240);
     assert.equal(await text(page, 'iodoA'), `n/a (the trace ends ${(300.05 - 100.05).toFixed(1)} s after the injection)`, 'past its end');
     assert.equal((await history(page, 'iodo')).index, h0.index + 1, 'a step');
+    // (the click is the injection's: no trace picked out or locked there, plot.js v536)
+    assert.deepEqual(await page.$eval('#iodoSvg', s=> [!!s._pick, s.querySelectorAll('.plot-pick-hl, .plot-pick-label, .plot-lockcross').length]), [false, 0], 'no trace locked by the injection click');
     assert.ok(Number.isNaN(e1.A));
     // Suggest: every trace's again.
     await page.click('#iodoSuggest'); await settle(page);

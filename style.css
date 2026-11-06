@@ -55,6 +55,7 @@
   --plot-readout: #f0f4f6;
   --plot-readout-halo: #0b0f12;
   --plot-errbar: #f0f4f6;
+  --plot-lock: #ff3ea5;      /* a trace locked: its crosshair and dot (plot.js _crossAt) */
 }
 /* Dark only: swap the plate direction (hover lighter, press darker). */
 :root[data-theme="dark"] {
@@ -105,6 +106,7 @@
   --plot-readout: #1a2327;
   --plot-readout-halo: var(--white);
   --plot-errbar: #2a2f38;
+  --plot-lock: #d4006f;
 }
 /* Plot chrome follows the theme. CSS beats SVG presentation attributes, so these
    override the fills/strokes plot.js sets inline — no JS changes needed. */
@@ -113,6 +115,9 @@
 .plot-tick   { fill: var(--plot-tick); }
 .plot-label  { fill: var(--plot-label); }
 .plot-crosshair { stroke: var(--plot-cross); }
+.plot-lockcross { stroke: var(--plot-lock); }
+.plot-lockdot { fill: var(--plot-lock); }
+.plot-pick-label text { font-family: inherit; }
 .plot-readout { fill: var(--plot-readout); stroke: var(--plot-readout-halo); }
 /* Error bars + their value labels: visible in both themes (override inline #fff) */
 .plot-errbar  { stroke: var(--plot-errbar); }
@@ -915,17 +920,11 @@ svg.plot.plot-wide { aspect-ratio: 3.236; }
    once the layout narrows and the card is a column's width (2φ : 1). */
 svg.plot.plot-strip { aspect-ratio: 6.472; }
 :root.narrow-layout svg.plot.plot-strip { aspect-ratio: 3.236; }
-/* An Urbach card's two Results plots, plain over subtracted, share the room of one
-   standard plot (φ : 1) of their column, so the upper one starts level with the E_U
-   chart beside them and the lower one ends level with it; the two are alike, each
-   half that room less what lies between them. That is the second one's caption line,
-   22px, and --pair-sep above it, so its toolbar, pulled up onto the caption, keeps
-   clear of the plot above (26px buttons + 2px gap, 12px clear). Stacked on a narrow
-   screen, each is a standard plot: half of one would leave no room for the data. */
-.plot-pair-col { container-type: inline-size; --pair-sep: 18px; }
-.plot-pair-col > .plot-wrap + .txt-caption { margin-top: var(--pair-sep); }
-svg.plot.plot-pair { aspect-ratio: auto; height: calc((100cqw / 1.618 - 22px - var(--pair-sep)) / 2); }
-:root.narrow-layout svg.plot.plot-pair { aspect-ratio: 1.618; height: auto; }
+/* An Urbach card's Results (v536): the plain plot and the subtracted one side by side, each
+   a standard plot (φ : 1), and each one's E_U chart under it, as wide. The two columns'
+   seven rows (caption, plot, legend, caption, chart, legend, alert) are shared, so the
+   charts start level whatever the legends and notes above them hold. */
+.row.cap-row.urb-row > .col { grid-row: span 7; }
 .legend {
   font-size: 12px;
   margin-top: 6px;

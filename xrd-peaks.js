@@ -1520,6 +1520,8 @@ export function createPeakAnalysis(host, root, o){
 
   // Plot-side peak click-to-select (mirror of the table interaction), acting only when
   // no pan/zoom tool is armed and no peak is being placed; the hover is the marks' own.
+  // (a click here is the peaks': no trace is picked out on this plot, plot.js pickOff)
+  $$('Svg')._noPick = true;
   $$('Svg').addEventListener('click', ()=>{
     const plot = anaPlot; if (!plot || plot._mode || addPeak.isAdding()) return;
     if (panel.hov!=null) selectPeak(panel.hov);  // clicked a peak/FWHM → (de)select it

@@ -1578,7 +1578,7 @@ function numsKey(a){
 const stateKey = v => JSON.stringify(v, (k, x)=> x instanceof Uint8Array ? bytesKey(x) : Array.isArray(x) && x.length && isFixed(x) ? numsKey(x) || x : x);
 /* ---- What a state holds of the view alone (v528) ----
    Pure visualization in a module's state — a card folded (cards.js `collapsed`, every
-   module's), a chart's selector of what it draws (DRS's E_g and E_U chips, egSel and urbSel;
+   module's), a chart's selector of what it draws (DRS's E_g chips, egSel, and to v535 its E_U ones, urbSel;
    GC's gases, gasSel; XRPD's size chart by sample or by peak, sizeBy) — is a step of the
    history like any change, but no change unsaved: the "*" compares a state's content, its
    key with those keys left out at any depth (contentKey), with the one saved. It is kept all

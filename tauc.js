@@ -70,15 +70,14 @@ const EG_METHODS = [
 /* The two ways E_U is read, told apart as GC's gases are: from ln F(R) as it is, and
    with the reference Tauc card's baseline taken out of F(R) first (urbachSub). Lines
    keep the sample's colour, the subtracted ones long-dashed (their fits dotted); bars
-   take the pair's two colours. Each Urbach card shows one, the other or both, in its line plot and in its
-   bar chart separately. */
+   take the pair's two colours. Each Urbach card's Results show both, each in a plot and a
+   bar chart of its own (v536: to v535 chips chose which E_U chart showed). */
 // Three line patterns, none used twice: the plain fits dashed (as every fit in the
 // Results is), the subtracted curves long-dashed, their fits dotted.
 const URB_METHODS = [
   { key: 'p', label: 'plain',      name: 'E_U',              color: '#3aa0ff' },
   { key: 's', label: 'subtracted', name: 'E_U (subtracted)', color: '#ff7a59' },
 ];
-const URB_ALL = ()=> ({ b: URB_METHODS.map(m=> m.key) });
 
 const clampN = v => Math.max(1, Math.round(v));
 const clampM = v => Math.max(2, Math.round(v));
@@ -339,7 +338,7 @@ function subBaselineSlopeErr(regs, Yraw, rb, ta, hv, FR, Mb){
 /* ---- Card markup ---- */
 const CARD_INFO = cardInfo(true, true);
 const TAUC_INFO = `Drag the vertical lines to set the Tauc linear regression region (red) and the baseline (magenta), or press <b>✦ Suggest intervals</b> to place them automatically from the absorption edge (second-derivative method), for every sample: one common set in <b>all</b> mode, each sample its own in <b>one</b> mode. Within each interval the best fit is chosen by sliding a window (its size is the regression-window value) and minimising <b>NRMSE/R²</b>, where <b>NRMSE = RMSE / (y<sub>max</sub>−y<sub>min</sub>)</b> of the window. Normalising by the y-range keeps the fit on the steep linear part instead of a flat low-value stretch that only has a small absolute RMSE, so it is markedly more stable. E<sub>g</sub> is extracted from both the x-axis intersection and the baseline intersection of the regression line. The <b>Tauc exponent</b> is 2 for direct allowed transitions, 0.5 for indirect allowed, 2/3 for direct forbidden and 1/3 for indirect forbidden ones; changing it places the lines again, as Suggest does (every sample in <b>all</b> mode, the one on show in <b>one</b> mode). Energies are hν = hc/λ (hc = 1239.842 eV·nm). The curve is smoothed with a centred moving average to choose each window, and the line is then fitted to the unsmoothed data inside it: fitted to smoothed values, whose residuals are no longer independent, its errors would come out too small. Where F(R) &lt; 0, [F(R)·hν]<sup>a</sup> has no value for a = 0.5, 2/3 or 1/3: those points are left out, as though not measured, of the smoothing, the derivatives, the suggestion and the fits. <b>Errors</b>: each E<sub>g</sub> uncertainty is the regression's own, its slope and intercept variances and their covariance propagated through the formula, multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom for each fit). E<sub>g</sub> from the baseline combines both fits and treats them as independent. ${CARD_INFO}`;
-const URBACH_INFO = `Below the band gap the absorption tail is exponential, F(R) ∝ exp(hν / E<sub>U</sub>), so <b>ln[F(R)]</b> against hν is a straight line of slope 1 / E<sub>U</sub>. The <b>Tauc reference</b> is the Tauc analysis this one is read against: its linear region is the red band on the plot, and <b>✦ Suggest intervals</b> places the Urbach region, for every sample, below it, where the tail is: from 1 eV under the middle of the Tauc linear region up to where that region starts; the regression window then finds the straightest stretch of the tail inside it by itself. The region follows the reference: when a sample's Tauc linear region moves (its lines, parameters, Suggest), the sample's Urbach region is placed on it again once the change is made (a Tauc line released, a value confirmed), and a new reference places them all. By default the reference is the nearest Tauc card above this one; one chosen by hand stays wherever the cards are moved. With <b>None</b> there is no band and nothing to follow, and the suggestion puts the lines at 25% and 75% of each sample's energy span. Drag the orange lines to set the region by hand: they stay until the reference's region moves again. The lines are always each sample's own: <b>all / one</b> here sets the parameters only. Within the region the best window of the regression-window size is chosen by minimising <b>NRMSE/R²</b> and fitted on the unsmoothed data, as for Tauc. <b>E<sub>U</sub> = 1 / slope</b>; its error is the slope's standard error carried through (σ<sub>m</sub> / m²), multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom). Points with F(R) ≤ 0 have no logarithm and are left out. <b>Subtracted</b>: the same, with the reference's Tauc baseline taken out of F(R) first. That baseline is a line in the Tauc plot, Y<sub>b</sub> = m·hν + b in [F(R)·hν]<sup>a</sup>, so in F(R) it is <b>F<sub>b</sub> = Y<sub>b</sub><sup>1/a</sup> / hν</b> where Y<sub>b</sub> > 0 (nothing where it is not); ln[F(R) − F<sub>b</sub>] is smoothed and fitted between the same lines, by the same rules, for a second slope and E<sub>U</sub> (subtracted). Its error adds, in quadrature, the fit's own (as for E<sub>U</sub>) and the Tauc baseline's carried through the subtraction: with the window held, the slope's derivatives with respect to the baseline's slope and intercept, J (exact, through F<sub>b</sub>), give its variance J Σ J<sup>T</sup>, Σ the baseline fit's covariance, whose square root, times that fit's own t factor (99%, two-sided, the reference card's baseline regression window − 2 degrees of freedom), is divided by slope² as above; the card's tooltip gives the two parts. The two fits are taken as independent, although the baseline and the Urbach region may share points. On the card's plot its curve is purple and its fit teal (solid in its window, dashed beyond), drawn as the plain ones are; with no reference there is nothing to subtract, and where the baseline lies above F(R) in the region there is no fit, which the card says. In the Results the Urbach plot is two, each with its own axes: the plain curves and fits above, the subtracted ones under them (empty, and saying why, when there is nothing to subtract); the chips on the E<sub>U</sub> chart show the plain E<sub>U</sub>, the subtracted one or both. ${CARD_INFO}`;
+const URBACH_INFO = `Below the band gap the absorption tail is exponential, F(R) ∝ exp(hν / E<sub>U</sub>), so <b>ln[F(R)]</b> against hν is a straight line of slope 1 / E<sub>U</sub>. The <b>Tauc reference</b> is the Tauc analysis this one is read against: its linear region is the red band on the plot, and <b>✦ Suggest intervals</b> places the Urbach region, for every sample, below it, where the tail is: from 1 eV under the middle of the Tauc linear region up to where that region starts; the regression window then finds the straightest stretch of the tail inside it by itself. The region follows the reference: when a sample's Tauc linear region moves (its lines, parameters, Suggest), the sample's Urbach region is placed on it again once the change is made (a Tauc line released, a value confirmed), and a new reference places them all. By default the reference is the nearest Tauc card above this one; one chosen by hand stays wherever the cards are moved. With <b>None</b> there is no band and nothing to follow, and the suggestion puts the lines at 25% and 75% of each sample's energy span. Drag the orange lines to set the region by hand: they stay until the reference's region moves again. The lines are always each sample's own: <b>all / one</b> here sets the parameters only. Within the region the best window of the regression-window size is chosen by minimising <b>NRMSE/R²</b> and fitted on the unsmoothed data, as for Tauc. <b>E<sub>U</sub> = 1 / slope</b>; its error is the slope's standard error carried through (σ<sub>m</sub> / m²), multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom). Points with F(R) ≤ 0 have no logarithm and are left out. <b>Subtracted</b>: the same, with the reference's Tauc baseline taken out of F(R) first. That baseline is a line in the Tauc plot, Y<sub>b</sub> = m·hν + b in [F(R)·hν]<sup>a</sup>, so in F(R) it is <b>F<sub>b</sub> = Y<sub>b</sub><sup>1/a</sup> / hν</b> where Y<sub>b</sub> > 0 (nothing where it is not); ln[F(R) − F<sub>b</sub>] is smoothed and fitted between the same lines, by the same rules, for a second slope and E<sub>U</sub> (subtracted). Its error adds, in quadrature, the fit's own (as for E<sub>U</sub>) and the Tauc baseline's carried through the subtraction: with the window held, the slope's derivatives with respect to the baseline's slope and intercept, J (exact, through F<sub>b</sub>), give its variance J Σ J<sup>T</sup>, Σ the baseline fit's covariance, whose square root, times that fit's own t factor (99%, two-sided, the reference card's baseline regression window − 2 degrees of freedom), is divided by slope² as above; the card's tooltip gives the two parts. The two fits are taken as independent, although the baseline and the Urbach region may share points. On the card's plot its curve is purple and its fit teal (solid in its window, dashed beyond), drawn as the plain ones are; with no reference there is nothing to subtract, and where the baseline lies above F(R) in the region there is no fit, which the card says. In the Results the Urbach plot is two, side by side, each with its own axes: the plain curves and fits on the left, the subtracted ones on the right (empty, and saying why, when there is nothing to subtract); under each, its E<sub>U</sub> chart, the plain E<sub>U</sub> under the plain plot and the subtracted one under the subtracted plot. ${CARD_INFO}`;
 const navRow = p => `
         <div class="plot-nav-row">
           <div class="plot-nav-left">
@@ -655,7 +654,8 @@ function createTauc({ key, root, layer, shown }){
      every card in the history. */
   const kit = moduleKit('tauc', {
     root, key, layer,
-    // (the charts' chips, E_g's and E_U's: the view alone, a step but no change unsaved; utils.js VIEW_KEYS)
+    // (E_g's chart's chips: the view alone, a step but no change unsaved; utils.js VIEW_KEYS. An
+    // Urbach card's choice, urbSel, is no more (v536): a project's own is read as nothing.)
     view: ['egSel', 'urbSel'],
     note: readNote,
     alerts: p =>{
@@ -678,7 +678,7 @@ function createTauc({ key, root, layer, shown }){
       const states = {};
       Object.entries(a.states).forEach(([k, s])=>{ if (k !== a.type && s) states[k] = clone(s); });
       states[a.type] = panelOf(a).snapshot();
-      return { ...deck.saved(a), ref: a.ref, refAuto: a.refAuto, egSel: a.egSel.slice(), urbSel: { b: a.urbSel.b.slice() }, states };
+      return { ...deck.saved(a), ref: a.ref, refAuto: a.refAuto, egSel: a.egSel.slice(), states };
     }) }),
     /* A file as a restore takes it (modkit RESTORED): its wavelengths and F(R), the points
        with both a finite number and a wavelength above 0 (none: left out); how it was read,
@@ -1136,7 +1136,7 @@ function createTauc({ key, root, layer, shown }){
   // A record's own fields, beside the deck's: `ref` is the Tauc reference's id, picked
   // by the default rule while `refAuto` is on. `states` keeps the settings of the kind
   // not on show.
-  const newFields = ()=> ({ ref: null, refAuto: true, egSel: EG_METHODS.map(m=>m.key), urbSel: URB_ALL(), states: {} });
+  const newFields = ()=> ({ ref: null, refAuto: true, egSel: EG_METHODS.map(m=>m.key), states: {} });
   const byId = id => deck.byId(id);
   const panelOf = a => a && live.has(a.id) ? live.get(a.id).panel : null;
   const refPanel = a =>{ const r = byId(a.ref); return r && r.type === 'tauc' ? panelOf(r) : null; };
@@ -1413,10 +1413,13 @@ function createTauc({ key, root, layer, shown }){
     nameDownloads(card.querySelector('.plot-wrap'), `${n} - sample.svg`, t ? `${n} - analysis_info.csv` : '');
     if (e.res && e.res.dataset.kind === a.type){
       e.res.querySelector('.res-an-title').textContent = a.name;
-      const w = e.res.querySelectorAll('.plot-wrap');
-      nameDownloads(w[0], `${n} - ${t ? 'Tauc' : 'Urbach'}_plot.svg`, `${n} - ${t ? 'tauc' : 'urbach'}_plot.csv`);
-      if (!t) nameDownloads(w[1], `${n} - Urbach_subtracted_plot.svg`, `${n} - urbach_plot.csv`);
-      nameDownloads(w[w.length - 1], `${n} - ${t ? 'Eg' : 'Eu'}_bar_chart.svg`, `${n} - ${t ? 'Eg' : 'Eu'}.csv`);
+      const w = id => e.res.querySelector('#an' + a.id + id).closest('.plot-wrap');
+      nameDownloads(w('R1'), `${n} - ${t ? 'Tauc' : 'Urbach'}_plot.svg`, `${n} - ${t ? 'tauc' : 'urbach'}_plot.csv`);
+      nameDownloads(w('R2'), `${n} - ${t ? 'Eg' : 'Eu'}_bar_chart.svg`, `${n} - ${t ? 'Eg' : 'Eu'}.csv`);
+      if (!t){
+        nameDownloads(w('R3'), `${n} - Urbach_subtracted_plot.svg`, `${n} - urbach_plot.csv`);
+        nameDownloads(w('R4'), `${n} - Eu_subtracted_bar_chart.svg`, `${n} - Eu.csv`);
+      }
     }
   }
   function syncRefSelects(){
@@ -1505,11 +1508,10 @@ function createTauc({ key, root, layer, shown }){
      files the restore left out (`gone`). */
   function readAnalysis(s, gone){
     const eg = Array.isArray(s.egSel) ? s.egSel.filter(k=> EG_METHODS.some(m=> m.key === k)) : [];
-    // Projects from before the subtraction show both, as a new card does.
-    const us = sec =>{ const v = s.urbSel && Array.isArray(s.urbSel[sec]) ? s.urbSel[sec].filter(k=> URB_METHODS.some(m=> m.key === k)) : []; return v.length ? v : URB_METHODS.map(m=> m.key); };
+    // (an Urbach card's urbSel, the E_U chips' choice to v535, is left out: both are shown)
     return {
       ref: Number.isInteger(s.ref) ? s.ref : null, refAuto: s.refAuto !== false,
-      egSel: eg.length ? eg : EG_METHODS.map(m=>m.key), urbSel: { b: us('b') },
+      egSel: eg.length ? eg : EG_METHODS.map(m=>m.key),
       states: Object.fromEntries(Object.entries(clone(isObj(s.states) ? s.states : {})).filter(([k, v])=> ownKey(KINDS, k) && isObj(v))
         .map(([k, v])=> [k, { ...v, per: Array.isArray(v.per) ? without(v.per, gone) : [] }])),
     };
@@ -1574,24 +1576,44 @@ function createTauc({ key, root, layer, shown }){
      under them across the card (2φ : 1), then each card's pair of charts under its name,
      in card order. To v497 the top was a pair, F(R) against λ and the log plot. ---- */
   const resList = $('taucResList');
+  /* An Urbach card's: the plain plot and the subtracted one side by side (each φ : 1), and
+     each one's E_U chart under it, as wide: plain R1 over R2, subtracted R3 over R4. Their
+     rows shared (cap-row), so the charts start level whatever lies between. */
   function resHtml(a){
-    const p = 'an' + a.id, t = a.type === 'tauc';
+    const p = 'an' + a.id;
+    if (a.type !== 'tauc') return `
+        <h4 class="res-an-title"></h4>
+        <div class="row res-row cap-row urb-row">
+          <div class="col">
+            <p class="txt-caption">Urbach Plot: plain</p>
+            ${box(p + 'R1', p + 'RL1', true)}
+            <div><div id="${p}RL1" class="legend"></div></div>
+            <p class="txt-caption">Urbach Energy: plain</p>
+            ${box(p + 'R2', p + 'RL2', true)}
+            <div id="${p}RL2" class="legend"></div>
+            <div id="${p}RA" class="bar-alert"></div>
+          </div>
+          <div class="col">
+            <p class="txt-caption">Urbach Plot: subtracted</p>
+            ${box(p + 'R3', p + 'RL3', true)}
+            <div><div id="${p}RL3" class="legend"></div><p id="${p}RS" class="txt-meta" hidden></p></div>
+            <p class="txt-caption">Urbach Energy: subtracted</p>
+            ${box(p + 'R4', p + 'RL4', true)}
+            <div id="${p}RL4" class="legend"></div>
+            <div id="${p}RA4" class="bar-alert"></div>
+          </div>
+        </div>`;
     return `
         <h4 class="res-an-title"></h4>
         <div class="row res-row">
-          <div class="col${t ? '' : ' plot-pair-col'}">${t ? `
+          <div class="col">
             <p class="txt-caption">Tauc Plot</p>
-            ${box(p + 'R1', p + 'RL1', true)}` : `
-            <p class="txt-caption">Urbach Plot: plain</p>
-            ${box(p + 'R1', p + 'RL1', true, '', 'plot-pair')}
-            <p class="txt-caption">Urbach Plot: subtracted</p>
-            ${box(p + 'R3', p + 'RL1', true, '', 'plot-pair')}
-            <p id="${p}RS" class="txt-meta" hidden></p>`}
+            ${box(p + 'R1', p + 'RL1', true)}
             <div id="${p}RL1" class="legend"></div>
           </div>
           <div class="col">
-            <p class="txt-caption" id="${p}BarTitle">${t ? 'Energy Band Gap' : 'Urbach Energy'}</p>
-            ${box(p + 'R2', p + 'RL2', true, `\n              <span class="plot-chips" id="${p}${t ? 'EgSel' : 'UrbSelB'}"></span>`)}
+            <p class="txt-caption" id="${p}BarTitle">Energy Band Gap</p>
+            ${box(p + 'R2', p + 'RL2', true, `\n              <span class="plot-chips" id="${p}EgSel"></span>`)}
             <div id="${p}RL2" class="legend"></div>
             <div id="${p}RA" class="bar-alert"></div>
           </div>
@@ -1740,13 +1762,12 @@ function createTauc({ key, root, layer, shown }){
     const errs = { x: fits.map(r=>r.EgErr), b: fits.map(r=>r.EgIntErr) };
     const shown = EG_METHODS.filter(m=> a.egSel.includes(m.key)).map(m=> ({ ...m, vals: vals[m.key], errs: errs[m.key] }));
     $('RA').innerHTML = shown.map(m=> negWarnHtml(m.vals, `E<sub>g</sub> (${m.label})`)).join('');
-    resBars(a, shown, $('EgSel'), `${egLabel ? egLabel+' ' : ''}Band Gap E<tspan baseline-shift="sub" font-size="8">g</tspan> (eV)`, 3);
+    resBars(a, 'R2', shown, $('EgSel'), `${egLabel ? egLabel+' ' : ''}Band Gap E<tspan baseline-shift="sub" font-size="8">g</tspan> (eV)`, 3);
   }
 
   // An Urbach card's Results: every sample's ln F(R) with its Urbach fit, drawn as the
   // Tauc plot is, plain on one plot and with the Tauc baseline subtracted on another
-  // under it, each with its own axes; and E_U beside them as the gaps are, plain,
-  // subtracted or both, as its chips say.
+  // beside it, each with its own axes; and under each its E_U, as the gaps are.
   function drawUrbachRes(a){
     const P = panelOf(a), $ = id => resEl(a, id);
     const fits = files.map((f,k)=> P.analyze(k));
@@ -1757,23 +1778,17 @@ function createTauc({ key, root, layer, shown }){
     }));
     const vals = { p: fits.map(r=> r.Eu*1000), s: fits.map(r=> r.sub ? r.sub.Eu*1000 : NaN) };
     const errs = { p: fits.map(r=> r.EuErr*1000), s: fits.map(r=> r.sub ? r.sub.EuErr*1000 : NaN) };
-    // Any value at all, of either sign: a negative E_U is flagged under the chart.
-    const canB = { p: true, s: vals.s.some(isFinite) };
-    // Why the subtracted series may be missing, for its chip's tooltip and under its plot.
+    // Why the subtracted series may be missing, said under its plot.
     const why = !refPanel(a) ? 'No Tauc reference: nothing to subtract'
       : fits.every(r=> !r.sub) ? "The Tauc reference's baseline has no fit: nothing to subtract"
       : 'No subtracted fit for any sample: the Tauc baseline lies above F(R) in the Urbach region (the card says where)';
-    // E_U's chips, GC's gas chips over again: a series the data cannot give (no
-    // reference: nothing subtracted) is there but disabled, and never are both off.
-    $('UrbSelB').innerHTML = chipRow(URB_METHODS, urbOn(a, canB), { cls: 'plot-chip', data: m=> `data-urb="${m.key}"`, can: m=> canB[m.key], why: ()=> why });
-    const showB = URB_METHODS.filter(m=> urbOn(a, canB).includes(m.key));
 
     const [hv0, hv1] = unionHv(), xExt = linspace(hv0, hv1, 100);
     /* One of the two plots: each sample's curve, and its Urbach fit dashed over the
        whole span. The plain curves are ranged in full; a subtracted curve runs down
        without end where F(R) − F_b goes to zero, below the tail, so those are ranged
        from each one's Urbach region up, the bottom at their 5th percentile there. */
-    const drawOne = (which, key, ylabelSvg, fitOf, tag)=>{
+    const drawOne = (which, key, ylabelSvg, fitOf, tag, legend)=>{
       const plot = resPlotOf(a, {xlabel:'Energy (eV)', ylabelSvg, xTickStep:0.5, noYTickLabels:true}, which);
       plot.clearData();
       let yLo = Infinity, yHi = -Infinity;
@@ -1798,39 +1813,34 @@ function createTauc({ key, root, layer, shown }){
           plot.line(xExt, xExt.map(x=>r.slope*x+r.intercept), f.color, 1, '5,4',
                     { label: `${f.label} Urbach`, key: `${f.name}${tag}/regs line` });
       });
+      $(legend).innerHTML = swatchLegend(files);
     };
-    drawOne('R1', 'p', 'ln[F(R)] (a. u.)', k=> fits[k].regs, '');
-    drawOne('R3', 's', 'ln[F(R) − F<tspan baseline-shift="sub" font-size="8">b</tspan>] (a. u.)', k=> fits[k].sub && fits[k].sub.regs, '/sub');
-    // With no subtracted curve at all, the plot under the plain one says why it is empty.
+    drawOne('R1', 'p', 'ln[F(R)] (a. u.)', k=> fits[k].regs, '', 'RL1');
+    drawOne('R3', 's', 'ln[F(R) − F<tspan baseline-shift="sub" font-size="8">b</tspan>] (a. u.)', k=> fits[k].sub && fits[k].sub.regs, '/sub', 'RL3');
+    // With no subtracted curve at all, the subtracted plot says why it is empty.
     const noSub = !curves.some(c=> c.s && c.s.some(isFinite));
     $('RS').textContent = noSub ? why + '.' : ''; $('RS').hidden = !noSub;
-    $('RL1').innerHTML = swatchLegend(files);
 
-    // The E_U bar chart, in meV as the Urbach card shows it: the plain and the
-    // subtracted E_U side by side in each sample's slot, as the gaps' two are.
-    const shown = showB.map(m=> ({ ...m, vals: vals[m.key], errs: errs[m.key] }));
-    $('RA').innerHTML = shown.map(m=> negWarnHtml(m.vals, m.key === 'p' ? 'E<sub>U</sub>' : 'E<sub>U</sub> (subtracted)')).join('');
-    resBars(a, shown, $('UrbSelB'), 'Urbach Energy E<tspan baseline-shift="sub" font-size="8">U</tspan> (meV)', 1);
+    // The E_U bar charts, in meV as the Urbach card shows it: the plain one under the
+    // plain plot, the subtracted one under the subtracted plot.
+    const yLab = 'Urbach Energy E<tspan baseline-shift="sub" font-size="8">U</tspan> (meV)';
+    URB_METHODS.forEach(m=>{
+      const shown = [{ ...m, vals: vals[m.key], errs: errs[m.key] }], pl = m.key === 'p';
+      $(pl ? 'RA' : 'RA4').innerHTML = negWarnHtml(shown[0].vals, pl ? 'E<sub>U</sub>' : 'E<sub>U</sub> (subtracted)');
+      resBars(a, pl ? 'R2' : 'R4', shown, null, yLab, 1);
+    });
   }
-  // The series E_U's chart shows: those chosen that the data can give, else the plain one.
-  // The choice itself is kept, so a series that comes back is shown again.
-  function urbOn(a, can){
-    const eff = a.urbSel.b.filter(k=> can[k]);
-    return eff.length ? eff : ['p'];
-  }
-  /* A chip of a card's chart clicked (E_g's two, E_U's two): its card's choice switched, a
-     click never leaving the chart with nothing (toggleChip; what is on show is what the
-     chips show), each card its own. */
-  const CHIPS = { eg: [EG_METHODS, a=> a.egSel, (a, v)=>{ a.egSel = v; }], urb: [URB_METHODS, a=> a.urbSel.b, (a, v)=>{ a.urbSel.b = v; }] };
+  /* A chip of a Tauc card's chart clicked (E_g's two): its card's choice switched, a click
+     never leaving the chart with nothing (toggleChip; what is on show is what the chips
+     show), each card its own. */
   resList.addEventListener('click', e=>{
-    const b = e.target.closest('.plot-chip'), sec = b && b.closest('.res-an');
-    const a = sec && byId(+sec.dataset.an), kind = b && ('eg' in b.dataset ? 'eg' : 'urb');
+    const b = e.target.closest('.plot-chip[data-eg]'), sec = b && b.closest('.res-an');
+    const a = sec && byId(+sec.dataset.an);
     if (!a || b.disabled) return;
-    const [opts, get, set] = CHIPS[kind];
-    const on = [...b.parentElement.querySelectorAll('.plot-chip.is-on')].map(x=> x.dataset[kind]);
-    const sel = toggleChip(opts.map(m=> m.key), get(a), on, b.dataset[kind]);
+    const on = [...b.parentElement.querySelectorAll('.plot-chip.is-on')].map(x=> x.dataset.eg);
+    const sel = toggleChip(EG_METHODS.map(m=> m.key), a.egSel, on, b.dataset.eg);
     if (!sel) return;
-    set(a, sel);
+    a.egSel = sel;
     renderAnalysisRes(a);
     kit.commit();
   });
@@ -1842,12 +1852,12 @@ function createTauc({ key, root, layer, shown }){
     return list.length ? `<div class="alert warn">⚠ Negative ${what} for:<br>${list.join('<br>')}</div>` : '';
   }
 
-  /* A card's chart of a value per sample ± its error (R2), as GC's mean rates are drawn
+  /* A card's chart of a value per sample ± its error (`which`: R2, an Urbach card's R4 too), as GC's mean rates are drawn
      (modcharts.js valueBars): `shown` the series side by side in each sample's slot,
      {name, color, vals[], errs[]}, `chips` the plot's chip row, which the value labels
      keep clear of. Only positive values are drawn; with none the chart is hidden. */
-  function resBars(a, shown, chips, yLabel, digits){
-    const svg = resEl(a, 'R2'), wrap = svg.closest('.plot-wrap'), legend = resEl(a, 'RL2');
+  function resBars(a, which, shown, chips, yLabel, digits){
+    const svg = resEl(a, which), wrap = svg.closest('.plot-wrap'), legend = resEl(a, 'RL' + which.slice(1));
     svg.style.display = wrap.style.display = '';
     if (valueBars(svg, { cats: files, series: shown, ok: v=> isFinite(v) && v > 0, digits, yLabel, chips, legend })) return;
     svg.style.display = wrap.style.display = 'none';
