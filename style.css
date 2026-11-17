@@ -2224,8 +2224,32 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
   color: var(--muted);
   line-height: 1.6;
 }
-/* A formula of an instruction block on a line of its own, indented (GC's rates, v541). */
-.instr-eq { display: block; margin: 2px 0 2px 16px; padding-left: 14px; text-indent: -14px; }
+/* GC's "From the reading to the rates" (v542): a box of its own in the instructions, its
+   steps numbered, each formula typeset in MathML on lines of its own (display math, centred
+   as in print), the units of its symbols under it. Theme tokens only: --panel on the
+   block's --panel2 sets it apart in either theme. A formula wider than the box (a phone)
+   scrolls inside its own line, never the page. The math font is the system's: Cambria Math
+   (Windows), STIX Two Math (macOS), else the browser's math family. */
+.instr-math {
+  max-width: 760px; margin: 10px 0 12px; padding: 10px 14px 12px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+}
+.instr-math math { font-family: 'Cambria Math', 'STIX Two Math', 'Latin Modern Math', 'STIX Math', math; font-size: 1.1em; color: var(--text); }
+.instr-math-head { margin: 0 0 2px; font-size: 13px; font-weight: 700; color: var(--text); }
+h5.instr-math-head { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line); }
+.instr-math-lead { margin: 0 0 4px; }
+.instr-steps { margin: 0; padding-left: 22px; }
+.instr-steps > li { margin-top: 10px; padding-left: 2px; }
+.instr-steps > li::marker { color: var(--text); font-weight: 700; }
+.instr-steps > li > b { color: var(--text); }
+.instr-eqbox { overflow-x: auto; overflow-y: hidden; padding: 2px 0; }
+.instr-eqbox math { font-size: 15px; margin: 8px 0; }
+.instr-cases mtd { text-align: left; }
+.instr-units { font-size: 12px; line-height: 1.55; }
+@media (max-width: 480px){
+  .instr-math { padding: 8px 10px 10px; }
+  .instr-steps { padding-left: 18px; }
+}
 
 /* ===== Table wrapper box (file lists, param tables) ===== */
 .table-wrap-box {

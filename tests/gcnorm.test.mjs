@@ -11,8 +11,11 @@
      is the flow over m in mg, as area gives it with A the same number as m (gc_raw.csv,
      gc_results.csv, mean_rates.csv of the fixtures, every column); a project saved before
      v540 opening so.
-   - The card's instructions (v541): the formulas from the reading to the rates, one a line,
-     and their example's numbers those of the hand calculation here.
+   - The card's instructions (v542): "From the reading to the rates", a box of numbered
+     steps, each formula typeset in MathML (display math) and read back as its structure,
+     the formulas the rates are worked out with; drawn as typeset, and at 320 px within the
+     window; their example worked through the same steps, its numbers those of the hand
+     calculation here.
    - The labels follow the choice: the axis titles of the Analysis plot, the two Results
      plots and the bar chart (their superscripts), the parameter table's column, the CSV
      headers (gc_raw.csv, gc_results.csv, mean_rates.csv with replicates and its SD,
@@ -202,21 +205,115 @@ test('area: the rates per cm² by hand; every label and CSV header follows the c
   } finally { await close(); }
 });
 
-test('the instructions: the formulas from the reading to the rates, one a line; their example by hand', async ()=>{
+/* The card's instructions (v542): "From the reading to the rates", a box of its own, its
+   steps numbered, each a title, what it means, its formula typeset in MathML (display math)
+   and the units of its symbols; then the example worked through the same steps. Each
+   formula read back as its structure (MathML's elements as functions: frac(a,b), sub(a,b),
+   sup(a,b), subsup and underover(a,b,c), over(a,mark), table(cell|cell;row)), against the
+   formulas the module works the rates out with; the example's numbers those of the hand
+   calculation here. Drawn: every formula on lines of its own, a fraction's numerator over
+   its denominator, a subscript under its base's top and a superscript over its bottom, the
+   integral's limits beside it, the sum's under and over it, the cases one under the other;
+   at 320 px nothing past the window, a formula wider than the box scrolling inside its own. */
+const BOX = '#tab-gc .an-instr .instr-math';
+const openInstr = async page =>{
+  await loadFiles(page, 'gc', [film('film-a.csv', '0.05', '0.02')]);
+  await page.click('#tab-gc .an-card .an-head .instr-info');
+  await page.waitForSelector(BOX, { state: 'visible' });
+};
+test('the instructions: from the reading to the rates, numbered steps in a box of their own, each formula typeset in MathML; their example by hand', async ()=>{
   const { page, errors, close } = await env.page();
   try {
     await openModule(page, 'gc');
-    const eqs = await page.$$eval('#tab-gc .an-instr .instr-eq', es=> es.map(e=> [e.textContent, getComputedStyle(e).display]));
-    assert.deepEqual(eqs.map(e=> e[0].split(' ')[0]), ['x', 'ṅ', 'r', 't', 'P(t)', 'r̄'], 'one formula a line');
-    assert.ok(eqs.every(e=> e[1] === 'block'));
-    assert.match(eqs[1][0], /Q \/ \(1000 mL L⁻¹\) × 60 min h⁻¹ \/ Vm, Vm = R·\(T \+ 273\.15\) \/ \(p \/ 101325 Pa atm⁻¹\).*R = 0\.0820573661 L atm mol⁻¹ K⁻¹/);
-    assert.match(eqs[2][0], /^r = x · ṅ · 106 \/ \(m \/ 1000\) in µmol g⁻¹ h⁻¹, m in mg, or r = x · ṅ · 106 \/ A in µmol cm⁻² h⁻¹/);
-    // The example: 0.05 %mol of 2 mL/min at 25 °C and 1 atm, as worked out here.
-    const text = await page.$eval('#tab-gc .an-instr', e=> e.textContent);
-    const ex = `ṅ = ${(F*1e3).toFixed(4)} × 10−3 mol h⁻¹, x · ṅ · 106 = ${umolH(0.05).toFixed(4)} µmol h⁻¹, so r = ${perG(0.05, 15).toFixed(2)} µmol g⁻¹ h⁻¹ over m = 15 mg, or ${(umolH(0.05)/2.5).toFixed(5)} µmol cm⁻² h⁻¹ over A = 2.5 cm²`;
-    assert.ok(text.includes(ex), ex);
+    await openInstr(page);
+    const box = await page.$eval(BOX, b=>{
+      const MATH = 'http://www.w3.org/1998/Math/MathML';
+      const lin = e =>{
+        const k = [...e.children].map(lin), n = e.localName;
+        if (n === 'mfrac') return `frac(${k[0]},${k[1]})`;
+        if (n === 'msub') return `sub(${k[0]},${k[1]})`;
+        if (n === 'msup') return `sup(${k[0]},${k[1]})`;
+        if (n === 'msubsup') return `subsup(${k.join(',')})`;
+        if (n === 'munderover') return `underover(${k.join(',')})`;
+        if (n === 'mover') return `over(${k.join(',')})`;
+        if (n === 'mtable') return `table(${k.join(';')})`;
+        if (n === 'mtr') return k.join('|');
+        if (n === 'mspace') return ' ';
+        return e.children.length ? k.join('') : e.textContent.replace(/ /g, ' ');
+      };
+      const txt = e => e.textContent.replace(/\s+/g, ' ').trim();
+      const steps = ol => [...ol.children].map(li=> ({
+        title: li.querySelector(':scope > b').textContent,
+        eqs: [...li.querySelectorAll(':scope > .instr-eqbox > math')].map(m=> ({ ns: m.namespaceURI === MATH, block: m.getAttribute('display') === 'block' && getComputedStyle(m).display === 'block math', f: lin(m) })),
+        lines: [...li.querySelectorAll(':scope > .instr-units')].map(txt),
+      }));
+      const ols = b.querySelectorAll(':scope > ol.instr-steps');
+      return { heads: [...b.querySelectorAll(':scope > .instr-math-head')].map(txt), lead: txt(b.querySelector('.instr-math-lead')), n: ols.length, steps: steps(ols[0]), example: steps(ols[1]),
+        bg: [getComputedStyle(b).backgroundColor, getComputedStyle(b.closest('.instr-block')).backgroundColor] };
+    });
+    assert.deepEqual(box.heads, ['From the reading to the rates', 'Worked example']);
+    assert.notEqual(box.bg[0], box.bg[1], 'the box set apart from the instructions around it');
+    assert.equal(box.lead, "As they are worked out for each gas, from each injection's reading c:");
+    assert.equal(box.n, 2);
+    const S = box.steps;
+    assert.deepEqual(S.map(s=> s.title), ['Mole fraction from the reading.', 'Molar flow of the carrier.', 'Flow of the gas produced.', 'Rate.', 'Time.', 'Production.', 'Mean rate.']);
+    for (const s of [...S, ...box.example]) assert.ok(s.eqs.length && s.eqs.every(e=> e.ns && e.block), s.title + ': display MathML');
+    assert.ok(S.every(s=> s.lines.length), 'each step its units');
+    // The formulas, as tablesOf, cumAt and computeRates work them out.
+    assert.deepEqual(S.map(s=> s.eqs.map(e=> e.f)), [
+      ['x={table(frac(c,100),|c in %mol;c⋅sup(10,−6),|c in ppm)'],
+      ['sub(V,m)=frac(R(T+273.15),p/101325)', 'over(n,˙)=frac(Q,1000)⋅frac(60,sub(V,m))'],
+      ['F=x⋅over(n,˙)⋅sup(10,6)'],
+      ['r={table(frac(F,m/1000),|by mass;frac(F,A),|by area)'],
+      ['t=frac(sub(t,inj)+Δsub(t,delay)−sub(t,on),3600)'],
+      ['P(t)=subsup(∫,sub(t,s),t)r dsup(t,′)', 'P(t)=underover(∑,i=0,n−1)frac(sub(r,i)+sub(r,i+1),2)⋅(sub(t,i+1)−sub(t,i))'],
+      ['over(r,¯)=frac(P(sub(t,e)),sub(t,e)−sub(t,s))'],
+    ]);
+    // Their units and notes: R, the molar volume at 0 °C and 25 °C by hand, the assumption.
+    assert.ok(S[1].lines[0].includes('R = 0.0820573661 L atm mol⁻¹ K⁻¹; T: °C; p: Pa (101325 Pa atm⁻¹); Q: mL min⁻¹'), S[1].lines[0]);
+    assert.equal(S[1].lines[1], `At 1 atm, Vm is ${(R*273.15).toFixed(3)} L mol⁻¹ at 0 °C and ${(R*298.15).toFixed(3)} L mol⁻¹ at 25 °C.`);
+    assert.match(S[1].lines[0], /Q: mL min⁻¹, at the controller's reference T and p/);
+    assert.match(S[2].lines[1], /^Assumed: the carrier's flow n˙ is the total flow leaving the reactor.*\(ppm to a few %mol\)\.$/);
+    assert.match(S[3].lines[0], /^r: µmol g⁻¹ h⁻¹ with m in mg \(1000 mg g⁻¹\), or µmol cm⁻² h⁻¹ with A in cm²\.$/);
+    assert.match(S[4].lines[1], /^At light-on, t=0: a point with the last reading before it \(r=0 if there is none\)\.$/);
+    // The example, 0.05 %mol of 2 mL/min at 25 °C and 1 atm over 15 mg or 2.5 cm², step by step as worked out here.
+    const vm = (R*298.15).toFixed(3), nd = (F*1e3).toFixed(4), fl = umolH(0.05).toFixed(4);
+    assert.deepEqual(box.example.map(s=> s.title), ['Mole fraction.', 'Molar flow.', 'Flow of the gas.', 'Rate.']);
+    assert.deepEqual(box.example.map(s=> s.eqs.map(e=> e.f)), [
+      ['x=frac(0.05,100)=5×sup(10,−4)'],
+      [`sub(V,m)=frac(0.0820573661×(25+273.15),101325/101325)=${vm} L sup(mol,−1)`, `over(n,˙)=frac(2,1000)⋅frac(60,${vm})=${nd}×sup(10,−3) mol sup(h,−1)`],
+      [`F=(5×sup(10,−4))×(${nd}×sup(10,−3))×sup(10,6)=${fl} µmol sup(h,−1)`],
+      [`r=frac(${fl},15/1000)=${perG(0.05, 15).toFixed(2)} µmol sup(g,−1) sup(h,−1)`, `r=frac(${fl},2.5)=${(umolH(0.05)/2.5).toFixed(5)} µmol sup(cm,−2) sup(h,−1)`],
+    ]);
+    assert.deepEqual([vm, nd, fl, perG(0.05, 15).toFixed(2), (umolH(0.05)/2.5).toFixed(5)], ['24.465', '4.9049', '2.4524', '163.50', '0.98098']);
+    // Drawn as typeset: each part where it belongs.
+    const drawn = await page.$eval(BOX, b=>{
+      const r = e => e.getBoundingClientRect(), out = [], all = s => [...b.querySelectorAll(s)];
+      for (const m of all('math')){ const q = r(m); if (!(q.width > 0 && q.height > 0)) out.push('empty math'); }
+      for (const f of all('mfrac')){ const [a, d] = [...f.children].map(r); if (!(a.bottom <= d.top + 0.5 && a.height && d.height)) out.push('frac ' + f.textContent); }
+      for (const s of all('msub')){ const [a, x] = [...s.children].map(r); if (!(x.bottom > a.bottom && x.left >= a.right - 1)) out.push('sub ' + s.textContent); }
+      for (const s of all('msup')){ const [a, x] = [...s.children].map(r); if (!(x.top < a.top + 0.5 && x.left >= a.right - 1)) out.push('sup ' + s.textContent); }
+      for (const s of all('msubsup')){ const [a, lo, hi] = [...s.children].map(r); if (!(lo.top >= hi.bottom && lo.left >= a.left && hi.left >= a.left)) out.push('subsup ' + s.textContent); }
+      for (const s of all('munderover')){ const [a, lo, hi] = [...s.children].map(r); if (!(lo.top >= a.bottom - 1 && hi.bottom <= a.top + 1)) out.push('underover ' + s.textContent); }
+      for (const t of all('mtable')){ const [a, c] = [...t.children].map(r); if (!(c.top >= a.bottom - 0.5)) out.push('table ' + t.textContent); }
+      for (const e of all('.instr-eqbox')) if (getComputedStyle(e).overflowX !== 'auto') out.push('eqbox overflow');
+      return { out, n: ['math', 'mfrac', 'msub', 'msup', 'msubsup', 'munderover', 'mtable'].map(s=> all(s).length) };
+    });
+    assert.deepEqual(drawn.out, []);
+    assert.ok(drawn.n.every(k=> k > 0), 'each kind checked: ' + drawn.n);
     assert.deepEqual(errors, []);
   } finally { await close(); }
+  // At 320 px: nothing past the window, the page not scrolling sideways.
+  const narrow = await env.page({ viewport: { width: 320, height: 700 } });
+  try {
+    await openModule(narrow.page, 'gc');
+    await openInstr(narrow.page);
+    const m = await narrow.page.$eval(BOX, b=> ({ scroll: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      right: Math.max(...[b, ...b.querySelectorAll('.instr-eqbox, .instr-units, li, p')].map(e=> e.getBoundingClientRect().right)) }));
+    assert.equal(m.scroll, 0, 'the page scrolls sideways');
+    assert.ok(m.right <= 320, 'past the window: ' + m.right);
+    assert.deepEqual(narrow.errors, []);
+  } finally { await narrow.close(); }
 });
 
 test('projects: one saved before v540 opens with mass and the same CSVs; one with area, with area; a choice edited by hand, mass', async ()=>{
