@@ -1,7 +1,0 @@
-live sem boot {"heap":2.9199905395507812,"heapTotal":3.53515625,"workers":0,"workerHeap":0,"renderer":{"rss":128.66796875,"pss":83.4970703125,"priv":58.03125,"hwm":130.9609375},"renderers":1,"rendererRssAll":128.66796875,"allPss":182.1337890625,"allRss":348.74609375,"byType":{"browser":41,"renderer":83,"GPU":33,"network.mojom.NetworkService":25},"domNodes":1474}
-live sem N 1 heap 96.7 workers 1 0.3 renderer rss/pss 364.4 314.3 all pss 478 dom 3354
-live sem N 2 heap 190.5 workers 2 0.7 renderer rss/pss 584.7 532.9 all pss 700.9 dom 5233
-live sem N 4 heap 375.9 workers 4 1.4 renderer rss/pss 1014.9 961.9 all pss 1133.3 dom 8991
-live sem N 8 heap 745.2 workers 8 2.8 renderer rss/pss 1877.3 1821.9 all pss 1998.5 dom 16507
-[{"n":1,"heapPerTab":93.8,"rssPerTab":235.8,"pssPerTab":230.8,"allPssPerTab":295.9},{"n":2,"heapPerTab":93.8,"rssPerTab":228,"pssPerTab":224.7,"allPssPerTab":259.4},{"n":4,"heapPerTab":93.3,"rssPerTab":221.6,"pssPerTab":219.6,"allPssPerTab":237.8},{"n":8,"heapPerTab":92.8,"rssPerTab":218.6,"pssPerTab":217.3,"allPssPerTab":227}]
-errors []

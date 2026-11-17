@@ -1,14 +1,13 @@
-/* The Rietveld workers' pool (backlog 23): every refinement of the page runs its patterns
-   in the workers of one pool, and every page of the app open in the browser (a window, a
-   live tab's frame) shares one cap of jobs at once.
+/* The Rietveld workers' pool (v518): every refinement of the page runs its patterns in the
+   workers of one pool, and every page of the app open in the browser (a window, another
+   browser tab) shares one cap of jobs at once.
 
    - A job is one pattern in one worker (xrd-rietveld.worker.js runs a message to its end:
      k patterns at once take k workers). It waits for a slot, then takes an idle worker of
      this page or makes one; at its end the worker goes back idle and the slot is free.
      Cancel terminates the worker (the only way to stop the engine) and frees the slot.
    - The slots: CAP of them for the whole browser, as Web Locks named 'datatreat-rv-slot-i'
-     (navigator.locks: one origin, every window and frame of it; a page closed or a frame
-     removed lets its locks go). A job asks for every slot at once and takes the first it is
+     (navigator.locks: one origin, every page of it; a page closed lets its locks go). A job asks for every slot at once and takes the first it is
      given, the others' requests withdrawn: the oldest job waiting gets the first slot
      freed, whichever page it is in. Without Web Locks (an old browser, not a secure page),
      or with 'datatreat-rv-shared' set to 'off', the cap holds within the page alone.
@@ -38,8 +37,6 @@ function cfg(){
     shared: knob('shared') !== 'off' && typeof navigator !== 'undefined' && !!navigator.locks && typeof AbortController !== 'undefined' };
   return CFG;
 }
-// The pool's settings: the cap, a run's lanes, whether the cap is shared with the other pages.
-export const poolCfg = ()=> ({ ...cfg() });
 
 /* ---- The slots ---- */
 let local = 0;                    // slots held by this page, when not shared
@@ -75,26 +72,16 @@ function slot(signal){
 
 /* ---- The workers of this page ---- */
 const idle = [];                  // { w, t: its timer }, the last freed last
-let alive = 0;                    // made and not terminated (idle or busy)
 function take(){
   const e = idle.pop();
   if (e){ clearTimeout(e.t); return e.w; }
-  alive++;
   return new Worker(URL_W, { type: 'module' });
 }
 function giveBack(w){
   const e = { w, t: setTimeout(()=>{ const i = idle.indexOf(e); if (i >= 0){ idle.splice(i, 1); kill(w); } }, cfg().idle) };
   idle.push(e);
 }
-function kill(w){ try { w.terminate(); } catch(e){} alive--; }
-// Workers made for the next jobs (their module loaded and evaluated meanwhile): up to n
-// idle in all, never past the cap. (The standard refined before the samples: theirs warm.)
-export function warm(n){
-  n = Math.min(n, cfg().cap);
-  while (idle.length < n && alive < cfg().cap){ alive++; giveBack(new Worker(URL_W, { type: 'module' })); }
-}
-// What the pool holds now: workers made (idle or busy), idle, jobs waiting for a slot here.
-export const poolNow = ()=> ({ alive, idle: idle.length, waiting: localQ.length });
+function kill(w){ try { w.terminate(); } catch(e){} }
 
 /* ---- A job ---- */
 let ids = 0;

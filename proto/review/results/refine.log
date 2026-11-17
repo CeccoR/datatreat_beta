@@ -1,8 +1,0 @@
-head-show {"n":5,"med":7213,"p90":7269,"max":7269,"min":6894} hashes [ '0e098f762ba8cae5' ] errors 0
-live-show {"n":5,"med":7141,"p90":7314,"max":7314,"min":6780} hashes [ '0e098f762ba8cae5' ] errors 0
-live-hidden {"n":5,"med":7035,"p90":7249,"max":7249,"min":6650} hashes [ '0e098f762ba8cae5' ] errors 0
-bg-show {"n":5,"med":7172,"p90":7579,"max":7579,"min":6919} hashes [ '0e098f762ba8cae5' ] errors 0
-bg-parked {"n":5,"med":7603,"p90":7918,"max":7918,"min":7090} hashes [ '0e098f762ba8cae5' ] errors 0
-pool-show {"n":5,"med":3050,"p90":3158,"max":3158,"min":3018} hashes [ '0e098f762ba8cae5' ] errors 0
-pool4-show {"n":5,"med":3035,"p90":3114,"max":3114,"min":2763} hashes [ '0e098f762ba8cae5' ] errors 0
-livepool-hidden {"n":5,"med":3070,"p90":3355,"max":3355,"min":3030} hashes [ '0e098f762ba8cae5' ] errors 0

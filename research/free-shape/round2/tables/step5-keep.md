@@ -1,0 +1,154 @@
+# Step 5: the keep test (`../STEP5.md` §4)
+
+G: the larger gain of the search's free and held fits over the isotropic fit, before the minima stage, in χ²/max(1, χ²_ν,iso) (an early-stopped run: the brief trials'). Nulls: the 22 tuning spheres (12 clean, 10 with an error) searched as each of the six solids, noise draws 0–4 (X1 and N: rule 'bic', early 0, the keep test's numbers and the per-line check of the fit tested recorded). Mild shapes (M): the 66 tuning truths outside the screening set, extents pulled towards their mean to a largest/smallest r of 1.02–1.6. Screening truths: step 4's S2 (their gain after the stage). `keep5.mjs`, `keep-rules.mjs`.
+
+## The nulls per solid
+
+| body | clean nulls: n, median, 90 %, 95 %, 99 %, max G | kept by ΔBIC < −10 | error nulls: n, median, 95 %, max G | kept by ΔBIC | flagged (error) |
+|---|---|---|---|---|---|
+| box | 60: -177.2, -6.1, 1.0, 8.7, 13.9 | 0 | 50: 21.5, 3359.7, 3569.4 | 24 | 20 |
+| sqbox | 60: -184.4, -5.9, 0.8, 7.5, 13.5 | 0 | 50: 20.1, 3324.2, 3520.2 | 24 | 18 |
+| cylinder | 60: -73.5, -1.6, 4.6, 10.4, 13.7 | 0 | 50: 20.4, 3289.8, 3488.9 | 24 | 23 |
+| ellcyl | 60: -59.3, 0.5, 6.9, 12.1, 14.4 | 0 | 50: 29.2, 3470.0, 3669.1 | 23 | 18 |
+| ellipsoid | 60: 2.1, 7.0, 9.9, 15.0, 21.1 | 0 | 50: 8.2, 3499.3, 3682.8 | 19 | 27 |
+| spheroid | 60: 1.7, 5.9, 7.8, 12.9, 18.6 | 0 | 50: 7.4, 3347.7, 3510.7 | 19 | 34 |
+
+## Per solid and crystal system (k + 1: tric 6, mono 4, orth 3, tetr, trig, hex 2, cub 1)
+
+| body | system | clean nulls n | mean G | median | max | error nulls: mean, max |
+|---|---|---|---|---|---|---|
+| box | tric | 10 | -694.7 | -685.4 | 13.9 | —, — |
+| box | mono | 10 | -30.3 | -31.2 | -7.5 | —, — |
+| box | orth | 5 | -402.7 | -394.5 | -357.4 | 295.4, 939.3 |
+| box | tetr | 10 | -730.9 | -710.7 | -666.1 | 171.0, 526.7 |
+| box | trig | 10 | -195.6 | -174.0 | -57.6 | -1594.7, 73.6 |
+| box | hex | 5 | -80.6 | -76.3 | -67.5 | 341.1, 2158.0 |
+| box | cub | 10 | -192.9 | -172.1 | 4.3 | 1415.4, 3569.4 |
+| sqbox | tric | 10 | -707.7 | -700.6 | 13.5 | —, — |
+| sqbox | mono | 10 | -32.0 | -31.3 | -8.1 | —, — |
+| sqbox | orth | 5 | -406.3 | -400.6 | -358.5 | 270.0, 937.3 |
+| sqbox | tetr | 10 | -777.1 | -756.6 | -714.5 | 162.6, 513.4 |
+| sqbox | trig | 10 | -206.8 | -184.4 | -58.0 | -1608.8, 59.9 |
+| sqbox | hex | 5 | -82.6 | -77.8 | -71.1 | 335.6, 2085.2 |
+| sqbox | cub | 10 | -202.0 | -197.0 | 1.9 | 1394.3, 3520.2 |
+| cylinder | tric | 10 | -383.9 | -369.5 | 13.7 | —, — |
+| cylinder | mono | 10 | -11.3 | -12.3 | 8.1 | —, — |
+| cylinder | orth | 5 | -174.2 | -172.0 | -161.4 | 220.5, 690.8 |
+| cylinder | tetr | 10 | -268.6 | -279.7 | -201.3 | 158.4, 451.6 |
+| cylinder | trig | 10 | -92.1 | -72.2 | -19.9 | -527.5, 62.3 |
+| cylinder | hex | 5 | -36.3 | -36.5 | -30.5 | 354.4, 2034.6 |
+| cylinder | cub | 10 | -79.8 | -74.6 | 5.1 | 1530.7, 3488.9 |
+| ellcyl | tric | 10 | -367.2 | -354.8 | 14.4 | —, — |
+| ellcyl | mono | 10 | -8.8 | -9.7 | 10.6 | —, — |
+| ellcyl | orth | 5 | -171.4 | -170.4 | -157.7 | 275.9, 822.9 |
+| ellcyl | tetr | 10 | -246.4 | -253.2 | -193.3 | 233.7, 543.8 |
+| ellcyl | trig | 10 | -77.0 | -55.1 | -14.5 | -481.7, 72.0 |
+| ellcyl | hex | 5 | -28.8 | -24.9 | -18.0 | 395.3, 2266.1 |
+| ellcyl | cub | 10 | -80.6 | -72.9 | 6.8 | 1608.6, 3669.1 |
+| ellipsoid | tric | 10 | 7.3 | 5.9 | 21.1 | —, — |
+| ellipsoid | mono | 10 | 4.4 | 4.8 | 7.4 | —, — |
+| ellipsoid | orth | 5 | 3.0 | 2.4 | 4.6 | 201.7, 714.4 |
+| ellipsoid | tetr | 10 | 2.1 | 2.1 | 3.4 | 241.6, 547.9 |
+| ellipsoid | trig | 10 | 3.4 | 2.9 | 9.1 | 4.7, 19.1 |
+| ellipsoid | hex | 5 | 1.5 | 1.3 | 2.8 | 347.6, 2113.0 |
+| ellipsoid | cub | 10 | 0.7 | 0.2 | 3.9 | 1768.2, 3682.8 |
+| spheroid | tric | 10 | 6.1 | 5.7 | 18.6 | —, — |
+| spheroid | mono | 10 | 3.4 | 3.0 | 5.8 | —, — |
+| spheroid | orth | 5 | 2.5 | 2.4 | 4.6 | 181.4, 649.1 |
+| spheroid | tetr | 10 | 1.3 | 1.5 | 2.8 | 197.6, 483.3 |
+| spheroid | trig | 10 | 2.7 | 2.2 | 8.9 | 2.6, 7.1 |
+| spheroid | hex | 5 | 1.3 | 1.3 | 2.7 | 347.0, 2110.3 |
+| spheroid | cub | 10 | 0.6 | 0.2 | 2.4 | 1694.3, 3510.7 |
+
+## The rules
+
+Thresholds from the clean nulls' draws 0–2 (216); scored on the fresh draws 3–4 (144) too. "flagged: also ΔBIC < −10": where the per-line check fires on the fit tested.
+
+| rule | clean nulls kept: draws 0–2 (set) | draws 3–4 (fresh) | error nulls kept | mild clean kept | mild error kept | strong kept |
+|---|---|---|---|---|---|---|
+| ΔBIC < −10 (today) | 0/216 | 0/144 | 133/300 | 71/86 | 81/90 | 66/66 |
+| G > 23.1 (every body: the clean nulls' max + 2) | 0/216 | 0/144 | 141/300 | 75/86 | 83/90 | 66/66 |
+| G > 23.1 (every body: the clean nulls' max + 2); flagged: also ΔBIC < −10 | 0/216 | 0/144 | 138/300 | 75/86 | 83/90 | 66/66 |
+| G > the body's clean nulls' 99 % + 2 | 4/216 | 6/144 | 148/300 | 79/86 | 85/90 | 66/66 |
+| G > the body's clean nulls' 99 % + 2; flagged: also ΔBIC < −10 | 4/216 | 6/144 | 138/300 | 79/86 | 85/90 | 66/66 |
+| G > the body's clean nulls' max + 2 | 0/216 | 4/144 | 147/300 | 77/86 | 85/90 | 66/66 |
+| G > the body's clean nulls' max + 2; flagged: also ΔBIC < −10 | 0/216 | 4/144 | 138/300 | 77/86 | 85/90 | 66/66 |
+| G > the body's max + 2 in its symmetry group (−1, 2/m | the rest) | 0/216 | 6/144 | 151/300 | 80/86 | 85/90 | 66/66 |
+| G > the body's max + 2 in its symmetry group (−1, 2/m | the rest); flagged: also ΔBIC < −10 | 0/216 | 6/144 | 138/300 | 80/86 | 85/90 | 66/66 |
+| G > χ²_{k+1}(0.99) + 0 | 3/216 | 0/144 | 154/300 | 82/86 | 85/90 | 66/66 |
+| G > χ²_{k+1}(0.99) + 0; flagged: also ΔBIC < −10 | 3/216 | 0/144 | 139/300 | 82/86 | 85/90 | 66/66 |
+| G > χ²_{k+1}(0.999) + 0 | 0/216 | 0/144 | 144/300 | 78/86 | 85/90 | 66/66 |
+| G > χ²_{k+1}(0.999) + 0; flagged: also ΔBIC < −10 | 0/216 | 0/144 | 138/300 | 78/86 | 85/90 | 66/66 |
+| G > χ²_{k+1}(0.999) + 2 | 0/216 | 0/144 | 142/300 | 78/86 | 85/90 | 66/66 |
+| G > χ²_{k+1}(0.999) + 2; flagged: also ΔBIC < −10 | 0/216 | 0/144 | 138/300 | 78/86 | 85/90 | 66/66 |
+| G > χ²_{k+1}(0.9999) + 0 | 0/216 | 0/144 | 141/300 | 77/86 | 84/90 | 66/66 |
+| G > χ²_{k+1}(0.9999) + 0; flagged: also ΔBIC < −10 | 0/216 | 0/144 | 138/300 | 77/86 | 84/90 | 66/66 |
+
+Thresholds:
+
+- G > the body's clean nulls' 99 % + 2 {"box":3.1,"sqbox":1.4,"cylinder":9,"ellcyl":11.2,"ellipsoid":19.5,"spheroid":17.2}
+- G > the body's clean nulls' max + 2 {"box":6.3,"sqbox":3.9,"cylinder":10.1,"ellcyl":12.6,"ellipsoid":23.1,"spheroid":20.6}
+- G > the body's max + 2 in its symmetry group (−1, 2/m | the rest) {"box|low":-2.7,"sqbox|low":-3.3,"cylinder|low":10.1,"ellcyl|low":12.6,"ellipsoid|low":23.1,"spheroid|low":20.6,"box|high":6.3,"sqbox|high":3.9,"cylinder|high":7.1,"ellcyl|high":8.8,"ellipsoid|high":11.1,"spheroid|high":10.9}
+- G > χ²_{k+1}(0.99) + 0 k = 0, 1, 2, 3, 5: 6.6, 9.2, 11.4, 13.3, 16.8
+- G > χ²_{k+1}(0.999) + 0 k = 0, 1, 2, 3, 5: 11.2, 14.1, 16.6, 18.7, 22.7
+- G > χ²_{k+1}(0.999) + 2 k = 0, 1, 2, 3, 5: 13.2, 16.1, 18.6, 20.7, 24.7
+- G > χ²_{k+1}(0.9999) + 0 k = 0, 1, 2, 3, 5: 16.2, 19.3, 21.8, 24.2, 28.4
+
+## Model errors (the adopted rule: χ²_{k+1}(0.999) + 2, flagged also ΔBIC < −10)
+
+| error kind | nulls | kept: ΔBIC | the LRT with the check | flagged at keep | real shapes (mild + strong) | kept: ΔBIC | the LRT |
+|---|---|---|---|---|---|---|---|
+| hump | 60 | 20 | 20 | 32 | 23 | 23 | 23 |
+| sizedist | 60 | 60 | 60 | 33 | 27 | 26 | 27 |
+| impurity | 60 | 4 | 4 | 32 | 25 | 24 | 24 |
+| air | 60 | 0 | 0 | 4 | 26 | 19 | 22 |
+| po | 60 | 49 | 54 | 39 | 22 | 22 | 22 |
+
+## Mild shapes per solid
+
+| body | mild clean: n, ΔBIC, LRT | mild error: n, ΔBIC, LRT |
+|---|---|---|
+| box | 12, 10, 11 | 10, 9, 10 |
+| sqbox | 10, 10, 10 | 12, 11, 12 |
+| cylinder | 12, 10, 12 | 10, 9, 10 |
+| ellcyl | 12, 12, 12 | 10, 9, 10 |
+| ellipsoid | 20, 15, 17 | 24, 19, 19 |
+| spheroid | 20, 14, 16 | 24, 24, 24 |
+
+## The quick parametric bootstrap (L)
+
+19 replicas drawn from the isotropic fit's pattern (Poisson); on each the isotropic fit refined again and the shape searched as the app does (the class's starts, one full refinement, no stage, no check); p = (1 + #{G* ≥ G})/20; kept at 5 % when G is above every G* (`methods/lrt.mjs`, `lrt-an.mjs`). Cost: the replicas' evaluations over the fit's own search's.
+
+| fit | class (k) | truth | G | replicas G*: mean, max | p | bootstrap at 5 % | the adopted rule (need) | cost (searches) |
+|---|---|---|---|---|---|---|---|---|
+| box-P-3m1-generic~m1 | -3m (1) | box r 1.17 | 21.8 | -22.8, 2.8 | 0.05 | kept | kept (16.1) | 13.8 |
+| box-P4m-generic~m1 | 4/m (1) | box r 1.40 | 14.0 | 4.2, 14.0 | 0.10 | — | — (16.1) | 17.0 |
+| cylinder-P6m-near~m1 | 6/m (1) | cylinder r 1.23 | 18.0 | 3.4, 17.8 | 0.05 | kept | kept (16.1) | 18.5 |
+| ellipsoid-P-1-near~m3 | -1 (5) | ellipsoid r 1.03 | 20.0 | 4.5, 10.9 | 0.05 | kept | — (24.7) | 20.4 |
+| ellipsoid-P-3-on~m1 | -3 (1) | ellipsoid r 1.06 | 23.6 | 2.3, 6.0 | 0.05 | kept | kept (16.1) | 15.7 |
+| ellipsoid-P-3m1-near~m4 | -3m (1) | ellipsoid r 1.03 | 12.3 | 2.4, 7.5 | 0.05 | kept | — (16.1) | 19.8 |
+| ellipsoid-P4m-near~m3 | 4/m (1) | ellipsoid r 1.11 | 31.9 | 1.9, 7.9 | 0.05 | kept | kept (16.1) | 17.6 |
+| ellipsoid-P4m-near~m4 | 4/m (1) | ellipsoid r 1.06 | 5.5 | 3.0, 8.8 | 0.30 | — | — (16.1) | 18.6 |
+| sphere-P-1-2.ellipsoid | -1 (5) | sphere | 21.1 | 5.3, 14.9 | 0.05 | kept | — (24.7) | 20.0 |
+| sphere-P-1-3.ellipsoid | -1 (5) | sphere | 1.1 | 5.2, 14.0 | 0.95 | — | — (24.7) | 20.5 |
+| sphere-P-3-1.ellipsoid | -3 (1) | sphere | 2.9 | 3.7, 13.2 | 0.55 | — | — (16.1) | 21.3 |
+| sphere-P-3m1-2.ellipsoid | -3m (1) | sphere | 9.1 | 2.8, 12.9 | 0.10 | — | — (16.1) | 18.8 |
+| sphere-P2m-1.ellipsoid | 2/m (3) | sphere | 2.0 | 5.4, 10.2 | 0.90 | — | — (20.7) | 17.8 |
+| sphere-P2m-3.ellipsoid | 2/m (3) | sphere | 5.8 | 4.7, 14.4 | 0.35 | — | — (20.7) | 20.1 |
+| sphere-P4m-2.ellipsoid | 4/m (1) | sphere | 2.1 | 1.4, 6.6 | 0.30 | — | — (16.1) | 17.8 |
+| sphere-P4mmm-1.ellipsoid | 4/mmm (1) | sphere | 3.4 | 2.6, 9.3 | 0.30 | — | — (16.1) | 18.0 |
+| sphere-P6m-1.ellipsoid | 6/m (1) | sphere | 0.7 | 2.5, 9.3 | 0.75 | — | — (16.1) | 21.7 |
+| sphere-Pm-3-3.ellipsoid | m-3 (0) | sphere | -0.1 | 1.4, 5.2 | 0.85 | — | — (13.2) | 26.6 |
+| sphere-Pm-3m-1.ellipsoid | m-3m (0) | sphere | 1.3 | 0.8, 6.6 | 0.15 | — | — (13.2) | 16.9 |
+| sphere-Pmmm-1.ellipsoid | mmm (2) | sphere | 1.9 | 3.9, 12.5 | 0.85 | — | — (18.6) | 18.7 |
+| spheroid-Pm-3-on~m2 | m-3 (0) | spheroid r 1.50 | 17.2 | 0.6, 4.6 | 0.05 | kept | kept (13.2) | 12.3 |
+| spheroid-Pm-3-on~m4 | m-3 (0) | spheroid r 1.31 | 8.4 | 1.7, 12.7 | 0.10 | — | — (13.2) | 8.2 |
+
+22 fits; the bootstrap and the adopted rule agree on 19; the bootstrap costs 17.6 searches beyond the fit's own (median; 7.2–25.6).
+
+## Cost (`cost5.mjs`)
+
+The brief trials' gain against each rule's early threshold (half its need; 'bic': by the held route); a run going on costs its search less the stage, one stopped early the median of the early-stopped runs of its solid and class.
+
+- clean nulls: bic: 5/360 go on, 947 evaluations a search; lrt: 9/360 go on, 953 evaluations a search; the isotropic fit 300
+- error nulls: bic: 147/300 go on, 1359 evaluations a search; lrt: 157/300 go on, 1378 evaluations a search; the isotropic fit 313

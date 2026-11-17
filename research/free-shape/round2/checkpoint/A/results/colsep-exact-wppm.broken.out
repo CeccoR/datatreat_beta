@@ -1,0 +1,3 @@
+box-P-1-near             -1     exact/lor/wppm own χ² 2682656.9 | box 0.0 sqbox 38388863424.2 cylinder 40925999210.5 ellcyl 2507439350.2 ellipsoid 8869914528.9 spheroid 51661078391.1
+ellcyl-P2m-generic       2/m    exact/lor/wppm own χ² 2527416.4 | box 569156453.4 sqbox 15791349051.0 cylinder 16552859515.9 ellcyl 0.0 ellipsoid 2598570256.8 spheroid 16210642075.9
+ellipsoid-Pmmm-generic   mmm    exact/lor/wppm own χ² 5881912.4 | box 14878018920.3 sqbox 15207474673.3 cylinder 10019964593.1 ellcyl 3300852693.7 ellipsoid 0.0 spheroid 197597457.7

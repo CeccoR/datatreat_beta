@@ -1,0 +1,3 @@
+ellcyl-P6m-generic (6/m, ellcyl) as ellcyl: iso χ²_ν 1.189, 313 ev, 2369 ms
+  symAs: free χ² 11065.28 best 11065.28 ΔBIC -634 | 2611 ev 28252 ms | starts 9 | central 59 ev Δχ² -0.003 | cov 25 ev | 19.40×34.84×29.75 | dims -57% -40% 203% axis 28.2°
+  wall 31.2 s

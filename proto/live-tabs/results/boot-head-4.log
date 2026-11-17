@@ -1,7 +1,0 @@
-head 4 parked rep 0 tab on show 916 ms  long tasks {"n":3,"ms":559,"max":437}
-head 4 parked rep 1 tab on show 900 ms  long tasks {"n":2,"ms":504,"max":429}
-head 4 parked rep 2 tab on show 765 ms  long tasks {"n":3,"ms":542,"max":383}
-head 4 parked rep 3 tab on show 869 ms  long tasks {"n":3,"ms":627,"max":466}
-head 4 parked rep 4 tab on show 894 ms  long tasks {"n":3,"ms":650,"max":441}
-head 4 parked {"shownMed":894.3,"shown":[915.7,900.3,764.5,869.1,894.3],"allMed":null,"longMsMed":559,"longMaxMed":437,"mem":{"heap":104.5,"rss":287.9,"pss":233.7,"workers":0,"frames":0}}
-errors []

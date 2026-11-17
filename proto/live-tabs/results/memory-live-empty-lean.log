@@ -1,7 +1,0 @@
-live empty boot {"heap":2.92303466796875,"heapTotal":3.78515625,"workers":0,"workerHeap":0,"renderer":{"rss":128.8203125,"pss":83.64453125,"priv":58.13671875,"hwm":133.1171875},"renderers":1,"rendererRssAll":128.8203125,"allPss":182.224609375,"allRss":348.27734375,"byType":{"browser":40,"renderer":84,"GPU":34,"network.mojom.NetworkService":25},"domNodes":1469}
-live empty N 1 heap 6.1 workers 0 0 renderer rss/pss 144.1 95.9 all pss 198.1 dom 2737
-live empty N 2 heap 7.7 workers 0 0 renderer rss/pss 149.2 101.2 all pss 204.1 dom 3550
-live empty N 4 heap 10 workers 0 0 renderer rss/pss 156.9 108.9 all pss 211.8 dom 5075
-live empty N 8 heap 15 workers 0 0 renderer rss/pss 173.2 125 all pss 229.6 dom 8628
-[{"n":1,"heapPerTab":3.1,"rssPerTab":15.3,"pssPerTab":12.3,"allPssPerTab":15.9},{"n":2,"heapPerTab":2.4,"rssPerTab":10.2,"pssPerTab":8.8,"allPssPerTab":10.9},{"n":4,"heapPerTab":1.8,"rssPerTab":7,"pssPerTab":6.3,"allPssPerTab":7.4},{"n":8,"heapPerTab":1.5,"rssPerTab":5.5,"pssPerTab":5.2,"allPssPerTab":5.9}]
-errors []

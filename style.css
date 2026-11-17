@@ -21,6 +21,7 @@
   --good: #7fd17f;
   --warn: var(--accent);     /* warnings reuse the accent (were a near-identical orange) */
   --bad: #ff6b6b;
+  --info: #7cc4ee;           /* info alerts (v539): azure, quieter than a warning */
   --accent-hover: #ffc271;   /* primary button :hover */
   --accent-active: #e89a35;  /* primary button :active (pressed) */
   --on-accent: #06131f;      /* text drawn on top of the accent fill */
@@ -45,6 +46,7 @@
   --alert-warn-bg: #3a2c0f;  --alert-warn-line: #5a430f;
   --alert-good-bg: #0f3a26;  --alert-good-line: #1c5a3c;
   --alert-bad-bg:  #3a1212;  --alert-bad-line:  #5a1c1c;
+  --alert-info-bg: #0f2a38;  --alert-info-line: #1c4a62;
   --pending-line: #6b4d1a;
   /* Plot chrome (axes/grid/labels/crosshair) — themed via .plot-* classes below */
   --plot-border: #3a414c;
@@ -55,6 +57,7 @@
   --plot-readout: #f0f4f6;
   --plot-readout-halo: #0b0f12;
   --plot-errbar: #f0f4f6;
+  --plot-lock: #ff3ea5;      /* a trace locked: its crosshair and dot (plot.js _crossAt) */
 }
 /* Dark only: swap the plate direction (hover lighter, press darker). */
 :root[data-theme="dark"] {
@@ -69,7 +72,7 @@
 /* Surface-aware: buttons sitting ON a --bar or --panel2 card re-point the single
    --plate token to the card-calibrated values, so the one shared plate rule set
    works everywhere without a second token pair in the button rules. */
-.project-bar, .peak-box, .table-box {
+.project-bar, .peak-box {
   --plate-hover: var(--cardbtn-hover);
   --plate-press: var(--cardbtn-press);
 }
@@ -85,6 +88,7 @@
   --accent2: #9c4b93;
   --good: #2e8b4e;
   --bad: #cc3b3b;
+  --info: #1d6896;
   --accent-hover: #a75e0b;
   --accent-active: #8c4e08;
   --on-accent: var(--white);
@@ -96,6 +100,7 @@
   --alert-warn-bg: #fbf1dd;  --alert-warn-line: #e4c583;
   --alert-good-bg: #e2f4ea;  --alert-good-line: #9dd3b3;
   --alert-bad-bg:  #fbe6e6;  --alert-bad-line:  #eaa9a9;
+  --alert-info-bg: #e8f3fa;  --alert-info-line: #a6cde6;
   --pending-line: #e4c583;
   --plot-border: #c2ccd2;
   --plot-grid: #e5eaed;
@@ -105,6 +110,7 @@
   --plot-readout: #1a2327;
   --plot-readout-halo: var(--white);
   --plot-errbar: #2a2f38;
+  --plot-lock: #d4006f;
 }
 /* Plot chrome follows the theme. CSS beats SVG presentation attributes, so these
    override the fills/strokes plot.js sets inline — no JS changes needed. */
@@ -113,6 +119,9 @@
 .plot-tick   { fill: var(--plot-tick); }
 .plot-label  { fill: var(--plot-label); }
 .plot-crosshair { stroke: var(--plot-cross); }
+.plot-lockcross { stroke: var(--plot-lock); }
+.plot-lockdot { fill: var(--plot-lock); }
+.plot-pick-label text { font-family: inherit; }
 .plot-readout { fill: var(--plot-readout); stroke: var(--plot-readout-halo); }
 /* Error bars + their value labels: visible in both themes (override inline #fff) */
 .plot-errbar  { stroke: var(--plot-errbar); }
@@ -125,6 +134,13 @@
   box-sizing: border-box;
 }
 html { background: var(--bg); }   /* themed backdrop shows while the body is hidden at boot */
+/* Every scrollbar follows the theme (v534: to v533 the boxes that scroll inside the page,
+   the Custom table's, the lists', the windows', stayed light in the dark theme): their
+   thumb and track set from the theme's tokens here, which every element inherits. (No
+   color-scheme: it would redraw the form controls the app leaves to the browser, its
+   radios among them, in the dark theme.) */
+:root { --scroll-thumb: #3b4b53; --scroll-track: var(--panel2); scrollbar-color: var(--scroll-thumb) var(--scroll-track); }
+:root[data-theme="light"] { --scroll-thumb: #b4bfc5; }
 body {
   margin: 0;
   font-family: 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
@@ -136,7 +152,7 @@ body {
    tabs.js has assembled it, then fade in. */
 html.app-booting body { opacity: 0; }
 /* Tabular figures keep numeric columns/readouts aligned in the data tables */
-table, input, .stat, .pill, .plot-readout { font-variant-numeric: tabular-nums; }
+table, input, .pill, .plot-readout { font-variant-numeric: tabular-nums; }
 header {
   display: flex;
   align-items: center;
@@ -266,7 +282,7 @@ button.btn.is-saved:disabled {
    (.table-csv-btn) are THE SAME BUTTON: one shared rule block, so their aesthetics
    can never drift apart. Bare at rest (no fill/border, muted icon); hover/press use
    the single --plate token like every other icon button — their card containers
-   (.project-bar / .peak-box / .table-box, above) re-point --plate to the
+   (.project-bar / .peak-box, above) re-point --plate to the
    card-calibrated shade so it never matches the surface. Save keeps its filled look
    (border stripped); delete lights red, not accent. */
 .btn.proj-icon.proj-saveas, .btn.proj-icon.proj-csv, .btn.proj-icon.proj-json, .btn.proj-icon.proj-del, .btn.proj-icon.proj-new,
@@ -500,7 +516,7 @@ main {
 .tab.active {
   display: block;
 }
-/* An instance's layer (a module made per tab, b2): its windows and menus, in the page
+/* An instance's layer (utils.js makeInstance): its windows and menus, in the page
    while the instance is; a box of no box of its own. */
 .inst-layer { display: contents; }
 /* Cross-fade colours during a light/dark toggle (scoped to .theme-anim so it only
@@ -591,7 +607,6 @@ main {
 .mw320 { min-width: 320px; }
 .mw280 { min-width: 280px; }
 .mw260 { min-width: 260px; }
-.mw220 { min-width: 220px; }
 .mw200 { min-width: 200px; }
 /* Narrow layout: let columns shrink and stack instead of overflowing the viewport.
    .narrow-layout is set by updateNarrowLayout() in utils.js — the threshold is half
@@ -601,7 +616,6 @@ main {
 :root.narrow-layout .mw320,
 :root.narrow-layout .mw280,
 :root.narrow-layout .mw260,
-:root.narrow-layout .mw220,
 :root.narrow-layout .mw200 { min-width: 100%; }
 /* Two plots side by side, each a caption, its plot and its legend, whose captions may
    wrap to different heights (a long one beside a short one, on a narrower window):
@@ -910,17 +924,11 @@ svg.plot.plot-wide { aspect-ratio: 3.236; }
    once the layout narrows and the card is a column's width (2φ : 1). */
 svg.plot.plot-strip { aspect-ratio: 6.472; }
 :root.narrow-layout svg.plot.plot-strip { aspect-ratio: 3.236; }
-/* An Urbach card's two Results plots, plain over subtracted, share the room of one
-   standard plot (φ : 1) of their column, so the upper one starts level with the E_U
-   chart beside them and the lower one ends level with it; the two are alike, each
-   half that room less what lies between them. That is the second one's caption line,
-   22px, and --pair-sep above it, so its toolbar, pulled up onto the caption, keeps
-   clear of the plot above (26px buttons + 2px gap, 12px clear). Stacked on a narrow
-   screen, each is a standard plot: half of one would leave no room for the data. */
-.plot-pair-col { container-type: inline-size; --pair-sep: 18px; }
-.plot-pair-col > .plot-wrap + .txt-caption { margin-top: var(--pair-sep); }
-svg.plot.plot-pair { aspect-ratio: auto; height: calc((100cqw / 1.618 - 22px - var(--pair-sep)) / 2); }
-:root.narrow-layout svg.plot.plot-pair { aspect-ratio: 1.618; height: auto; }
+/* An Urbach card's Results (v536): the plain plot and the subtracted one side by side, each
+   a standard plot (φ : 1), and each one's E_U chart under it, as wide. The two columns'
+   seven rows (caption, plot, legend, caption, chart, legend, alert) are shared, so the
+   charts start level whatever the legends and notes above them hold. */
+.row.cap-row.urb-row > .col { grid-row: span 7; }
 .legend {
   font-size: 12px;
   margin-top: 6px;
@@ -979,28 +987,15 @@ svg.plot.plot-pair { aspect-ratio: auto; height: calc((100cqw / 1.618 - 22px - v
   color: var(--bad);
   border: 1px solid var(--alert-bad-line);
 }
-.grid2 {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
+/* An info alert (v539, utils.js alertHtml): what is worth knowing and needs no check, as a
+   warning in all but its colours, azure, and its icon, a circled i drawn in the text's
+   colour where the others have a character (⚠, ✕), as wide as one with its space. */
+.alert.info {
+  background: var(--alert-info-bg);
+  color: var(--info);
+  border: 1px solid var(--alert-info-line);
 }
-.stat {
-  background: var(--panel2);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 8px 10px;
-  font-size: 13px;
-}
-.stat b {
-  color: var(--accent);
-}
-.viewswitch {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  justify-content: center;
-  margin-top: 8px;
-}
+.alert-ic { vertical-align: -0.15em; margin-right: 0.3em; }
 .home-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -1156,6 +1151,7 @@ footer a:hover {
 .incl-cell input[type="checkbox"] { width: auto; margin: 0; vertical-align: middle; cursor: pointer; }
 .file-row.is-excluded td.fname,
 .file-row.is-excluded .file-label,
+.file-row.is-excluded .color-swatch,
 .file-row.is-excluded td.note-cell { opacity: 0.4; }
 .file-none { margin: 8px 0 0; }
 .file-row.dragging { opacity: 0.45; }
@@ -1195,7 +1191,10 @@ td.fname {
   font-size: 12px;
   overflow: hidden;
 }
-/* Flex-center the colour swatch with the filename so it sits on the row centre */
+/* The trace's cell (v532): its colour's swatch, then its name's field filling the rest,
+   centred on the row. */
+.trace-inner { display: flex; align-items: center; min-width: 0; }
+.trace-inner input.label-input { flex: 1 1 0; width: auto; min-width: 0; }
 .fname-inner {
   display: flex;
   align-items: center;
@@ -1316,6 +1315,10 @@ button.color-swatch {
    (.cp-anchored), then returns to idle once the picker closes. */
 button.color-swatch:hover,
 button.color-swatch.cp-anchored { border-color: var(--white); }
+/* No colour shown (SEM's images, the Figure's files): the swatch's and the palette's
+   place kept empty, so the names stand where the other modules' do. */
+span.swatch-gap { display: inline-block; flex-shrink: 0; width: 14px; height: 14px; visibility: hidden; }
+span.color-swatch.swatch-gap { margin-right: 5px; }
 
 /* ===== Custom Color Picker popup ===== */
 .cp-popup {
@@ -1698,7 +1701,6 @@ button.btn.table-csv-btn {
   transition: opacity 0.18s, background 0.15s, color 0.15s;
 }
 .peak-box:hover .table-csv-btn,
-.table-box:hover .table-csv-btn,
 .table-csv-btn:hover {
   opacity: 1;
 }
@@ -1805,17 +1807,6 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 .btn.nav-arrow:hover:not(:disabled)  { --btn-fg: var(--text); }
 .btn.nav-arrow:active:not(:disabled) { --btn-bg: var(--line); --btn-fg: var(--text); }
 
-/* Instrumental-standard picker: sits in the plot header row, aligned with and the
-   same height as the "+ Add peak" corner button. Greyed while showing its ghost
-   placeholder (nothing chosen). */
-.std-select {
-  height: 30px;
-  width: 100%;
-  max-width: 340px;
-  padding: 0 9px;
-}
-.std-select.ghost { color: var(--muted); }
-
 /* ===== Plot header row: the sample nav on the left; the plot's toolbar takes its
    right (.plot-wrap). It keeps the 30px it had when it held the action button, so
    the plot below stays where it was. ===== */
@@ -1871,9 +1862,14 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
    (the plot sits below the sample-nav row: 35px nav + 6px gap). */
 .param-head.aligned { margin-top: 41px; }
 :root.narrow-layout .param-head.aligned { margin-top: 0; }
+/* A plot-style card's parameters (every module's: a plot on the left, its parameters on
+   the right), a row each: its name on three fifths of the column, its field on the two
+   fifths left (v531: the field's track 40 % and the name's the rest, gap included, so
+   neither a long name nor a wide field moves the split; the name wraps, the field's
+   content shrinks). */
 .param-grid {
   display: grid;
-  grid-template-columns: 3fr 2fr;
+  grid-template-columns: minmax(0, 1fr) 40%;
   column-gap: 10px;
   row-gap: 9px;
   align-items: center;
@@ -1893,7 +1889,7 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
   flex-wrap: wrap;
   gap: 6px;
 }
-.param-grid > .pg-field { grid-column: 2; width: 100%; margin: 0; }
+.param-grid > .pg-field { grid-column: 2; width: 100%; min-width: 0; margin: 0; }
 /* A setting switched on or off by a box at the start of its title (the Scherrer
    baseline), the box in the title's text so that they wrap together; its value's field
    beside it disabled when off. */
@@ -1904,9 +1900,11 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 .legend .lg-bl.is-off { text-decoration: line-through; opacity: .5; }
 /* Wavelength cell: split the field column into a source preset selector (left) and
    the numeric value (right, read-only unless the preset is "Custom"). */
-.lambda-field { display: flex; gap: 6px; align-items: center; }
-.lambda-field .lambda-sel { flex: 1 1 0; min-width: 0; padding-left: 6px; padding-right: 4px; }
-.lambda-field .lambda-val { flex: 1 1 0; min-width: 0; }
+/* (in the field's two fifths: side by side while each has room for its value, else the
+   value under the preset) */
+.lambda-field { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.lambda-field .lambda-sel { flex: 1 1 8ch; min-width: 0; padding-left: 6px; padding-right: 4px; }
+.lambda-field .lambda-val { flex: 1 1 10ch; min-width: 0; }
 .lambda-field .lambda-val[readonly] { opacity: .7; cursor: default; }
 /* Info outputs: keep them full-width where they sit, but bare (no field box) —
    they read like the titles, with the value in accent. */
@@ -1938,15 +1936,6 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 .pg-result > .cag-note { color: var(--muted); font-size: 12px; line-height: 1.5; }
 .cag-alert:not(:empty) { margin-top: 12px; }
 /* ===== XRPD Rietveld card ===== */
-/* The phases from CIFs, one row each: a colour key, the name and what was read from
-   the file, its remove ×. */
-.rv-phase { display: flex; align-items: flex-start; gap: 10px; padding: 8px 2px; border-top: 1px solid var(--line); }
-.rv-phase:first-child { border-top: none; }
-.rv-phase .rv-key { flex: none; width: 12px; height: 12px; border-radius: 3px; margin-top: 3px; }
-.rv-phase .rv-main { flex: 1; min-width: 0; font-size: 13px; line-height: 1.5; }
-.rv-phase .rv-main b { color: var(--text); }
-.rv-phase .rv-sub { color: var(--muted); font-size: 12px; }
-.rv-phase .rv-del { flex: none; }
 /* The side column's buttons, rows of equal widths: Refine, Refine all; Settings…, Clear,
    Clear all (three in the column's 280 px: the side padding narrowed so that "Settings…"
    keeps to one line). */
@@ -1998,6 +1987,7 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
    the warning colour when an entry was not taken. */
 .rvs-cell { display: flex; align-items: center; gap: 8px; min-width: 0; height: 23px; }
 .rvs-row input[type="text"] { flex: none; width: 72px; height: 23px; padding: 1px 6px; font-size: 12px; }
+.rvs-cell select { max-width: 100%; }
 .rvs-range { min-width: 0; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rvs-head button.btn.rvs-def { margin-left: auto; flex: none; padding: 2px 10px; font-size: 12px; }
 .rvs-note.is-warn { color: var(--warn); }
@@ -2142,7 +2132,7 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 .rv-wrow > .rv-tests { grid-column: 2; padding: 10px 12px; }
 .rv-wrow > .rv-solids { grid-column: 3; padding: 10px 8px; }
 .rv-wrow > .peak-box > .peak-box-head { flex: none; margin-bottom: 6px; }
-.rv-tests-body { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; display: grid; align-content: start; row-gap: 6px; }
+.rv-tests-body { flex: 1 1 auto; min-height: 0; overflow: auto; display: grid; align-content: start; row-gap: 6px; }
 .rv-tests-body > .pg-stat { font-size: 13px; color: var(--text); }
 .rv-tests-body > .pg-stat b { color: var(--accent); }
 .rv-tests-body > .pg-stat .txt-meta { font-size: 12px; margin-left: 4px; }
@@ -2248,22 +2238,6 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
   width: 100%;
 }
 
-/* The "interval too small" alert sits at the end of the Parameters column;
-   give it a clear break from the stats above it. */
-#taucAlert:not(:empty), #taucUAlert:not(:empty) { margin-top: 16px; }
-
-/* ===== Tauc Eg summary table ===== */
-#taucEgTableWrap { overflow: hidden; }
-#taucEgTableWrap table { font-size: 11px; table-layout: fixed; width: 100%; }
-#taucEgTableWrap th,
-#taucEgTableWrap td { font-size: 11px; white-space: nowrap; padding: 4px 6px; overflow: hidden; text-overflow: ellipsis; }
-#taucEgTableWrap td:nth-child(2),
-#taucEgTableWrap td:nth-child(3) { text-align: center; }
-
-/* Inline field + all/one toggle row */
-.field-row { display:flex; gap:5px; align-items:stretch; }
-.field-row > input, .field-row > select { flex:1; min-width:0; }
-
 /* ===== all/one flip-chip (GC-table style, reused for Tauc & XRD fields) ===== */
 /* all/one pill: an outlined dark chip, exactly like the sample-nav arrows —
    light-grey border, dark fill, muted text at rest; hover turns the text white
@@ -2277,10 +2251,6 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
 }
 .mode-chip:hover  { color: var(--text); }
 .mode-chip:active { color: var(--text); background: var(--line); }
-.field-row .mode-chip { flex: 0 0 auto; align-self: center; }
-/* Two half-width sub-panels side by side */
-.field-half { display:flex; gap:10px; }
-.field-half > div { flex:1; min-width:0; }
 
 /* ===== XRD peak table box ===== */
 .peak-box {
@@ -2370,7 +2340,6 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
   line-height: 1.7;
 }
 .size-summary b { color: var(--accent); }
-.size-summary .ss-n { color: var(--muted); font-size: 12px; }
 
 /* ✕ delete button — bare glyph, no border/background; padding keeps a clickable hitbox */
 .xrd-peak-wrap .peak-row .peak-del {
@@ -2580,11 +2549,8 @@ html:has(.modal-backdrop:not([style*="none"])) { overflow: hidden; scrollbar-gut
 .newproj-card:hover { border-color: var(--accent); color: var(--accent); }
 .newproj-card .tech-icon { width: 44px; height: 26px; }
 
-/* ===== Legend markers: segment for lines, circle for scatter, square for bars ===== */
+/* ===== Legend markers: segment for lines, square for bars ===== */
 .legend i { display: inline-block; margin-right: 5px; vertical-align: middle; width: 16px; height: 3px; border-radius: 2px; }
-.legend i.mk-dot { width: 9px; height: 9px; border-radius: 50%; }
-/* Hollow ring marker (open circles in the plot, e.g. raw XRPD data) */
-.legend i.mk-ring { width: 9px; height: 9px; border-radius: 50%; background: transparent; border: 1.6px solid; box-sizing: border-box; vertical-align: middle; }
 .legend i.mk-box { width: 11px; height: 11px; border-radius: 2px; }
 /* Dashed key: matches a series drawn with a dash pattern (the GC second gas). The
    dashes come from a repeating gradient so the key uses the series colour as-is. */
@@ -2908,7 +2874,6 @@ input.fig-slabel { flex: 1; min-width: 40px; padding: 3px 5px; font-size: 13px; 
   border-top: 1px solid var(--line); padding-top: 9px;
 }
 .fig-sec > .fig-subhead:first-of-type { border-top: none; padding-top: 0; margin-top: 4px; }
-.fig-kind { color: var(--muted); font-size: 10px; }
 /* Series grouped by the panel they are drawn in; a series moves by being dragged
    from one group into another. */
 .fig-group {
@@ -3095,7 +3060,7 @@ button.btn.fig-align.cp-anchored { --btn-bd: var(--accent); --btn-fg: var(--acce
   .fig-row { flex-wrap: wrap; gap: 3px 8px; }
   .fig-row > span { flex: 1 0 100%; }
   .fig-row input, .fig-row select { flex: 1 1 auto; }
-  .fig-richbar, .fig-chars { margin-left: 0; }
+  .fig-richbar { margin-left: 0; }
 
   .fig-axhead, .fig-axrow { grid-template-columns: 42px repeat(5, 1fr) 54px; gap: 2px; }
   .fig-axhead span { font-size: 9px; }
@@ -3147,14 +3112,15 @@ button.btn.fig-align.cp-anchored { --btn-bd: var(--accent); --btn-fg: var(--acce
 .sem-box-head select { width: auto; flex: 1 1 90px; min-width: 0; padding-top: 4px; padding-bottom: 4px; }
 .sem-thumbs-box { flex: 1 1 0; overflow-y: auto; }
 .sem-info-box { flex: 0 0 auto; }
-/* Settings in rows of two or three fields, each with its name above it. */
+/* Settings a row each, as every plot-style card's (.param-grid: the name on three fifths,
+   the field on two; to v530 rows of two or three fields, each its name above it). A
+   name is cut short ("…") rather than wrapped: then, or with a field under 90 px, the
+   card goes to one column
+   (sem.js fitWork). */
 .sem-set-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 18px 0 8px; }
 .sem-set-head:first-child { margin-top: 0; }
 .sem-set-head .sem-check { margin: 0; }
-.sem-fr { display: grid; gap: 8px; margin-bottom: 8px; }
-.sem-fr2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.sem-fr3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.sem-fr .txt-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sem-pg > .txt-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* One column: the image on top, the thumbnails in the middle, the settings under
    them. Taken on a phone, and wherever the columns would cut a field's name short
    (sem.js fitWork sets .sem-stacked). */
@@ -3181,11 +3147,7 @@ button.btn.fig-align.cp-anchored { --btn-bd: var(--accent); --btn-fg: var(--acce
   overflow: hidden; touch-action: none; user-select: none;
 }
 .sem-crop-view canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-.sem-crop-um { margin: 8px 0 10px; }
 .sem-check { display: flex; align-items: center; gap: 8px; margin-top: 12px; cursor: pointer; font-size: 13px; }
-.sem-crop-note { margin-top: 10px; }
-.sem-crop-btns { display: flex; gap: 8px; margin-top: 12px; }
-.sem-crop-btns .btn { flex: 1; }
 .sem-info-row { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; padding: 4px 0; border-bottom: 1px solid var(--line); }
 .sem-info-row:last-child { border-bottom: 0; }
 .sem-info-row > span:last-child { text-align: right; }
@@ -3216,17 +3178,10 @@ button.sem-link:hover { color: #fff; border-color: #fff; }
 .sem-thumb-wrap.is-out { opacity: 0.4; }
 .sem-thumb-wrap.is-out:hover { opacity: 0.8; }
 button.sem-link.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
-/* The list's colour palette means nothing for images. */
-#semFileTableWrap .palette-pick-btn { display: none; }
-.modal-box label.sem-copy-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; cursor: pointer; }
-.sem-copy-row .txt-meta { margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 55%; }
-.sem-copy-all { padding-bottom: 6px; border-bottom: 1px solid var(--line); }
 
 /* ===== SEM: intensity ===== */
 .sem-hist canvas { display: block; width: 100%; height: 100%; }
 .sem-hist { width: 100%; height: 120px; margin-top: 10px; }
-.sem-bcg { display: flex; gap: 8px; }
-.sem-bcg > div { flex: 1; min-width: 0; }
 /* A field that the settings do not use stays in place, greyed. */
 #semWorkspace input:disabled, #semWorkspace select:disabled, #semWorkspace .btn:disabled { opacity: 0.45; cursor: default; }
 #semWorkspace .sem-check:has(input:disabled) { opacity: 0.45; cursor: default; }
@@ -3241,7 +3196,6 @@ button.sem-link.is-on { background: var(--accent); border-color: var(--accent); 
    images, the scrollbar hidden; snapping lands a page on an image's edge. The arrows
    stand outside the row, never over an image: their room is kept at both ends even
    where an arrow is not needed (hidden, not removed), so the row never shifts. */
-.sem-crop-group { margin-top: 10px; }
 .sem-group {
   display: flex; flex-direction: column; gap: 8px; height: var(--sem-group-h, auto); box-sizing: border-box;
   border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px 12px; margin-bottom: 12px; background: var(--panel2);
@@ -3308,18 +3262,20 @@ button.an-add.is-drop { border-color: var(--accent); }
    other modules): muted, small, one line cut short
    with an ellipsis. To v501 a 40px column left of the label, centred, DRS's alone. */
 .file-row td.note-cell { color: var(--muted); font-size: 0.78rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* A phone: FILE and LABEL with half the cells' side padding, the note with a
-   quarter (so that "F(R)" shows whole down to 320px), the label field with less of its own,
-   and the field, while typed in, laid over the note beside it, so that a label of a dozen
-   characters shows whole: its cell's width, then the note's column (2/3 of the label's,
-   the cell's and its padding), less that column's right padding. The note under it is
-   hidden meanwhile: an excluded file's field, dimmed, let it show through what is typed. */
+/* A phone: TRACE and FILE with half the cells' side padding, the note with a
+   quarter (so that "F(R)" shows whole down to 320px), the name's field with less of its
+   own, and the field, while typed in, laid over FILE and the note right of it, so that a
+   name of two dozen characters shows whole: from its place (the cell's padding and the
+   swatch's 19px in) to the note's right padding: with u a part of the 3 : 3 : 2, its box
+   (the cell less its padding) is 3u − 8px, and the field is made 8u − 25px. FILE and the note under it are
+   hidden meanwhile: an excluded trace's field, dimmed, let them show through what is
+   typed. (To v531 LABEL was right of FILE, and its field went over the note alone.) */
 @media (max-width: 600px) {
   .file-table :is(th, td):nth-child(n+3):nth-last-child(n+3) { padding-left: 4px; padding-right: 4px; }
   .file-table .note-cell { padding-left: 2px; padding-right: 2px; }
   .file-table input.label-input { padding-left: 6px; padding-right: 6px; }
-  .file-table input.label-input:focus { position: relative; z-index: 1; width: calc(100% * 5 / 3 + 22px / 3); }
-  .file-table tr:has(input.label-input:focus) td.note-cell { visibility: hidden; }
+  .file-table .trace-inner input.label-input:focus { position: relative; z-index: 1; flex: none; width: calc(100% * 8 / 3 - 11px / 3); }
+  .file-table tr:has(input.label-input:focus) :is(td.fname, td.note-cell) { visibility: hidden; }
 }
 /* GC's Sample column (gc.js REPLICATES): its select fills the note's cell, as tall as the
    label field beside it, in the field's type. A phone: the header cut short with an
@@ -3349,3 +3305,119 @@ button.an-add.is-drop { border-color: var(--accent); }
 .wf-pts { flex: none; min-width: 4.4em; margin: -3px 0 6px auto; line-height: 1.2; text-align: right; font-size: 11px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
 /* (empty, with no file to count on: no room taken, the box one line as its neighbours) */
 .wf-pts:empty { display: none; }
+
+/* The Custom module (fig.js; to v530 named Figure). Its Plot cards are .pside (v531; the
+   Data card too to v533): the nav over the plot, the column beside it spanning that
+   box exactly, its head at the top (5 px under the box's top, as the analysis cards'
+   .param-head.aligned is under their plots') and its list scrolling in the room left. */
+.fig-side > .param-head { margin-top: 5px; }
+.fig-pside > .pside-col.fig-side { gap: 0; }
+/* The Data card: the roles' box at the right of the file's arrows; the file's table whole,
+   across the card (v534: to v533 a Plot card's chart's width, the series' names beside it),
+   in a box as tall as a Plot card's chart (two thirds of the card's width less the .pside
+   gap, at φ : 1; the card's width, stacked), scrolling both ways inside it, the series'
+   names, the roles and the header staying at its top. At an end of it the wheel and the
+   touch go on to scroll the page (v534: to v533 overscroll-behavior: contain kept them in
+   the box, and the page did not scroll while the pointer was over it). */
+.fig-data { container-type: inline-size; }
+.fig-data-nav { justify-content: space-between; flex-wrap: wrap; }
+.fig-data-nav > .fig-same { margin: 0 0 0 auto; }
+.fig-head-wrap { overflow: auto; width: 100%; height: calc((100cqw - 16px) * 2 / 3 / 1.618); min-height: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--panel2); }
+:root.narrow-layout .fig-head-wrap { height: calc(100cqw / 1.618); }
+.fig-head-wrap:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+table.fig-cols { border-collapse: separate; border-spacing: 0; font-size: 12px; font-variant-numeric: tabular-nums; }
+table.fig-cols thead { position: sticky; top: 0; z-index: 1; }
+table.fig-cols th, table.fig-cols td { padding: 4px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; text-align: left; }
+table.fig-cols thead th { background: var(--panel2); }
+table.fig-cols tbody tr:last-child td { border-bottom: none; }
+table.fig-cols select { width: auto; min-width: 7ch; padding: 4px 6px; }
+table.fig-cols .fig-hd th { color: var(--muted); font-weight: 600; }
+/* (the series' names, each over its columns, between rules that mark where it starts and ends) */
+table.fig-cols .fig-names th { height: 25px; font-weight: 600; color: var(--text); max-width: 0; overflow: hidden; text-overflow: ellipsis; }
+table.fig-cols .fig-names th.fig-name { border-left: 1px solid var(--line); border-right: 1px solid var(--line); text-align: center; padding: 2px 4px; }
+/* (a series' name typed over in place, v534: the field across its cell, as the cell's text was) */
+table.fig-cols input.fig-name-in { display: block; width: 100%; min-width: 0; height: 22px; padding: 1px 6px; font-size: 12px; font-weight: 600; text-align: center;
+  color: var(--text); background: transparent; border: 1px solid transparent; border-radius: 5px; text-overflow: ellipsis; }
+table.fig-cols input.fig-name-in:hover { border-color: var(--line); }
+table.fig-cols input.fig-name-in:focus { border-color: var(--text); background: var(--panel); outline: none; }
+table.fig-cols .fig-names th:first-child { border-left: none; }
+table.fig-cols .fig-names th:last-child { border-right: none; }
+#figWarn .alert { margin-top: 10px; }
+/* A Plot card's list of series scrolls in its box, which takes the column's height left
+   (flex 1 1 0: it never makes the row taller); at its end the wheel goes on to the page.
+   Its scrollbar thin (the theme's colours, as every one: :root) and laid in the card's
+   padding, so the rows keep the column's width and the parameters' three fifths and two
+   (gutter reserved: the same with or without it). */
+.fig-scroll { flex: 1 1 0; min-height: 0; overflow-y: auto; overflow-x: hidden;
+  scrollbar-gutter: stable; scrollbar-width: thin; margin-right: -10px; padding-right: 2px; }
+.fig-scroll > .param-grid { padding: 1px 0; }
+/* Stacked on a narrow screen, the column at its own height: the lists at theirs, to a cap. */
+:root.narrow-layout .fig-scroll { flex: none; max-height: 50vh; }
+/* A Plot card: its plot, or in its place a box of its size saying it has no series; beside
+   it its normalisation, its series and + Add series, the button's bottom on the plot's. */
+.fig-empty { aspect-ratio: 1.618; display: flex; align-items: center; justify-content: center; text-align: center; padding: 16px;
+  border: 1px dashed var(--line); border-radius: 8px; }
+.fig-ser-list { margin-top: 10px; }
+.fig-side > .plot-action-btn { margin-top: 8px; flex: none; }
+/* A series a row, on the parameters' grid: × to take it out and its name on three fifths,
+   its scale (and offset) on two. */
+.fig-ser { display: grid; grid-template-columns: minmax(0, 1fr) 40%; column-gap: 10px; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.fig-ser:last-of-type { border-bottom: none; }
+.fig-ser-head { display: flex; align-items: center; gap: 6px; font-size: 13px; min-width: 0; }
+.fig-ser-head > .fig-ser-x { flex: none; }
+.fig-ser-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fig-ops { display: flex; gap: 4px; min-width: 0; }
+.fig-op { flex: 1 1 0; min-width: 0; display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); margin: 0; }
+.fig-op > span { flex: none; }
+.fig-op input[type="text"] { flex: 1 1 0; width: 0; min-width: 0; padding: 3px 6px; }
+.fig-ser-out { margin-top: 6px; }
+/* Add series: the files and their series, each with its box; a file's box with some of
+   its series ticked holds a small square, neither a tick nor empty. */
+.modal-box.fig-pick-box { width: min(480px, 94vw); }
+.fig-pick-body { max-height: 60vh; overflow: auto; }
+.fig-pick-file { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; margin-bottom: 8px; }
+.modal-box label.fig-pick-row { display: flex; align-items: center; gap: 8px; margin: 0; padding: 3px 0 3px 23px; font-size: 13px; cursor: pointer; min-width: 0; }
+.modal-box label.fig-pick-row.fig-pick-head { padding-left: 0; }
+.fig-pick-name { margin-left: auto; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.fig-pick input[type="checkbox"] {
+  -webkit-appearance: none; appearance: none; flex: none; width: 15px; height: 15px; margin: 0;
+  border: 1px solid var(--line); border-radius: 3px; background: var(--panel2);
+  display: inline-grid; place-content: center; cursor: pointer;
+}
+.fig-pick input[type="checkbox"]::before { content: ''; width: 9px; height: 9px; transform: scale(0); background: var(--on-accent, #fff); }
+.fig-pick input[type="checkbox"]:checked { background: var(--accent); border-color: var(--accent); }
+.fig-pick input[type="checkbox"]:checked::before { transform: scale(1); clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%); }
+.fig-pick input[type="checkbox"]:indeterminate { background: var(--panel2); border-color: var(--accent); }
+.fig-pick input[type="checkbox"]:indeterminate::before { transform: scale(1); width: 7px; height: 7px; border-radius: 1px; background: var(--accent); clip-path: none; }
+.fig-pick input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* The Iodometry module (iodo.js). The Analysis card's plot is clicked to set the trace's
+   injection: a crosshair over it (a pan or zoom tool sets its own). Its two actions under
+   the parameters, one under the other. The calibration's window, as the XRPD standard's:
+   a head with its ×, what is under it scrolling, the answers at its foot. */
+svg.plot.iodo-pick { cursor: crosshair; }
+#iodoSuggest + #iodoCalBtn { margin-top: 8px; }
+.iodo-cal-box {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  width: min(560px, 96vw); max-height: 94vh; overflow: hidden;
+  display: flex; flex-direction: column;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+}
+.iodo-cal-box:focus { outline: none; }
+.iodo-cal-head { flex: none; display: flex; align-items: center; gap: 8px; padding: 12px 16px 12px 18px; border-bottom: 1px solid var(--line); }
+.iodo-cal-head > h3 { flex: 1 1 auto; margin: 0; }
+.iodo-cal-head .an-ic { margin-right: -4px; }
+.iodo-cal-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 14px 18px 4px; }
+.iodo-cal-about { margin: 0 0 12px; line-height: 1.5; }
+.iodo-cal-scroll > .param-grid + .param-grid, .iodo-cal-std { margin-top: 12px; }
+table.iodo-std { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+table.iodo-std th { text-align: left; color: var(--muted); font-weight: 600; padding: 4px 6px; }
+table.iodo-std th:last-child, table.iodo-std td:last-child { width: 34px; }
+table.iodo-std td { padding: 3px 6px; }
+table.iodo-std input { width: 100%; min-width: 0; margin: 0; }
+.iodo-cal-std > .btn { margin-top: 8px; }
+.iodo-cal-fit { margin-top: 10px; font-size: 13px; color: var(--text); }
+.iodo-cal-fit b { color: var(--accent); }
+.iodo-cal-msg:not(:empty) { margin-top: 10px; color: var(--bad); font-size: 13px; }
+.iodo-cal-foot { flex: none; margin: 0; padding: 12px 18px 16px; }
+@media (max-width: 600px){ .iodo-cal-box { width: 100vw; max-height: 100vh; border-radius: 0; } .iodo-cal-head { padding: 10px 10px 10px 12px; } .iodo-cal-scroll { padding: 12px 12px 4px; } }

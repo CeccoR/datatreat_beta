@@ -1,0 +1,432 @@
+--- step6-app/xrd-rietveld.js	2026-10-31 10:58:18.700031663 +0000
++++ r3-app/xrd-rietveld.js	2026-10-31 17:57:11.458383296 +0000
+@@ -1113,7 +1113,46 @@
+    σ is right against noise (replicas 0.97 σ rms) but the truth lies 1.21 σ rms off on the clean
+    rows (a bias of 0.4 σ rms from the instrument's and the line's residual misfit, and minima that
+    settle apart); κ 1.2 covers 77 of their 82 extents (94 %; κ 1: 73), the combined interval 78. */
+-const SHAPE_MINIMA = { on: true, collect: 30, preLn: 0.1, preDeg: 5, max: 6, kick: 0.02, rounds: 10, gain: 0.5, shift: 0, k: 2, floorLn: 0.02, floorDeg: 1, capDeg: 10, delta: 16, deltaMisfit: 25, keep: 30, kappa: 1.2 };
++const SHAPE_MINIMA = { on: true, collect: 30, preLn: 0.1, preDeg: 5, max: 6, kick: 0.02, rounds: 10, gain: 0.5, shift: 0, k: 2, floorLn: 0.02, floorDeg: 1, capDeg: 10, delta: 16, deltaMisfit: 25, keep: 30, kappa: 1.2,
++  capCands: Infinity, capEvals: 6000 };
++/* [round 3] (research/free-shape/round3/: POINT4.md, CONFIRM.md) capEvals 6000: on the 308 tuning runs the
++   flagged rows' stage ran to 17 237 evaluations uncapped (the others' to 13 225); with capEvals alone 6 rows are
++   cut (0.59× their stage), every interval kept, one held fit left held 12.7 χ²_ν above the free minimum the
++   full stage reaches. capCands 3 (the screening's choice) cut 23 rows, most of them cheap ones, and lost 16 of
++   their 55 minima within Δ*, 3 extents' and 3 axes' coverage: Infinity (off). Both Infinity: round 2's stage.
++   The stage's cap where the per-line check of the fit before the stage fired (the keep test's
++   check): at most capCands candidates, and no candidate or round of turns begun once the stage has spent
++   capEvals pattern evaluations. info.minimaStage (and the report's minima) say whether the minima were
++   explored in full: `explored` false when the cap, or max, left a distinct candidate or a round out.
++   [round 3] The axes' 95 % radius (SHAPE_ANGLE). rule 'r2': round 2's, 2·esdAngle (the profile's σ of the
++   tilt, the rms of its two turns), with the minima's betweenDeg and the jackknife's jackTurn. 'profile':
++   each turn's profile (turned, the rest refined 4 iterations, as turnEsds) read where χ² rises by t·χ²_ν,
++   the axis's radius the larger reading of the turns that tilt it. 'curv': the covariance's σ of each turn
++   times kappa·√5.99 (χ²₂'s 95 %), the larger of the two turns. each: the radius the largest over the
++   minima within Δ* of the angle to the minimum's axis plus that minimum's own (its covariance; for
++   'profile' its own profile), in place of betweenDeg. record: the profiles' points and the covariances'
++   σ in the report (a study's: angle). A held fit's radius is at least 2·freeOff, as round 2's (esdAngle ≥ freeOff).
++   'profile' with t 5.99, χ²₂'s 95 % point (round 3, POINT1.md, CONFIRM.md): on the 128 clean kept truths of the
++   tuning part (not flagged) it covers 125 principal axes (98 %) against round 2's 116 (91 %; its 2·esdAngle is
++   the tilt's 1-σ reading doubled, 86 % for a two-dimensional normal tilt), at 1.34× round 2's radius (median)
++   and 2.05× the profile's trials; the screening runs had chosen 9 (5.99 × 1.2², the extents' bias factor: 31
++   of 31 against 30), which the 308 runs showed over-covering (127 of 128, 1.61×): the reading at the
++   threshold, the larger side and turn, is conservative enough without κ. 'curv' covers 125 at κ 1 but its σ
++   runs to hundreds of degrees where two widths are nearly equal or the orientation symmetric. */
++const SHAPE_ANGLE = { rule: 'profile', t: 5.99, kappa: 1, each: false, record: false, dMax: 40 };
++/* [round 3] Targeted starts (search v2, a body). lines: from the isotropic fit's residual, each segment's
++   (lineCheck's cut) extra width along its strongest reflection's normal, the derivative of the pattern in
++   Ys as the probe; a plate on the normals of the `lines` most broadened segments and a needle on those of
++   the `lines` least broadened, a family already among the low-index starts left out. frames: from the
++   `frames` lowest distinct ends of the search before the minima stage, the same frame with the widths
++   relabelled (a box's or an ellipsoid's five other orders, an elliptic cylinder's height on either side,
++   a body of revolution's or a square box's two swapped, a square box also turned 45° about its height),
++   each refined briefly and the framesFull best of them in full, their ends for the stage. */
++// (lines 2, round 3, POINT5.md: on the 66 screening truths 3 rows lower than without, one of them a clean
++// truth by 1293 χ²_ν, at 1.08× the search's evaluations; frames 1 bought 2 rows at 1.17×, 4 random starts 2
++// at 1.10×, and are off)
++const SHAPE_TARGET = { lines: 2, frames: 0, framesFull: 2 };
++const EVAL_COUNT = { n: 0 };
+ /* The keep test (STEP5.md): one size against the shape, on G, the larger gain over the isotropic fit of
+    the search's free and held fits before the minima stage, in χ²/max(1, χ²_ν,iso).
+    - rule 'lrt' (default): G > χ²_{k+1}(1 − alpha) + margin, a likelihood-ratio test whose degrees of
+@@ -1373,8 +1412,13 @@
+    rest is a second valley nearly as deep, which a profile does not see). An axis i's
+    esd is then √((σ_j² + σ_k²)/2) over the turns that tilt it. The model is left as it
+    was. */
+-function turnEsds(model, v, res, about, turn, names){
++// [round 3] o: { steps (°, a superset of the default ones), dMax (the profile followed until Δχ²/χ²_ν
++// reaches it), rec (an array: each turn's points { b, plus, minus: [[°, Δχ²/χ²_ν]] }) }; the esd is read
++// from the default steps alone, as without o.
++const TURN_STEPS = [1, 2, 4, 8, 16, 32, 60], TURN_STEPS_FINE = [1, 1.5, 2, 3, 4, 6, 8, 12, 16, 24, 32, 45, 60];
++function turnEsds(model, v, res, about, turn, names, o){
+   if (!res || !res.stats) return about.map(()=> NaN);
++  if (o) return turnProfiles(model, v, res, about, turn, names, o);
+   const keep = { v: model.v.slice(), esd: model.esd, cov: model.cov };
+   const chiAt = (vv, free) => {
+     setParams(model, vv);
+@@ -1399,6 +1443,52 @@
+     setParams(model, keep.v); model.esd = keep.esd; model.cov = keep.cov;
+   }
+ }
++// [round 3] turnEsds with each turn's profile kept (o.rec) on the steps o.steps, followed to dMax·χ²_ν;
++// the esds as turnEsds's (read on its own steps, from the same points).
++function turnProfiles(model, v, res, about, turn, names, o){
++  const keep = { v: model.v.slice(), esd: model.esd, cov: model.cov }, nu = res.stats.chi2;
++  const chiAt = (vv, free) => {
++    setParams(model, vv);
++    try { refine(model, { free, maxIter: 4, audit: false }); } catch(e){ return Infinity; }
++    return evaluate(model, model.v).chi2;
++  };
++  try {
++    const side = (b, sg, c0) => {
++      const pts = [];
++      for (const deg of o.steps || TURN_STEPS_FINE){
++        const d = (chiAt(turn(b, sg*deg*D2R), names(b)) - c0)/nu;
++        if (!Number.isFinite(d)){ pts.push([deg, Infinity]); break; }
++        pts.push([deg, d]);
++        // followed to dMax, and until a default step has reached 1 (the esd's own reading)
++        if (d >= Math.max(1, o.dMax || 1) && pts.some(([dg, dd])=> TURN_STEPS.includes(dg) && dd >= 1)) break;
++      }
++      return pts;
++    };
++    return about.map(b=> {
++      const c0 = chiAt(turn(b, 0), names(b));
++      if (!Number.isFinite(c0)){ if (o.rec) o.rec.push({ b, plus: [], minus: [] }); return NaN; }
++      const plus = side(b, 1, c0), minus = side(b, -1, c0);
++      if (o.rec) o.rec.push({ b, plus, minus });
++      // the esd on turnEsds's own steps: σ where √(Δχ²) first reaches √χ²_ν (in χ²_ν: 1)
++      const on = pts => turnRead(pts.filter(([deg])=> TURN_STEPS.includes(deg)), 1)*D2R;
++      return (on(plus) + on(minus))/2;
++    });
++  } finally {
++    setParams(model, keep.v); model.esd = keep.esd; model.cov = keep.cov;
++  }
++}
++// The angle (°) where a profile's points [[°, Δχ²/χ²_ν]] first reach t, √Δχ² linear between the last two
++// (from 0 before the first); NaN when they never do or a trial could not be refined first.
++function turnRead(pts, t){
++  let t0 = 0, r0 = 0; const target = Math.sqrt(t);
++  for (const [deg, d] of pts){
++    if (!Number.isFinite(d)) return NaN;
++    const r = Math.sqrt(Math.max(0, d));
++    if (r >= target) return t0 + (deg - t0)*(target - r0)/Math.max(1e-12, r - r0);
++    t0 = deg; r0 = r;
++  }
++  return NaN;
++}
+ /* shapeOf(model, params, k, res?) → the phase's free shape, or null when not in use:
+    for a body (spheroid, cylinder, elliptic cylinder, box, square box) bodyShapeOf's; for the
+    ellipsoid { type, kind: 'plate' | 'needle' | 'triaxial' | 'isometric' |
+@@ -1577,12 +1667,17 @@
+   // and the rest adding 0.2 % at most), and the turns about the other axes, from the
+   // turned frame (r = 0 there).
+   const reopt = res && res.free ? res.free.filter(nm=> model.index[nm] != null && !q.iR.includes(model.index[nm])) : [];
+-  const sigP = turnEsds(model, v, res, about, (b, phi)=>{
+-    const vv = v.slice(), e = [0, 0, 0]; e[b] = 1;
++  // [round 3] SHAPE_ANGLE: the profile kept (rule 'profile', or record) on the finer steps
++  const AN = SHAPE_ANGLE, profOn = AN.rule === 'profile' || AN.record, profOpt = vb => profOn ? { steps: TURN_STEPS_FINE, dMax: AN.record ? Math.max(AN.dMax, AN.t) : AN.t, rec: [] } : undefined;
++  const turnAt = (vb, Rb) => (b, phi)=>{
++    const vv = vb.slice(), e = [0, 0, 0]; e[b] = 1;
+     q.iR.forEach(i=> { vv[i] = 0; });
+-    quatOfMat(mulM(R, turnAbout(e, phi))).forEach((t, i)=> { vv[q.iQ[i]] = t; });
++    quatOfMat(mulM(Rb, turnAbout(e, phi))).forEach((t, i)=> { vv[q.iQ[i]] = t; });
+     return vv;
+-  }, b=> reopt.concat(q.iR.filter((_, j)=> j !== b).map(i=> model.par[i].name)));
++  };
++  const turnNames = b=> reopt.concat(q.iR.filter((_, j)=> j !== b).map(i=> model.par[i].name));
++  const pOwn = profOpt(v);
++  const sigP = turnEsds(model, v, res, about, turnAt(v, R), turnNames, pOwn);
+   const sig = [0, 1, 2].map(b=> about.includes(b) ? sigP[about.indexOf(b)] : NaN);
+   const tiltEsd = i => { const [j, l] = [0, 1, 2].filter(t=> t !== i), e = Math.sqrt((sig[j]**2 + sig[l]**2)/2)*R2D;
+     return held && info.freeOff && Number.isFinite(e) ? Math.max(e, info.freeOff[i]) : e; };
+@@ -1805,13 +1900,27 @@
+     // Δ*: delta, or deltaMisfit where the per-line check fired (the fit has a misfit)
+     const dStar = chk && chk.flagged ? SHAPE_MINIMA.deltaMisfit : SHAPE_MINIMA.delta;
+     const all = info.minima.map(m=> ({ m, p: minimaMatch(q, fit, { W: m.W, R: m.R }, false) })), inD = all.filter(x=> x.m.delta <= dStar);
++    // [round 3] each minimum within Δ* profiled too (SHAPE_ANGLE each with 'profile', or record with each);
++    // the reported fit's own minimum (every axis within 0.01°, the widths within 0.1 %) is not profiled again
++    if (profOn && AN.each && res && res.stats) for (const x of inD){
++      if (!x.m.v || (x.p.ang.every(a=> !Number.isFinite(a) || a < 1e-4) && x.p.Wb.every((w, i)=> Math.abs(w - B.axes(W)[i]) <= 1e-3*Math.max(w, B.axes(W)[i])))){ x.prof = pOwn && pOwn.rec; continue; }
++      const vm = Float64Array.from(x.m.v), o = profOpt(vm);
++      turnEsds(model, vm, res, about, turnAt(vm, bodyFrame(q, vm)), turnNames, o);
++      x.prof = o.rec;
++    }
+     dims.forEach((d, j)=> { const i = wIx.indexOf(j), Ds = [d.D, ...inD.map(x=> Dof(x.p.Wb[i]))]; d.betweenLo = Math.min(...Ds); d.betweenHi = Math.max(...Ds); });
+     groups.forEach(g=> { const Ds = [g.D, ...inD.map(x=> Dof(g.axes.reduce((t, i)=> t + x.p.Wb[i], 0)/g.axes.length))]; g.betweenLo = Math.min(...Ds); g.betweenHi = Math.max(...Ds); });
+     const angOf = ix => { const a = inD.flatMap(x=> ix.map(i=> x.p.ang[i])).filter(Number.isFinite); return a.length ? Math.max(...a)*R2D : 0; };
+     axes.forEach(ax=> { ax.betweenDeg = angOf([ax.axis]); });
+     setList.forEach(S=> { S.betweenDeg = angOf(S.axes); });
+-    minima = { delta: dStar, n: inD.length, unique: inD.length <= 1,
++    minima = { delta: dStar, n: inD.length, unique: inD.length <= 1, explored: info.minimaStage ? info.minimaStage.explored !== false : true,
+       list: all.map(({ m, p })=> ({ delta: m.delta, n: m.n, dims: m.W.map(Dof), angle: Math.max(0, ...p.ang.filter(Number.isFinite))*R2D })) };
++    // [round 3] the study's record (SHAPE_ANGLE.record): the reported fit's turns' profiles and covariance σ (°),
++    // and each minimum within keep: its angle to each reported axis (°), its axes' order, its turns' σ (°)
++    // and, with each, its profiles
++    if (AN.record) minima.angle = { nu: res && res.stats ? res.stats.chi2 : NaN, about, held, freeOff: held && info.freeOff ? info.freeOff : null,
++      prof: pOwn ? pOwn.rec : null, sigC: about.map(b=> Math.sqrt(cov(nW + b, nW + b))*R2D),
++      minima: all.map(x=> ({ delta: x.m.delta, ang: x.p.ang.map(a=> Number.isFinite(a) ? a*R2D : null), perm: x.p.p, sigC: x.m.s && x.m.s.t ? x.m.s.t.map(t=> t*R2D) : null, prof: x.prof || null })) };
+     /* The two errors as one 95 % interval: each dimension's lo–hi, the hull of its local interval
+        D·e^(±2κσ) (σ = Desd/D, the curvature's; κ = SHAPE_MINIMA.kappa; a group's member: the
+        group's interval and its members' values), the minima's range, and where the check fired the
+@@ -1825,7 +1934,34 @@
+       const hi = [at(g && !Number.isFinite(d.Desd) ? g.D : d.D, 1), d.betweenHi, ...(g && !Number.isFinite(d.Desd) ? g.axes.map(i=> dims[i].D) : []), ...(d.jackHi != null ? [d.jackHi] : [])];
+       d.sLocal = kap*sd; d.lo = Math.min(...lo); d.hi = Math.max(...hi);
+     });
+-    axes.forEach(ax=> { ax.radius = Math.max(Number.isFinite(ax.esdAngle) ? 2*ax.esdAngle : 0, ax.betweenDeg, Number.isFinite(ax.jackTurn) ? ax.jackTurn : 0); });
++    if (AN.rule === 'r2') axes.forEach(ax=> { ax.radius = Math.max(Number.isFinite(ax.esdAngle) ? 2*ax.esdAngle : 0, ax.betweenDeg, Number.isFinite(ax.jackTurn) ? ax.jackTurn : 0); });
++    else {
++      // [round 3] SHAPE_ANGLE 'profile' or 'curv': each turn's reading (°); an axis's, the larger of the
++      // turns that tilt it; with each, the hull over the minima within Δ* (angle + its own reading)
++      const readP = rec => b => { const t = rec && rec.find(x=> x.b === b); return t ? Math.max(turnRead(t.plus, AN.t), turnRead(t.minus, AN.t)) : NaN; };
++      const readC = sT => b => AN.kappa*Math.sqrt(5.99)*sT[b]*R2D;
++      const tiltBy = (rd, i) => { const r = about.filter(b=> b !== i).map(rd); return r.some(x=> !Number.isFinite(x)) ? NaN : Math.max(0, ...r); };
++      const sTown = about.map(b=> Math.sqrt(cov(nW + b, nW + b)));
++      const own = AN.rule === 'profile' ? readP(pOwn.rec) : readC([0, 1, 2].map(b=> sTown[b]));
++      const fallback = i => Number.isFinite(tiltEsd(i)) ? 2*tiltEsd(i)*(AN.rule === 'profile' ? Math.sqrt(AN.t)/2 : AN.kappa*Math.sqrt(5.99)/2) : 0;
++      axes.forEach(ax=> {
++        let r = tiltBy(own, ax.axis);
++        if (!Number.isFinite(r)) r = fallback(ax.axis);   // a held fit's covariance has no turns: its profile's σ
++        if (held && info.freeOff) r = Math.max(r, 2*info.freeOff[ax.axis]);   // as round 2's 2·esdAngle, esdAngle ≥ freeOff
++        let rm = ax.betweenDeg;
++        if (AN.each){
++          rm = 0;
++          for (const x of inD){
++            const j = x.p.p[ax.axis], a = x.p.ang[ax.axis];
++            if (!Number.isFinite(a)) continue;
++            const rd = AN.rule === 'profile' ? (x.prof ? readP(x.prof) : null) : (x.m.s && x.m.s.t ? readC(x.m.s.t) : null);
++            const loc = rd ? tiltBy(rd, j) : NaN;
++            rm = Math.max(rm, a*R2D + (Number.isFinite(loc) ? loc : r));
++          }
++        }
++        ax.radius = Math.max(r, rm, Number.isFinite(ax.jackTurn) ? ax.jackTurn : 0);
++      });
++    }
+     setList.forEach(S=> { const jt = Math.max(0, ...axes.filter(ax=> S.axes.includes(ax.axis) && Number.isFinite(ax.jackTurn)).map(ax=> ax.jackTurn));
+       S.radius = Math.max(Number.isFinite(S.esdAngle) ? 2*S.esdAngle : 0, S.betweenDeg, jt); });
+   }
+@@ -2800,6 +2936,7 @@
+ /* One phase's pattern at scale 1 into `out` (zeroed here). With `ticks`, the α1 line of
+    every reflection in the range is listed there too. */
+ function phasePattern(model, v, k, out, ticks){
++  EVAL_COUNT.n++;
+   out.fill(0);
+   const q = model.phases[k];
+   const cell = cellOf(model, v, k), { Gs } = metric(cell);
+@@ -4681,7 +4818,7 @@
+   const sd = nm => { const i = res && res.cov ? res.free.indexOf(nm) : -1; return i >= 0 ? Math.sqrt(res.cov[i][i]) : NaN; };
+   const sW = q.iW.map(i=> sd(model.par[i].name)), wIx = q.iW.length === 2 ? [0, 0, 1] : [0, 1, 2];
+   const sT = [0, 1, 2].map(b=> b < q.iR.length ? sd(model.par[q.iR[b]].name) : 0);
+-  return { w: [0, 1, 2].map(i=> sW[wIx[i]]), a: [0, 1, 2].map(i=> { const [j, l] = [0, 1, 2].filter(t=> t !== i); return Math.sqrt((sT[j]**2 + sT[l]**2)/2); }) };
++  return { w: [0, 1, 2].map(i=> sW[wIx[i]]), a: [0, 1, 2].map(i=> { const [j, l] = [0, 1, 2].filter(t=> t !== i); return Math.sqrt((sT[j]**2 + sT[l]**2)/2); }), t: sT };
+ }
+ /* shapeMinima(model, k, ends, o) → { minima, ends, cands } or null: SHAPE_MINIMA's stage on the
+    search's ends ({ v, chi, kind }), o: { names (the free parameters), lm (central, as the returned
+@@ -4699,10 +4836,16 @@
+   const sorted = ends.filter(e=> Number.isFinite(e.chi)).sort((x, y)=> x.chi - y.chi);
+   if (!sorted.length) return null;
+   const c0 = sorted[0].chi, cands = [];
++  // [round 3] the cap where the check before the stage fired (o.flagged): at most capCands candidates and
++  // capEvals evaluations; left: distinct candidates beyond the limit (counted, not refined)
++  const capOn = !!o.flagged, maxC = capOn ? Math.min(M.max, M.capCands) : M.max, budget = capOn ? M.capEvals : Infinity, ev0 = EVAL_COUNT.n;
++  let left = 0, capped = false;
+   for (const e of sorted){
+-    if (e.chi > c0 + M.collect*o.nu || cands.length >= M.max) break;
++    if (e.chi > c0 + M.collect*o.nu) break;
+     const f = fitOf(e.v), same = cands.find(c=> minimaMatch(q, c.f, f, false).r <= 1);
+-    if (same) same.kinds.push(e.kind); else cands.push({ ...e, f, kinds: [e.kind] });
++    if (same){ same.kinds.push(e.kind); continue; }
++    if (cands.length >= maxC){ if (left < 12) left++; else break; continue; }
++    cands.push({ ...e, f, kinds: [e.kind] });
+   }
+   // The softest turn: the turns' covariance's largest-variance direction (body frame); an
+   // undetermined turn itself; else (1, 1, 1) or, for a body of revolution, (1, 1, 0).
+@@ -4732,6 +4875,7 @@
+     let r; try { r = refine(model, { free: o.names, ...lm }); } catch(e){ return null; }
+     let cur = { res: r, v: model.v.slice() }, kicks = 0;
+     for (let round = 0; round < M.rounds; round++){
++      if (EVAL_COUNT.n - ev0 > budget){ capped = true; break; }
+       let kb = null;
+       for (const u of soft(cur.res)) for (const s of [1, -1]){
+         setParams(model, kick(cur.v, u, s*M.kick)); kicks++;
+@@ -4747,7 +4891,9 @@
+     return { ...cur, kicks };
+   };
+   const mins = [];
++  let skipped = 0;
+   for (const c of cands){
++    if (EVAL_COUNT.n - ev0 > budget){ capped = true; skipped++; continue; }
+     const s = settle(c.v);
+     if (!s) continue;
+     const f = fitOf(s.v); f.s = minimaSigmas(model, q, s.res);
+@@ -4759,7 +4905,7 @@
+     const t = out.find(x=> minimaMatch(q, x.f, m.f, true).r <= 1);
+     if (t){ t.n++; t.from = t.from.concat(m.from); } else out.push({ ...m, n: 1 });
+   }
+-  return { minima: out, ends: sorted.length, cands: cands.length, refined: mins.length };
++  return { minima: out, ends: sorted.length, cands: cands.length, refined: mins.length, left, skipped, capped: capped || (capOn && left > 0 && maxC < M.max), explored: !capped && left === 0, evals: EVAL_COUNT.n - ev0 };
+ }
+ 
+ /* freeShape(model, k, res, free, opts) → { res, info }, { rejected, dBIC } or null: the
+@@ -4799,6 +4945,37 @@
+    parameters): { S, B, zSeg, zBin, flagged, cuts (each segment's first point, then n),
+    segs (the flagged segments: { s, i0, i1, lo, hi, hkl (the strongest line), chi2nu, zSeg,
+    zBin }) }. */
++/* [round 3] lineBroadening(model, k, v) → { segs: [{ hkl, g (the normal, Cartesian unit), delta (extra Ys), z }] }:
++   the fit at v's residual on each of lineCheck's segments projected on the pattern's derivative in the
++   isotropic size Ys (a segment whose strongest line carries at least half its intensity). */
++function lineBroadening(model, k, v){
++  const q = model.phases[k], n = model.n, x = model.x, w = model.w, y = model.y, C = SHAPE_CHECK;
++  const y0 = Float64Array.from(evaluate(model, v).yc), vv = Float64Array.from(v), h = Math.max(0.05*v[q.iYs], 2e-3);
++  vv[q.iYs] = v[q.iYs] + h;
++  const y1 = Float64Array.from(evaluate(model, vv).yc);
++  const L2 = model.lines.length > 1 ? model.lines[1] : null;
++  const cen = tt => { if (!L2) return tt; const th = tt/2*Math.PI/180, s = L2.lam/model.lines[0].lam*Math.sin(th);
++    return s < 1 ? tt + 2*(Math.asin(s) - th)*180/Math.PI*(L2.w/(model.lines[0].w + L2.w)) : tt; };
++  const ticks = calc(model, v, { internal: true }).ticks.filter(t=> t.phase === q.id), Imax = Math.max(0, ...ticks.map(t=> t.I));
++  const Ls = ticks.filter(t=> t.I > 1e-4*Imax && t.tt >= x[0] && t.tt <= x[n - 1])
++    .map(t=> ({ c: cen(t.tt), H: t.H > 0 ? t.H : 0.1, I: t.I, hkl: [t.h, t.k, t.l] })).sort((a, b)=> a.c - b.c);
++  const G = [];
++  for (const l of Ls){ const g = G[G.length - 1]; if (g && l.c - g.last.c < Math.max(C.minsep, (l.H + g.last.H)/2)){ g.ls.push(l); g.last = l; } else G.push({ ls: [l], last: l, first: l }); }
++  const cut = G.length ? [x[0] - 1e-9, ...G.slice(1).map((g, i)=> (G[i].last.c + g.first.c)/2), x[n - 1] + 1e-9] : [x[0] - 1e-9, x[n - 1] + 1e-9];
++  const B = q.Bm, segs = []; let i = 0;
++  for (let s = 0; s < cut.length - 1; s++){
++    const i0 = i; while (i < n && x[i] < cut[s + 1]) i++;
++    if (i - 1 < i0 || !G[s]) continue;
++    const tot = G[s].ls.reduce((t, l)=> t + l.I, 0), top = G[s].ls.reduce((p, l)=> l.I > p.I ? l : p);
++    if (top.I < 0.5*tot) continue;
++    let num = 0, den = 0;
++    for (let j = i0; j < i; j++){ if (!(w[j] > 0)) continue; const d = (y1[j] - y0[j])/h; num += w[j]*(y[j] - y0[j])*d; den += w[j]*d*d; }
++    if (!(den > 0)) continue;
++    const [hh, kk, ll] = top.hkl, c = [B[0]*hh + B[1]*kk + B[2]*ll, B[4]*kk + B[5]*ll, B[8]*ll], nn = Math.hypot(...c);
++    segs.push({ hkl: top.hkl, g: c.map(t=> t/nn), delta: num/den, z: num/Math.sqrt(den) });
++  }
++  return { segs };
++}
+ function lineCheck(model, k, v, P){
+   const q = model.phases[k], n = model.n, x = model.x, w = model.w, y = model.y, C = SHAPE_CHECK;
+   const yc = evaluate(model, v).yc, r = new Float64Array(n);
+@@ -4954,6 +5131,7 @@
+   // Each solid's own parameters, its starts (functions that write one into v), how a
+   // start is charted afresh before its full refinement, and a small turn of the best.
+   let names, starts = [], rebase = v => v, turned, snaps = null;
++  const targetRec = {};   // [round 3] SHAPE_TARGET's record
+   if (q.iL){
+     const cholL = S => { const l11 = Math.sqrt(S[0]), l21 = S[3]/l11, l31 = S[6]/l11, l22 = Math.sqrt(Math.max(1e-30, S[4] - l21*l21)), l32 = (S[7] - l31*l21)/l22, l33 = Math.sqrt(Math.max(1e-30, S[8] - l31*l31 - l32*l32)); return [l11, l21, l22, l31, l32, l33]; };
+     // S turned by R: R·S·Rᵀ.
+@@ -5011,6 +5189,19 @@
+       for (let c = starts.length; c < nStarts + 1; c++) for (let d = 0; d < 7; d++) gauss();
+       const g = mulberry(0x85ebca6b), nFill = SHAPE_FILL + Math.max(0, nStarts - SHAPE_STARTS);
+       for (let c = 0; c < nFill; c++) starts.push(put(Wof(...[0, 1, 2].map(()=> w0*Math.exp(0.8*g()))), randomTurn(g)));
++      // [round 3] SHAPE_TARGET.lines: a plate on the normals of the most broadened segments, a needle on
++      // those of the least broadened, a family among the low-index starts' left out
++      if (SHAPE_TARGET.lines > 0){
++        const lb = lineBroadening(model, k, vIso), lowLab = new Set(axesLow.map(e=> lattDirection(q, e).label)), seen = new Set();
++        const pickDir = (list, sel) => { const out = [];
++          for (const sg of list){ if (out.length >= SHAPE_TARGET.lines) break; if (!sel(sg)) continue;
++            const ld = lattDirection(q, sg.g); if ((ld.angle <= SNAP_DEG && lowLab.has(ld.label)) || seen.has(ld.label)) continue; seen.add(ld.label); out.push(sg); }
++          return out; };
++        const most = pickDir([...lb.segs].sort((a, b)=> b.delta - a.delta), sg=> sg.z > 2), least = pickDir([...lb.segs].sort((a, b)=> a.delta - b.delta), sg=> sg.z < -2);
++        for (const sg of most){ const f = put(Wof(1.2*w0, 1.6*w0, 0.4*w0), frameAlong(sg.g)); f.kind = 'line'; starts.push(f); }
++        for (const sg of least){ const f = put(Wof(0.5*w0, 0.7*w0, 2.5*w0), frameAlong(sg.g)); f.kind = 'line'; starts.push(f); }
++        targetRec.lines = { most: most.map(sg=> ({ hkl: sg.hkl, delta: sg.delta, z: sg.z })), least: least.map(sg=> ({ hkl: sg.hkl, delta: sg.delta, z: sg.z })) };
++      }
+     }
+     // The orientation reached becomes the reference, r = 0: the chart is fresh at the
+     // start of each full refinement, far from |r| = π.
+@@ -5068,10 +5259,10 @@
+     const vv = vIso.slice(); vv[q.iYs] = 0;
+     put(vv);
+     setParams(model, vv);
+-    try { const r = refine(model, { free: names, ...lmBrief, audit: false }); brief.push({ v: model.v.slice(), chi: chiTot(r) }); } catch(e){}
++    try { const r = refine(model, { free: names, ...lmBrief, audit: false }); brief.push({ v: model.v.slice(), chi: chiTot(r), ...(put.kind ? { kind: 'brief-' + put.kind } : null) }); } catch(e){}
+     tick();
+   }
+-  if (MIN) for (const b of brief) ends.push({ ...b, kind: 'brief' });
++  if (MIN) for (const b of brief) ends.push({ ...b, kind: b.kind || 'brief' });
+   brief.sort((a, b)=> a.chi - b.chi);
+   // Every brief refinement threw: nothing was refined (not a ΔBIC of +∞).
+   if (!brief.length){ setParams(model, vIso); return null; }
+@@ -5094,15 +5285,15 @@
+   let best = null;
+   const finals = [];
+   // A full refinement from v; kept as the best when it is.
+-  const full = v => {
++  const full = (v, tag) => {
+     setParams(model, rebase(v));
+     let r; try { r = refine(model, { free: names, ...lmFull }); } catch(e){ return null; }
+-    if (MIN) ends.push({ v: model.v.slice(), chi: chiTot(r), kind: 'full' });
++    if (MIN) ends.push({ v: model.v.slice(), chi: chiTot(r), kind: tag && tag !== 'brief' ? 'full-' + tag.slice(6) : 'full' });
+     if (!best || chiTot(r) < chiTot(best.res)) best = { res: r, v: model.v.slice() };
+     tick();
+     return chiTot(r);
+   };
+-  for (const b of brief.slice(0, nFull)){ const c = full(b.v); if (c != null) finals.push(c); }
++  for (const b of brief.slice(0, nFull)){ const c = full(b.v, b.kind); if (c != null) finals.push(c); }
+   // (With the minima stage the stage's own turns, deterministic, both ways, polish every
+   // minimum: no random turn here or in the held fit's refit below.)
+   if (best && !MIN){
+@@ -5193,9 +5384,30 @@
+      tested against it again as above. info.minima: those within keep·nu of the lowest, each
+      { chi2, delta (in nu), W, R, s, n, from, v }; nu the lowest's χ²_ν floored at 1. */
+   let minima = null;
++  if (MIN && SHAPE_TARGET.frames > 0 && q.iW){
++    // [round 3] SHAPE_TARGET.frames: the lowest distinct ends' frames with their widths relabelled
++    const Bt = BODIES[q.shapeType], srt = ends.filter(e=> Number.isFinite(e.chi)).sort((a, b)=> a.chi - b.chi), picks = [];
++    for (const e of srt){ if (picks.length >= SHAPE_TARGET.frames) break; const f = { W: q.iW.map(i=> e.v[i]), R: bodyFrame(q, e.v) }; if (!picks.some(p=> minimaMatch(q, p, f, false).r <= 1)) picks.push(f); }
++    const tb = [], e0 = EVAL_COUNT.n;
++    for (const f of picks){
++      const W0 = f.W, orders = Bt.W.length === 2 ? [[1, 0]] : q.shapeType === 'ellcyl' ? [[2, 1, 0], [0, 2, 1]] : [[1, 0, 2], [0, 2, 1], [2, 1, 0], [1, 2, 0], [2, 0, 1]];
++      const tries = orders.map(o=> ({ W: o.map(i=> W0[i]), R: f.R }));
++      if (q.shapeType === 'sqbox'){ const T = turnAbout([0, 0, 1], Math.PI/4); tries.push({ W: W0, R: [0, 1, 2].flatMap(i=> [0, 1, 2].map(j=> f.R[3*i]*T[j] + f.R[3*i + 1]*T[3 + j] + f.R[3*i + 2]*T[6 + j])) }); }
++      for (const t of tries){
++        const vv = vIso.slice(); vv[q.iYs] = 0;
++        for (const nm of names){ const i = model.index[nm]; if (i != null) vv[i] = best.v[i]; }
++        t.W.forEach((w, i)=> { vv[q.iW[i]] = w; }); q.iR.forEach(i=> { vv[i] = 0; }); quatOfMat(t.R).forEach((x, i)=> { vv[q.iQ[i]] = x; });
++        setParams(model, vv);
++        try { const r = refine(model, { free: names, ...lmBrief, audit: false }); tb.push({ v: model.v.slice(), chi: chiTot(r) }); ends.push({ v: model.v.slice(), chi: chiTot(r), kind: 'brief-frame' }); } catch(e){}
++      }
++    }
++    tb.sort((a, b)=> a.chi - b.chi);
++    for (const b of tb.slice(0, SHAPE_TARGET.framesFull)){ setParams(model, rebase(b.v)); try { const r = refine(model, { free: names, ...lmFull }); ends.push({ v: model.v.slice(), chi: chiTot(r), kind: 'full-frame' }); } catch(e){} }
++    targetRec.frames = { picks: picks.length, tries: tb.length, evals: EVAL_COUNT.n - e0 };
++  }
+   if (MIN){
+     const free0 = held ? bestFree : best, nu0 = Math.max(1, free0.res.stats.chi2);
+-    const st = shapeMinima(model, k, ends, { names, lm: lmCentral, rebase, nu: nu0, chiTot });
++    const st = shapeMinima(model, k, ends, { names, lm: lmCentral, rebase, nu: nu0, chiTot, flagged: !!keepRec.flagged });
+     if (st && st.minima.length){
+       const m0 = st.minima[0], nu = Math.max(1, m0.res.stats.chi2), before = chiTot(free0.res);
+       if (chiTot(m0.res) < before){
+@@ -5213,7 +5425,7 @@
+       }
+       const c0 = chiTot(m0.res);
+       minima = st.minima.filter(m=> (m.chi - c0)/nu <= SHAPE_MINIMA.keep).map(m=> ({ chi2: m.chi, delta: (m.chi - c0)/nu, W: m.f.W, R: m.f.R, s: m.f.s, n: m.n, from: m.from, kicks: m.kicks, v: Array.from(m.v) }));
+-      minima.stage = { ends: st.ends, cands: st.cands, refined: st.refined, before, after: c0 };
++      minima.stage = { ends: st.ends, cands: st.cands, refined: st.refined, before, after: c0, left: st.left, skipped: st.skipped, capped: st.capped, explored: st.explored, evals: st.evals, flagged: !!keepRec.flagged };
+     }
+   }
+   setParams(model, best.v);
+@@ -5242,6 +5454,7 @@
+   }
+   return { res: best.res, info: { type: q.shapeType, starts: starts.length, full: finals.length,
+     chi2Iso: chiTot(res), chi2: cb, Piso: res.stats.P, P: best.res.stats.P, N, chi2redIso: res.stats.chi2, held, dBICfree, dBICheld, freeOff, freeW, check, keep: keepRec,
++    ...(Object.keys(targetRec).length ? { target: targetRec } : null),
+     ...(minima ? { minima, minimaStage: minima.stage } : null) } };
+ }
+ 
+@@ -5307,4 +5520,4 @@
+ export { buildModel, calc, refine, cellSearch, autoRefine, fitSettings, sizeStrain, weightFractions, shapeOf, columnLengthV, SHAPE_TYPES, shapeTypeOf,
+          solveLinear, getParams, setParams, rStats, tch, profileAtTheta, displacementMm,
+          fcjNodes, addPeak, addPeakFCJ, addLine, shapeActive, HG2_FLOOR, K_SCHERRER, cellOf, siteU, lowIndexPlanes, strainFormsAt, PROFILES, faultOf, lpFactor,
+-         phaseSites, phaseMass, OCC_MAX, axialNodes, axialOf, axialOn, axialReach, bgInvOn, KIND_GROUP, shapeNamed, SHAPE_MODE, WPPM_OPT, SHAPE_CHECK, lineCheck, lineJack, SHAPE_MINIMA, SHAPE_KEEP, SHAPE_FAMILY, familyVerdict, siblingModel };
++         phaseSites, phaseMass, OCC_MAX, axialNodes, axialOf, axialOn, axialReach, bgInvOn, KIND_GROUP, shapeNamed, SHAPE_MODE, WPPM_OPT, SHAPE_CHECK, lineCheck, lineJack, SHAPE_MINIMA, SHAPE_KEEP, SHAPE_FAMILY, familyVerdict, siblingModel, SHAPE_ANGLE, SHAPE_TARGET };
+--- step6-app/RIETVELD.md	2026-10-31 10:59:01.390950786 +0000
++++ r3-app/RIETVELD.md	2026-10-31 17:57:11.460074747 +0000
+@@ -1868,6 +1868,8 @@
+ 
+ **Frozen** (research/free-shape/round2/CONFIRM.md). The prototype's parts and tunables above (the exact line and WPPM's shortcuts, search v2 with forward differences in the brief trials alone and no random fill, the per-line check at z 3.09 with its jackknife, the minima stage with Δ* 16 / 25, κ 1.2, at most 6 minima and 10 rounds, the keep test χ²_{k+1}(0.999) + 2, the family's margins 14 / 35 and nested needs) were confirmed on the whole tuning part, 154 runs, and none changed: no shape lost where the isotropic fit read no size, the combined interval covering 155 of 165 clean extents (94 %), no false alarm of the check on 78 clean patterns, no clean null sphere kept, no clean truth given a wrong family. The validation part was then scored once on this version (VALIDATION.md).
+ 
++**Round 3** (research/free-shape/round3/). Three parts added, each behind its own tunables, with round 2's behaviour given back by `SHAPE_ANGLE.rule = 'r2'`, `SHAPE_MINIMA.capCands = capEvals = Infinity` and `SHAPE_TARGET.lines = 0`. *The axes' radius* (`SHAPE_ANGLE`): round 2's 2·esdAngle is the tilt's one-σ profile reading doubled, which a two-dimensional tilt exceeds one time in seven (its validation covered 84 % of the clean principal axes); each turn's profile (turned, the rest refined again, as `turnEsds`) is now followed until χ² rises by t·χ²_ν, t = 5.99 (χ²₂'s 95 % point; 125 of 128 clean principal axes of the tuning part covered, against round 2's 116), on finer steps (1, 1.5, 2, 3, 4, 6, 8, 12° …), and an axis's radius is the larger reading of the turns that tilt it (a held fit's at least 2·freeOff; the minima's spread and the jackknife as before); `esdAngle` is unchanged. The covariance's σ scaled by a factor (`rule 'curv'`) was the cheaper alternative and was not taken: near-equal widths and symmetric orientations put it at hundreds of degrees. *The minima stage's cap*: where the per-line check of the fit before the stage fired, no candidate or round of turns begun after `capEvals` 6000 evaluations (a cap on the candidates, `capCands`, is off: at 3 it lost minima and coverage on cheap rows); `info.minimaStage` and the report's `minima.explored` say whether the minima were explored in full (false also where `max` left a distinct candidate out). *Targeted starts* (`SHAPE_TARGET.lines` 2): the isotropic fit's residual on each line, projected on the pattern's derivative in Ys, gives each line's extra width along its normal; a plate on the normals of the two most broadened lines and a needle on those of the two least broadened are added to the class's starts where their family is not among them (the frames of the minima found with their widths relabelled, and random starts, bought less and are off).
++
+ ### 10.9 Sizes, groups and kinds (`shapeOf`, `bodyShapeOf`)
+ 
+ **Each dimension.**

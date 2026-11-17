@@ -1,4 +1,4 @@
-/* UV-Vis DRS made per tab (b2): each DRS tab an instance of its own in one page. Two tabs
+/* UV-Vis DRS made per tab (v518): each DRS tab an instance of its own in one page. Two tabs
    awake at once, each its own files, cards, parameters, view and undo history; a switch to
    one awake only showing it (its own section, its plots as they were, not drawn again); a
    tab hidden past Settings' minutes asleep (tabs.js sleepTick: the time taken to be later),

@@ -1,0 +1,27 @@
+chi: margin 10, flagged 35, nest {"box":3.84,"cyl":5.99,"ball":5.99}, chosen: true
+| strategy | searches a fit | right / not determined / wrong | clean | error | n.d. with the truth among those within | determined and the solid itself right | verdict as all six |
+nested (gen, the right family): special truths given the special 20, the general 2 [sqbox-Pmmm-generic 6.4; spheroid-P-1-generic 517.5 po]; general truths given the general 19, the special 7 [box-Pm-3-near 10.0; ellcyl-P4mmm-generic 2.7; ellcyl-P6m-generic 2.6; ellcyl-Pm-3m-generic 4.5; ellipsoid-Pmmm-generic 0.3; ellipsoid-P-3m1-on 0.3; ellipsoid-P6mmm-generic 14.3]
+| all | 6.0 | 29 / 33 / 4 | 21 / 12 / 0 | 8 / 21 / 4 | 30/33 | 26 | 66/66 |
+| gen | 4.0 | 29 / 33 / 4 | 21 / 12 / 0 | 8 / 21 / 4 | 30/33 | 26 | 66/66 |
+| near | 3.0 | 31 / 30 / 5 | 21 / 12 / 0 | 10 / 18 / 5 | 30/30 | 27 | 60/66 |
+| one | 1.0 | 66 / 0 / 0 | 33 / 0 / 0 | 33 / 0 / 0 | 0/0 | 66 | 29/66 |
+chi: margin 14, flagged 35, nest {"box":3.84,"cyl":5.99,"ball":5.99}, chosen: true
+| strategy | searches a fit | right / not determined / wrong | clean | error | n.d. with the truth among those within | determined and the solid itself right | verdict as all six |
+nested (gen, the right family): special truths given the special 20, the general 2 [sqbox-Pmmm-generic 6.4; spheroid-P-1-generic 517.5 po]; general truths given the general 19, the special 7 [box-Pm-3-near 10.0; ellcyl-P4mmm-generic 2.7; ellcyl-P6m-generic 2.6; ellcyl-Pm-3m-generic 4.5; ellipsoid-Pmmm-generic 0.3; ellipsoid-P-3m1-on 0.3; ellipsoid-P6mmm-generic 14.3]
+| all | 6.0 | 26 / 37 / 3 | 19 / 14 / 0 | 7 / 23 / 3 | 34/37 | 23 | 66/66 |
+| gen | 4.0 | 26 / 37 / 3 | 19 / 14 / 0 | 7 / 23 / 3 | 34/37 | 23 | 66/66 |
+| near | 3.0 | 28 / 34 / 4 | 19 / 14 / 0 | 9 / 20 / 4 | 34/34 | 24 | 60/66 |
+| one | 1.0 | 66 / 0 / 0 | 33 / 0 / 0 | 33 / 0 / 0 | 0/0 | 66 | 26/66 |
+bic: margin 10, flagged 35, nest {"box":3.84,"cyl":5.99,"ball":5.99}, chosen: true
+| strategy | searches a fit | right / not determined / wrong | clean | error | n.d. with the truth among those within | determined and the solid itself right | verdict as all six |
+nested (gen, the right family): special truths given the special 22, the general 3 [sqbox-Pmmm-generic 6.4; spheroid-P-1-generic 517.5 po; spheroid-P6m-on 19.8 sizedist]; general truths given the general 18, the special 9 [box-P6m-generic 2.8; box-Pm-3-near 10.0; ellcyl-P4mmm-generic 2.7; ellcyl-P6m-generic 2.6; ellcyl-Pm-3m-generic 4.5; ellipsoid-Pmmm-generic 0.3; ellipsoid-P-3m1-on 0.3; ellipsoid-P6mmm-generic 14.3; ellipsoid-Pm-3m-near 4.9]
+| all | 6.0 | 33 / 29 / 4 | 24 / 9 / 0 | 9 / 20 / 4 | 27/29 | 29 | 66/66 |
+| gen | 4.0 | 39 / 23 / 4 | 28 / 5 / 0 | 11 / 18 / 4 | 21/23 | 31 | 58/66 |
+| near | 3.0 | 42 / 20 / 4 | 28 / 5 / 0 | 14 / 15 / 4 | 20/20 | 33 | 51/66 |
+| one | 1.0 | 66 / 0 / 0 | 33 / 0 / 0 | 33 / 0 / 0 | 0/0 | 66 | 33/66 |
+chi: margin 14, flagged 35, nest {"box":3.84,"cyl":5.99,"ball":5.99}, chosen: any
+| strategy | searches a fit | right / not determined / wrong | clean | error | n.d. with the truth among those within | determined and the solid itself right | verdict as all six |
+| all | 6.0 | 156 / 222 / 18 | 114 / 84 / 0 | 42 / 138 / 18 | 204/222 | 138 | 396/396 |
+| gen | 4.0 | 156 / 218 / 22 | 114 / 84 / 0 | 42 / 134 / 22 | 200/218 | 94 | 388/396 |
+| near | 3.0 | 130 / 172 / 94 | 84 / 62 / 52 | 46 / 110 / 42 | 118/172 | 86 | 250/396 |
+| one | 1.0 | 132 / 2 / 262 | 66 / 2 / 130 | 66 / 0 / 132 | 2/2 | 66 | 58/396 |

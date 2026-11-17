@@ -1,0 +1,76 @@
+--- $W/fs2/harness/eng/xrd-rietveld.js	2026-10-26 11:21:42.757165393 +0000
++++ $W/fs2/B/h/eng/xrd-rietveld.js	2026-10-26 16:38:45.288730303 +0000
+@@ -2741,6 +2741,32 @@
+   // The F² caches now hold the last displaced cell: the next evaluation at v recomputes.
+   return cols;
+ }
++/* [track B] jacobian with forward differences: the pattern at v is st's (this
++   refinement's, same FCJ node counts), one displaced point a non-linear column; at an
++   upper bound the point below. Linear columns exact, as jacobian's. */
++function jacobianFwd(model, v, st, free, cols){
++  const n = model.n, np = model.phases.length;
++  const tmpA = new Float64Array(n);
++  free.forEach((j, a)=>{
++    const p = model.par[j], col = cols[a];
++    if (p.linear){ col.set(p.group === 'bg' ? model.basis[p.basis] : st.pats[p.phase]); return; }
++    col.fill(0);
++    const h = diffStep(model, j, v);
++    let up = v[j] + h, dn = v[j];
++    if (up > p.hi){ up = v[j]; dn = Math.max(p.lo, v[j] - h); }
++    if (up === dn) return;
++    const vd = v.slice(); vd[j] = up === v[j] ? dn : up;
++    const ks = p.group === 'phase' ? [p.phase] : [...Array(np).keys()];
++    for (const k of ks){
++      const S = v[model.phases[k].iScale]; if (!S) continue;
++      phasePattern(model, vd, k, tmpA);
++      const P0 = st.pats[k], f = S/(up - dn);
++      if (up === v[j]) for (let i = 0; i < n; i++) col[i] += f*(P0[i] - tmpA[i]);
++      else for (let i = 0; i < n; i++) col[i] += f*(tmpA[i] - P0[i]);
++    }
++  });
++  return cols;
++}
+ function normalEq(model, cols, st){
+   const m = cols.length, n = model.n, w = model.w, y = model.y, yc = st.yc;
+   const A = new Float64Array(m*m), g = new Float64Array(m), wr = new Float64Array(n);
+@@ -2884,7 +2910,7 @@
+    any start up to 10⁻³, and for the damping that rejections add, as before. */
+ const LAM_START = 1e-3;
+ function refineHeld(model, opts){
+-  const t0 = Date.now();
++  const t0 = Date.now(), X = opts.x || {};
+   const names = opts.free || model.par.filter(p=> p.refine).map(p=> p.name);
+   const free = [...new Set(names.map(nm=> model.index[nm]).filter(i=> i != null))];
+   const m = free.length, maxIter = opts.maxIter || 40, n = model.n;
+@@ -2923,8 +2949,8 @@
+     v = vl; st.bg.set(linSt.bg); st.yc.set(linSt.yc); st.chi2 = linSt.chi2;
+     return before - linSt.chi2 > 0.01*chiRed(before);
+   };
+-  for (; m && it < maxIter; it++){
+-    jacobian(model, v, st, free, cols);
++  for (; m && !X.covOnly && it < maxIter; it++){
++    if (X.fwd) jacobianFwd(model, v, st, free, cols); else jacobian(model, v, st, free, cols);
+     const { A, g } = normalEq(model, cols, st);
+     const act = [];
+     for (let a = 0; a < m; a++) if (A[a*m + a] > 0 && !onBound(free[a], g[a])) act.push(a);
+@@ -3003,10 +3029,10 @@
+      in atBound, for the reader to take the value as a limit. U, V, W with H_G² on its
+      floor have no meaningful curvature (∂y/∂W ∝ 1/√W there, the esd follows the
+      difference step): esd NaN, and listed in atBound. */
+-  st = evaluate(model, v, st);
++  if (!X.noCov) st = evaluate(model, v, st);
+   const esd = {}, atBound = [], esdHeld = {};
+   let corr = null, cov = null, tied = [];
+-  if (m){
++  if (m && !X.noCov){
+     jacobian(model, v, st, free, cols);
+     const { A, g } = normalEq(model, cols, st);
+     const act = [];
+@@ -4600,5 +4626,6 @@
+ // [harness] internals for the methods
+ const ENG = { FS, freeShape, freeShapeRun, refine, setParams, getParams, evaluate, calc, rStats, bodyFrame, BODIES, quatMat, quatOfMat, quatMul, quatOfRot,
+   lowIndexAxes, lattDirection, latticeAcross, shapeWidths, shapeTs, columnLengthV, SHAPE_SOFT, SHAPE_STARTS, SHAPE_FULL, fitSettings, shapeOf, turnEsds,
+-  bodyShapeOf, SNAP_DEG, D2R, R2D, K_SCHERRER, lowIndexPlanes, memberVectors, phasePattern, cartOp, properOp };
++  bodyShapeOf, SNAP_DEG, D2R, R2D, K_SCHERRER, lowIndexPlanes, memberVectors, phasePattern, cartOp, properOp,
++  jacobian, jacobianFwd, diffStep, solveLinear };
+ export { ENG };

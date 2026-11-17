@@ -489,7 +489,7 @@ test('no hashing again: a GC, a switch there and back, a reload; the record writ
   } finally { await close(); }
 });
 
-test('a rename from the list writes the title alone, and brings back no project another page deleted; a connection lost is opened again', async ()=>{
+test('a rename from the list writes the title alone, and brings back no project another page deleted; a connection lost is opened again; a name typed as the list is drawn again is kept', async ()=>{
   const { ctx, page, errors, close } = await env.page();
   try {
     await openModule(page, 'xrd'); await loadFiles(page, 'xrd', env.fx.files.xrd); await saveAs(page, 'R');
@@ -526,6 +526,20 @@ test('a rename from the list writes the title alone, and brings back no project 
     });
     assert.equal(done, true);
     assert.ok((await dumpDb(page)).tabs.some(t=> t.id === 'again'));
+    // Another row's name clicked as a rename is written: the list drawn again then keeps that
+    // field, focus and text (v526; to v525 the focus was lost, what was typed after too).
+    await page.evaluate(async ()=>{
+      const db = await import('./db.js');
+      for (const [id, title, at] of [['a', 'A', 2], ['b', 'B', 1]]) await db.putProject({ id, module: 'gc', title, state: db.park({ files: [] }), createdAt: at, updatedAt: at });
+    });
+    await page.click('#nav button[data-tab="projects"]'); await row(page, 'B').waitFor();
+    await row(page, 'A').locator('input.proj-rename').fill('A2');
+    await row(page, 'B').locator('input.proj-rename').click();
+    await row(page, 'A2').waitFor();
+    assert.deepEqual(await page.evaluate(()=> [document.activeElement.closest('tr').dataset.id, document.activeElement.value]), ['b', 'B']);
+    await page.keyboard.press('End'); await page.keyboard.type('2'); await page.keyboard.press('Enter');
+    await row(page, 'B2').waitFor(); await drain(page);
+    assert.deepEqual((await dumpDb(page)).sessions.map(r=> r.title).sort(), ['A2', 'B2']);
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });

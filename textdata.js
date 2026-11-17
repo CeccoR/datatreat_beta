@@ -1,7 +1,7 @@
 /* =========================================================
    TEXT DATA
    Reading a table of text as instruments and spreadsheets write it, for every module
-   that takes one (DRS, GC):
+   that takes one (DRS, GC, Figure):
    - the bytes decoded: UTF-8 with or without its byte-order mark, UTF-16 LE or BE by its
      mark or, without one, by the NUL byte beside each character of ASCII text (as
      xrd-instr.js decodeXml finds an XML file's). Blob.text() decodes UTF-8 alone (Chromium
@@ -90,7 +90,7 @@ export const isNum = s => s != null && (NUM.test(s = String(s).trim()) || GROUPE
 /* The separator a file is written with: the one under which `fit(rows, sep)`, its lines
    split into fields, takes the most, on a tie the first of SEPS. `fit` gives { score,
    ...what it read } or null (none, or not this separator). → { sep, rows, ...that } or null. */
-export function bestSep(lines, fit){
+function bestSep(lines, fit){
   let best = null;
   for (const sep of SEPS){
     const rows = lines.map(l=> splitFields(l, sep)), r = fit(rows, sep);
@@ -127,7 +127,7 @@ export function readXY(lines){
 }
 
 // A line's fields up to the last that is not empty (a trailing separator adds none).
-const width = r =>{ let n = r.length; while (n && r[n - 1] === '') n--; return n; };
+export const width = r =>{ let n = r.length; while (n && r[n - 1] === '') n--; return n; };
 // A whole number, then digits: the halves of a number its decimal ',' cut in two.
 const cut = (a, b)=> /^[+-]?\d+$/.test(a) && /^\d+([eE][+-]?\d+)?$/.test(b || '');
 /* A table under a header the module knows: `head(fields, sep)` gives the columns a line
@@ -142,12 +142,14 @@ const cut = (a, b)=> /^[+-]?\d+$/.test(a) && /^\d+([eE][+-]?\d+)?$/.test(b || ''
    cell left blank leaves none there, and the cells after it would slip into its column.
    The header's fields are its columns, unless `head` says how many it names (cols.n: DRS,
    whose names a run of single spaces splits, 'Wavelength (nm) R (%)' two columns in four
-   fields; GC gives none, and reads as it did to v509).
+   fields; GC gives none, and reads as it did to v509). `head` is given the lines' fields
+   and the line's place too (rows, h), for a header of several lines (GC's alternative
+   export, v539: its gases named on a line under it).
    → { sep, cols, rows (those lines) } or null. */
 export function readTable(lines, head, isRow){
   return bestSep(lines, (rows, sep)=>{
     for (let h = 0; h < rows.length; h++){
-      const cols = head(rows[h], sep);
+      const cols = head(rows[h], sep, rows, h);
       if (!cols) continue;
       const n = cols.n || width(rows[h]), body = rows.slice(h + 1), data = body.filter(r=> isRow(r, cols));
       if (sep === ',' && data.some(r=> width(r) > n && r.some((c, i)=> cut(c, r[i + 1])))) return null;
@@ -156,4 +158,51 @@ export function readTable(lines, head, isRow){
     }
     return null;
   });
+}
+
+/* A table of columns, as the Figure module reads any file: under whatever lines come
+   before it (a title), a header naming the columns or none, then rows of fields, some of
+   them numbers (a column of names, as a bar chart's categories, is read as text). The
+   separator is the one under which the rows of the file's usual width (its most common
+   among the lines holding a number; on a tie the wider) hold the most numbers, on a tie
+   the first of SEPS: '350,5;0,523' holds two under ';' and under ',' two as well, 350 and
+   523, so ';' (first); a field that is two numbers with a ';', a tab or spaces between
+   them is a line read under the wrong separator, no row ('5;0' under ','). The data are
+   the lines from the first such row on that hold a number; the header, the line just
+   before them, if it is not all numbers and names two columns at least (a title of one
+   field over them is none). Over a header, a line of the series' titles (v529): its first
+   field one, two of them at least, none a number, and a blank between some (a title over
+   each group of columns: "series 1",,,"series 2" over x,y,y,x,y), as Origin and the
+   spreadsheets write several series side by side.
+   → { sep, n (columns), head (the header's fields, or null), titles (that line's fields,
+   or null), rows (the data's fields, each n long) } or null. */
+const TWO = /^[+-]?[\d.,]+(e[+-]?\d+)?(;|\t| +)[+-]?[\d.,]+/i;
+export function readColumns(lines){
+  const t = bestSep(lines, rows =>{
+    const ok = rows.map(r=> r.some(isNum) && !r.some(c=> TWO.test(c)));
+    const ws = new Map();
+    rows.forEach((r, i)=>{ if (ok[i]){ const w = width(r); ws.set(w, (ws.get(w) || 0) + 1); } });
+    let n = 0, most = 0;
+    ws.forEach((k, w)=>{ if (k > most || (k === most && w > n)){ n = w; most = k; } });
+    if (!n) return null;
+    let score = 0, first = -1;
+    rows.forEach((r, i)=>{ if (ok[i] && width(r) === n){ score += r.filter(isNum).length; if (first < 0) first = i; } });
+    return { score, n, first, ok };
+  });
+  if (!t) return null;
+  const { n, first, ok } = t, pad = r => Array.from({ length: n }, (_, c)=> r[c] == null ? '' : r[c]);
+  const h = first > 0 ? t.rows[first - 1] : null;
+  const head = h && width(h) <= n && width(h) >= Math.min(n, 2) && h.some(c=> c !== '' && !isNum(c)) ? pad(h) : null;
+  const rows = t.rows.slice(first).filter((r, i)=> ok[first + i]).map(pad);
+  const tl = head && first > 1 ? t.rows[first - 2] : null, named = tl ? tl.slice(0, n).filter(c=> c !== '') : [];
+  const titles = tl && width(tl) <= n && tl[0] !== '' && named.length >= 2 && named.length < n && !named.some(isNum) ? pad(tl) : null;
+  return { sep: t.sep, n, head, titles, rows };
+}
+/* A column's name as a header writes it, and its unit: 'Wavelength (nm)', 'Wavelength
+   [nm]' and 'Wavelength / nm' are Wavelength in nm; a name with none, its unit ''. */
+export function nameUnit(s){
+  s = String(s == null ? '' : s).trim();
+  const m = /^(.*?)\s*(?:\(([^()]*)\)|\[([^[\]]*)\])$/.exec(s) || /^(.+?)\s+\/\s+(\S.*)$/.exec(s);
+  if (!m || !m[1].trim()) return { name: s, unit: '' };
+  return { name: m[1].trim(), unit: (m[2] ?? m[3] ?? '').trim() };
 }

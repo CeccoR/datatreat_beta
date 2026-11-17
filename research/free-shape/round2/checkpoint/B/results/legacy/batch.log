@@ -1,0 +1,9 @@
+2026-10-26T20:17:49.295Z legacy: 1 of 1 runs to do (sqbox-Pm-3-on), 1 at a time; methods today,symA0,symC0,cuts0
+2026-10-26T20:18:57.581Z [1/1] sqbox-Pm-3-on: ok 68 s
+sqbox-Pm-3-on (m-3, sqbox) as sqbox: iso χ²_ν 1.589, 296 ev, 1463 ms
+  today: held χ² 15492.83 best 15492.83 ΔBIC -227 | 3095 ev 25748 ms | starts 11 | 15.85×15.85×15.85 | dims 46% 46% 4% axis 0.0°
+  symA0: held χ² 15492.83 best 15492.83 ΔBIC -227 | 1354 ev 14637 ms | starts 7 | central 44 ev Δχ² -0.010 | cov 15 ev | heldDup 1 | 15.85×15.85×15.86 | dims 46% 46% 4% axis 0.0°
+  symC0: held χ² 15492.82 best 15492.82 ΔBIC -227 | 1326 ev 13671 ms | starts 8 | central 30 ev Δχ² -0.000 | cov 15 ev | heldDup 1 | 15.84×15.84×15.84 | dims 46% 46% 4% axis 0.0°
+  cuts0: held χ² 15492.83 best 15492.83 ΔBIC -227 | 1226 ev 12032 ms | starts 7 | central 44 ev Δχ² -0.010 | cov 15 ev | heldDup 1 | 15.85×15.85×15.86 | dims 46% 46% 4% axis 0.0°
+  wall 68.1 s
+2026-10-26T20:18:57.581Z legacy: 1 done, 0 failed, 1.1 min

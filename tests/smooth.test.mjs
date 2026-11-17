@@ -4,9 +4,8 @@
    ⅛ / ⅞ end weights, the ends cut short; against the integral itself on uneven x, x
    running down, points at one x; w = 0 the data as they are; the weights the FWHM's
    uncertainty is carried through (boxWeights) as the box's, and as the moving average's for
-   an even N; the slope (boxSlope) as a moving average of gradientArr over an odd N; the
-   field's texts; a value that is no number left out of the line, the others smoothed as
-   without it. And XRPD's SNIP by its half-width (xrd-peaks.js computeBaseline, read from
+   an even N; the field's texts; a value that is no number left out of the line, the others
+   smoothed as without it. And XRPD's SNIP by its half-width (xrd-peaks.js computeBaseline, read from
    its source): on an uneven grid the line at x ± k·step, as the definition reads it, point
    for point, the 2θ read once, at the cost of the even grid's passes. */
 import { test } from 'node:test';
@@ -14,7 +13,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { boxSmooth, boxWeights, boxSlope, meanStep, widthText, ptsNum, ptsText } from '../smooth.js';
+import { boxSmooth, boxWeights, meanStep, widthText, ptsNum, ptsText } from '../smooth.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const UTILS = fs.readFileSync(path.join(ROOT, 'utils.js'), 'utf8');
@@ -24,7 +23,7 @@ const fromUtils = name =>{
   assert.ok(m, `${name} in utils.js`);
   return new Function(`return ${m[0]}`)();
 };
-const movingAverage = fromUtils('movingAverage'), gradientArr = fromUtils('gradientArr');
+const movingAverage = fromUtils('movingAverage');
 // XRPD's SNIP as xrd-peaks.js has it (a module of a page: its function cut out by its braces).
 const computeBaseline = (()=>{
   const src = fs.readFileSync(path.join(ROOT, 'xrd-peaks.js'), 'utf8'), i = src.indexOf('function computeBaseline(');
@@ -125,21 +124,6 @@ test('the weights (fwhmSigma\'s): summing to 1, giving boxSmooth\'s value, and t
   const W = boxWeights(x, 200, 10*step);
   assert.equal(W.size, 11);
   for (let k = 195; k <= 205; k++) assert.ok(Math.abs(W.get(k) - (Math.abs(k - 200) === 5 ? 0.5 : 1)/10) < 1e-9);
-});
-
-test('the slope: a moving average of gradientArr over an odd N, the secant at w = N steps; narrower, the central difference', ()=>{
-  const { x, y, step } = pattern(800);
-  for (const N of [3, 5, 9, 21]){
-    const ma = movingAverage(gradientArr(y, x), N), sl = boxSlope(x, y, N*step), h = (N + 1)/2;
-    let m = 0; for (let i = h; i < y.length - h; i++) m = Math.max(m, Math.abs(ma[i] - sl[i])/Math.max(1, Math.abs(ma[i])));
-    assert.ok(m < 1e-8, `N ${N}: ${m}`);
-  }
-  for (const w of [0, step, 2*step]) assert.ok(maxDiff(gradientArr(y, x), boxSlope(x, y, w)) < 1e-9, `w ${w}`);
-  // x running down: the same slope, dy/dx
-  const down = boxSlope(x.slice().reverse(), y.slice().reverse(), 9*step).reverse();
-  assert.ok(maxDiff(boxSlope(x, y, 9*step), down) < 1e-6);
-  // a line: its slope everywhere, ends included
-  assert.ok(maxDiff(boxSlope(x, x.map(t=> 3*t - 1), 0.4), x.map(()=> 3)) < 1e-9);
 });
 
 test('the step and the field\'s texts', ()=>{

@@ -1,0 +1,3 @@
+cylinder-Pm-3m-on (m-3m, cylinder, sizedist) as cylinder: iso χ²_ν 4.026, 304 ev, 1581 ms
+  symAs: held χ² 16949.54 best 16943.18 ΔBIC -5768 | 1225 ev 14932 ms | starts 7 | central 28 ev Δχ² -0.000 | cov 15 ev | 22.93×22.93×4.78 | dims 23% 23% 29% axis 0.0°
+  wall 17.3 s

@@ -1,0 +1,1407 @@
+2026-10-31T07:15:08.919Z jobs-T0.txt: 3 jobs, 3 to run, 3 at a time
+2026-10-31T07:15:18.303Z ok T0x sphere-P-3-1 box 9 s
+2026-10-31T07:15:18.550Z ok T0 cylinder-P6m-on  10 s
+2026-10-31T07:15:23.267Z ok T0 spheroid-P-3-near  14 s
+2026-10-31T07:15:23.267Z jobs-T0.txt: done, 3 ok, 0 failed
+2026-10-31T07:15:56.096Z jobs-X1.txt: 396 jobs, 396 to run, 3 at a time
+2026-10-31T07:16:14.156Z ok X1 sphere-P-1-2 cylinder 18 s
+2026-10-31T07:16:15.567Z ok X1 sphere-P-1-2 sqbox 19 s
+2026-10-31T07:16:15.853Z ok X1 sphere-P-1-2 box 20 s
+2026-10-31T07:16:34.009Z ok X1 sphere-P-1-2 ellcyl 20 s
+2026-10-31T07:16:43.138Z ok X1 sphere-P-1-2 ellipsoid 28 s
+2026-10-31T07:16:44.658Z ok X1 sphere-P2m-3 box 11 s
+2026-10-31T07:16:53.558Z ok X1 sphere-P2m-3 sqbox 10 s
+2026-10-31T07:17:06.215Z ok X1 sphere-P2m-3 cylinder 22 s
+2026-10-31T07:17:19.762Z ok X1 sphere-P2m-3 ellcyl 26 s
+2026-10-31T07:17:31.028Z ok X1 sphere-P2m-3 ellipsoid 25 s
+2026-10-31T07:17:33.450Z ok X1 sphere-P2m-3 spheroid 14 s
+2026-10-31T07:17:34.678Z ok X1 sphere-P-1-2 spheroid 79 s
+2026-10-31T07:17:43.170Z ok X1 sphere-Pmmm-1 box 12 s
+2026-10-31T07:17:44.692Z ok X1 sphere-Pmmm-1 cylinder 10 s
+2026-10-31T07:17:44.758Z ok X1 sphere-Pmmm-1 sqbox 11 s
+2026-10-31T07:17:56.105Z ok X1 sphere-Pmmm-1 ellcyl 13 s
+2026-10-31T07:18:02.473Z ok X1 sphere-Pmmm-1 ellipsoid 18 s
+2026-10-31T07:18:04.851Z ok X1 sphere-P4m-2 box 9 s
+2026-10-31T07:18:05.580Z ok X1 sphere-Pmmm-1 spheroid 21 s
+2026-10-31T07:18:10.898Z ok X1 sphere-P4m-2 sqbox 8 s
+2026-10-31T07:18:12.524Z ok X1 sphere-P4m-2 cylinder 8 s
+2026-10-31T07:18:14.735Z ok X1 sphere-P4m-2 ellcyl 9 s
+2026-10-31T07:18:21.581Z ok X1 sphere-P4mmm-3 box 7 s
+2026-10-31T07:18:23.818Z ok X1 sphere-P4m-2 ellipsoid 13 s
+2026-10-31T07:18:24.499Z ok X1 sphere-P4m-2 spheroid 12 s
+2026-10-31T07:18:28.241Z ok X1 sphere-P4mmm-3 sqbox 7 s
+2026-10-31T07:18:29.657Z ok X1 sphere-P4mmm-3 cylinder 6 s
+2026-10-31T07:18:31.679Z ok X1 sphere-P4mmm-3 ellcyl 7 s
+2026-10-31T07:18:40.456Z ok X1 sphere-P4mmm-3 ellipsoid 12 s
+2026-10-31T07:18:40.562Z ok X1 sphere-P-3-1 box 9 s
+2026-10-31T07:18:41.017Z ok X1 sphere-P4mmm-3 spheroid 11 s
+2026-10-31T07:18:48.515Z ok X1 sphere-P-3-1 cylinder 8 s
+2026-10-31T07:18:48.994Z ok X1 sphere-P-3-1 sqbox 9 s
+2026-10-31T07:18:50.274Z ok X1 sphere-P-3-1 ellcyl 9 s
+2026-10-31T07:18:57.883Z ok X1 sphere-P-3m1-2 box 8 s
+2026-10-31T07:19:01.078Z ok X1 sphere-P-3-1 ellipsoid 13 s
+2026-10-31T07:19:04.890Z ok X1 sphere-P-3m1-2 sqbox 7 s
+2026-10-31T07:19:07.350Z ok X1 sphere-P-3m1-2 cylinder 6 s
+2026-10-31T07:19:10.271Z ok X1 sphere-P-3-1 spheroid 21 s
+2026-10-31T07:19:12.754Z ok X1 sphere-P-3m1-2 ellcyl 8 s
+2026-10-31T07:19:16.886Z ok X1 sphere-P6m-3 box 4 s
+2026-10-31T07:19:18.880Z ok X1 sphere-P-3m1-2 ellipsoid 12 s
+2026-10-31T07:19:20.893Z ok X1 sphere-P6m-3 sqbox 4 s
+2026-10-31T07:19:24.882Z ok X1 sphere-P6m-3 ellcyl 4 s
+2026-10-31T07:19:28.298Z ok X1 sphere-P6m-3 cylinder 9 s
+2026-10-31T07:19:29.431Z ok X1 sphere-P-3m1-2 spheroid 19 s
+2026-10-31T07:19:38.160Z ok X1 sphere-P6m-3 spheroid 10 s
+2026-10-31T07:19:43.870Z ok X1 sphere-P6m-3 ellipsoid 19 s
+2026-10-31T07:19:55.264Z ok X1 sphere-P6mmm-1 box 26 s
+2026-10-31T07:19:56.120Z ok X1 sphere-P6mmm-1 sqbox 18 s
+2026-10-31T07:19:59.015Z ok X1 sphere-P6mmm-1 cylinder 15 s
+2026-10-31T07:20:07.788Z ok X1 sphere-P6mmm-1 spheroid 9 s
+2026-10-31T07:20:10.673Z ok X1 sphere-Pm-3-2 box 3 s
+2026-10-31T07:20:13.397Z ok X1 sphere-Pm-3-2 sqbox 3 s
+2026-10-31T07:20:16.097Z ok X1 sphere-Pm-3-2 cylinder 3 s
+2026-10-31T07:20:19.292Z ok X1 sphere-Pm-3-2 ellcyl 3 s
+2026-10-31T07:20:19.842Z ok X1 sphere-P6mmm-1 ellcyl 25 s
+2026-10-31T07:20:23.765Z ok X1 sphere-Pm-3-2 ellipsoid 4 s
+2026-10-31T07:20:23.775Z ok X1 sphere-P6mmm-1 ellipsoid 28 s
+2026-10-31T07:20:25.432Z ok X1 sphere-Pm-3-2 spheroid 6 s
+2026-10-31T07:20:28.497Z ok X1 sphere-Pm-3m-3 sqbox 5 s
+2026-10-31T07:20:29.149Z ok X1 sphere-Pm-3m-3 cylinder 4 s
+2026-10-31T07:20:33.374Z ok X1 sphere-Pm-3m-3 ellcyl 5 s
+2026-10-31T07:20:33.928Z ok X1 sphere-Pm-3m-3 ellipsoid 5 s
+2026-10-31T07:20:37.038Z ok X1 sphere-Pm-3m-3 spheroid 4 s
+2026-10-31T07:20:38.595Z ok X1 sphere-Pm-3m-3 box 15 s
+2026-10-31T07:21:38.677Z ok X1 box-P-1-near ellcyl 60 s
+2026-10-31T07:22:09.465Z ok X1 box-P-1-near sqbox 96 s
+2026-10-31T07:22:19.237Z ok X1 box-P-1-near ellipsoid 41 s
+2026-10-31T07:22:46.326Z jobs-X2.txt: 396 jobs, 396 to run, 3 at a time
+2026-10-31T07:23:29.594Z ok X2 box-P-1-near box 43 s
+2026-10-31T07:24:20.821Z ok X2 box-P-1-near ellcyl 51 s
+2026-10-31T07:24:33.630Z ok X2 box-P-1-near sqbox 107 s
+2026-10-31T07:24:59.240Z ok X2 box-P-1-near ellipsoid 38 s
+2026-10-31T07:25:02.756Z ok X2 box-P-1-near cylinder 136 s
+2026-10-31T07:25:15.198Z ok X2 box-P2m-generic box 16 s
+2026-10-31T07:25:21.890Z ok X2 box-P2m-generic sqbox 19 s
+2026-10-31T07:25:29.242Z ok X2 box-P2m-generic cylinder 14 s
+2026-10-31T07:25:29.703Z ok X2 box-P-1-near spheroid 56 s
+2026-10-31T07:25:57.275Z jobs-X2a.txt: 264 jobs, 258 to run, 3 at a time
+2026-10-31T07:26:12.464Z ok X2 box-P2m-generic ellipsoid 15 s
+2026-10-31T07:26:13.805Z ok X2 box-Pmmm-on box 17 s
+2026-10-31T07:26:15.097Z ok X2 box-P2m-generic ellcyl 18 s
+2026-10-31T07:26:30.753Z ok X2 box-Pmmm-on sqbox 18 s
+2026-10-31T07:26:31.294Z ok X2 box-Pmmm-on ellipsoid 16 s
+2026-10-31T07:26:31.386Z ok X2 box-Pmmm-on ellcyl 18 s
+2026-10-31T07:26:41.900Z ok X2 box-P4m-near box 11 s
+2026-10-31T07:26:44.149Z ok X2 box-P4m-near ellcyl 13 s
+2026-10-31T07:26:44.659Z ok X2 box-P4m-near sqbox 13 s
+2026-10-31T07:26:54.975Z ok X2 box-P4mmm-generic box 11 s
+2026-10-31T07:26:55.095Z ok X2 box-P4mmm-generic sqbox 10 s
+2026-10-31T07:26:56.302Z ok X2 box-P4m-near ellipsoid 14 s
+2026-10-31T07:27:05.400Z ok X2 box-P4mmm-generic ellcyl 10 s
+2026-10-31T07:27:06.160Z ok X2 box-P4mmm-generic ellipsoid 11 s
+2026-10-31T07:27:21.028Z ok X2 box-P-3-on box 25 s
+2026-10-31T07:27:28.951Z ok X2 box-P-3-on sqbox 24 s
+2026-10-31T07:27:37.198Z ok X2 box-P-3m1-near box 8 s
+2026-10-31T07:27:45.591Z ok X2 box-P-3m1-near sqbox 8 s
+2026-10-31T07:27:45.762Z ok X2 box-P-3-on ellcyl 40 s
+2026-10-31T07:27:54.168Z ok X2 box-P-3m1-near ellipsoid 8 s
+2026-10-31T07:27:55.029Z ok X2 box-P-3m1-near ellcyl 9 s
+2026-10-31T07:27:56.541Z ok X2 box-P-3-on ellipsoid 36 s
+2026-10-31T07:28:02.502Z ok X2 box-P6m-generic box 8 s
+2026-10-31T07:28:03.032Z ok X2 box-P6m-generic sqbox 8 s
+2026-10-31T07:28:04.830Z ok X2 box-P6m-generic ellcyl 8 s
+2026-10-31T07:28:09.991Z ok X2 box-P6m-generic ellipsoid 7 s
+2026-10-31T07:28:16.149Z ok X2 box-P6mmm-on sqbox 11 s
+2026-10-31T07:28:16.826Z ok X2 box-P6mmm-on box 14 s
+2026-10-31T07:28:23.220Z ok X2 box-Pm-3-near box 6 s
+2026-10-31T07:28:26.154Z ok X2 box-P6mmm-on ellcyl 16 s
+2026-10-31T07:28:28.641Z ok X2 box-Pm-3-near sqbox 5 s
+2026-10-31T07:28:31.974Z ok X2 box-P6mmm-on ellipsoid 16 s
+2026-10-31T07:28:35.457Z ok X2 box-Pm-3-near ellipsoid 7 s
+2026-10-31T07:28:35.665Z ok X2 box-Pm-3-near ellcyl 10 s
+2026-10-31T07:28:41.182Z ok X2 box-Pm-3m-generic ellcyl 6 s
+2026-10-31T07:28:42.585Z ok X2 box-Pm-3m-generic sqbox 7 s
+2026-10-31T07:28:45.850Z ok X2 box-Pm-3m-generic box 14 s
+2026-10-31T07:28:46.530Z ok X2 box-Pm-3m-generic ellipsoid 5 s
+2026-10-31T07:29:41.283Z ok X2 sqbox-P-1-on box 59 s
+2026-10-31T07:29:52.135Z ok X2 sqbox-P-1-on sqbox 66 s
+2026-10-31T07:30:05.103Z ok X2 sqbox-P-1-on ellcyl 79 s
+2026-10-31T07:30:13.758Z ok X2 sqbox-P2m-near box 22 s
+2026-10-31T07:30:27.662Z ok X2 sqbox-P2m-near sqbox 23 s
+2026-10-31T07:30:37.036Z ok X2 sqbox-P-1-on ellipsoid 56 s
+2026-10-31T07:30:52.644Z ok X2 sqbox-Pmmm-generic box 16 s
+2026-10-31T07:30:56.560Z ok X2 sqbox-P2m-near ellipsoid 29 s
+2026-10-31T07:31:07.307Z ok X2 sqbox-Pmmm-generic sqbox 15 s
+2026-10-31T07:31:11.517Z ok X2 sqbox-Pmmm-generic ellcyl 15 s
+2026-10-31T07:31:12.808Z ok X2 sqbox-P2m-near ellcyl 59 s
+2026-10-31T07:31:22.739Z ok X2 sqbox-Pmmm-generic ellipsoid 15 s
+2026-10-31T07:31:22.934Z ok X2 sqbox-P4m-on sqbox 10 s
+2026-10-31T07:31:23.442Z ok X2 sqbox-P4m-on box 12 s
+2026-10-31T07:31:34.121Z ok X2 sqbox-P4m-on ellipsoid 11 s
+2026-10-31T07:31:34.797Z ok X2 sqbox-P4m-on ellcyl 12 s
+2026-10-31T07:31:36.707Z ok X2 sqbox-P4mmm-near box 13 s
+2026-10-31T07:31:47.173Z ok X2 sqbox-P4mmm-near sqbox 13 s
+2026-10-31T07:31:49.470Z ok X2 sqbox-P4mmm-near ellipsoid 13 s
+2026-10-31T07:31:52.386Z ok X2 sqbox-P4mmm-near ellcyl 18 s
+2026-10-31T07:31:58.576Z ok X2 sqbox-P-3-generic box 11 s
+2026-10-31T07:31:59.090Z ok X2 sqbox-P-3-generic sqbox 10 s
+2026-10-31T07:32:02.784Z ok X2 sqbox-P-3-generic ellcyl 10 s
+2026-10-31T07:32:08.169Z ok X2 sqbox-P-3-generic ellipsoid 10 s
+2026-10-31T07:32:14.145Z ok X2 sqbox-P-3m1-on box 15 s
+2026-10-31T07:32:16.317Z ok X2 sqbox-P-3m1-on sqbox 14 s
+2026-10-31T07:32:18.944Z ok X2 sqbox-P-3m1-on ellcyl 11 s
+2026-10-31T07:32:23.729Z ok X2 sqbox-P6m-near box 7 s
+2026-10-31T07:32:26.085Z ok X2 sqbox-P6m-near sqbox 7 s
+2026-10-31T07:32:31.250Z ok X2 sqbox-P6m-near ellcyl 8 s
+2026-10-31T07:32:32.778Z ok X2 sqbox-P6m-near ellipsoid 7 s
+2026-10-31T07:32:36.447Z ok X2 sqbox-P-3m1-on ellipsoid 22 s
+2026-10-31T07:32:39.838Z ok X2 sqbox-P6mmm-generic box 9 s
+2026-10-31T07:32:41.703Z ok X2 sqbox-P6mmm-generic sqbox 9 s
+2026-10-31T07:32:45.735Z ok X2 sqbox-P6mmm-generic ellcyl 9 s
+2026-10-31T07:32:47.070Z ok X2 sqbox-Pm-3-on box 5 s
+2026-10-31T07:32:48.106Z ok X2 sqbox-P6mmm-generic ellipsoid 8 s
+2026-10-31T07:32:50.734Z ok X2 sqbox-Pm-3-on sqbox 5 s
+2026-10-31T07:32:51.201Z ok X2 sqbox-Pm-3-on ellipsoid 3 s
+2026-10-31T07:32:53.734Z ok X2 sqbox-Pm-3-on ellcyl 7 s
+2026-10-31T07:32:55.451Z ok X2 sqbox-Pm-3m-near box 5 s
+2026-10-31T07:32:55.960Z ok X2 sqbox-Pm-3m-near sqbox 5 s
+2026-10-31T07:32:59.307Z ok X2 sqbox-Pm-3m-near ellcyl 6 s
+2026-10-31T07:33:00.542Z ok X2 sqbox-Pm-3m-near ellipsoid 5 s
+2026-10-31T07:33:47.217Z ok X2 cylinder-P-1-generic box 51 s
+2026-10-31T07:33:54.685Z ok X2 cylinder-P-1-generic cylinder 55 s
+2026-10-31T07:33:54.873Z ok X2 cylinder-P-1-generic ellcyl 54 s
+2026-10-31T07:34:12.527Z ok X2 cylinder-P2m-on cylinder 18 s
+2026-10-31T07:34:17.023Z ok X2 cylinder-P2m-on box 22 s
+2026-10-31T07:34:35.068Z ok X2 cylinder-P2m-on ellipsoid 18 s
+2026-10-31T07:34:35.449Z ok X2 cylinder-P2m-on ellcyl 23 s
+2026-10-31T07:34:38.027Z ok X2 cylinder-P-1-generic ellipsoid 51 s
+2026-10-31T07:34:44.963Z ok X2 cylinder-Pmmm-near cylinder 10 s
+2026-10-31T07:34:48.486Z ok X2 cylinder-Pmmm-near box 13 s
+2026-10-31T07:34:53.833Z ok X2 cylinder-Pmmm-near ellcyl 16 s
+2026-10-31T07:34:57.955Z ok X2 cylinder-P4m-generic box 9 s
+2026-10-31T07:35:00.682Z ok X2 cylinder-Pmmm-near ellipsoid 16 s
+2026-10-31T07:35:00.978Z ok X2 cylinder-P4m-generic cylinder 7 s
+2026-10-31T07:35:06.497Z ok X2 cylinder-P4m-generic ellcyl 9 s
+2026-10-31T07:35:09.554Z ok X2 cylinder-P4m-generic ellipsoid 9 s
+2026-10-31T07:35:16.285Z ok X2 cylinder-P4mmm-on box 15 s
+2026-10-31T07:35:18.671Z ok X2 cylinder-P4mmm-on cylinder 12 s
+2026-10-31T07:35:21.142Z ok X2 cylinder-P4mmm-on ellcyl 12 s
+2026-10-31T07:35:27.350Z ok X2 cylinder-P4mmm-on ellipsoid 11 s
+2026-10-31T07:35:28.686Z ok X2 cylinder-P-3-near box 10 s
+2026-10-31T07:35:29.282Z ok X2 cylinder-P-3-near cylinder 8 s
+2026-10-31T07:35:40.570Z ok X2 cylinder-P-3-near ellcyl 13 s
+2026-10-31T07:35:41.086Z ok X2 cylinder-P-3m1-generic box 12 s
+2026-10-31T07:35:43.255Z ok X2 cylinder-P-3-near ellipsoid 15 s
+2026-10-31T07:35:47.825Z ok X2 cylinder-P-3m1-generic cylinder 7 s
+2026-10-31T07:35:54.553Z ok X2 cylinder-P-3m1-generic ellipsoid 11 s
+2026-10-31T07:35:55.620Z ok X2 cylinder-P6m-on box 8 s
+2026-10-31T07:35:57.148Z ok X2 cylinder-P-3m1-generic ellcyl 16 s
+2026-10-31T07:36:00.982Z ok X2 cylinder-P6m-on cylinder 6 s
+2026-10-31T07:36:04.150Z ok X2 cylinder-P6m-on ellcyl 9 s
+2026-10-31T07:36:06.598Z ok X2 cylinder-P6m-on ellipsoid 9 s
+2026-10-31T07:36:11.497Z ok X2 cylinder-P6mmm-near cylinder 7 s
+2026-10-31T07:36:12.147Z ok X2 cylinder-P6mmm-near box 11 s
+2026-10-31T07:36:17.408Z ok X2 cylinder-P6mmm-near ellcyl 11 s
+2026-10-31T07:36:22.595Z ok X2 cylinder-P6mmm-near ellipsoid 11 s
+2026-10-31T07:36:25.770Z ok X2 cylinder-Pm-3-generic box 14 s
+2026-10-31T07:36:29.382Z ok X2 cylinder-Pm-3-generic cylinder 12 s
+2026-10-31T07:36:32.976Z ok X2 cylinder-Pm-3-generic ellcyl 10 s
+2026-10-31T07:36:39.228Z ok X2 cylinder-Pm-3m-on cylinder 6 s
+2026-10-31T07:36:40.854Z ok X2 cylinder-Pm-3-generic ellipsoid 15 s
+2026-10-31T07:36:42.927Z ok X2 cylinder-Pm-3m-on box 14 s
+2026-10-31T07:36:47.737Z ok X2 cylinder-Pm-3m-on ellipsoid 7 s
+2026-10-31T07:36:58.132Z ok X2 cylinder-Pm-3m-on ellcyl 19 s
+2026-10-31T07:37:51.544Z ok X2 ellcyl-P-1-near box 69 s
+2026-10-31T07:38:03.966Z ok X2 ellcyl-P-1-near cylinder 76 s
+2026-10-31T07:38:14.514Z ok X2 ellcyl-P-1-near ellcyl 76 s
+2026-10-31T07:38:22.265Z ok X2 ellcyl-P2m-generic box 18 s
+2026-10-31T07:38:40.265Z ok X2 ellcyl-P2m-generic ellcyl 18 s
+2026-10-31T07:38:51.482Z ok X2 ellcyl-P2m-generic cylinder 37 s
+2026-10-31T07:38:55.597Z ok X2 ellcyl-P2m-generic ellipsoid 15 s
+2026-10-31T07:39:05.341Z ok X2 ellcyl-Pmmm-on box 14 s
+2026-10-31T07:39:07.762Z ok X2 ellcyl-Pmmm-on cylinder 12 s
+2026-10-31T07:39:19.609Z ok X2 ellcyl-Pmmm-on ellcyl 14 s
+2026-10-31T07:39:22.559Z ok X2 ellcyl-Pmmm-on ellipsoid 15 s
+2026-10-31T07:39:34.886Z ok X2 ellcyl-P4m-near cylinder 12 s
+2026-10-31T07:40:04.124Z ok X2 ellcyl-P4m-near box 45 s
+2026-10-31T07:40:14.018Z ok X2 ellcyl-P4m-near ellcyl 39 s
+2026-10-31T07:40:16.981Z ok X2 ellcyl-P4m-near ellipsoid 13 s
+2026-10-31T07:40:23.487Z ok X2 ellcyl-P4mmm-generic box 9 s
+2026-10-31T07:40:31.290Z ok X2 ellcyl-P4mmm-generic cylinder 14 s
+2026-10-31T07:40:32.832Z ok X2 ellcyl-P4mmm-generic ellcyl 9 s
+2026-10-31T07:40:40.558Z ok X2 ellcyl-P4mmm-generic ellipsoid 9 s
+2026-10-31T07:40:48.326Z ok X2 ellcyl-P-3-on box 15 s
+2026-10-31T07:40:52.537Z ok X2 ellcyl-P-3-on cylinder 12 s
+2026-10-31T07:40:53.279Z ok X2 ellcyl-P-1-near ellipsoid 182 s
+2026-10-31T07:41:08.885Z ok X2 ellcyl-P-3m1-near box 16 s
+2026-10-31T07:41:14.594Z ok X2 ellcyl-P-3-on ellipsoid 22 s
+2026-10-31T07:41:19.895Z ok X2 ellcyl-P-3m1-near cylinder 11 s
+2026-10-31T07:41:29.300Z ok X2 ellcyl-P-3m1-near ellipsoid 9 s
+2026-10-31T07:41:30.194Z ok X2 ellcyl-P-3-on ellcyl 42 s
+2026-10-31T07:41:30.860Z ok X2 ellcyl-P-3m1-near ellcyl 16 s
+2026-10-31T07:41:36.166Z ok X2 ellcyl-P6m-generic cylinder 6 s
+2026-10-31T07:41:37.210Z ok X2 ellcyl-P6m-generic box 8 s
+2026-10-31T07:41:37.252Z ok X2 ellcyl-P6m-generic ellcyl 6 s
+2026-10-31T07:41:42.566Z ok X2 ellcyl-P6m-generic ellipsoid 6 s
+2026-10-31T07:41:45.071Z ok X2 ellcyl-P6mmm-on cylinder 8 s
+2026-10-31T07:41:49.950Z ok X2 ellcyl-P6mmm-on box 13 s
+2026-10-31T07:41:54.946Z ok X2 ellcyl-P6mmm-on ellcyl 12 s
+2026-10-31T07:41:56.216Z ok X2 ellcyl-P6mmm-on ellipsoid 11 s
+2026-10-31T07:41:58.994Z ok X2 ellcyl-Pm-3-near box 9 s
+2026-10-31T07:42:00.798Z ok X2 ellcyl-Pm-3-near cylinder 6 s
+2026-10-31T07:42:05.323Z ok X2 ellcyl-Pm-3-near ellipsoid 6 s
+2026-10-31T07:42:05.419Z ok X2 ellcyl-Pm-3m-generic box 5 s
+2026-10-31T07:42:05.821Z ok X2 ellcyl-Pm-3-near ellcyl 10 s
+2026-10-31T07:42:09.082Z ok X2 ellcyl-Pm-3m-generic cylinder 4 s
+2026-10-31T07:42:10.498Z ok X2 ellcyl-Pm-3m-generic ellcyl 5 s
+2026-10-31T07:42:11.019Z ok X2 ellcyl-Pm-3m-generic ellipsoid 5 s
+2026-10-31T07:43:27.539Z ok X2 ellipsoid-P-1-on ellipsoid 77 s
+2026-10-31T07:43:33.773Z ok X2 ellipsoid-P-1-on ellcyl 83 s
+2026-10-31T07:44:08.853Z ok X2 ellipsoid-P2m-near box 35 s
+2026-10-31T07:44:20.685Z ok X2 ellipsoid-P-1-on box 132 s
+2026-10-31T07:44:42.011Z ok X2 ellipsoid-P-1-on spheroid 74 s
+2026-10-31T07:44:43.130Z ok X2 ellipsoid-P2m-near ellipsoid 22 s
+2026-10-31T07:44:45.562Z ok X2 ellipsoid-P2m-near ellcyl 37 s
+2026-10-31T07:44:57.171Z ok X2 ellipsoid-Pmmm-generic box 14 s
+2026-10-31T07:45:00.814Z ok X2 ellipsoid-Pmmm-generic ellcyl 15 s
+2026-10-31T07:45:11.035Z ok X2 ellipsoid-Pmmm-generic ellipsoid 14 s
+2026-10-31T07:45:11.865Z ok X2 ellipsoid-Pmmm-generic spheroid 11 s
+2026-10-31T07:45:16.620Z ok X2 ellipsoid-P2m-near spheroid 35 s
+2026-10-31T07:45:33.569Z ok X2 ellipsoid-P4m-on box 23 s
+2026-10-31T07:45:37.883Z ok X2 ellipsoid-P4m-on ellipsoid 21 s
+2026-10-31T07:45:37.966Z ok X2 ellipsoid-P4m-on ellcyl 26 s
+2026-10-31T07:45:51.167Z ok X2 ellipsoid-P4m-on spheroid 18 s
+2026-10-31T07:45:51.954Z ok X2 ellipsoid-P4mmm-near box 14 s
+2026-10-31T07:45:58.103Z ok X2 ellipsoid-P4mmm-near ellcyl 20 s
+2026-10-31T07:46:03.518Z ok X2 ellipsoid-P4mmm-near spheroid 12 s
+2026-10-31T07:46:06.902Z ok X2 ellipsoid-P4mmm-near ellipsoid 16 s
+2026-10-31T07:46:09.166Z ok X2 ellipsoid-P-3-generic box 11 s
+2026-10-31T07:46:15.118Z ok X2 ellipsoid-P-3-generic ellcyl 12 s
+2026-10-31T07:46:15.913Z ok X2 ellipsoid-P-3-generic spheroid 7 s
+2026-10-31T07:46:18.011Z ok X2 ellipsoid-P-3-generic ellipsoid 11 s
+2026-10-31T07:46:24.826Z ok X2 ellipsoid-P-3m1-on ellcyl 9 s
+2026-10-31T07:46:25.128Z ok X2 ellipsoid-P-3m1-on box 10 s
+2026-10-31T07:46:27.142Z ok X2 ellipsoid-P-3m1-on ellipsoid 9 s
+2026-10-31T07:46:32.014Z ok X2 ellipsoid-P-3m1-on spheroid 7 s
+2026-10-31T07:46:34.483Z ok X2 ellipsoid-P6m-near box 9 s
+2026-10-31T07:46:36.352Z ok X2 ellipsoid-P6m-near ellcyl 9 s
+2026-10-31T07:46:39.855Z ok X2 ellipsoid-P6m-near ellipsoid 8 s
+2026-10-31T07:46:41.518Z ok X2 ellipsoid-P6m-near spheroid 7 s
+2026-10-31T07:46:43.628Z ok X2 ellipsoid-P6mmm-generic box 7 s
+2026-10-31T07:46:46.463Z ok X2 ellipsoid-P6mmm-generic ellcyl 7 s
+2026-10-31T07:46:46.736Z ok X2 ellipsoid-P6mmm-generic ellipsoid 5 s
+2026-10-31T07:46:48.412Z ok X2 ellipsoid-P6mmm-generic spheroid 5 s
+2026-10-31T07:46:55.226Z ok X2 ellipsoid-Pm-3-on box 9 s
+2026-10-31T07:46:55.458Z ok X2 ellipsoid-Pm-3-on ellcyl 9 s
+2026-10-31T07:46:59.214Z ok X2 ellipsoid-Pm-3-on ellipsoid 11 s
+2026-10-31T07:46:59.675Z ok X2 ellipsoid-Pm-3m-near box 4 s
+2026-10-31T07:47:02.609Z ok X2 ellipsoid-Pm-3m-near ellipsoid 3 s
+2026-10-31T07:47:03.402Z ok X2 ellipsoid-Pm-3m-near ellcyl 4 s
+2026-10-31T07:47:04.397Z ok X2 ellipsoid-Pm-3-on spheroid 9 s
+2026-10-31T07:47:04.858Z ok X2 ellipsoid-Pm-3m-near spheroid 2 s
+2026-10-31T07:47:38.018Z ok X2 spheroid-P-1-generic ellipsoid 33 s
+2026-10-31T07:47:44.898Z ok X2 spheroid-P-1-generic ellcyl 41 s
+2026-10-31T07:48:11.172Z ok X2 spheroid-P-1-generic spheroid 33 s
+2026-10-31T07:48:27.194Z ok X2 spheroid-P2m-on box 42 s
+2026-10-31T07:48:41.441Z ok X2 spheroid-P-1-generic box 98 s
+2026-10-31T07:48:52.127Z ok X2 spheroid-P2m-on ellcyl 41 s
+2026-10-31T07:49:06.033Z ok X2 spheroid-Pmmm-near box 14 s
+2026-10-31T07:49:11.980Z ok X2 spheroid-P2m-on ellipsoid 45 s
+2026-10-31T07:49:17.489Z ok X2 spheroid-Pmmm-near ellcyl 11 s
+2026-10-31T07:49:23.502Z ok X2 spheroid-Pmmm-near ellipsoid 12 s
+2026-10-31T07:49:26.723Z ok X2 spheroid-Pmmm-near spheroid 9 s
+2026-10-31T07:49:33.382Z ok X2 spheroid-P2m-on spheroid 52 s
+2026-10-31T07:49:33.752Z ok X2 spheroid-P4m-generic box 10 s
+2026-10-31T07:49:37.516Z ok X2 spheroid-P4m-generic ellcyl 11 s
+2026-10-31T07:49:42.217Z ok X2 spheroid-P4m-generic ellipsoid 9 s
+2026-10-31T07:49:42.302Z ok X2 spheroid-P4m-generic spheroid 9 s
+2026-10-31T07:49:49.826Z ok X2 spheroid-P4mmm-on box 12 s
+2026-10-31T07:49:53.536Z ok X2 spheroid-P4mmm-on ellcyl 11 s
+2026-10-31T07:49:54.459Z ok X2 spheroid-P4mmm-on ellipsoid 12 s
+2026-10-31T07:49:59.975Z ok X2 spheroid-P4mmm-on spheroid 10 s
+2026-10-31T07:50:02.487Z ok X2 spheroid-P-3-near box 9 s
+2026-10-31T07:50:05.033Z ok X2 spheroid-P-3-near ellcyl 11 s
+2026-10-31T07:50:08.359Z ok X2 spheroid-P-3-near ellipsoid 8 s
+2026-10-31T07:50:09.022Z ok X2 spheroid-P-3-near spheroid 7 s
+2026-10-31T07:50:20.298Z ok X2 spheroid-P-3m1-generic ellcyl 12 s
+2026-10-31T07:50:21.278Z ok X2 spheroid-P-3m1-generic ellipsoid 12 s
+2026-10-31T07:50:25.774Z ok X2 spheroid-P-3m1-generic box 21 s
+2026-10-31T07:50:28.046Z ok X2 spheroid-P6m-on box 7 s
+2026-10-31T07:50:28.873Z ok X2 spheroid-P-3m1-generic spheroid 9 s
+2026-10-31T07:50:32.766Z ok X2 spheroid-P6m-on ellcyl 7 s
+2026-10-31T07:50:33.182Z ok X2 spheroid-P6m-on spheroid 4 s
+2026-10-31T07:50:33.942Z ok X2 spheroid-P6m-on ellipsoid 6 s
+2026-10-31T07:50:42.494Z ok X2 spheroid-P6mmm-near ellipsoid 9 s
+2026-10-31T07:50:43.750Z ok X2 spheroid-P6mmm-near box 11 s
+2026-10-31T07:50:47.540Z ok X2 spheroid-Pm-3-generic box 4 s
+2026-10-31T07:50:49.039Z ok X2 spheroid-P6mmm-near spheroid 7 s
+2026-10-31T07:50:49.594Z ok X2 spheroid-P6mmm-near ellcyl 16 s
+2026-10-31T07:50:52.588Z ok X2 spheroid-Pm-3-generic ellcyl 5 s
+2026-10-31T07:50:52.906Z ok X2 spheroid-Pm-3-generic spheroid 3 s
+2026-10-31T07:50:53.275Z ok X2 spheroid-Pm-3-generic ellipsoid 4 s
+2026-10-31T07:50:58.141Z ok X2 spheroid-Pm-3m-on ellipsoid 5 s
+2026-10-31T07:50:58.568Z ok X2 spheroid-Pm-3m-on box 6 s
+2026-10-31T07:51:00.589Z ok X2 spheroid-Pm-3m-on ellcyl 8 s
+2026-10-31T07:51:01.662Z ok X2 spheroid-Pm-3m-on spheroid 4 s
+2026-10-31T07:51:01.662Z jobs-X2a.txt: done, 258 ok, 0 failed
+2026-10-31T07:51:05.892Z jobs-FB.txt: 177 jobs, 177 to run, 3 at a time
+2026-10-31T07:51:46.907Z ok FB box-P-1-near sqbox 41 s
+2026-10-31T07:51:52.757Z jobs-FB.txt: 154 jobs, 153 to run, 3 at a time
+2026-10-31T07:52:10.867Z ok FB box-P2m-generic sqbox 18 s
+2026-10-31T07:52:28.550Z ok FB box-P-1-near box 36 s
+2026-10-31T07:52:31.463Z ok FB box-P2m-generic box 21 s
+2026-10-31T07:52:39.518Z ok FB box-P-1-near ellcyl 47 s
+2026-10-31T07:52:44.905Z ok FB box-P2m-generic ellcyl 16 s
+2026-10-31T07:52:46.794Z ok FB box-Pmmm-on sqbox 15 s
+2026-10-31T07:52:46.940Z ok FB box-Pmmm-on box 7 s
+2026-10-31T07:52:57.414Z ok FB box-P4m-near sqbox 11 s
+2026-10-31T07:52:59.457Z ok FB box-P4m-near box 13 s
+2026-10-31T07:53:01.312Z ok FB box-Pmmm-on ellcyl 16 s
+2026-10-31T07:53:11.725Z ok FB box-P4m-near ellcyl 14 s
+2026-10-31T07:53:12.330Z ok FB box-P-3-on box 11 s
+2026-10-31T07:53:18.007Z ok FB box-P-3-on sqbox 19 s
+2026-10-31T07:53:28.378Z ok FB box-P-3-on ellcyl 17 s
+2026-10-31T07:53:33.851Z ok FB box-P-3m1-near sqbox 16 s
+2026-10-31T07:53:41.558Z ok FB box-P-3m1-near box 13 s
+2026-10-31T07:53:45.259Z ok FB box-P-3-on ellipsoid 33 s
+2026-10-31T07:53:53.770Z ok FB box-P6m-generic sqbox 9 s
+2026-10-31T07:53:55.650Z ok FB box-P-3m1-near ellcyl 22 s
+2026-10-31T07:53:56.978Z ok FB box-P-3m1-near ellipsoid 15 s
+2026-10-31T07:54:03.454Z ok FB box-P6mmm-on sqbox 6 s
+2026-10-31T07:54:05.647Z ok FB box-P6m-generic box 12 s
+2026-10-31T07:54:10.495Z ok FB box-P6m-generic ellcyl 15 s
+2026-10-31T07:54:17.027Z ok FB box-P6mmm-on box 14 s
+2026-10-31T07:54:20.482Z ok FB box-Pm-3-near sqbox 10 s
+2026-10-31T07:54:23.210Z ok FB box-P6mmm-on ellcyl 18 s
+2026-10-31T07:54:28.845Z ok FB box-Pm-3-near box 12 s
+2026-10-31T07:54:29.330Z ok FB box-Pm-3m-generic sqbox 6 s
+2026-10-31T07:54:34.635Z ok FB box-Pm-3m-generic ellcyl 5 s
+2026-10-31T07:54:34.826Z ok FB box-Pm-3m-generic box 6 s
+2026-10-31T07:54:38.034Z ok FB box-Pm-3-near ellcyl 18 s
+2026-10-31T07:54:42.182Z ok FB box-Pm-3m-generic ellipsoid 8 s
+2026-10-31T07:55:34.717Z ok FB sqbox-P-1-on ellcyl 53 s
+2026-10-31T07:55:38.288Z ok FB sqbox-P-1-on sqbox 63 s
+2026-10-31T07:55:47.522Z ok FB sqbox-P4m-on sqbox 13 s
+2026-10-31T07:55:50.064Z ok FB sqbox-P-1-on box 72 s
+2026-10-31T07:55:55.062Z ok FB sqbox-P4m-on box 17 s
+2026-10-31T07:55:57.393Z ok FB sqbox-P4m-on ellcyl 10 s
+2026-10-31T07:56:00.814Z ok FB sqbox-P4mmm-near sqbox 11 s
+2026-10-31T07:56:06.518Z ok FB sqbox-P4mmm-near box 11 s
+2026-10-31T07:56:10.673Z ok FB sqbox-P4mmm-near ellcyl 13 s
+2026-10-31T07:56:12.126Z ok FB sqbox-P-3-generic sqbox 11 s
+2026-10-31T07:56:22.799Z ok FB sqbox-P-3-generic box 16 s
+2026-10-31T07:56:24.335Z ok FB sqbox-P-3-generic ellcyl 14 s
+2026-10-31T07:56:29.080Z ok FB sqbox-P-3-generic ellipsoid 17 s
+2026-10-31T07:56:35.830Z ok FB sqbox-P-3m1-on box 11 s
+2026-10-31T07:56:35.855Z ok FB sqbox-P-3m1-on sqbox 13 s
+2026-10-31T07:56:41.138Z ok FB sqbox-P-3m1-on ellcyl 12 s
+2026-10-31T07:56:45.273Z ok FB sqbox-P6mmm-generic sqbox 9 s
+2026-10-31T07:56:52.496Z ok FB sqbox-P6mmm-generic box 11 s
+2026-10-31T07:56:55.810Z ok FB sqbox-P6mmm-generic ellcyl 11 s
+2026-10-31T07:56:58.554Z ok FB sqbox-P-3m1-on ellipsoid 23 s
+2026-10-31T07:57:05.633Z ok FB sqbox-P6mmm-generic ellipsoid 13 s
+2026-10-31T07:57:36.499Z ok FB cylinder-P-1-generic cylinder 41 s
+2026-10-31T07:57:59.223Z ok FB cylinder-P2m-on cylinder 23 s
+2026-10-31T07:58:00.510Z ok FB cylinder-P-1-generic ellcyl 62 s
+2026-10-31T07:58:01.410Z ok FB cylinder-P-1-generic box 56 s
+2026-10-31T07:58:12.182Z ok FB cylinder-Pmmm-near cylinder 11 s
+2026-10-31T07:58:18.742Z ok FB cylinder-P2m-on ellcyl 20 s
+2026-10-31T07:58:27.618Z ok FB cylinder-Pmmm-near ellcyl 15 s
+2026-10-31T07:58:28.239Z ok FB cylinder-P2m-on box 28 s
+2026-10-31T07:58:34.750Z ok FB cylinder-Pmmm-near box 16 s
+2026-10-31T07:58:37.362Z ok FB cylinder-P-3-near cylinder 10 s
+2026-10-31T07:58:43.039Z ok FB cylinder-P-3-near ellcyl 15 s
+2026-10-31T07:58:47.894Z ok FB cylinder-P-3-near box 13 s
+2026-10-31T07:58:48.802Z ok FB cylinder-P-3m1-generic cylinder 11 s
+2026-10-31T07:58:56.718Z ok FB cylinder-P-3m1-generic ellcyl 14 s
+2026-10-31T07:59:04.590Z ok FB cylinder-P-3m1-generic box 16 s
+2026-10-31T07:59:07.924Z ok FB cylinder-P6m-on cylinder 11 s
+2026-10-31T07:59:15.934Z ok FB cylinder-P6m-on ellcyl 11 s
+2026-10-31T07:59:20.414Z ok FB cylinder-P-3m1-generic ellipsoid 33 s
+2026-10-31T07:59:20.814Z ok FB cylinder-P6m-on box 13 s
+2026-10-31T07:59:30.782Z ok FB cylinder-P6m-on ellipsoid 15 s
+2026-10-31T07:59:33.475Z ok FB cylinder-P6mmm-near cylinder 13 s
+2026-10-31T07:59:41.438Z ok FB cylinder-P6mmm-near ellipsoid 11 s
+2026-10-31T07:59:41.842Z ok FB cylinder-P6mmm-near ellcyl 21 s
+2026-10-31T07:59:46.785Z ok FB cylinder-P6mmm-near box 13 s
+2026-10-31T08:00:41.226Z ok FB ellcyl-P-1-near cylinder 60 s
+2026-10-31T08:00:48.065Z ok FB ellcyl-P-1-near ellcyl 66 s
+2026-10-31T08:00:54.260Z ok FB ellcyl-Pmmm-on cylinder 13 s
+2026-10-31T08:00:55.578Z ok FB ellcyl-P-1-near box 69 s
+2026-10-31T08:01:03.582Z ok FB ellcyl-P4mmm-generic cylinder 8 s
+2026-10-31T08:01:04.088Z ok FB ellcyl-Pmmm-on ellcyl 16 s
+2026-10-31T08:01:08.453Z ok FB ellcyl-Pmmm-on box 14 s
+2026-10-31T08:01:13.770Z ok FB ellcyl-P4mmm-generic box 10 s
+2026-10-31T08:01:14.931Z ok FB ellcyl-P6m-generic cylinder 6 s
+2026-10-31T08:01:17.367Z ok FB ellcyl-P4mmm-generic ellcyl 14 s
+2026-10-31T08:01:22.413Z ok FB ellcyl-P6m-generic box 7 s
+2026-10-31T08:01:24.249Z ok FB ellcyl-P6m-generic ellcyl 10 s
+2026-10-31T08:01:24.491Z ok FB ellcyl-Pm-3-near cylinder 7 s
+2026-10-31T08:01:32.419Z ok FB ellcyl-Pm-3-near ellcyl 10 s
+2026-10-31T08:01:32.698Z ok FB ellcyl-Pm-3-near ellipsoid 8 s
+2026-10-31T08:01:35.533Z ok FB ellcyl-Pm-3-near box 11 s
+2026-10-31T08:01:37.305Z ok FB ellcyl-Pm-3m-generic cylinder 5 s
+2026-10-31T08:01:38.142Z ok FB ellcyl-Pm-3m-generic ellcyl 5 s
+2026-10-31T08:01:42.856Z ok FB ellcyl-Pm-3m-generic box 7 s
+2026-10-31T08:02:02.546Z ok FB ellipsoid-P2m-near ellipsoid 24 s
+2026-10-31T08:02:05.450Z ok FB ellipsoid-P2m-near ellcyl 23 s
+2026-10-31T08:02:13.096Z ok FB ellipsoid-Pmmm-generic spheroid 11 s
+2026-10-31T08:02:23.148Z ok FB ellipsoid-Pmmm-generic ellipsoid 18 s
+2026-10-31T08:02:26.974Z ok FB ellipsoid-P2m-near spheroid 50 s
+2026-10-31T08:02:28.874Z ok FB ellipsoid-Pmmm-generic ellcyl 16 s
+2026-10-31T08:02:34.712Z ok FB ellipsoid-P4m-on spheroid 12 s
+2026-10-31T08:02:42.282Z ok FB ellipsoid-P-3-generic spheroid 8 s
+2026-10-31T08:02:47.869Z ok FB ellipsoid-P4m-on ellcyl 19 s
+2026-10-31T08:02:48.427Z ok FB ellipsoid-P4m-on ellipsoid 21 s
+2026-10-31T08:03:00.553Z ok FB ellipsoid-P-3-generic ellipsoid 18 s
+2026-10-31T08:03:01.324Z ok FB ellipsoid-P-3-generic box 13 s
+2026-10-31T08:03:06.233Z ok FB ellipsoid-P-3-generic ellcyl 18 s
+2026-10-31T08:03:09.769Z ok FB ellipsoid-P-3m1-on spheroid 9 s
+2026-10-31T08:03:13.975Z ok FB ellipsoid-P-3m1-on ellipsoid 13 s
+2026-10-31T08:03:20.990Z ok FB ellipsoid-P-3m1-on ellcyl 15 s
+2026-10-31T08:03:21.790Z ok FB ellipsoid-P6m-near spheroid 12 s
+2026-10-31T08:03:24.991Z ok FB ellipsoid-P6m-near ellipsoid 11 s
+2026-10-31T08:03:29.760Z ok FB ellipsoid-P6mmm-generic spheroid 5 s
+2026-10-31T08:03:30.325Z ok FB ellipsoid-P6m-near ellcyl 9 s
+2026-10-31T08:03:34.876Z ok FB ellipsoid-P6m-near box 13 s
+2026-10-31T08:03:35.607Z ok FB ellipsoid-P6mmm-generic ellipsoid 6 s
+2026-10-31T08:03:38.008Z ok FB ellipsoid-P6mmm-generic ellcyl 8 s
+2026-10-31T08:03:46.222Z ok FB ellipsoid-Pm-3-on ellipsoid 11 s
+2026-10-31T08:03:48.622Z ok FB ellipsoid-Pm-3-on spheroid 14 s
+2026-10-31T08:03:49.653Z ok FB ellipsoid-Pm-3-on ellcyl 12 s
+2026-10-31T08:03:53.687Z ok FB ellipsoid-Pm-3m-near spheroid 5 s
+2026-10-31T08:03:56.653Z ok FB ellipsoid-Pm-3m-near ellipsoid 7 s
+2026-10-31T08:03:58.998Z ok FB ellipsoid-Pm-3-on box 13 s
+2026-10-31T08:03:59.474Z ok FB ellipsoid-Pm-3m-near ellcyl 6 s
+2026-10-31T08:04:02.788Z ok FB ellipsoid-Pm-3m-near box 6 s
+2026-10-31T08:04:33.719Z ok FB spheroid-P2m-on ellcyl 31 s
+2026-10-31T08:04:36.614Z ok FB spheroid-P2m-on ellipsoid 37 s
+2026-10-31T08:04:44.839Z ok FB spheroid-P4m-generic spheroid 8 s
+2026-10-31T08:04:54.389Z ok FB spheroid-P2m-on spheroid 55 s
+2026-10-31T08:05:05.807Z ok FB spheroid-P4m-generic ellipsoid 21 s
+2026-10-31T08:05:11.735Z ok FB spheroid-P2m-on box 38 s
+2026-10-31T08:05:14.186Z ok FB spheroid-P4mmm-on spheroid 8 s
+2026-10-31T08:05:15.854Z ok FB spheroid-P4m-generic ellcyl 21 s
+2026-10-31T08:05:24.446Z ok FB spheroid-P4mmm-on ellipsoid 13 s
+2026-10-31T08:05:25.871Z ok FB spheroid-P4mmm-on ellcyl 12 s
+2026-10-31T08:05:26.400Z ok FB spheroid-P4mmm-on box 11 s
+2026-10-31T08:05:39.578Z ok FB spheroid-P-3-near spheroid 15 s
+2026-10-31T08:05:39.774Z ok FB spheroid-P-3-near ellcyl 13 s
+2026-10-31T08:05:47.198Z ok FB spheroid-P6m-on spheroid 8 s
+2026-10-31T08:05:48.658Z ok FB spheroid-P6m-on ellipsoid 9 s
+2026-10-31T08:05:48.705Z ok FB spheroid-P-3-near ellipsoid 23 s
+2026-10-31T08:05:57.331Z ok FB spheroid-P6mmm-near spheroid 9 s
+2026-10-31T08:05:58.381Z ok FB spheroid-P6m-on ellcyl 11 s
+2026-10-31T08:06:00.534Z ok FB spheroid-P6m-on box 12 s
+2026-10-31T08:06:12.473Z ok FB spheroid-P6mmm-near ellipsoid 15 s
+2026-10-31T08:06:13.875Z ok FB spheroid-P6mmm-near box 13 s
+2026-10-31T08:06:15.409Z ok FB spheroid-P6mmm-near ellcyl 17 s
+2026-10-31T08:06:16.154Z ok FB spheroid-Pm-3-generic spheroid 4 s
+2026-10-31T08:06:21.314Z ok FB spheroid-Pm-3-generic box 5 s
+2026-10-31T08:06:21.694Z ok FB spheroid-Pm-3-generic ellcyl 6 s
+2026-10-31T08:06:22.185Z ok FB spheroid-Pm-3-generic ellipsoid 8 s
+2026-10-31T08:06:22.185Z jobs-FB.txt: done, 153 ok, 0 failed
+2026-10-31T08:06:22.214Z jobs-M.txt: 176 jobs, 176 to run, 3 at a time
+2026-10-31T08:06:38.970Z ok M box-P2m-on~m1  17 s
+2026-10-31T08:06:55.653Z ok M box-P-1-generic~m2  33 s
+2026-10-31T08:06:55.765Z ok M box-P-1-generic~m1  34 s
+2026-10-31T08:06:55.861Z ok M box-P2m-on~m2  17 s
+2026-10-31T08:07:06.103Z ok M box-P4m-generic~m1  10 s
+2026-10-31T08:07:15.294Z ok M box-P4m-generic~m2  9 s
+2026-10-31T08:07:20.567Z ok M box-Pmmm-near~m1  25 s
+2026-10-31T08:07:25.317Z ok M box-P4mmm-on~m1  10 s
+2026-10-31T08:07:35.010Z ok M box-P4mmm-on~m2  14 s
+2026-10-31T08:07:44.835Z ok M box-P-3-near~m1  20 s
+2026-10-31T08:07:48.767Z ok M box-Pmmm-near~m2  53 s
+2026-10-31T08:07:52.539Z ok M box-P-3m1-generic~m1  8 s
+2026-10-31T08:07:55.130Z ok M box-P-3-near~m2  20 s
+2026-10-31T08:08:01.864Z ok M box-P6m-on~m1  9 s
+2026-10-31T08:08:08.845Z ok M box-P6m-on~m2  14 s
+2026-10-31T08:08:10.563Z ok M box-P6mmm-near~m1  9 s
+2026-10-31T08:08:16.028Z ok M box-P6mmm-near~m2  7 s
+2026-10-31T08:08:19.877Z ok M box-P-3m1-generic~m2  31 s
+2026-10-31T08:08:22.788Z ok M box-Pm-3-generic~m1  12 s
+2026-10-31T08:08:26.642Z ok M box-Pm-3m-on~m1  7 s
+2026-10-31T08:08:28.147Z ok M box-Pm-3-generic~m2  12 s
+2026-10-31T08:08:31.517Z ok M box-Pm-3m-on~m2  9 s
+2026-10-31T08:08:53.820Z ok M sqbox-P2m-generic~m1  22 s
+2026-10-31T08:09:22.215Z ok M sqbox-P-1-near~m1  56 s
+2026-10-31T08:09:29.302Z ok M sqbox-P2m-generic~m2  35 s
+2026-10-31T08:09:36.245Z ok M sqbox-P-1-near~m2  68 s
+2026-10-31T08:09:45.245Z ok M sqbox-Pmmm-on~m1  23 s
+2026-10-31T08:09:49.218Z ok M sqbox-P4m-near~m1  13 s
+2026-10-31T08:09:58.641Z ok M sqbox-P4mmm-generic~m1  9 s
+2026-10-31T08:10:00.294Z ok M sqbox-P4m-near~m2  15 s
+2026-10-31T08:10:02.646Z ok M sqbox-Pmmm-on~m2  33 s
+2026-10-31T08:10:11.272Z ok M sqbox-P-3-on~m1  11 s
+2026-10-31T08:10:13.255Z ok M sqbox-P4mmm-generic~m2  15 s
+2026-10-31T08:10:22.042Z ok M sqbox-P-3-on~m2  19 s
+2026-10-31T08:10:27.978Z ok M sqbox-P-3m1-near~m1  17 s
+2026-10-31T08:10:35.996Z ok M sqbox-P-3m1-near~m2  23 s
+2026-10-31T08:10:36.875Z ok M sqbox-P6m-generic~m1  15 s
+2026-10-31T08:10:37.342Z ok M sqbox-P6m-generic~m2  9 s
+2026-10-31T08:10:45.441Z ok M sqbox-Pm-3-near~m1  8 s
+2026-10-31T08:10:49.854Z ok M sqbox-P6mmm-on~m1  14 s
+2026-10-31T08:10:50.843Z ok M sqbox-Pm-3-near~m2  5 s
+2026-10-31T08:10:50.955Z ok M sqbox-P6mmm-on~m2  14 s
+2026-10-31T08:10:55.829Z ok M sqbox-Pm-3m-generic~m1  6 s
+2026-10-31T08:11:03.449Z ok M sqbox-Pm-3m-generic~m2  13 s
+2026-10-31T08:11:14.178Z ok M cylinder-P2m-near~m1  11 s
+2026-10-31T08:11:26.849Z ok M cylinder-P2m-near~m2  13 s
+2026-10-31T08:11:40.104Z ok M cylinder-Pmmm-generic~m1  13 s
+2026-10-31T08:11:52.867Z ok M cylinder-P-1-on~m2  57 s
+2026-10-31T08:11:53.694Z ok M cylinder-Pmmm-generic~m2  14 s
+2026-10-31T08:12:01.020Z ok M cylinder-P4m-on~m1  8 s
+2026-10-31T08:12:02.268Z ok M cylinder-P4m-on~m2  9 s
+2026-10-31T08:12:12.026Z ok M cylinder-P4mmm-near~m2  10 s
+2026-10-31T08:12:18.649Z ok M cylinder-P4mmm-near~m1  18 s
+2026-10-31T08:12:26.994Z ok M cylinder-P-3-generic~m1  15 s
+2026-10-31T08:12:33.064Z ok M cylinder-P-1-on~m1  102 s
+2026-10-31T08:12:37.423Z ok M cylinder-P-3m1-on~m1  10 s
+2026-10-31T08:12:41.626Z ok M cylinder-P6m-near~m1  4 s
+2026-10-31T08:12:45.230Z ok M cylinder-P-3m1-on~m2  12 s
+2026-10-31T08:12:50.894Z ok M cylinder-P6m-near~m2  9 s
+2026-10-31T08:12:51.786Z ok M cylinder-P6mmm-generic~m1  7 s
+2026-10-31T08:12:52.766Z ok M cylinder-P-3-generic~m2  34 s
+2026-10-31T08:12:56.016Z ok M cylinder-Pm-3-on~m1  4 s
+2026-10-31T08:12:57.225Z ok M cylinder-Pm-3-on~m2  4 s
+2026-10-31T08:12:58.115Z ok M cylinder-P6mmm-generic~m2  7 s
+2026-10-31T08:13:01.077Z ok M cylinder-Pm-3m-near~m1  5 s
+2026-10-31T08:13:01.999Z ok M cylinder-Pm-3m-near~m2  5 s
+2026-10-31T08:13:21.299Z ok M ellcyl-P-1-generic~m1  23 s
+2026-10-31T08:13:25.242Z ok M ellcyl-P-1-generic~m2  24 s
+2026-10-31T08:13:43.127Z ok M ellcyl-P2m-on~m1  41 s
+2026-10-31T08:13:46.703Z ok M ellcyl-Pmmm-near~m1  21 s
+2026-10-31T08:13:49.586Z ok M ellcyl-P2m-on~m2  28 s
+2026-10-31T08:14:05.250Z ok M ellcyl-P4m-generic~m1  19 s
+2026-10-31T08:14:13.245Z ok M ellcyl-P4m-generic~m2  24 s
+2026-10-31T08:14:17.053Z ok M ellcyl-Pmmm-near~m2  34 s
+2026-10-31T08:14:30.067Z ok M ellcyl-P4mmm-on~m1  25 s
+2026-10-31T08:14:35.360Z ok M ellcyl-P4mmm-on~m2  22 s
+2026-10-31T08:14:59.118Z ok M ellcyl-P-3-near~m2  29 s
+2026-10-31T08:15:00.289Z ok M ellcyl-P-3-near~m1  43 s
+2026-10-31T08:15:04.402Z ok M ellcyl-P-3m1-generic~m1  29 s
+2026-10-31T08:15:17.090Z ok M ellcyl-P6m-on~m1  17 s
+2026-10-31T08:15:28.910Z ok M ellcyl-P6m-on~m2  25 s
+2026-10-31T08:15:29.210Z ok M ellcyl-P6mmm-near~m1  12 s
+2026-10-31T08:15:41.690Z ok M ellcyl-Pm-3-generic~m1  12 s
+2026-10-31T08:15:50.984Z ok M ellcyl-P6mmm-near~m2  22 s
+2026-10-31T08:15:52.834Z ok M ellcyl-P-3m1-generic~m2  54 s
+2026-10-31T08:15:54.272Z ok M ellcyl-Pm-3m-on~m1  3 s
+2026-10-31T08:15:57.605Z ok M ellcyl-Pm-3-generic~m2  16 s
+2026-10-31T08:16:16.313Z ok M ellcyl-Pm-3m-on~m2  23 s
+2026-10-31T08:16:27.844Z ok M ellipsoid-P-1-near~m1  34 s
+2026-10-31T08:16:28.688Z ok M ellipsoid-P-1-near~m2  31 s
+2026-10-31T08:16:46.339Z ok M ellipsoid-P-1-near~m3  30 s
+2026-10-31T08:16:48.324Z ok M ellipsoid-P2m-generic~m1  20 s
+2026-10-31T08:17:00.975Z ok M ellipsoid-P-1-near~m4  33 s
+2026-10-31T08:17:06.425Z ok M ellipsoid-P2m-generic~m2  20 s
+2026-10-31T08:17:06.529Z ok M ellipsoid-P2m-generic~m3  18 s
+2026-10-31T08:17:29.114Z ok M ellipsoid-Pmmm-on~m1  23 s
+2026-10-31T08:17:31.779Z ok M ellipsoid-P2m-generic~m4  31 s
+2026-10-31T08:17:41.813Z ok M ellipsoid-Pmmm-on~m3  13 s
+2026-10-31T08:17:49.874Z ok M ellipsoid-Pmmm-on~m2  43 s
+2026-10-31T08:17:56.305Z ok M ellipsoid-Pmmm-on~m4  25 s
+2026-10-31T08:18:04.526Z ok M ellipsoid-P4m-near~m3  8 s
+2026-10-31T08:18:08.076Z ok M ellipsoid-P4m-near~m1  26 s
+2026-10-31T08:18:12.860Z ok M ellipsoid-P4m-near~m4  8 s
+2026-10-31T08:18:13.658Z ok M ellipsoid-P4mmm-generic~m1  6 s
+2026-10-31T08:18:18.723Z ok M ellipsoid-P4m-near~m2  29 s
+2026-10-31T08:18:26.259Z ok M ellipsoid-P4mmm-generic~m2  13 s
+2026-10-31T08:18:27.154Z ok M ellipsoid-P4mmm-generic~m3  13 s
+2026-10-31T08:18:28.702Z ok M ellipsoid-P4mmm-generic~m4  10 s
+2026-10-31T08:18:38.082Z ok M ellipsoid-P-3-on~m1  12 s
+2026-10-31T08:18:53.878Z ok M ellipsoid-P-3-on~m3  25 s
+2026-10-31T08:19:05.884Z ok M ellipsoid-P-3-on~m4  28 s
+2026-10-31T08:19:19.340Z ok M ellipsoid-P-3m1-near~m1  25 s
+2026-10-31T08:19:25.189Z ok M ellipsoid-P-3-on~m2  58 s
+2026-10-31T08:19:30.053Z ok M ellipsoid-P-3m1-near~m3  11 s
+2026-10-31T08:19:33.037Z ok M ellipsoid-P-3m1-near~m4  8 s
+2026-10-31T08:19:45.001Z ok M ellipsoid-P-3m1-near~m2  39 s
+2026-10-31T08:19:56.214Z ok M ellipsoid-P6m-generic~m1  26 s
+2026-10-31T08:20:15.229Z ok M ellipsoid-P6m-generic~m4  19 s
+2026-10-31T08:20:17.066Z ok M ellipsoid-P6m-generic~m2  44 s
+2026-10-31T08:20:21.082Z ok M ellipsoid-P6m-generic~m3  36 s
+2026-10-31T08:20:22.906Z ok M ellipsoid-P6mmm-on~m1  8 s
+2026-10-31T08:20:28.987Z ok M ellipsoid-P6mmm-on~m2  12 s
+2026-10-31T08:20:30.808Z ok M ellipsoid-P6mmm-on~m4  8 s
+2026-10-31T08:20:32.635Z ok M ellipsoid-Pm-3-near~m1  4 s
+2026-10-31T08:20:34.715Z ok M ellipsoid-Pm-3-near~m2  4 s
+2026-10-31T08:20:35.573Z ok M ellipsoid-Pm-3-near~m3  3 s
+2026-10-31T08:20:38.073Z ok M ellipsoid-Pm-3-near~m4  3 s
+2026-10-31T08:20:38.360Z ok M ellipsoid-P6mmm-on~m3  17 s
+2026-10-31T08:20:41.238Z ok M ellipsoid-Pm-3m-generic~m1  6 s
+2026-10-31T08:20:45.522Z ok M ellipsoid-Pm-3m-generic~m3  7 s
+2026-10-31T08:20:47.326Z ok M ellipsoid-Pm-3m-generic~m2  9 s
+2026-10-31T08:20:49.502Z ok M ellipsoid-Pm-3m-generic~m4  8 s
+2026-10-31T08:21:11.333Z ok M spheroid-P-1-on~m2  24 s
+2026-10-31T08:21:14.051Z ok M spheroid-P-1-on~m3  25 s
+2026-10-31T08:21:33.950Z ok M spheroid-P2m-near~m1  20 s
+2026-10-31T08:21:36.476Z ok M spheroid-P-1-on~m4  25 s
+2026-10-31T08:21:54.386Z ok M spheroid-P2m-near~m2  20 s
+2026-10-31T08:22:00.495Z ok M spheroid-P2m-near~m3  24 s
+2026-10-31T08:22:13.180Z ok M spheroid-P-1-on~m1  88 s
+2026-10-31T08:22:14.381Z ok M spheroid-Pmmm-generic~m1  14 s
+2026-10-31T08:22:14.457Z ok M spheroid-P2m-near~m4  20 s
+2026-10-31T08:22:27.291Z ok M spheroid-Pmmm-generic~m2  14 s
+2026-10-31T08:22:28.626Z ok M spheroid-Pmmm-generic~m3  14 s
+2026-10-31T08:22:28.791Z ok M spheroid-Pmmm-generic~m4  14 s
+2026-10-31T08:22:40.966Z ok M spheroid-P4m-on~m3  12 s
+2026-10-31T08:22:47.668Z ok M spheroid-P4m-on~m1  20 s
+2026-10-31T08:22:53.659Z ok M spheroid-P4m-on~m2  25 s
+2026-10-31T08:22:58.373Z ok M spheroid-P4m-on~m4  17 s
+2026-10-31T08:22:59.782Z ok M spheroid-P4mmm-near~m1  12 s
+2026-10-31T08:23:11.020Z ok M spheroid-P4mmm-near~m3  13 s
+2026-10-31T08:23:12.249Z ok M spheroid-P4mmm-near~m4  12 s
+2026-10-31T08:23:15.211Z ok M spheroid-P4mmm-near~m2  22 s
+2026-10-31T08:23:24.386Z ok M spheroid-P-3-generic~m2  12 s
+2026-10-31T08:23:30.475Z ok M spheroid-P-3-generic~m1  19 s
+2026-10-31T08:23:33.542Z ok M spheroid-P-3-generic~m3  18 s
+2026-10-31T08:23:40.252Z ok M spheroid-P-3m1-on~m2  7 s
+2026-10-31T08:23:41.170Z ok M spheroid-P-3m1-on~m1  11 s
+2026-10-31T08:23:47.622Z ok M spheroid-P-3m1-on~m4  6 s
+2026-10-31T08:23:49.618Z ok M spheroid-P-3-generic~m4  25 s
+2026-10-31T08:23:53.919Z ok M spheroid-P6m-near~m1  6 s
+2026-10-31T08:23:54.861Z ok M spheroid-P-3m1-on~m3  15 s
+2026-10-31T08:23:57.435Z ok M spheroid-P6m-near~m2  8 s
+2026-10-31T08:24:00.404Z ok M spheroid-P6m-near~m3  6 s
+2026-10-31T08:24:02.830Z ok M spheroid-P6mmm-generic~m1  5 s
+2026-10-31T08:24:03.454Z ok M spheroid-P6m-near~m4  9 s
+2026-10-31T08:24:07.123Z ok M spheroid-P6mmm-generic~m2  7 s
+2026-10-31T08:24:08.117Z ok M spheroid-P6mmm-generic~m3  5 s
+2026-10-31T08:24:08.831Z ok M spheroid-P6mmm-generic~m4  5 s
+2026-10-31T08:24:10.535Z ok M spheroid-Pm-3-on~m1  3 s
+2026-10-31T08:24:12.494Z ok M spheroid-Pm-3-on~m3  4 s
+2026-10-31T08:24:12.564Z ok M spheroid-Pm-3-on~m2  4 s
+2026-10-31T08:24:15.702Z ok M spheroid-Pm-3m-near~m2  3 s
+2026-10-31T08:24:16.841Z ok M spheroid-Pm-3-on~m4  6 s
+2026-10-31T08:24:18.069Z ok M spheroid-Pm-3m-near~m1  6 s
+2026-10-31T08:24:19.653Z ok M spheroid-Pm-3m-near~m3  4 s
+2026-10-31T08:24:21.567Z ok M spheroid-Pm-3m-near~m4  5 s
+2026-10-31T08:24:21.567Z jobs-M.txt: done, 176 ok, 0 failed
+2026-10-31T08:24:21.598Z jobs-N.txt: 594 jobs, 594 to run, 3 at a time
+2026-10-31T08:24:40.671Z ok N sphere-P-1-3 cylinder 19 s
+2026-10-31T08:24:41.420Z ok N sphere-P-1-3 sqbox 20 s
+2026-10-31T08:24:42.095Z ok N sphere-P-1-3 box 20 s
+2026-10-31T08:25:01.293Z ok N sphere-P-1-3 ellcyl 21 s
+2026-10-31T08:25:01.426Z ok N sphere-P-1-3 spheroid 19 s
+2026-10-31T08:25:02.523Z ok N sphere-P-1-3 ellipsoid 21 s
+2026-10-31T08:25:14.915Z ok N sphere-P2m-1 sqbox 13 s
+2026-10-31T08:25:15.332Z ok N sphere-P2m-1 cylinder 13 s
+2026-10-31T08:25:15.549Z ok N sphere-P2m-1 box 14 s
+2026-10-31T08:25:28.540Z ok N sphere-P2m-1 spheroid 13 s
+2026-10-31T08:25:29.671Z ok N sphere-P2m-1 ellcyl 15 s
+2026-10-31T08:25:33.006Z ok N sphere-P2m-1 ellipsoid 18 s
+2026-10-31T08:25:54.219Z ok N sphere-Pmmm-2 sqbox 25 s
+2026-10-31T08:26:02.675Z ok N sphere-Pmmm-2 cylinder 30 s
+2026-10-31T08:26:03.322Z ok N sphere-Pmmm-2 box 35 s
+2026-10-31T08:26:18.366Z ok N sphere-Pmmm-2 spheroid 15 s
+2026-10-31T08:26:40.864Z ok N sphere-Pmmm-2 ellcyl 47 s
+2026-10-31T08:26:41.526Z ok N sphere-Pmmm-2 ellipsoid 39 s
+2026-10-31T08:26:48.650Z ok N sphere-P4m-3 box 30 s
+2026-10-31T08:26:54.542Z ok N sphere-P4m-3 cylinder 13 s
+2026-10-31T08:27:03.772Z ok N sphere-P4m-3 sqbox 23 s
+2026-10-31T08:27:04.006Z ok N sphere-P4m-3 ellcyl 15 s
+2026-10-31T08:27:06.136Z ok N sphere-P4m-3 ellipsoid 12 s
+2026-10-31T08:27:09.930Z ok N sphere-P4mmm-1 box 6 s
+2026-10-31T08:27:11.434Z ok N sphere-P4mmm-1 sqbox 5 s
+2026-10-31T08:27:14.189Z ok N sphere-P4m-3 spheroid 10 s
+2026-10-31T08:27:14.973Z ok N sphere-P4mmm-1 cylinder 5 s
+2026-10-31T08:27:17.395Z ok N sphere-P4mmm-1 ellcyl 6 s
+2026-10-31T08:27:21.215Z ok N sphere-P4mmm-1 spheroid 6 s
+2026-10-31T08:27:21.512Z ok N sphere-P4mmm-1 ellipsoid 7 s
+2026-10-31T08:27:24.798Z ok N sphere-P-3-2 box 7 s
+2026-10-31T08:27:28.200Z ok N sphere-P-3-2 cylinder 7 s
+2026-10-31T08:27:28.290Z ok N sphere-P-3-2 sqbox 7 s
+2026-10-31T08:27:32.581Z ok N sphere-P-3-2 ellcyl 8 s
+2026-10-31T08:27:35.266Z ok N sphere-P-3-2 spheroid 7 s
+2026-10-31T08:27:36.574Z ok N sphere-P-3-2 ellipsoid 8 s
+2026-10-31T08:27:40.038Z ok N sphere-P-3m1-3 box 7 s
+2026-10-31T08:27:42.234Z ok N sphere-P-3m1-3 sqbox 7 s
+2026-10-31T08:27:42.821Z ok N sphere-P-3m1-3 cylinder 6 s
+2026-10-31T08:27:47.463Z ok N sphere-P-3m1-3 ellcyl 7 s
+2026-10-31T08:27:50.623Z ok N sphere-P-3m1-3 spheroid 8 s
+2026-10-31T08:27:51.132Z ok N sphere-P6m-1 box 4 s
+2026-10-31T08:27:51.160Z ok N sphere-P-3m1-3 ellipsoid 9 s
+2026-10-31T08:27:54.321Z ok N sphere-P6m-1 sqbox 4 s
+2026-10-31T08:27:54.653Z ok N sphere-P6m-1 cylinder 4 s
+2026-10-31T08:27:55.219Z ok N sphere-P6m-1 ellcyl 4 s
+2026-10-31T08:27:58.238Z ok N sphere-P6m-1 spheroid 4 s
+2026-10-31T08:27:58.498Z ok N sphere-P6m-1 ellipsoid 4 s
+2026-10-31T08:28:12.686Z ok N sphere-P6mmm-2 box 17 s
+2026-10-31T08:28:19.042Z ok N sphere-P6mmm-2 cylinder 21 s
+2026-10-31T08:28:24.647Z ok N sphere-P6mmm-2 sqbox 26 s
+2026-10-31T08:28:25.625Z ok N sphere-P6mmm-2 ellipsoid 7 s
+2026-10-31T08:28:26.484Z ok N sphere-P6mmm-2 ellcyl 14 s
+2026-10-31T08:28:28.851Z ok N sphere-Pm-3-3 box 3 s
+2026-10-31T08:28:29.321Z ok N sphere-Pm-3-3 sqbox 3 s
+2026-10-31T08:28:30.541Z ok N sphere-P6mmm-2 spheroid 6 s
+2026-10-31T08:28:31.791Z ok N sphere-Pm-3-3 cylinder 3 s
+2026-10-31T08:28:32.663Z ok N sphere-Pm-3-3 ellcyl 3 s
+2026-10-31T08:28:33.614Z ok N sphere-Pm-3-3 ellipsoid 3 s
+2026-10-31T08:28:34.486Z ok N sphere-Pm-3-3 spheroid 3 s
+2026-10-31T08:28:35.485Z ok N sphere-Pm-3m-1 box 3 s
+2026-10-31T08:28:36.322Z ok N sphere-Pm-3m-1 sqbox 3 s
+2026-10-31T08:28:36.973Z ok N sphere-Pm-3m-1 cylinder 2 s
+2026-10-31T08:28:39.641Z ok N sphere-Pm-3m-1 spheroid 3 s
+2026-10-31T08:28:39.935Z ok N sphere-Pm-3m-1 ellipsoid 4 s
+2026-10-31T08:28:40.575Z ok N sphere-Pm-3m-1 ellcyl 5 s
+2026-10-31T08:28:59.283Z ok N sphere-P-1-2~d1 cylinder 19 s
+2026-10-31T08:28:59.714Z ok N sphere-P-1-2~d1 sqbox 20 s
+2026-10-31T08:29:00.253Z ok N sphere-P-1-2~d1 box 21 s
+2026-10-31T08:29:19.619Z ok N sphere-P-1-2~d1 ellcyl 20 s
+2026-10-31T08:29:21.614Z ok N sphere-P-1-2~d1 spheroid 21 s
+2026-10-31T08:29:22.708Z ok N sphere-P-1-2~d1 ellipsoid 23 s
+2026-10-31T08:29:39.102Z ok N sphere-P-1-3~d1 box 19 s
+2026-10-31T08:29:40.625Z ok N sphere-P-1-3~d1 sqbox 19 s
+2026-10-31T08:29:40.630Z ok N sphere-P-1-3~d1 cylinder 18 s
+2026-10-31T08:29:59.646Z ok N sphere-P-1-3~d1 spheroid 19 s
+2026-10-31T08:30:00.781Z ok N sphere-P-1-3~d1 ellipsoid 20 s
+2026-10-31T08:30:01.390Z ok N sphere-P-1-3~d1 ellcyl 22 s
+2026-10-31T08:30:14.024Z ok N sphere-P2m-1~d1 cylinder 13 s
+2026-10-31T08:30:14.342Z ok N sphere-P2m-1~d1 box 15 s
+2026-10-31T08:30:14.651Z ok N sphere-P2m-1~d1 sqbox 14 s
+2026-10-31T08:30:27.759Z ok N sphere-P2m-1~d1 spheroid 13 s
+2026-10-31T08:30:28.982Z ok N sphere-P2m-1~d1 ellcyl 15 s
+2026-10-31T08:30:29.321Z ok N sphere-P2m-1~d1 ellipsoid 15 s
+2026-10-31T08:30:38.592Z ok N sphere-P2m-3~d1 box 11 s
+2026-10-31T08:30:38.820Z ok N sphere-P2m-3~d1 cylinder 9 s
+2026-10-31T08:30:39.282Z ok N sphere-P2m-3~d1 sqbox 10 s
+2026-10-31T08:30:49.694Z ok N sphere-P2m-3~d1 spheroid 10 s
+2026-10-31T08:30:49.811Z ok N sphere-P2m-3~d1 ellcyl 11 s
+2026-10-31T08:30:52.356Z ok N sphere-P2m-3~d1 ellipsoid 14 s
+2026-10-31T08:31:01.003Z ok N sphere-Pmmm-1~d1 sqbox 11 s
+2026-10-31T08:31:01.654Z ok N sphere-Pmmm-1~d1 box 12 s
+2026-10-31T08:31:02.658Z ok N sphere-Pmmm-1~d1 cylinder 10 s
+2026-10-31T08:31:13.030Z ok N sphere-Pmmm-1~d1 ellcyl 12 s
+2026-10-31T08:31:15.232Z ok N sphere-Pmmm-1~d1 ellipsoid 14 s
+2026-10-31T08:31:15.563Z ok N sphere-Pmmm-1~d1 spheroid 13 s
+2026-10-31T08:31:26.867Z ok N sphere-Pmmm-2~d1 cylinder 11 s
+2026-10-31T08:31:39.785Z ok N sphere-Pmmm-2~d1 ellcyl 13 s
+2026-10-31T08:31:53.285Z ok N sphere-Pmmm-2~d1 sqbox 38 s
+2026-10-31T08:31:59.291Z ok N sphere-Pmmm-2~d1 box 46 s
+2026-10-31T08:32:01.683Z ok N sphere-Pmmm-2~d1 ellipsoid 22 s
+2026-10-31T08:32:07.418Z ok N sphere-P4m-2~d1 box 8 s
+2026-10-31T08:32:09.386Z ok N sphere-P4m-2~d1 sqbox 8 s
+2026-10-31T08:32:14.273Z ok N sphere-P4m-2~d1 cylinder 7 s
+2026-10-31T08:32:17.555Z ok N sphere-P4m-2~d1 ellcyl 8 s
+2026-10-31T08:32:24.930Z ok N sphere-P4m-2~d1 ellipsoid 11 s
+2026-10-31T08:32:25.182Z ok N sphere-P4m-2~d1 spheroid 8 s
+2026-10-31T08:32:26.201Z ok N sphere-Pmmm-2~d1 spheroid 33 s
+2026-10-31T08:32:45.186Z ok N sphere-P4m-3~d1 cylinder 19 s
+2026-10-31T08:32:47.413Z ok N sphere-P4m-3~d1 sqbox 22 s
+2026-10-31T08:32:54.759Z ok N sphere-P4m-3~d1 box 30 s
+2026-10-31T08:33:00.302Z ok N sphere-P4m-3~d1 ellipsoid 13 s
+2026-10-31T08:33:02.759Z ok N sphere-P4m-3~d1 ellcyl 18 s
+2026-10-31T08:33:05.155Z ok N sphere-P4m-3~d1 spheroid 10 s
+2026-10-31T08:33:05.784Z ok N sphere-P4mmm-1~d1 box 5 s
+2026-10-31T08:33:08.035Z ok N sphere-P4mmm-1~d1 sqbox 5 s
+2026-10-31T08:33:10.017Z ok N sphere-P4mmm-1~d1 cylinder 5 s
+2026-10-31T08:33:11.406Z ok N sphere-P4mmm-1~d1 ellcyl 6 s
+2026-10-31T08:33:14.786Z ok N sphere-P4mmm-1~d1 ellipsoid 7 s
+2026-10-31T08:33:16.818Z ok N sphere-P4mmm-1~d1 spheroid 7 s
+2026-10-31T08:33:17.990Z ok N sphere-P4mmm-3~d1 box 7 s
+2026-10-31T08:33:21.206Z ok N sphere-P4mmm-3~d1 sqbox 6 s
+2026-10-31T08:33:22.556Z ok N sphere-P4mmm-3~d1 cylinder 6 s
+2026-10-31T08:33:25.002Z ok N sphere-P4mmm-3~d1 ellcyl 7 s
+2026-10-31T08:33:29.417Z ok N sphere-P4mmm-3~d1 ellipsoid 8 s
+2026-10-31T08:33:29.419Z ok N sphere-P4mmm-3~d1 spheroid 7 s
+2026-10-31T08:33:33.683Z ok N sphere-P-3-1~d1 box 9 s
+2026-10-31T08:33:37.070Z ok N sphere-P-3-1~d1 cylinder 8 s
+2026-10-31T08:33:37.568Z ok N sphere-P-3-1~d1 sqbox 8 s
+2026-10-31T08:33:42.680Z ok N sphere-P-3-1~d1 ellcyl 9 s
+2026-10-31T08:33:47.415Z ok N sphere-P-3-1~d1 ellipsoid 10 s
+2026-10-31T08:33:53.302Z ok N sphere-P-3-1~d1 spheroid 16 s
+2026-10-31T08:34:13.339Z ok N sphere-P-3-2~d1 cylinder 20 s
+2026-10-31T08:34:14.071Z ok N sphere-P-3-2~d1 box 31 s
+2026-10-31T08:34:21.983Z ok N sphere-P-3-2~d1 sqbox 35 s
+2026-10-31T08:34:23.010Z ok N sphere-P-3-2~d1 ellipsoid 9 s
+2026-10-31T08:34:29.969Z ok N sphere-P-3-2~d1 spheroid 8 s
+2026-10-31T08:34:30.322Z ok N sphere-P-3m1-2~d1 box 7 s
+2026-10-31T08:34:36.824Z ok N sphere-P-3m1-2~d1 cylinder 7 s
+2026-10-31T08:34:36.926Z ok N sphere-P-3m1-2~d1 sqbox 7 s
+2026-10-31T08:34:44.653Z ok N sphere-P-3m1-2~d1 ellcyl 8 s
+2026-10-31T08:34:46.245Z ok N sphere-P-3m1-2~d1 ellipsoid 9 s
+2026-10-31T08:34:52.162Z ok N sphere-P-3m1-2~d1 spheroid 8 s
+2026-10-31T08:34:53.461Z ok N sphere-P-3m1-3~d1 box 7 s
+2026-10-31T08:34:59.202Z ok N sphere-P-3m1-3~d1 sqbox 7 s
+2026-10-31T08:34:59.532Z ok N sphere-P-3m1-3~d1 cylinder 6 s
+2026-10-31T08:35:06.695Z ok N sphere-P-3m1-3~d1 ellcyl 7 s
+2026-10-31T08:35:07.221Z ok N sphere-P-3-2~d1 ellcyl 54 s
+2026-10-31T08:35:10.090Z ok N sphere-P-3m1-3~d1 ellipsoid 11 s
+2026-10-31T08:35:10.910Z ok N sphere-P6m-1~d1 box 4 s
+2026-10-31T08:35:13.339Z ok N sphere-P-3m1-3~d1 spheroid 7 s
+2026-10-31T08:35:13.546Z ok N sphere-P6m-1~d1 sqbox 3 s
+2026-10-31T08:35:14.191Z ok N sphere-P6m-1~d1 cylinder 3 s
+2026-10-31T08:35:17.145Z ok N sphere-P6m-1~d1 ellcyl 4 s
+2026-10-31T08:35:18.411Z ok N sphere-P6m-1~d1 spheroid 4 s
+2026-10-31T08:35:18.660Z ok N sphere-P6m-1~d1 ellipsoid 5 s
+2026-10-31T08:35:21.445Z ok N sphere-P6m-3~d1 box 4 s
+2026-10-31T08:35:22.617Z ok N sphere-P6m-3~d1 sqbox 4 s
+2026-10-31T08:35:22.711Z ok N sphere-P6m-3~d1 cylinder 4 s
+2026-10-31T08:35:26.846Z ok N sphere-P6m-3~d1 spheroid 4 s
+2026-10-31T08:35:27.426Z ok N sphere-P6m-3~d1 ellipsoid 5 s
+2026-10-31T08:35:27.530Z ok N sphere-P6m-3~d1 ellcyl 6 s
+2026-10-31T08:35:36.491Z ok N sphere-P6mmm-1~d1 cylinder 9 s
+2026-10-31T08:35:39.266Z ok N sphere-P6mmm-1~d1 sqbox 12 s
+2026-10-31T08:35:41.537Z ok N sphere-P6mmm-1~d1 box 15 s
+2026-10-31T08:35:44.805Z ok N sphere-P6mmm-1~d1 ellipsoid 6 s
+2026-10-31T08:35:46.237Z ok N sphere-P6mmm-1~d1 spheroid 5 s
+2026-10-31T08:35:58.034Z ok N sphere-P6mmm-2~d1 box 13 s
+2026-10-31T08:36:03.272Z ok N sphere-P6mmm-2~d1 sqbox 17 s
+2026-10-31T08:36:03.493Z ok N sphere-P6mmm-1~d1 ellcyl 27 s
+2026-10-31T08:36:16.296Z ok N sphere-P6mmm-2~d1 ellcyl 13 s
+2026-10-31T08:36:25.326Z ok N sphere-P6mmm-2~d1 cylinder 27 s
+2026-10-31T08:36:26.150Z ok N sphere-P6mmm-2~d1 spheroid 10 s
+2026-10-31T08:36:28.461Z ok N sphere-Pm-3-2~d1 box 3 s
+2026-10-31T08:36:29.112Z ok N sphere-Pm-3-2~d1 sqbox 3 s
+2026-10-31T08:36:31.294Z ok N sphere-Pm-3-2~d1 cylinder 3 s
+2026-10-31T08:36:32.321Z ok N sphere-Pm-3-2~d1 ellcyl 3 s
+2026-10-31T08:36:34.369Z ok N sphere-Pm-3-2~d1 ellipsoid 3 s
+2026-10-31T08:36:35.150Z ok N sphere-P6mmm-2~d1 ellipsoid 32 s
+2026-10-31T08:36:35.251Z ok N sphere-Pm-3-2~d1 spheroid 3 s
+2026-10-31T08:36:37.428Z ok N sphere-Pm-3-3~d1 box 3 s
+2026-10-31T08:36:38.048Z ok N sphere-Pm-3-3~d1 cylinder 3 s
+2026-10-31T08:36:38.154Z ok N sphere-Pm-3-3~d1 sqbox 3 s
+2026-10-31T08:36:40.610Z ok N sphere-Pm-3-3~d1 ellcyl 3 s
+2026-10-31T08:36:41.370Z ok N sphere-Pm-3-3~d1 spheroid 3 s
+2026-10-31T08:36:41.457Z ok N sphere-Pm-3-3~d1 ellipsoid 3 s
+2026-10-31T08:36:45.200Z ok N sphere-Pm-3m-1~d1 sqbox 4 s
+2026-10-31T08:36:45.349Z ok N sphere-Pm-3m-1~d1 box 5 s
+2026-10-31T08:36:45.765Z ok N sphere-Pm-3m-1~d1 cylinder 4 s
+2026-10-31T08:36:48.818Z ok N sphere-Pm-3m-1~d1 spheroid 3 s
+2026-10-31T08:36:48.992Z ok N sphere-Pm-3m-1~d1 ellipsoid 4 s
+2026-10-31T08:36:50.697Z ok N sphere-Pm-3m-1~d1 ellcyl 5 s
+2026-10-31T08:36:53.579Z ok N sphere-Pm-3m-3~d1 sqbox 5 s
+2026-10-31T08:36:54.390Z ok N sphere-Pm-3m-3~d1 cylinder 4 s
+2026-10-31T08:36:58.871Z ok N sphere-Pm-3m-3~d1 box 10 s
+2026-10-31T08:36:58.961Z ok N sphere-Pm-3m-3~d1 ellipsoid 5 s
+2026-10-31T08:37:02.401Z ok N sphere-Pm-3m-3~d1 spheroid 4 s
+2026-10-31T08:37:05.584Z ok N sphere-Pm-3m-3~d1 ellcyl 12 s
+2026-10-31T08:37:18.279Z ok N sphere-P-1-2~d2 box 19 s
+2026-10-31T08:37:21.009Z ok N sphere-P-1-2~d2 sqbox 19 s
+2026-10-31T08:37:23.671Z ok N sphere-P-1-2~d2 cylinder 18 s
+2026-10-31T08:37:37.629Z ok N sphere-P-1-2~d2 ellcyl 19 s
+2026-10-31T08:37:42.271Z ok N sphere-P-1-2~d2 ellipsoid 21 s
+2026-10-31T08:37:44.942Z ok N sphere-P-1-2~d2 spheroid 21 s
+2026-10-31T08:37:57.315Z ok N sphere-P-1-3~d2 box 20 s
+2026-10-31T08:38:00.869Z ok N sphere-P-1-3~d2 sqbox 19 s
+2026-10-31T08:38:03.362Z ok N sphere-P-1-3~d2 cylinder 18 s
+2026-10-31T08:38:18.390Z ok N sphere-P-1-3~d2 ellcyl 21 s
+2026-10-31T08:38:22.998Z ok N sphere-P-1-3~d2 ellipsoid 22 s
+2026-10-31T08:38:25.281Z ok N sphere-P-1-3~d2 spheroid 22 s
+2026-10-31T08:38:33.040Z ok N sphere-P2m-1~d2 box 15 s
+2026-10-31T08:38:36.882Z ok N sphere-P2m-1~d2 sqbox 14 s
+2026-10-31T08:38:37.659Z ok N sphere-P2m-1~d2 cylinder 12 s
+2026-10-31T08:38:47.518Z ok N sphere-P2m-1~d2 ellcyl 14 s
+2026-10-31T08:38:49.747Z ok N sphere-P2m-1~d2 spheroid 12 s
+2026-10-31T08:38:52.907Z ok N sphere-P2m-1~d2 ellipsoid 16 s
+2026-10-31T08:38:58.658Z ok N sphere-P2m-3~d2 box 11 s
+2026-10-31T08:39:00.079Z ok N sphere-P2m-3~d2 sqbox 10 s
+2026-10-31T08:39:02.301Z ok N sphere-P2m-3~d2 cylinder 9 s
+2026-10-31T08:39:09.873Z ok N sphere-P2m-3~d2 ellcyl 11 s
+2026-10-31T08:39:12.744Z ok N sphere-P2m-3~d2 spheroid 10 s
+2026-10-31T08:39:16.541Z ok N sphere-P2m-3~d2 ellipsoid 16 s
+2026-10-31T08:39:21.945Z ok N sphere-Pmmm-1~d2 box 12 s
+2026-10-31T08:39:23.773Z ok N sphere-Pmmm-1~d2 sqbox 11 s
+2026-10-31T08:39:26.470Z ok N sphere-Pmmm-1~d2 cylinder 10 s
+2026-10-31T08:39:33.747Z ok N sphere-Pmmm-1~d2 ellcyl 12 s
+2026-10-31T08:39:35.430Z ok N sphere-Pmmm-1~d2 ellipsoid 12 s
+2026-10-31T08:39:36.871Z ok N sphere-Pmmm-1~d2 spheroid 10 s
+2026-10-31T08:40:03.734Z ok N sphere-Pmmm-2~d2 box 30 s
+2026-10-31T08:40:07.278Z ok N sphere-Pmmm-2~d2 cylinder 30 s
+2026-10-31T08:40:17.824Z ok N sphere-Pmmm-2~d2 sqbox 42 s
+2026-10-31T08:40:23.823Z ok N sphere-Pmmm-2~d2 ellipsoid 17 s
+2026-10-31T08:40:32.217Z ok N sphere-P4m-2~d2 box 8 s
+2026-10-31T08:40:32.925Z ok N sphere-Pmmm-2~d2 spheroid 15 s
+2026-10-31T08:40:39.913Z ok N sphere-P4m-2~d2 cylinder 7 s
+2026-10-31T08:40:40.163Z ok N sphere-P4m-2~d2 sqbox 8 s
+2026-10-31T08:40:40.663Z ok N sphere-Pmmm-2~d2 ellcyl 37 s
+2026-10-31T08:40:48.526Z ok N sphere-P4m-2~d2 ellcyl 9 s
+2026-10-31T08:40:49.759Z ok N sphere-P4m-2~d2 spheroid 9 s
+2026-10-31T08:40:50.775Z ok N sphere-P4m-2~d2 ellipsoid 11 s
+2026-10-31T08:41:03.168Z ok N sphere-P4m-3~d2 box 15 s
+2026-10-31T08:41:04.086Z ok N sphere-P4m-3~d2 sqbox 14 s
+2026-10-31T08:41:04.301Z ok N sphere-P4m-3~d2 cylinder 14 s
+2026-10-31T08:41:14.882Z ok N sphere-P4m-3~d2 spheroid 11 s
+2026-10-31T08:41:18.544Z ok N sphere-P4m-3~d2 ellipsoid 14 s
+2026-10-31T08:41:20.637Z ok N sphere-P4mmm-1~d2 box 6 s
+2026-10-31T08:41:23.732Z ok N sphere-P4mmm-1~d2 sqbox 5 s
+2026-10-31T08:41:25.591Z ok N sphere-P4mmm-1~d2 cylinder 5 s
+2026-10-31T08:41:28.922Z ok N sphere-P4m-3~d2 ellcyl 26 s
+2026-10-31T08:41:29.588Z ok N sphere-P4mmm-1~d2 ellcyl 6 s
+2026-10-31T08:41:33.027Z ok N sphere-P4mmm-1~d2 ellipsoid 7 s
+2026-10-31T08:41:34.505Z ok N sphere-P4mmm-1~d2 spheroid 6 s
+2026-10-31T08:41:36.319Z ok N sphere-P4mmm-3~d2 box 7 s
+2026-10-31T08:41:39.233Z ok N sphere-P4mmm-3~d2 sqbox 6 s
+2026-10-31T08:41:40.251Z ok N sphere-P4mmm-3~d2 cylinder 6 s
+2026-10-31T08:41:43.480Z ok N sphere-P4mmm-3~d2 ellcyl 7 s
+2026-10-31T08:41:46.852Z ok N sphere-P4mmm-3~d2 ellipsoid 8 s
+2026-10-31T08:41:47.243Z ok N sphere-P4mmm-3~d2 spheroid 7 s
+2026-10-31T08:41:52.309Z ok N sphere-P-3-1~d2 box 9 s
+2026-10-31T08:41:55.012Z ok N sphere-P-3-1~d2 cylinder 8 s
+2026-10-31T08:41:55.174Z ok N sphere-P-3-1~d2 sqbox 8 s
+2026-10-31T08:42:01.050Z ok N sphere-P-3-1~d2 ellcyl 9 s
+2026-10-31T08:42:05.433Z ok N sphere-P-3-1~d2 ellipsoid 10 s
+2026-10-31T08:42:05.932Z ok N sphere-P-3-1~d2 spheroid 11 s
+2026-10-31T08:42:08.567Z ok N sphere-P-3-2~d2 box 8 s
+2026-10-31T08:42:12.594Z ok N sphere-P-3-2~d2 cylinder 7 s
+2026-10-31T08:42:12.679Z ok N sphere-P-3-2~d2 sqbox 7 s
+2026-10-31T08:42:16.271Z ok N sphere-P-3-2~d2 ellcyl 8 s
+2026-10-31T08:42:19.910Z ok N sphere-P-3-2~d2 spheroid 7 s
+2026-10-31T08:42:21.506Z ok N sphere-P-3-2~d2 ellipsoid 9 s
+2026-10-31T08:42:23.835Z ok N sphere-P-3m1-2~d2 box 8 s
+2026-10-31T08:42:27.058Z ok N sphere-P-3m1-2~d2 sqbox 7 s
+2026-10-31T08:42:27.994Z ok N sphere-P-3m1-2~d2 cylinder 6 s
+2026-10-31T08:42:31.406Z ok N sphere-P-3m1-2~d2 ellcyl 8 s
+2026-10-31T08:42:35.546Z ok N sphere-P-3m1-2~d2 spheroid 8 s
+2026-10-31T08:42:36.610Z ok N sphere-P-3m1-2~d2 ellipsoid 10 s
+2026-10-31T08:42:38.616Z ok N sphere-P-3m1-3~d2 box 7 s
+2026-10-31T08:42:42.676Z ok N sphere-P-3m1-3~d2 sqbox 7 s
+2026-10-31T08:42:42.853Z ok N sphere-P-3m1-3~d2 cylinder 6 s
+2026-10-31T08:42:46.150Z ok N sphere-P-3m1-3~d2 ellcyl 8 s
+2026-10-31T08:42:49.770Z ok N sphere-P6m-1~d2 box 4 s
+2026-10-31T08:42:50.690Z ok N sphere-P-3m1-3~d2 spheroid 8 s
+2026-10-31T08:42:51.724Z ok N sphere-P-3m1-3~d2 ellipsoid 9 s
+2026-10-31T08:42:53.428Z ok N sphere-P6m-1~d2 sqbox 4 s
+2026-10-31T08:42:54.264Z ok N sphere-P6m-1~d2 cylinder 4 s
+2026-10-31T08:42:55.525Z ok N sphere-P6m-1~d2 ellcyl 4 s
+2026-10-31T08:42:57.568Z ok N sphere-P6m-1~d2 ellipsoid 4 s
+2026-10-31T08:42:57.830Z ok N sphere-P6m-1~d2 spheroid 4 s
+2026-10-31T08:43:01.356Z ok N sphere-P6m-3~d2 box 6 s
+2026-10-31T08:43:02.639Z ok N sphere-P6m-3~d2 cylinder 5 s
+2026-10-31T08:43:02.881Z ok N sphere-P6m-3~d2 sqbox 5 s
+2026-10-31T08:43:06.603Z ok N sphere-P6m-3~d2 ellcyl 5 s
+2026-10-31T08:43:07.431Z ok N sphere-P6m-3~d2 ellipsoid 5 s
+2026-10-31T08:43:07.685Z ok N sphere-P6m-3~d2 spheroid 5 s
+2026-10-31T08:43:17.992Z ok N sphere-P6mmm-1~d2 cylinder 10 s
+2026-10-31T08:43:18.783Z ok N sphere-P6mmm-1~d2 sqbox 11 s
+2026-10-31T08:43:19.833Z ok N sphere-P6mmm-1~d2 box 13 s
+2026-10-31T08:43:28.726Z ok N sphere-P6mmm-1~d2 spheroid 9 s
+2026-10-31T08:43:35.742Z ok N sphere-P6mmm-1~d2 ellipsoid 17 s
+2026-10-31T08:43:41.558Z ok N sphere-P6mmm-1~d2 ellcyl 24 s
+2026-10-31T08:43:47.090Z ok N sphere-P6mmm-2~d2 box 18 s
+2026-10-31T08:43:50.586Z ok N sphere-P6mmm-2~d2 cylinder 9 s
+2026-10-31T08:43:53.829Z ok N sphere-P6mmm-2~d2 sqbox 18 s
+2026-10-31T08:44:03.106Z ok N sphere-P6mmm-2~d2 spheroid 9 s
+2026-10-31T08:44:06.244Z ok N sphere-Pm-3-2~d2 box 3 s
+2026-10-31T08:44:07.466Z ok N sphere-P6mmm-2~d2 ellcyl 20 s
+2026-10-31T08:44:09.246Z ok N sphere-Pm-3-2~d2 sqbox 3 s
+2026-10-31T08:44:09.340Z ok N sphere-P6mmm-2~d2 ellipsoid 19 s
+2026-10-31T08:44:10.308Z ok N sphere-Pm-3-2~d2 cylinder 3 s
+2026-10-31T08:44:12.646Z ok N sphere-Pm-3-2~d2 ellcyl 3 s
+2026-10-31T08:44:13.445Z ok N sphere-Pm-3-2~d2 spheroid 3 s
+2026-10-31T08:44:13.481Z ok N sphere-Pm-3-2~d2 ellipsoid 4 s
+2026-10-31T08:44:15.794Z ok N sphere-Pm-3-3~d2 box 3 s
+2026-10-31T08:44:16.281Z ok N sphere-Pm-3-3~d2 cylinder 3 s
+2026-10-31T08:44:16.566Z ok N sphere-Pm-3-3~d2 sqbox 3 s
+2026-10-31T08:44:18.976Z ok N sphere-Pm-3-3~d2 ellcyl 3 s
+2026-10-31T08:44:19.958Z ok N sphere-Pm-3-3~d2 ellipsoid 4 s
+2026-10-31T08:44:20.048Z ok N sphere-Pm-3-3~d2 spheroid 3 s
+2026-10-31T08:44:21.818Z ok N sphere-Pm-3m-1~d2 box 3 s
+2026-10-31T08:44:22.641Z ok N sphere-Pm-3m-1~d2 sqbox 3 s
+2026-10-31T08:44:22.765Z ok N sphere-Pm-3m-1~d2 cylinder 3 s
+2026-10-31T08:44:24.758Z ok N sphere-Pm-3m-1~d2 ellcyl 3 s
+2026-10-31T08:44:25.480Z ok N sphere-Pm-3m-1~d2 spheroid 3 s
+2026-10-31T08:44:25.930Z ok N sphere-Pm-3m-1~d2 ellipsoid 3 s
+2026-10-31T08:44:29.746Z ok N sphere-Pm-3m-3~d2 cylinder 4 s
+2026-10-31T08:44:30.129Z ok N sphere-Pm-3m-3~d2 sqbox 5 s
+2026-10-31T08:44:34.705Z ok N sphere-Pm-3m-3~d2 ellcyl 5 s
+2026-10-31T08:44:35.931Z ok N sphere-Pm-3m-3~d2 ellipsoid 6 s
+2026-10-31T08:44:38.609Z ok N sphere-Pm-3m-3~d2 spheroid 4 s
+2026-10-31T08:44:40.285Z ok N sphere-Pm-3m-3~d2 box 16 s
+2026-10-31T08:44:56.100Z ok N sphere-P-1-2~d3 box 20 s
+2026-10-31T08:44:58.050Z ok N sphere-P-1-2~d3 sqbox 19 s
+2026-10-31T08:44:58.405Z ok N sphere-P-1-2~d3 cylinder 18 s
+2026-10-31T08:45:16.446Z ok N sphere-P-1-2~d3 ellcyl 20 s
+2026-10-31T08:45:20.322Z ok N sphere-P-1-2~d3 ellipsoid 22 s
+2026-10-31T08:45:20.754Z ok N sphere-P-1-2~d3 spheroid 22 s
+2026-10-31T08:45:41.470Z ok N sphere-P-1-3~d3 box 25 s
+2026-10-31T08:45:44.642Z ok N sphere-P-1-3~d3 sqbox 24 s
+2026-10-31T08:45:45.000Z ok N sphere-P-1-3~d3 cylinder 24 s
+2026-10-31T08:46:04.350Z ok N sphere-P-1-3~d3 ellipsoid 20 s
+2026-10-31T08:46:05.349Z ok N sphere-P-1-3~d3 ellcyl 24 s
+2026-10-31T08:46:06.553Z ok N sphere-P-1-3~d3 spheroid 22 s
+2026-10-31T08:46:18.666Z ok N sphere-P2m-1~d3 sqbox 13 s
+2026-10-31T08:46:18.728Z ok N sphere-P2m-1~d3 box 14 s
+2026-10-31T08:46:18.896Z ok N sphere-P2m-1~d3 cylinder 12 s
+2026-10-31T08:46:31.514Z ok N sphere-P2m-1~d3 spheroid 13 s
+2026-10-31T08:46:33.127Z ok N sphere-P2m-1~d3 ellcyl 14 s
+2026-10-31T08:46:34.581Z ok N sphere-P2m-1~d3 ellipsoid 16 s
+2026-10-31T08:46:42.523Z ok N sphere-P2m-3~d3 box 11 s
+2026-10-31T08:46:43.530Z ok N sphere-P2m-3~d3 sqbox 10 s
+2026-10-31T08:46:43.870Z ok N sphere-P2m-3~d3 cylinder 9 s
+2026-10-31T08:46:53.615Z ok N sphere-P2m-3~d3 spheroid 10 s
+2026-10-31T08:46:53.697Z ok N sphere-P2m-3~d3 ellcyl 11 s
+2026-10-31T08:46:56.463Z ok N sphere-P2m-3~d3 ellipsoid 13 s
+2026-10-31T08:47:05.524Z ok N sphere-Pmmm-1~d3 sqbox 12 s
+2026-10-31T08:47:05.933Z ok N sphere-Pmmm-1~d3 box 12 s
+2026-10-31T08:47:06.886Z ok N sphere-Pmmm-1~d3 cylinder 10 s
+2026-10-31T08:47:17.525Z ok N sphere-Pmmm-1~d3 spheroid 11 s
+2026-10-31T08:47:17.530Z ok N sphere-Pmmm-1~d3 ellcyl 12 s
+2026-10-31T08:47:18.168Z ok N sphere-Pmmm-1~d3 ellipsoid 12 s
+2026-10-31T08:47:37.504Z ok N sphere-Pmmm-2~d3 cylinder 19 s
+2026-10-31T08:47:47.760Z ok N sphere-Pmmm-2~d3 sqbox 30 s
+2026-10-31T08:47:49.771Z ok N sphere-Pmmm-2~d3 box 32 s
+2026-10-31T08:48:17.951Z ok N sphere-Pmmm-2~d3 ellipsoid 30 s
+2026-10-31T08:48:25.994Z ok N sphere-P4m-2~d3 box 8 s
+2026-10-31T08:48:26.179Z ok N sphere-Pmmm-2~d3 ellcyl 49 s
+2026-10-31T08:48:33.327Z ok N sphere-P4m-2~d3 cylinder 7 s
+2026-10-31T08:48:33.886Z ok N sphere-P4m-2~d3 sqbox 8 s
+2026-10-31T08:48:39.329Z ok N sphere-Pmmm-2~d3 spheroid 50 s
+2026-10-31T08:48:41.842Z ok N sphere-P4m-2~d3 ellcyl 9 s
+2026-10-31T08:48:43.731Z ok N sphere-P4m-2~d3 ellipsoid 10 s
+2026-10-31T08:48:47.756Z ok N sphere-P4m-2~d3 spheroid 8 s
+2026-10-31T08:49:00.526Z ok N sphere-P4m-3~d3 sqbox 17 s
+2026-10-31T08:49:01.738Z ok N sphere-P4m-3~d3 cylinder 14 s
+2026-10-31T08:49:01.761Z ok N sphere-P4m-3~d3 box 20 s
+2026-10-31T08:49:11.952Z ok N sphere-P4m-3~d3 spheroid 10 s
+2026-10-31T08:49:13.258Z ok N sphere-P4m-3~d3 ellipsoid 12 s
+2026-10-31T08:49:17.614Z ok N sphere-P4mmm-1~d3 box 6 s
+2026-10-31T08:49:18.569Z ok N sphere-P4mmm-1~d3 sqbox 5 s
+2026-10-31T08:49:18.835Z ok N sphere-P4m-3~d3 ellcyl 18 s
+2026-10-31T08:49:22.733Z ok N sphere-P4mmm-1~d3 cylinder 5 s
+2026-10-31T08:49:24.458Z ok N sphere-P4mmm-1~d3 ellcyl 6 s
+2026-10-31T08:49:25.976Z ok N sphere-P4mmm-1~d3 ellipsoid 7 s
+2026-10-31T08:49:28.199Z ok N sphere-P4mmm-1~d3 spheroid 5 s
+2026-10-31T08:49:31.024Z ok N sphere-P4mmm-3~d3 box 7 s
+2026-10-31T08:49:32.438Z ok N sphere-P4mmm-3~d3 sqbox 6 s
+2026-10-31T08:49:33.930Z ok N sphere-P4mmm-3~d3 cylinder 6 s
+2026-10-31T08:49:38.304Z ok N sphere-P4mmm-3~d3 ellcyl 7 s
+2026-10-31T08:49:40.834Z ok N sphere-P4mmm-3~d3 spheroid 7 s
+2026-10-31T08:49:41.716Z ok N sphere-P4mmm-3~d3 ellipsoid 9 s
+2026-10-31T08:49:47.181Z ok N sphere-P-3-1~d3 box 9 s
+2026-10-31T08:49:49.325Z ok N sphere-P-3-1~d3 sqbox 8 s
+2026-10-31T08:49:49.568Z ok N sphere-P-3-1~d3 cylinder 8 s
+2026-10-31T08:49:56.818Z ok N sphere-P-3-1~d3 ellcyl 10 s
+2026-10-31T08:49:58.255Z ok N sphere-P-3-1~d3 spheroid 9 s
+2026-10-31T08:50:01.000Z ok N sphere-P-3-1~d3 ellipsoid 12 s
+2026-10-31T08:50:04.389Z ok N sphere-P-3-2~d3 box 8 s
+2026-10-31T08:50:05.140Z ok N sphere-P-3-2~d3 sqbox 7 s
+2026-10-31T08:50:07.982Z ok N sphere-P-3-2~d3 cylinder 7 s
+2026-10-31T08:50:12.205Z ok N sphere-P-3-2~d3 ellcyl 8 s
+2026-10-31T08:50:13.985Z ok N sphere-P-3-2~d3 ellipsoid 9 s
+2026-10-31T08:50:16.178Z ok N sphere-P-3-2~d3 spheroid 8 s
+2026-10-31T08:50:19.582Z ok N sphere-P-3m1-2~d3 box 7 s
+2026-10-31T08:50:20.984Z ok N sphere-P-3m1-2~d3 sqbox 7 s
+2026-10-31T08:50:22.567Z ok N sphere-P-3m1-2~d3 cylinder 6 s
+2026-10-31T08:50:27.214Z ok N sphere-P-3m1-2~d3 ellcyl 8 s
+2026-10-31T08:50:29.800Z ok N sphere-P-3m1-2~d3 spheroid 7 s
+2026-10-31T08:50:31.658Z ok N sphere-P-3m1-2~d3 ellipsoid 11 s
+2026-10-31T08:50:34.266Z ok N sphere-P-3m1-3~d3 box 7 s
+2026-10-31T08:50:36.657Z ok N sphere-P-3m1-3~d3 sqbox 7 s
+2026-10-31T08:50:37.862Z ok N sphere-P-3m1-3~d3 cylinder 6 s
+2026-10-31T08:50:41.530Z ok N sphere-P-3m1-3~d3 ellcyl 7 s
+2026-10-31T08:50:45.092Z ok N sphere-P6m-1~d3 box 4 s
+2026-10-31T08:50:45.102Z ok N sphere-P-3m1-3~d3 spheroid 7 s
+2026-10-31T08:50:46.641Z ok N sphere-P-3m1-3~d3 ellipsoid 10 s
+2026-10-31T08:50:48.523Z ok N sphere-P6m-1~d3 cylinder 3 s
+2026-10-31T08:50:48.874Z ok N sphere-P6m-1~d3 sqbox 4 s
+2026-10-31T08:50:50.683Z ok N sphere-P6m-1~d3 ellcyl 4 s
+2026-10-31T08:50:52.451Z ok N sphere-P6m-1~d3 spheroid 4 s
+2026-10-31T08:50:53.342Z ok N sphere-P6m-1~d3 ellipsoid 5 s
+2026-10-31T08:50:55.003Z ok N sphere-P6m-3~d3 box 4 s
+2026-10-31T08:50:56.369Z ok N sphere-P6m-3~d3 sqbox 4 s
+2026-10-31T08:50:56.941Z ok N sphere-P6m-3~d3 cylinder 4 s
+2026-10-31T08:50:59.087Z ok N sphere-P6m-3~d3 ellcyl 4 s
+2026-10-31T08:51:00.783Z ok N sphere-P6m-3~d3 spheroid 4 s
+2026-10-31T08:51:01.077Z ok N sphere-P6m-3~d3 ellipsoid 5 s
+2026-10-31T08:51:09.265Z ok N sphere-P6mmm-1~d3 cylinder 8 s
+2026-10-31T08:51:14.916Z ok N sphere-P6mmm-1~d3 box 16 s
+2026-10-31T08:51:16.061Z ok N sphere-P6mmm-1~d3 sqbox 15 s
+2026-10-31T08:51:20.853Z ok N sphere-P6mmm-1~d3 ellipsoid 6 s
+2026-10-31T08:51:21.236Z ok N sphere-P6mmm-1~d3 spheroid 5 s
+2026-10-31T08:51:31.926Z ok N sphere-P6mmm-1~d3 ellcyl 23 s
+2026-10-31T08:51:43.935Z ok N sphere-P6mmm-2~d3 sqbox 23 s
+2026-10-31T08:51:46.368Z ok N sphere-P6mmm-2~d3 cylinder 14 s
+2026-10-31T08:51:50.470Z ok N sphere-P6mmm-2~d3 box 30 s
+2026-10-31T08:52:02.684Z ok N sphere-P6mmm-2~d3 spheroid 12 s
+2026-10-31T08:52:05.605Z ok N sphere-Pm-3-2~d3 box 3 s
+2026-10-31T08:52:08.535Z ok N sphere-Pm-3-2~d3 sqbox 3 s
+2026-10-31T08:52:11.407Z ok N sphere-Pm-3-2~d3 cylinder 3 s
+2026-10-31T08:52:14.487Z ok N sphere-Pm-3-2~d3 ellcyl 3 s
+2026-10-31T08:52:17.531Z ok N sphere-Pm-3-2~d3 ellipsoid 3 s
+2026-10-31T08:52:17.658Z ok N sphere-P6mmm-2~d3 ellcyl 34 s
+2026-10-31T08:52:20.286Z ok N sphere-Pm-3-2~d3 spheroid 3 s
+2026-10-31T08:52:20.845Z ok N sphere-Pm-3-3~d3 box 3 s
+2026-10-31T08:52:23.233Z ok N sphere-Pm-3-3~d3 sqbox 3 s
+2026-10-31T08:52:23.618Z ok N sphere-Pm-3-3~d3 cylinder 3 s
+2026-10-31T08:52:26.313Z ok N sphere-Pm-3-3~d3 ellcyl 3 s
+2026-10-31T08:52:27.735Z ok N sphere-Pm-3-3~d3 ellipsoid 4 s
+2026-10-31T08:52:29.291Z ok N sphere-Pm-3-3~d3 spheroid 3 s
+2026-10-31T08:52:32.690Z ok N sphere-Pm-3m-1~d3 box 5 s
+2026-10-31T08:52:32.802Z ok N sphere-Pm-3m-1~d3 sqbox 4 s
+2026-10-31T08:52:36.397Z ok N sphere-Pm-3m-1~d3 cylinder 4 s
+2026-10-31T08:52:38.314Z ok N sphere-Pm-3m-1~d3 ellcyl 6 s
+2026-10-31T08:52:39.193Z ok N sphere-Pm-3m-1~d3 ellipsoid 3 s
+2026-10-31T08:52:41.089Z ok N sphere-Pm-3m-1~d3 spheroid 3 s
+2026-10-31T08:52:45.523Z ok N sphere-Pm-3m-3~d3 sqbox 4 s
+2026-10-31T08:52:48.630Z ok N sphere-Pm-3m-3~d3 box 9 s
+2026-10-31T08:52:49.338Z ok N sphere-Pm-3m-3~d3 cylinder 4 s
+2026-10-31T08:52:54.003Z ok N sphere-Pm-3m-3~d3 ellipsoid 5 s
+2026-10-31T08:52:54.129Z ok N sphere-P6mmm-2~d3 ellipsoid 68 s
+2026-10-31T08:52:54.730Z ok N sphere-Pm-3m-3~d3 ellcyl 6 s
+2026-10-31T08:52:57.990Z ok N sphere-Pm-3m-3~d3 spheroid 4 s
+2026-10-31T08:53:13.081Z ok N sphere-P-1-2~d4 sqbox 18 s
+2026-10-31T08:53:13.620Z ok N sphere-P-1-2~d4 box 19 s
+2026-10-31T08:53:15.477Z ok N sphere-P-1-2~d4 cylinder 17 s
+2026-10-31T08:53:32.690Z ok N sphere-P-1-2~d4 ellcyl 20 s
+2026-10-31T08:53:36.010Z ok N sphere-P-1-2~d4 ellipsoid 22 s
+2026-10-31T08:53:36.776Z ok N sphere-P-1-2~d4 spheroid 21 s
+2026-10-31T08:53:57.426Z ok N sphere-P-1-3~d4 sqbox 21 s
+2026-10-31T08:53:57.555Z ok N sphere-P-1-3~d4 cylinder 21 s
+2026-10-31T08:54:00.054Z ok N sphere-P-1-3~d4 box 27 s
+2026-10-31T08:54:17.485Z ok N sphere-P-1-3~d4 ellipsoid 20 s
+2026-10-31T08:54:19.108Z ok N sphere-P-1-3~d4 spheroid 19 s
+2026-10-31T08:54:21.253Z ok N sphere-P-1-3~d4 ellcyl 24 s
+2026-10-31T08:54:31.646Z ok N sphere-P2m-1~d4 box 14 s
+2026-10-31T08:54:32.394Z ok N sphere-P2m-1~d4 sqbox 13 s
+2026-10-31T08:54:33.873Z ok N sphere-P2m-1~d4 cylinder 13 s
+2026-10-31T08:54:45.614Z ok N sphere-P2m-1~d4 ellcyl 14 s
+2026-10-31T08:54:46.185Z ok N sphere-P2m-1~d4 spheroid 12 s
+2026-10-31T08:54:48.138Z ok N sphere-P2m-1~d4 ellipsoid 16 s
+2026-10-31T08:54:56.658Z ok N sphere-P2m-3~d4 sqbox 10 s
+2026-10-31T08:54:56.713Z ok N sphere-P2m-3~d4 box 11 s
+2026-10-31T08:54:57.688Z ok N sphere-P2m-3~d4 cylinder 10 s
+2026-10-31T08:55:06.853Z ok N sphere-P2m-3~d4 spheroid 9 s
+2026-10-31T08:55:07.822Z ok N sphere-P2m-3~d4 ellcyl 11 s
+2026-10-31T08:55:10.611Z ok N sphere-P2m-3~d4 ellipsoid 14 s
+2026-10-31T08:55:18.470Z ok N sphere-Pmmm-1~d4 box 12 s
+2026-10-31T08:55:18.837Z ok N sphere-Pmmm-1~d4 sqbox 11 s
+2026-10-31T08:55:20.517Z ok N sphere-Pmmm-1~d4 cylinder 10 s
+2026-10-31T08:55:30.337Z ok N sphere-Pmmm-1~d4 ellcyl 12 s
+2026-10-31T08:55:30.941Z ok N sphere-Pmmm-1~d4 spheroid 10 s
+2026-10-31T08:55:31.582Z ok N sphere-Pmmm-1~d4 ellipsoid 13 s
+2026-10-31T08:55:45.021Z ok N sphere-Pmmm-2~d4 cylinder 13 s
+2026-10-31T08:55:45.458Z ok N sphere-Pmmm-2~d4 box 15 s
+2026-10-31T08:55:45.963Z ok N sphere-Pmmm-2~d4 sqbox 15 s
+2026-10-31T08:56:01.121Z ok N sphere-Pmmm-2~d4 ellipsoid 16 s
+2026-10-31T08:56:02.374Z ok N sphere-Pmmm-2~d4 spheroid 16 s
+2026-10-31T08:56:05.696Z ok N sphere-Pmmm-2~d4 ellcyl 21 s
+2026-10-31T08:56:09.578Z ok N sphere-P4m-2~d4 box 8 s
+2026-10-31T08:56:10.426Z ok N sphere-P4m-2~d4 sqbox 8 s
+2026-10-31T08:56:12.891Z ok N sphere-P4m-2~d4 cylinder 7 s
+2026-10-31T08:56:18.651Z ok N sphere-P4m-2~d4 ellcyl 9 s
+2026-10-31T08:56:20.249Z ok N sphere-P4m-2~d4 ellipsoid 10 s
+2026-10-31T08:56:21.200Z ok N sphere-P4m-2~d4 spheroid 8 s
+2026-10-31T08:56:33.506Z ok N sphere-P4m-3~d4 cylinder 12 s
+2026-10-31T08:56:36.888Z ok N sphere-P4m-3~d4 sqbox 17 s
+2026-10-31T08:56:42.770Z ok N sphere-P4m-3~d4 box 24 s
+2026-10-31T08:56:48.931Z ok N sphere-P4m-3~d4 ellipsoid 12 s
+2026-10-31T08:56:52.316Z ok N sphere-P4m-3~d4 spheroid 10 s
+2026-10-31T08:56:54.831Z ok N sphere-P4mmm-1~d4 box 6 s
+2026-10-31T08:56:57.571Z ok N sphere-P4mmm-1~d4 sqbox 5 s
+2026-10-31T08:56:59.849Z ok N sphere-P4mmm-1~d4 cylinder 5 s
+2026-10-31T08:57:03.630Z ok N sphere-P4mmm-1~d4 ellcyl 6 s
+2026-10-31T08:57:04.487Z ok N sphere-P4m-3~d4 ellcyl 31 s
+2026-10-31T08:57:07.258Z ok N sphere-P4mmm-1~d4 ellipsoid 7 s
+2026-10-31T08:57:09.837Z ok N sphere-P4mmm-1~d4 spheroid 6 s
+2026-10-31T08:57:11.253Z ok N sphere-P4mmm-3~d4 box 7 s
+2026-10-31T08:57:13.433Z ok N sphere-P4mmm-3~d4 sqbox 6 s
+2026-10-31T08:57:15.907Z ok N sphere-P4mmm-3~d4 cylinder 6 s
+2026-10-31T08:57:18.554Z ok N sphere-P4mmm-3~d4 ellcyl 7 s
+2026-10-31T08:57:21.097Z ok N sphere-P4mmm-3~d4 ellipsoid 8 s
+2026-10-31T08:57:22.756Z ok N sphere-P4mmm-3~d4 spheroid 7 s
+2026-10-31T08:57:27.250Z ok N sphere-P-3-1~d4 box 9 s
+2026-10-31T08:57:29.498Z ok N sphere-P-3-1~d4 sqbox 8 s
+2026-10-31T08:57:30.648Z ok N sphere-P-3-1~d4 cylinder 8 s
+2026-10-31T08:57:36.800Z ok N sphere-P-3-1~d4 ellcyl 10 s
+2026-10-31T08:57:38.843Z ok N sphere-P-3-1~d4 spheroid 8 s
+2026-10-31T08:57:40.314Z ok N sphere-P-3-1~d4 ellipsoid 11 s
+2026-10-31T08:57:44.446Z ok N sphere-P-3-2~d4 box 8 s
+2026-10-31T08:57:46.034Z ok N sphere-P-3-2~d4 sqbox 7 s
+2026-10-31T08:57:49.608Z ok N sphere-P-3-2~d4 cylinder 9 s
+2026-10-31T08:57:55.814Z ok N sphere-P-3-2~d4 ellcyl 11 s
+2026-10-31T08:57:56.322Z ok N sphere-P-3-2~d4 ellipsoid 10 s
+2026-10-31T08:57:58.000Z ok N sphere-P-3-2~d4 spheroid 8 s
+2026-10-31T08:58:03.399Z ok N sphere-P-3m1-2~d4 sqbox 7 s
+2026-10-31T08:58:03.434Z ok N sphere-P-3m1-2~d4 box 8 s
+2026-10-31T08:58:04.221Z ok N sphere-P-3m1-2~d4 cylinder 6 s
+2026-10-31T08:58:11.350Z ok N sphere-P-3m1-2~d4 spheroid 7 s
+2026-10-31T08:58:11.516Z ok N sphere-P-3m1-2~d4 ellcyl 8 s
+2026-10-31T08:58:13.089Z ok N sphere-P-3m1-2~d4 ellipsoid 10 s
+2026-10-31T08:58:18.513Z ok N sphere-P-3m1-3~d4 sqbox 7 s
+2026-10-31T08:58:18.622Z ok N sphere-P-3m1-3~d4 box 7 s
+2026-10-31T08:58:19.356Z ok N sphere-P-3m1-3~d4 cylinder 6 s
+2026-10-31T08:58:26.041Z ok N sphere-P-3m1-3~d4 ellcyl 8 s
+2026-10-31T08:58:27.622Z ok N sphere-P-3m1-3~d4 spheroid 8 s
+2026-10-31T08:58:28.441Z ok N sphere-P-3m1-3~d4 ellipsoid 10 s
+2026-10-31T08:58:29.645Z ok N sphere-P6m-1~d4 box 4 s
+2026-10-31T08:58:31.147Z ok N sphere-P6m-1~d4 sqbox 4 s
+2026-10-31T08:58:31.875Z ok N sphere-P6m-1~d4 cylinder 3 s
+2026-10-31T08:58:33.745Z ok N sphere-P6m-1~d4 ellcyl 4 s
+2026-10-31T08:58:35.347Z ok N sphere-P6m-1~d4 spheroid 3 s
+2026-10-31T08:58:35.650Z ok N sphere-P6m-1~d4 ellipsoid 5 s
+2026-10-31T08:58:37.717Z ok N sphere-P6m-3~d4 box 4 s
+2026-10-31T08:58:39.171Z ok N sphere-P6m-3~d4 cylinder 4 s
+2026-10-31T08:58:39.259Z ok N sphere-P6m-3~d4 sqbox 4 s
+2026-10-31T08:58:41.914Z ok N sphere-P6m-3~d4 ellcyl 4 s
+2026-10-31T08:58:43.337Z ok N sphere-P6m-3~d4 spheroid 4 s
+2026-10-31T08:58:43.673Z ok N sphere-P6m-3~d4 ellipsoid 5 s
+2026-10-31T08:58:48.876Z ok N sphere-P6mmm-1~d4 box 7 s
+2026-10-31T08:58:49.062Z ok N sphere-P6mmm-1~d4 sqbox 6 s
+2026-10-31T08:58:53.879Z ok N sphere-P6mmm-1~d4 cylinder 10 s
+2026-10-31T08:58:54.871Z ok N sphere-P6mmm-1~d4 ellipsoid 6 s
+2026-10-31T08:58:56.243Z ok N sphere-P6mmm-1~d4 ellcyl 7 s
+2026-10-31T08:58:58.474Z ok N sphere-P6mmm-1~d4 spheroid 5 s
+2026-10-31T08:59:12.823Z ok N sphere-P6mmm-2~d4 box 18 s
+2026-10-31T08:59:13.827Z ok N sphere-P6mmm-2~d4 cylinder 15 s
+2026-10-31T08:59:22.713Z ok N sphere-P6mmm-2~d4 sqbox 26 s
+2026-10-31T08:59:26.464Z ok N sphere-P6mmm-2~d4 ellipsoid 13 s
+2026-10-31T08:59:29.391Z ok N sphere-Pm-3-2~d4 box 3 s
+2026-10-31T08:59:32.159Z ok N sphere-Pm-3-2~d4 sqbox 3 s
+2026-10-31T08:59:33.718Z ok N sphere-P6mmm-2~d4 spheroid 11 s
+2026-10-31T08:59:34.918Z ok N sphere-Pm-3-2~d4 cylinder 3 s
+2026-10-31T08:59:36.962Z ok N sphere-Pm-3-2~d4 ellcyl 3 s
+2026-10-31T08:59:37.827Z ok N sphere-Pm-3-2~d4 ellipsoid 3 s
+2026-10-31T08:59:39.693Z ok N sphere-Pm-3-2~d4 spheroid 3 s
+2026-10-31T08:59:40.860Z ok N sphere-Pm-3-3~d4 box 3 s
+2026-10-31T08:59:42.561Z ok N sphere-Pm-3-3~d4 sqbox 3 s
+2026-10-31T08:59:43.585Z ok N sphere-Pm-3-3~d4 cylinder 3 s
+2026-10-31T08:59:44.212Z ok N sphere-P6mmm-2~d4 ellcyl 31 s
+2026-10-31T08:59:45.794Z ok N sphere-Pm-3-3~d4 ellcyl 3 s
+2026-10-31T08:59:47.285Z ok N sphere-Pm-3-3~d4 spheroid 3 s
+2026-10-31T08:59:48.170Z ok N sphere-Pm-3-3~d4 ellipsoid 5 s
+2026-10-31T08:59:48.614Z ok N sphere-Pm-3m-1~d4 box 3 s
+2026-10-31T08:59:49.959Z ok N sphere-Pm-3m-1~d4 sqbox 3 s
+2026-10-31T08:59:50.818Z ok N sphere-Pm-3m-1~d4 cylinder 3 s
+2026-10-31T08:59:51.583Z ok N sphere-Pm-3m-1~d4 ellcyl 3 s
+2026-10-31T08:59:52.818Z ok N sphere-Pm-3m-1~d4 ellipsoid 3 s
+2026-10-31T08:59:53.703Z ok N sphere-Pm-3m-1~d4 spheroid 3 s
+2026-10-31T08:59:57.237Z ok N sphere-Pm-3m-3~d4 sqbox 4 s
+2026-10-31T08:59:57.404Z ok N sphere-Pm-3m-3~d4 cylinder 4 s
+2026-10-31T09:00:00.974Z ok N sphere-Pm-3m-3~d4 box 9 s
+2026-10-31T09:00:03.481Z ok N sphere-Pm-3m-3~d4 ellipsoid 6 s
+2026-10-31T09:00:04.696Z ok N sphere-Pm-3m-3~d4 ellcyl 7 s
+2026-10-31T09:00:04.905Z ok N sphere-Pm-3m-3~d4 spheroid 4 s
+2026-10-31T09:00:04.905Z jobs-N.txt: done, 594 ok, 0 failed
+2026-10-31T09:00:04.935Z jobs-X2b.txt: 132 jobs, 129 to run, 3 at a time
+2026-10-31T09:00:17.676Z ok X2 box-P2m-generic spheroid 13 s
+2026-10-31T09:00:18.778Z ok X2 box-Pmmm-on spheroid 14 s
+2026-10-31T09:00:20.826Z ok X2 box-Pmmm-on cylinder 16 s
+2026-10-31T09:00:26.638Z ok X2 box-P4m-near cylinder 9 s
+2026-10-31T09:00:28.050Z ok X2 box-P4m-near spheroid 9 s
+2026-10-31T09:00:29.661Z ok X2 box-P4mmm-generic cylinder 9 s
+2026-10-31T09:00:35.284Z ok X2 box-P4mmm-generic spheroid 9 s
+2026-10-31T09:00:41.650Z ok X2 box-P-3m1-near cylinder 6 s
+2026-10-31T09:00:45.170Z ok X2 box-P-3-on spheroid 16 s
+2026-10-31T09:00:48.401Z ok X2 box-P-3m1-near spheroid 7 s
+2026-10-31T09:00:51.028Z ok X2 box-P-3-on cylinder 23 s
+2026-10-31T09:00:51.700Z ok X2 box-P6m-generic cylinder 7 s
+2026-10-31T09:00:55.308Z ok X2 box-P6m-generic spheroid 7 s
+2026-10-31T09:01:00.399Z ok X2 box-Pm-3-near cylinder 5 s
+2026-10-31T09:01:04.109Z ok X2 box-P6mmm-on cylinder 13 s
+2026-10-31T09:01:04.710Z ok X2 box-P6mmm-on spheroid 13 s
+2026-10-31T09:01:05.702Z ok X2 box-Pm-3-near spheroid 5 s
+2026-10-31T09:01:08.424Z ok X2 box-Pm-3m-generic cylinder 4 s
+2026-10-31T09:01:08.556Z ok X2 box-Pm-3m-generic spheroid 4 s
+2026-10-31T09:01:35.651Z ok X2 sqbox-P2m-near cylinder 27 s
+2026-10-31T09:01:52.804Z ok X2 sqbox-P2m-near spheroid 17 s
+2026-10-31T09:02:00.734Z ok X2 sqbox-P-1-on spheroid 52 s
+2026-10-31T09:02:05.466Z ok X2 sqbox-P-1-on cylinder 60 s
+2026-10-31T09:02:05.473Z ok X2 sqbox-Pmmm-generic cylinder 13 s
+2026-10-31T09:02:14.078Z ok X2 sqbox-P4m-on spheroid 9 s
+2026-10-31T09:02:14.150Z ok X2 sqbox-Pmmm-generic spheroid 13 s
+2026-10-31T09:02:16.390Z ok X2 sqbox-P4m-on cylinder 11 s
+2026-10-31T09:02:24.957Z ok X2 sqbox-P-3-generic cylinder 9 s
+2026-10-31T09:02:26.533Z ok X2 sqbox-P4mmm-near spheroid 12 s
+2026-10-31T09:02:29.669Z ok X2 sqbox-P4mmm-near cylinder 16 s
+2026-10-31T09:02:31.722Z ok X2 sqbox-P-3-generic spheroid 7 s
+2026-10-31T09:02:34.786Z ok X2 sqbox-P-3m1-on cylinder 8 s
+2026-10-31T09:02:37.250Z ok X2 sqbox-P6m-near cylinder 6 s
+2026-10-31T09:02:37.458Z ok X2 sqbox-P-3m1-on spheroid 8 s
+2026-10-31T09:02:39.418Z ok X2 sqbox-P6m-near spheroid 5 s
+2026-10-31T09:02:43.741Z ok X2 sqbox-Pm-3-on cylinder 4 s
+2026-10-31T09:02:44.554Z ok X2 sqbox-P6mmm-generic spheroid 7 s
+2026-10-31T09:02:45.345Z ok X2 sqbox-P6mmm-generic cylinder 8 s
+2026-10-31T09:02:46.448Z ok X2 sqbox-Pm-3-on spheroid 3 s
+2026-10-31T09:02:48.146Z ok X2 sqbox-Pm-3m-near cylinder 4 s
+2026-10-31T09:02:48.253Z ok X2 sqbox-Pm-3m-near spheroid 3 s
+2026-10-31T09:03:07.330Z ok X2 cylinder-P2m-on sqbox 19 s
+2026-10-31T09:03:25.213Z ok X2 cylinder-P2m-on spheroid 18 s
+2026-10-31T09:03:37.399Z ok X2 cylinder-Pmmm-near sqbox 12 s
+2026-10-31T09:03:40.505Z ok X2 cylinder-P-1-generic sqbox 54 s
+2026-10-31T09:03:40.548Z ok X2 cylinder-P-1-generic spheroid 52 s
+2026-10-31T09:03:47.131Z ok X2 cylinder-P4m-generic spheroid 7 s
+2026-10-31T09:03:47.630Z ok X2 cylinder-Pmmm-near spheroid 10 s
+2026-10-31T09:03:48.322Z ok X2 cylinder-P4m-generic sqbox 8 s
+2026-10-31T09:03:58.010Z ok X2 cylinder-P-3-near sqbox 10 s
+2026-10-31T09:03:58.730Z ok X2 cylinder-P4mmm-on spheroid 11 s
+2026-10-31T09:04:00.482Z ok X2 cylinder-P4mmm-on sqbox 13 s
+2026-10-31T09:04:07.196Z ok X2 cylinder-P-3m1-generic sqbox 8 s
+2026-10-31T09:04:07.800Z ok X2 cylinder-P-3-near spheroid 10 s
+2026-10-31T09:04:07.809Z ok X2 cylinder-P-3m1-generic spheroid 7 s
+2026-10-31T09:04:15.713Z ok X2 cylinder-P6m-on spheroid 8 s
+2026-10-31T09:04:16.037Z ok X2 cylinder-P6m-on sqbox 9 s
+2026-10-31T09:04:17.299Z ok X2 cylinder-P6mmm-near sqbox 9 s
+2026-10-31T09:04:21.613Z ok X2 cylinder-Pm-3-generic spheroid 4 s
+2026-10-31T09:04:23.863Z ok X2 cylinder-P6mmm-near spheroid 8 s
+2026-10-31T09:04:28.816Z ok X2 cylinder-Pm-3m-on sqbox 7 s
+2026-10-31T09:04:30.358Z ok X2 cylinder-Pm-3-generic sqbox 14 s
+2026-10-31T09:04:31.513Z ok X2 cylinder-Pm-3m-on spheroid 8 s
+2026-10-31T09:05:15.296Z ok X2 ellcyl-P2m-generic sqbox 44 s
+2026-10-31T09:05:35.607Z ok X2 ellcyl-P2m-generic spheroid 20 s
+2026-10-31T09:05:37.506Z ok X2 ellcyl-P-1-near spheroid 67 s
+2026-10-31T09:05:48.855Z ok X2 ellcyl-Pmmm-on spheroid 11 s
+2026-10-31T09:05:50.422Z ok X2 ellcyl-Pmmm-on sqbox 15 s
+2026-10-31T09:06:01.041Z ok X2 ellcyl-P4m-near spheroid 11 s
+2026-10-31T09:06:10.928Z ok X2 ellcyl-P4mmm-generic sqbox 10 s
+2026-10-31T09:06:18.420Z ok X2 ellcyl-P4mmm-generic spheroid 7 s
+2026-10-31T09:06:30.067Z ok X2 ellcyl-P4m-near sqbox 41 s
+2026-10-31T09:06:32.382Z ok X2 ellcyl-P-3-on sqbox 14 s
+2026-10-31T09:06:44.770Z ok X2 ellcyl-P-3-on spheroid 15 s
+2026-10-31T09:06:46.360Z ok X2 ellcyl-P-3m1-near sqbox 14 s
+2026-10-31T09:06:52.789Z ok X2 ellcyl-P6m-generic sqbox 6 s
+2026-10-31T09:06:54.318Z ok X2 ellcyl-P-3m1-near spheroid 10 s
+2026-10-31T09:06:58.542Z ok X2 ellcyl-P6m-generic spheroid 6 s
+2026-10-31T09:07:01.283Z ok X2 ellcyl-P-1-near sqbox 152 s
+2026-10-31T09:07:06.950Z ok X2 ellcyl-P6mmm-on spheroid 8 s
+2026-10-31T09:07:08.295Z ok X2 ellcyl-Pm-3-near sqbox 7 s
+2026-10-31T09:07:08.538Z ok X2 ellcyl-P6mmm-on sqbox 14 s
+2026-10-31T09:07:12.501Z ok X2 ellcyl-Pm-3m-generic spheroid 4 s
+2026-10-31T09:07:12.625Z ok X2 ellcyl-Pm-3m-generic sqbox 4 s
+2026-10-31T09:07:15.659Z ok X2 ellcyl-Pm-3-near spheroid 9 s
+2026-10-31T09:07:47.987Z ok X2 ellipsoid-P2m-near sqbox 32 s
+2026-10-31T09:08:14.755Z ok X2 ellipsoid-P2m-near cylinder 27 s
+2026-10-31T09:08:32.093Z ok X2 ellipsoid-Pmmm-generic sqbox 17 s
+2026-10-31T09:08:35.117Z ok X2 ellipsoid-P-1-on cylinder 82 s
+2026-10-31T09:08:44.085Z ok X2 ellipsoid-Pmmm-generic cylinder 12 s
+2026-10-31T09:08:51.099Z ok X2 ellipsoid-P4m-on sqbox 16 s
+2026-10-31T09:08:54.147Z ok X2 ellipsoid-P-1-on sqbox 102 s
+2026-10-31T09:09:03.386Z ok X2 ellipsoid-P4m-on cylinder 19 s
+2026-10-31T09:09:07.226Z ok X2 ellipsoid-P4mmm-near cylinder 13 s
+2026-10-31T09:09:13.525Z ok X2 ellipsoid-P-3-generic sqbox 10 s
+2026-10-31T09:09:14.974Z ok X2 ellipsoid-P-3-generic cylinder 8 s
+2026-10-31T09:09:17.126Z ok X2 ellipsoid-P4mmm-near sqbox 26 s
+2026-10-31T09:09:23.398Z ok X2 ellipsoid-P6m-near sqbox 6 s
+2026-10-31T09:09:24.083Z ok X2 ellipsoid-P-3m1-on cylinder 9 s
+2026-10-31T09:09:28.275Z ok X2 ellipsoid-P-3m1-on sqbox 15 s
+2026-10-31T09:09:29.338Z ok X2 ellipsoid-P6m-near cylinder 6 s
+2026-10-31T09:09:31.203Z ok X2 ellipsoid-P6mmm-generic sqbox 7 s
+2026-10-31T09:09:34.063Z ok X2 ellipsoid-P6mmm-generic cylinder 6 s
+2026-10-31T09:09:35.967Z ok X2 ellipsoid-Pm-3-on sqbox 7 s
+2026-10-31T09:09:37.455Z ok X2 ellipsoid-Pm-3m-near sqbox 3 s
+2026-10-31T09:09:39.081Z ok X2 ellipsoid-Pm-3m-near cylinder 3 s
+2026-10-31T09:09:39.720Z ok X2 ellipsoid-Pm-3-on cylinder 9 s
+2026-10-31T09:10:17.691Z ok X2 spheroid-P2m-on sqbox 38 s
+2026-10-31T09:10:19.987Z ok X2 spheroid-P-1-generic cylinder 41 s
+2026-10-31T09:10:32.469Z ok X2 spheroid-Pmmm-near sqbox 12 s
+2026-10-31T09:10:38.348Z ok X2 spheroid-P-1-generic sqbox 61 s
+2026-10-31T09:10:42.461Z ok X2 spheroid-Pmmm-near cylinder 10 s
+2026-10-31T09:10:47.366Z ok X2 spheroid-P4m-generic sqbox 9 s
+2026-10-31T09:10:50.315Z ok X2 spheroid-P4m-generic cylinder 8 s
+2026-10-31T09:10:57.864Z ok X2 spheroid-P4mmm-on sqbox 10 s
+2026-10-31T09:11:00.271Z ok X2 spheroid-P4mmm-on cylinder 10 s
+2026-10-31T09:11:05.959Z ok X2 spheroid-P2m-on cylinder 48 s
+2026-10-31T09:11:07.949Z ok X2 spheroid-P-3-near cylinder 8 s
+2026-10-31T09:11:10.040Z ok X2 spheroid-P-3-near sqbox 12 s
+2026-10-31T09:11:16.336Z ok X2 spheroid-P6m-on sqbox 6 s
+2026-10-31T09:11:18.448Z ok X2 spheroid-P-3m1-generic cylinder 10 s
+2026-10-31T09:11:21.886Z ok X2 spheroid-P6m-on cylinder 6 s
+2026-10-31T09:11:29.441Z ok X2 spheroid-P6mmm-near cylinder 8 s
+2026-10-31T09:11:30.586Z ok X2 spheroid-P6mmm-near sqbox 12 s
+2026-10-31T09:11:31.257Z ok X2 spheroid-P-3m1-generic sqbox 25 s
+2026-10-31T09:11:33.572Z ok X2 spheroid-Pm-3-generic sqbox 4 s
+2026-10-31T09:11:34.072Z ok X2 spheroid-Pm-3-generic cylinder 3 s
+2026-10-31T09:11:36.038Z ok X2 spheroid-Pm-3m-on sqbox 5 s
+2026-10-31T09:11:38.371Z ok X2 spheroid-Pm-3m-on cylinder 5 s
+2026-10-31T09:11:38.371Z jobs-X2b.txt: done, 129 ok, 0 failed

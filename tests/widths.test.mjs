@@ -354,8 +354,9 @@ test('EPR: the smoothing width in mT, its points (a range at different steps), t
     assert.equal(await pts(page, 'epr1Smooth'), '≈ 10–20 pts');
     await page.press('#epr1Smooth', 'Enter'); await settle(page);
     assert.equal((await moduleState(page, 'epr')).cards[0].smoothW, 0.4);
+    // (each trace named by its .DSC's TITL, v532)
     const h = (await csvs(page))['Spectra - epr_spectra.csv'][0];
-    assert.ok(h.includes('Smoothed_e1 (w=0.4 mT)') && h.includes('Smoothed_h1 (w=0.4 mT)'), JSON.stringify(h));
+    assert.ok(h.includes('Smoothed_sample one (w=0.4 mT)') && h.includes('Smoothed_half (w=0.4 mT)'), JSON.stringify(h));
     await enter(page, 'epr1Smooth', 0);
     assert.equal(await pts(page, 'epr1Smooth'), 'off');
     // Projects to v510: the points at the spectra's median step (here, e1's alone).
@@ -369,7 +370,7 @@ test('EPR: the smoothing width in mT, its points (a range at different steps), t
     near(cs[0].smoothW, 10*step, 1e-15, 'N 10');
     assert.deepEqual([cs[1].smoothW, cs[2].smoothW], [0, 0.2], 'N = 1: none; no number: the default');
     assert.deepEqual([await val(page, 'epr1Smooth'), await pts(page, 'epr1Smooth'), await pts(page, 'epr2Smooth')], ['0.1955', '≈ 10 pts', 'off']);
-    assert.ok((await csvs(page))['Spectra - epr_spectra.csv'][0].includes('Smoothed_e1 (w=0.1955 mT)'));
+    assert.ok((await csvs(page))['Spectra - epr_spectra.csv'][0].includes('Smoothed_sample one (w=0.1955 mT)'));
     // One from before the cards: its settings at the top.
     await reopen(page, 'epr', 'Older EPR', s=>{ delete s.cards; s.smooth = 4; s.norm = 'local'; });
     cs = (await moduleState(page, 'epr')).cards;
@@ -385,7 +386,7 @@ test('EPR: a value that is no number in a spectrum: the others smoothed without 
   try {
     await openModule(page, 'epr');
     await loadFiles(page, 'epr', eprNaN);
-    const col = rows =>{ const j = rows[0].indexOf('Smoothed_n1 (w=0.2 mT)'); assert.ok(j >= 0, JSON.stringify(rows[0])); return rows.slice(1).map(r=> r[j]); };
+    const col = rows =>{ const j = rows[0].indexOf('Smoothed_nan (w=0.2 mT)'); assert.ok(j >= 0, JSON.stringify(rows[0])); return rows.slice(1).map(r=> r[j]); };
     const fresh = col((await csvs(page))['Spectra - epr_spectra.csv']);
     const bad = fresh.map((v, i)=> [i, v]).filter(([, v])=> !Number.isFinite(parseFloat(String(v).replace(',', '.'))));
     assert.deepEqual(bad.map(([i])=> i), [500], 'the point itself alone');

@@ -2,10 +2,11 @@
   "name": "datatreat",
   "private": true,
   "type": "module",
-  "description": "DataTreat runs as it is, with no build and no dependency: this file only drives its browser tests (tests/README.md).",
+  "description": "DataTreat runs as it is, with no build and no dependency: this file only drives its browser tests (tests/README.md) and its lint (eslint.config.mjs; ESLint is installed apart, not a dependency).",
   "scripts": {
     "test": "node --test --test-concurrency=1 --test-timeout=240000 --test-reporter=spec \"tests/*.test.mjs\"",
-    "test:update": "node --test --test-concurrency=1 --test-timeout=240000 --test-reporter=spec \"tests/*.test.mjs\""
+    "test:update": "node --test --test-concurrency=1 --test-timeout=240000 --test-reporter=spec \"tests/*.test.mjs\"",
+    "lint": "eslint ."
   },
   "engines": {
     "node": ">=22"

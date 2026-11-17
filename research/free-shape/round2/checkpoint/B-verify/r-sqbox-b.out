@@ -1,0 +1,5 @@
+sqbox-Pm-3-on (m-3, sqbox) as sqbox: iso χ²_ν 1.589, 296 ev, 2221 ms
+  fwd: held χ² 15492.83 best 15492.83 ΔBIC -227 | 1614 ev 19780 ms | starts 11 | central 30 ev Δχ² -0.001 | cov 15 ev | heldDup 1 | 15.85×15.85×15.84 | dims 46% 46% 4% axis 0.0°
+  nocov: held χ² 15492.83 best 15492.83 ΔBIC -227 | 2729 ev 28410 ms | starts 11 | cov 15 ev | 15.85×15.85×15.85 | dims 46% 46% 4% axis 0.0°
+  today: held χ² 15492.83 best 15492.83 ΔBIC -227 | 3095 ev 29603 ms | starts 11 | 15.85×15.85×15.85 | dims 46% 46% 4% axis 0.0°
+  wall 80.8 s

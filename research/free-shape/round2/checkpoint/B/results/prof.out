@@ -1,0 +1,6 @@
+box-Pm-3-near today: search 4076 ev 56309 ms; in phasePattern 54757 ms (13.43 ms/ev); outside 1552 ms = 2.8 %; iterations 161
+box-Pm-3-near fwd: search 2523 ev 42763 ms; in phasePattern 40872 ms (16.20 ms/ev); outside 1891 ms = 4.4 %; iterations 192
+cylinder-P4mmm-on today: search 3513 ev 56434 ms; in phasePattern 54937 ms (15.64 ms/ev); outside 1497 ms = 2.7 %; iterations 143
+cylinder-P4mmm-on fwd: search 2440 ev 43252 ms; in phasePattern 41555 ms (17.03 ms/ev); outside 1697 ms = 3.9 %; iterations 182
+ellcyl-P2m-generic today: search 4319 ev 91994 ms; in phasePattern 90534 ms (20.96 ms/ev); outside 1460 ms = 1.6 %; iterations 140
+ellcyl-P2m-generic fwd: search 2147 ev 56771 ms; in phasePattern 55369 ms (25.79 ms/ev); outside 1402 ms = 2.5 %; iterations 141

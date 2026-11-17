@@ -1,0 +1,11 @@
+box-P-1-near             -1     refl 70 members 70 distinct ⟨L⟩_V 36 | box 0.00% sqbox 22.44% cylinder 23.41% ellcyl 1.11% ellipsoid 2.48% spheroid 25.21%
+ellcyl-P2m-generic       2/m    refl 46 members 71 distinct ⟨L⟩_V 36 | box 1.37% sqbox 12.01% cylinder 13.20% ellcyl 0.00% ellipsoid 1.65% spheroid 13.10%
+ellipsoid-Pmmm-generic   mmm    refl 30 members 68 distinct ⟨L⟩_V 38 | box 2.62% sqbox 2.62% cylinder 2.10% ellcyl 1.61% ellipsoid 0.00% spheroid 0.84%
+box-P4m-near             4/m    refl 22 members 67 distinct ⟨L⟩_V 37 | box 0.00% sqbox 16.98% cylinder 17.69% ellcyl 1.73% ellipsoid 3.09% spheroid 17.70%
+cylinder-P4mmm-on        4/mmm  refl 19 members 68 distinct ⟨L⟩_V 8 | box 0.94% sqbox 0.94% cylinder 0.00% ellcyl 0.00% ellipsoid 3.31% spheroid 3.32%
+spheroid-P-3-near        -3     refl 23 members 61 distinct ⟨L⟩_V 13 | box 2.05% sqbox 2.06% cylinder 1.69% ellcyl 1.01% ellipsoid 0.00% spheroid 0.00%
+box-P-3m1-near           -3m    refl 22 members 67 distinct ⟨L⟩_V 34 | box 0.00% sqbox 12.27% cylinder 13.32% ellcyl 1.57% ellipsoid 2.60% spheroid 15.21%
+cylinder-P6m-on          6/m    refl 17 members 69 distinct ⟨L⟩_V 9 | box 0.88% sqbox 0.88% cylinder 0.00% ellcyl 0.00% ellipsoid 2.34% spheroid 2.36%
+ellcyl-P6m-generic       6/m    refl 17 members 69 distinct ⟨L⟩_V 40 | box 1.32% sqbox 3.70% cylinder 3.93% ellcyl 0.00% ellipsoid 1.96% spheroid 4.57%
+sqbox-Pm-3-on            m-3    refl 12 members 73 distinct ⟨L⟩_V 11 | box 0.00% sqbox 0.00% cylinder 3.20% ellcyl 3.17% ellipsoid 5.63% spheroid 5.63%
+ellcyl-Pm-3m-generic     m-3m   refl 10 members 73 distinct ⟨L⟩_V 42 | box 1.54% sqbox 14.83% cylinder 15.35% ellcyl 0.00% ellipsoid 1.49% spheroid 16.35%

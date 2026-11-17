@@ -1,0 +1,130 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="520" viewBox="0 0 560 520" font-family="system-ui, -apple-system, Segoe UI, sans-serif">
+<rect width="560" height="520" fill="#fcfcfb"/>
+<text x="16" y="24" font-size="15" font-weight="600" fill="#0b0b0b">Evaluations a run: adaptive search (4 picks) against the app's</text>
+<line x1="64" x2="64" y1="56" y2="464" stroke="#e4e3df"/><line x1="64" x2="540" y1="464" y2="464" stroke="#e4e3df"/>
+<text x="64" y="480" font-size="11" fill="#52514e" text-anchor="middle">0</text><text x="58" y="468" font-size="11" fill="#52514e" text-anchor="end">0</text>
+<line x1="183" x2="183" y1="56" y2="464" stroke="#e4e3df"/><line x1="64" x2="540" y1="362" y2="362" stroke="#e4e3df"/>
+<text x="183" y="480" font-size="11" fill="#52514e" text-anchor="middle">2.0k</text><text x="58" y="366" font-size="11" fill="#52514e" text-anchor="end">2.0k</text>
+<line x1="302" x2="302" y1="56" y2="464" stroke="#e4e3df"/><line x1="64" x2="540" y1="260" y2="260" stroke="#e4e3df"/>
+<text x="302" y="480" font-size="11" fill="#52514e" text-anchor="middle">4.0k</text><text x="58" y="264" font-size="11" fill="#52514e" text-anchor="end">4.0k</text>
+<line x1="421" x2="421" y1="56" y2="464" stroke="#e4e3df"/><line x1="64" x2="540" y1="158" y2="158" stroke="#e4e3df"/>
+<text x="421" y="480" font-size="11" fill="#52514e" text-anchor="middle">6.0k</text><text x="58" y="162" font-size="11" fill="#52514e" text-anchor="end">6.0k</text>
+<line x1="540" x2="540" y1="56" y2="464" stroke="#e4e3df"/><line x1="64" x2="540" y1="56" y2="56" stroke="#e4e3df"/>
+<text x="540" y="480" font-size="11" fill="#52514e" text-anchor="middle">8.0k</text><text x="58" y="60" font-size="11" fill="#52514e" text-anchor="end">8.0k</text>
+<line x1="64" y1="464" x2="540" y2="56" stroke="#a3a29d" stroke-width="1.5" stroke-dasharray="4 4"/><text x="506.68" y="78.56" font-size="11" fill="#52514e" text-anchor="end">same cost</text>
+<line x1="64" y1="464" x2="540" y2="260" stroke="#a3a29d" stroke-width="1.5" stroke-dasharray="2 3"/><text x="525.72" y="282.12" font-size="11" fill="#52514e" text-anchor="end">half</text>
+<text x="302" y="506" font-size="11.5" fill="#52514e" text-anchor="middle">the app's search (baseline): evaluations</text><text transform="translate(16 260) rotate(-90)" font-size="11.5" fill="#52514e" text-anchor="middle">a4: evaluations</text>
+<circle cx="289.148" cy="369.599" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>box-block-rand#1: 3784 → 1851</title></circle>
+<circle cx="354.122" cy="327.983" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>box-needle111#1: 4876 → 2667</title></circle>
+<circle cx="293.908" cy="340.019" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>box-plate100#1: 3864 → 2431</title></circle>
+<circle cx="315.3875" cy="372.251" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>box-plate110#1: 4225 → 1799</title></circle>
+<circle cx="302.89250000000004" cy="356.18600000000004" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>box-plate110-off8#1: 4015 → 2114</title></circle>
+<circle cx="340.199" cy="315.182" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>box-plate110-t20#1: 4642 → 2918</title></circle>
+<circle cx="267.728" cy="359.756" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>box-plate111-big#1: 3424 → 2044</title></circle>
+<circle cx="333.1185" cy="295.496" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>box-ribbon001#1: 4523 → 3304</title></circle>
+<circle cx="224.174" cy="370.211" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>cyl-disc-rand#1: 2692 → 1839</title></circle>
+<circle cx="210.846" cy="394.079" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>cyl-disc110#1: 2468 → 1371</title></circle>
+<circle cx="215.487" cy="383.063" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>cyl-disc111-off8#1: 2546 → 1587</title></circle>
+<circle cx="256.304" cy="322.373" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>cyl-rod100#1: 3232 → 2777</title></circle>
+<circle cx="318.18399999999997" cy="347.516" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>ecyl-plate110#1: 4272 → 2284</title></circle>
+<circle cx="362.6305" cy="301.361" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>ecyl-plate110-t20#1: 5019 → 3189</title></circle>
+<circle cx="201.683" cy="452.117" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>ecyl-rand#1: 2314 → 233</title></circle>
+<circle cx="343.7095" cy="310.49" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>ecyl-ribbon001#1: 4701 → 3010</title></circle>
+<circle cx="254.2215" cy="376.28" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>ell-block-t25#1: 3197 → 1720</title></circle>
+<circle cx="433.852" cy="261.887" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>ell-needle100#1: 6216 → 3963</title></circle>
+<circle cx="261.8375" cy="378.065" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>ell-plate110#1: 3325 → 1685</title></circle>
+<circle cx="266.65700000000004" cy="338.48900000000003" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>ell-plate111#1: 3406 → 2461</title></circle>
+<circle cx="311.401" cy="344.966" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>ell-ribbon-rand#1: 4158 → 2334</title></circle>
+<circle cx="147.8355" cy="454.361" r="4" fill="#1baf7a" stroke="#fcfcfb" stroke-width="1.5"><title>fx-s00#0: 1409 → 189</title></circle>
+<circle cx="147.3595" cy="454.463" r="4" fill="#1baf7a" stroke="#fcfcfb" stroke-width="1.5"><title>fx-s05#0: 1401 → 187</title></circle>
+<circle cx="177.3475" cy="454.106" r="4" fill="#1baf7a" stroke="#fcfcfb" stroke-width="1.5"><title>iso-20#1: 1905 → 194</title></circle>
+<circle cx="209.775" cy="451.811" r="4" fill="#1baf7a" stroke="#fcfcfb" stroke-width="1.5"><title>iso-7#1: 2450 → 239</title></circle>
+<circle cx="205.848" cy="398.057" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>sph-mild001#1: 2384 → 1293</title></circle>
+<circle cx="191.80599999999998" cy="418.304" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>sph-oblate-rand#1: 2148 → 896</title></circle>
+<circle cx="223.8765" cy="375.26" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>sph-oblate110#1: 2687 → 1740</title></circle>
+<circle cx="204.2415" cy="391.07" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>sph-prolate111#1: 2357 → 1430</title></circle>
+<circle cx="283.793" cy="383.573" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>sqbox-block-rand#1: 3694 → 1577</title></circle>
+<circle cx="312.17449999999997" cy="354.146" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>sqbox-plate-rand#1: 4171 → 2154</title></circle>
+<circle cx="292.30150000000003" cy="382.859" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>sqbox-plate001#1: 3837 → 1591</title></circle>
+<circle cx="257.73199999999997" cy="395.252" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>sqbox-plate110-t15#1: 3256 → 1348</title></circle>
+<circle cx="275.52250000000004" cy="377.657" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>sqbox-rod111#1: 3555 → 1693</title></circle>
+<circle cx="277.605" cy="261.887" r="4" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>u01#1: 3590 → 3963</title></circle>
+<circle cx="329.9055" cy="252.554" r="4" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>u02#1: 4469 → 4146</title></circle>
+<circle cx="351.742" cy="242.915" r="4" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>u03#1: 4836 → 4335</title></circle>
+<circle cx="312.353" cy="342.365" r="4" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>u04#1: 4174 → 2385</title></circle>
+<circle cx="392.1425" cy="231.389" r="4" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>u05#1: 5515 → 4561</title></circle>
+<circle cx="336.9265" cy="267.038" r="4" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>u06#1: 4587 → 3862</title></circle>
+<circle cx="279.985" cy="291.416" r="4" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>u07#1: 3630 → 3384</title></circle>
+<circle cx="317.23199999999997" cy="279.278" r="4" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>u08#1: 4256 → 3622</title></circle>
+<circle cx="289.624" cy="323.801" r="4" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>u09#1: 3792 → 2749</title></circle>
+<circle cx="335.082" cy="252.248" r="4" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>u10#1: 4556 → 4152</title></circle>
+<circle cx="299.0845" cy="367.76300000000003" r="4" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>u11#1: 3951 → 1887</title></circle>
+<circle cx="364.118" cy="213.59" r="4" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>u12#1: 5044 → 4910</title></circle>
+<circle cx="206.562" cy="452.321" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>box-block-rand#2: 2396 → 229</title></circle>
+<circle cx="207.4545" cy="452.321" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>box-block-rand#3: 2411 → 229</title></circle>
+<circle cx="278.0215" cy="344.507" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>box-needle111#2: 3597 → 2343</title></circle>
+<circle cx="320.5045" cy="348.332" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>box-needle111#3: 4311 → 2268</title></circle>
+<circle cx="282.1865" cy="376.025" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>box-plate100#2: 3667 → 1725</title></circle>
+<circle cx="291.34950000000003" cy="370.772" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>box-plate100#3: 3821 → 1828</title></circle>
+<circle cx="273.2615" cy="383.165" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>box-plate110#2: 3517 → 1585</title></circle>
+<circle cx="298.6085" cy="378.779" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>box-plate110#3: 3943 → 1671</title></circle>
+<circle cx="261.897" cy="371.435" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>box-plate110-off8#2: 3326 → 1815</title></circle>
+<circle cx="289.0885" cy="373.93399999999997" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>box-plate110-off8#3: 3783 → 1766</title></circle>
+<circle cx="324.134" cy="383.624" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>box-plate110-t20#2: 4372 → 1576</title></circle>
+<circle cx="325.6215" cy="387.296" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>box-plate110-t20#3: 4397 → 1504</title></circle>
+<circle cx="272.3095" cy="324.10699999999997" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>box-plate111-big#2: 3501 → 2743</title></circle>
+<circle cx="310.74649999999997" cy="322.067" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>box-plate111-big#3: 4147 → 2783</title></circle>
+<circle cx="357.8705" cy="329.462" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>box-ribbon001#2: 4939 → 2638</title></circle>
+<circle cx="413.8005" cy="253.115" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>box-ribbon001#3: 5879 → 4135</title></circle>
+<circle cx="236.907" cy="385.97" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>cyl-disc-rand#2: 2906 → 1530</title></circle>
+<circle cx="252.02" cy="319.058" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>cyl-disc-rand#3: 3160 → 2842</title></circle>
+<circle cx="223.0435" cy="379.085" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>cyl-disc110#2: 2673 → 1665</title></circle>
+<circle cx="249.997" cy="392.192" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>cyl-disc110#3: 3126 → 1408</title></circle>
+<circle cx="235.479" cy="290.804" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>cyl-disc111-off8#2: 2882 → 3396</title></circle>
+<circle cx="282.96000000000004" cy="325.433" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>cyl-disc111-off8#3: 3680 → 2717</title></circle>
+<circle cx="220.5445" cy="390.866" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>cyl-rod100#2: 2631 → 1434</title></circle>
+<circle cx="250.4135" cy="387.398" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>cyl-rod100#3: 3133 → 1502</title></circle>
+<circle cx="363.523" cy="345.935" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>ecyl-plate110#2: 5034 → 2315</title></circle>
+<circle cx="294.0865" cy="368.069" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>ecyl-plate110#3: 3867 → 1881</title></circle>
+<circle cx="446.823" cy="296.312" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>ecyl-plate110-t20#2: 6434 → 3288</title></circle>
+<circle cx="397.081" cy="345.17" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>ecyl-plate110-t20#3: 5598 → 2330</title></circle>
+<circle cx="371.0795" cy="337.571" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>ecyl-rand#2: 5161 → 2479</title></circle>
+<circle cx="302.0595" cy="328.64599999999996" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>ecyl-rand#3: 4001 → 2654</title></circle>
+<circle cx="327.1685" cy="326.147" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>ecyl-ribbon001#2: 4423 → 2703</title></circle>
+<circle cx="369.235" cy="330.533" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>ecyl-ribbon001#3: 5130 → 2617</title></circle>
+<circle cx="252.4365" cy="387.245" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>ell-block-t25#2: 3167 → 1505</title></circle>
+<circle cx="239.7035" cy="394.793" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>ell-block-t25#3: 2953 → 1357</title></circle>
+<circle cx="277.7835" cy="378.371" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>ell-needle100#2: 3593 → 1679</title></circle>
+<circle cx="265.5265" cy="382.655" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>ell-needle100#3: 3387 → 1595</title></circle>
+<circle cx="285.34000000000003" cy="358.481" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>ell-plate110#2: 3720 → 2069</title></circle>
+<circle cx="255.352" cy="382.094" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>ell-plate110#3: 3216 → 1606</title></circle>
+<circle cx="300.9885" cy="338.948" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>ell-plate111#2: 3983 → 2452</title></circle>
+<circle cx="283.317" cy="353.228" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>ell-plate111#3: 3686 → 2172</title></circle>
+<circle cx="317.351" cy="329.615" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>ell-ribbon-rand#2: 4258 → 2635</title></circle>
+<circle cx="293.1345" cy="340.988" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>ell-ribbon-rand#3: 3851 → 2412</title></circle>
+<circle cx="189.54500000000002" cy="453.698" r="4" fill="#1baf7a" stroke="#fcfcfb" stroke-width="1.5"><title>iso-20#2: 2110 → 202</title></circle>
+<circle cx="184.309" cy="457.064" r="4" fill="#1baf7a" stroke="#fcfcfb" stroke-width="1.5"><title>iso-20#3: 2022 → 136</title></circle>
+<circle cx="209.18" cy="452.321" r="4" fill="#1baf7a" stroke="#fcfcfb" stroke-width="1.5"><title>iso-7#2: 2440 → 229</title></circle>
+<circle cx="211.6195" cy="452.219" r="4" fill="#1baf7a" stroke="#fcfcfb" stroke-width="1.5"><title>iso-7#3: 2481 → 231</title></circle>
+<circle cx="204.658" cy="384.185" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>sph-mild001#2: 2364 → 1565</title></circle>
+<circle cx="189.902" cy="453.596" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>sph-mild001#3: 2116 → 204</title></circle>
+<circle cx="210.251" cy="406.37" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>sph-oblate-rand#2: 2458 → 1130</title></circle>
+<circle cx="218.4025" cy="400.964" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>sph-oblate-rand#3: 2595 → 1236</title></circle>
+<circle cx="204.539" cy="403.055" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>sph-oblate110#2: 2362 → 1195</title></circle>
+<circle cx="203.111" cy="385.51099999999997" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>sph-oblate110#3: 2338 → 1539</title></circle>
+<circle cx="206.9785" cy="368.579" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>sph-prolate111#2: 2403 → 1871</title></circle>
+<circle cx="204.1225" cy="391.529" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>sph-prolate111#3: 2355 → 1421</title></circle>
+<circle cx="263.682" cy="452.831" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>sqbox-block-rand#2: 3356 → 219</title></circle>
+<circle cx="196.804" cy="453.239" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>sqbox-block-rand#3: 2232 → 211</title></circle>
+<circle cx="263.02750000000003" cy="376.841" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>sqbox-plate-rand#2: 3345 → 1709</title></circle>
+<circle cx="258.8625" cy="368.834" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>sqbox-plate-rand#3: 3275 → 1866</title></circle>
+<circle cx="264.158" cy="392.396" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>sqbox-plate001#2: 3364 → 1404</title></circle>
+<circle cx="261.8375" cy="386.88800000000003" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>sqbox-plate001#3: 3325 → 1512</title></circle>
+<circle cx="268.323" cy="367.304" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>sqbox-plate110-t15#2: 3434 → 1896</title></circle>
+<circle cx="271.5955" cy="392.498" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>sqbox-plate110-t15#3: 3489 → 1402</title></circle>
+<circle cx="266.7165" cy="388.724" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>sqbox-rod111#2: 3407 → 1476</title></circle>
+<circle cx="248.0335" cy="385.307" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>sqbox-rod111#3: 3093 → 1543</title></circle>
+<circle cx="78" cy="62" r="4.5" fill="#2a78d6"/><text x="88" y="66" font-size="12" fill="#52514e">synthetic (90)</text>
+<circle cx="78" cy="80" r="4.5" fill="#eb6834"/><text x="88" y="84" font-size="12" fill="#52514e">sample-like (12)</text>
+<circle cx="78" cy="98" r="4.5" fill="#1baf7a"/><text x="88" y="102" font-size="12" fill="#52514e">controls and fixtures (8)</text>
+</svg>

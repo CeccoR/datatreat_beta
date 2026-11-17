@@ -1,0 +1,134 @@
+2026-10-26T17:27:02.240Z sub2: 22 of 22 runs to do (sub), 2 at a time; methods fwdH,fullDrop,fullRep
+2026-10-26T17:33:17.859Z [1/22] box-P-1-near: ok 376 s
+box-P-1-near (-1, box) as box: iso χ²_ν 2.529, 997 ev, 65873 ms
+  fwdH: free χ² 13090.69 best 13090.69 ΔBIC -4760 | 1899 ev 100890 ms | starts 11 | central 64 ev Δχ² -0.000 | cov 33 ev | 71.49×7.73×18.14 | dims 15% 32% 19% axis 3.7°
+  fullDrop: free χ² 13090.69 best 13090.69 ΔBIC -4760 | 1815 ev 102836 ms | starts 11 | central 64 ev Δχ² -0.000 | cov 33 ev | 18.14×7.73×71.49 | dims 15% 32% 19% axis 3.7°
+  fullRep: free χ² 13090.69 best 13090.69 ΔBIC -4760 | 2063 ev 104918 ms | starts 11 | central 64 ev Δχ² -0.000 | cov 33 ev | 71.49×7.73×18.14 | dims 15% 32% 19% axis 3.7°
+  wall 375.4 s
+2026-10-26T17:36:10.463Z [2/22] sqbox-P-1-on: ok 548 s
+sqbox-P-1-on (-1, sqbox, sizedist) as sqbox: iso χ²_ν 3.439, 1003 ev, 75252 ms
+  fwdH: free χ² 14666.74 best 14666.74 ΔBIC -5681 | 2494 ev 162625 ms | starts 11 | central 64 ev Δχ² -0.002 | cov 31 ev | 3.91×3.91×13.82 | dims 16% 16% 39% axis 3.9°
+  fullDrop: free χ² 14666.74 best 14666.74 ΔBIC -5681 | 2395 ev 152673 ms | starts 11 | central 64 ev Δχ² -0.002 | cov 31 ev | 3.91×3.91×13.82 | dims 16% 16% 39% axis 3.9°
+  fullRep: free χ² 14666.74 best 14666.74 ΔBIC -5681 | 2563 ev 156566 ms | starts 11 | central 64 ev Δχ² -0.002 | cov 31 ev | 3.91×3.91×13.82 | dims 16% 16% 39% axis 3.9°
+  wall 548.1 s
+2026-10-26T17:36:48.331Z [3/22] ellcyl-P2m-generic: ok 210 s
+ellcyl-P2m-generic (2/m, ellcyl) as ellcyl: iso χ²_ν 4.641, 595 ev, 19360 ms
+  fwdH: free χ² 16415.58 best 16415.58 ΔBIC -6401 | 2147 ev 56825 ms | starts 11 | central 56 ev Δχ² -0.000 | cov 29 ev | 71.56×28.36×17.26 | dims 4% 19% 18% axis 18.3°
+  fullDrop: free χ² 16415.58 best 16415.58 ΔBIC -6401 | 2075 ev 55554 ms | starts 11 | central 56 ev Δχ² -0.000 | cov 29 ev | 71.56×28.36×17.26 | dims 4% 19% 18% axis 18.3°
+  fullRep: free χ² 16415.58 best 16415.58 ΔBIC -6401 | 2979 ev 77651 ms | starts 11 | central 56 ev Δχ² -0.000 | cov 29 ev | 71.56×28.36×17.26 | dims 4% 19% 18% axis 18.3°
+  wall 210.3 s
+2026-10-26T17:39:19.208Z [4/22] cylinder-P2m-on: ok 189 s
+cylinder-P2m-on (2/m, cylinder, impurity) as cylinder: iso χ²_ν 1.458, 745 ev, 24065 ms
+  fwdH: free χ² 11824.16 best 11824.16 ΔBIC -1847 | 1686 ev 52790 ms | starts 11 | central 48 ev Δχ² -0.000 | cov 25 ev | 11.67×11.67×43.22 | dims 4% 4% -28% axis 6.1°
+  fullDrop: free χ² 11824.16 best 11824.16 ΔBIC -1847 | 1562 ev 55464 ms | starts 11 | central 48 ev Δχ² -0.000 | cov 25 ev | 11.67×11.67×43.22 | dims 4% 4% -28% axis 6.1°
+  fullRep: free χ² 11824.16 best 11824.16 ΔBIC -1847 | 1737 ev 55681 ms | starts 11 | central 48 ev Δχ² -0.000 | cov 25 ev | 11.67×11.67×43.22 | dims 4% 4% -28% axis 6.1°
+  wall 188.6 s
+2026-10-26T17:40:02.266Z [5/22] spheroid-P6mmm-near: ok 194 s
+spheroid-P6mmm-near (6/mmm, spheroid, hump) as spheroid: iso χ²_ν 3.195, 338 ev, 3494 ms
+  fwdH: held χ² 28764.65 best 28764.65 ΔBIC -973 | 3427 ev 70149 ms | starts 11 | central 32 ev Δχ² -0.000 | cov 17 ev | 3.77×3.77×6.75 | dims -36% -36% 185% axis 89.1°
+  fullDrop: held χ² 28764.65 best 28764.65 ΔBIC -973 | 2586 ev 54899 ms | starts 11 | central 32 ev Δχ² -0.000 | cov 17 ev | 3.77×3.77×6.75 | dims -36% -36% 185% axis 89.1°
+  fullRep: held χ² 28764.65 best 28764.65 ΔBIC -973 | 3379 ev 64594 ms | starts 11 | central 32 ev Δχ² -0.000 | cov 17 ev | 3.77×3.77×6.75 | dims -36% -36% 185% axis 89.1°
+  wall 193.8 s
+2026-10-26T17:42:14.372Z [6/22] box-P4m-near: ok 175 s
+box-P4m-near (4/m, box) as box: iso χ²_ν 2.660, 511 ev, 5697 ms
+  fwdH: held χ² 15449.07 best 15449.07 ΔBIC -4160 | 4244 ev 54672 ms | starts 11 | central 87 ev Δχ² -0.000 | cov 19 ev | heldDup 1 | 12.45×18.00×57.89 | dims 37% -1% -4% axis 5.5°
+  fullDrop: held χ² 15449.07 best 15449.07 ΔBIC -4160 | 4244 ev 58697 ms | starts 11 | central 87 ev Δχ² -0.000 | cov 19 ev | heldDup 1 | 12.45×18.00×57.89 | dims 37% -1% -4% axis 5.5°
+  fullRep: held χ² 15449.07 best 15449.07 ΔBIC -4160 | 4244 ev 55149 ms | starts 11 | central 87 ev Δχ² -0.000 | cov 19 ev | heldDup 1 | 12.45×18.00×57.89 | dims 37% -1% -4% axis 5.5°
+  wall 175.0 s
+2026-10-26T17:42:40.033Z [7/22] spheroid-Pmmm-near: ok 158 s
+spheroid-Pmmm-near (mmm, spheroid, air) as spheroid: iso χ²_ν 2.241, 374 ev, 6085 ms
+  fwdH: held χ² 18951.93 best 18951.93 ΔBIC -1520 | 2400 ev 53016 ms | starts 11 | central 36 ev Δχ² -0.000 | cov 19 ev | 10.75×10.75×15.63 | dims 8% 8% 7% axis 6.1°
+  fullDrop: held χ² 18951.93 best 18951.93 ΔBIC -1520 | 1497 ev 34816 ms | starts 11 | central 36 ev Δχ² -0.000 | cov 19 ev | 10.75×10.75×15.63 | dims 8% 8% 7% axis 6.1°
+  fullRep: held χ² 18951.93 best 18951.93 ΔBIC -1520 | 3197 ev 63095 ms | starts 11 | central 36 ev Δχ² -0.000 | cov 19 ev | 10.75×10.75×15.63 | dims 8% 8% 7% axis 6.1°
+  wall 157.6 s
+2026-10-26T17:44:10.904Z [8/22] ellcyl-P4mmm-generic: ok 117 s
+ellcyl-P4mmm-generic (4/mmm, ellcyl, hump) as ellcyl: iso χ²_ν 1.080, 260 ev, 3017 ms
+  fwdH: free χ² 10652.64 best 10652.64 ΔBIC -80 | 2672 ev 40285 ms | starts 11 | central 52 ev Δχ² -0.003 | cov 25 ev | 5.48×7.70×12.71 | dims -53% -42% 284% axis 3.5°
+  fullDrop: free χ² 10652.80 best 10652.80 ΔBIC -80 | 2203 ev 33844 ms | starts 11 | central 76 ev Δχ² -0.014 | cov 25 ev | 5.47×7.60×12.25 | dims -53% -42% 270% axis 4.2°
+  fullRep: free χ² 10652.63 best 10652.63 ΔBIC -80 | 2439 ev 38452 ms | starts 11 | central 52 ev Δχ² -0.002 | cov 25 ev | 5.47×7.67×12.60 | dims -53% -42% 281% axis 3.6°
+  wall 116.4 s
+2026-10-26T17:44:55.668Z [9/22] cylinder-P4mmm-on: ok 136 s
+cylinder-P4mmm-on (4/mmm, cylinder) as cylinder: iso χ²_ν 16.552, 333 ev, 3893 ms
+  fwdH: held χ² 159072.33 best 159072.33 ΔBIC -366 | 2440 ev 41934 ms | starts 11 | central 32 ev Δχ² -0.001 | cov 17 ev | 7.48×7.48×7.31 | dims 19% 19% 13% axis 0.0°
+  fullDrop: held χ² 159072.33 best 159072.33 ΔBIC -366 | 2408 ev 42449 ms | starts 11 | central 32 ev Δχ² -0.001 | cov 17 ev | 7.48×7.48×7.31 | dims 19% 19% 13% axis 0.0°
+  fullRep: held χ² 159072.33 best 159072.33 ΔBIC -366 | 2440 ev 46595 ms | starts 11 | central 32 ev Δχ² -0.001 | cov 17 ev | 7.48×7.48×7.31 | dims 19% 19% 13% axis 0.0°
+  wall 135.5 s
+2026-10-26T17:46:06.947Z [10/22] box-Pm-3-near: ok 116 s
+box-Pm-3-near (m-3, box, impurity) as box: iso χ²_ν 2.144, 222 ev, 2038 ms
+  fwdH: held χ² 21134.76 best 21134.76 ΔBIC -109 | 2327 ev 38571 ms | starts 11 | central 34 ev Δχ² -0.000 | cov 17 ev | heldDup 2 | 2.30×2.49×5.14 | dims 12% 2% -42% axis 7.4°
+  fullDrop: held χ² 21134.76 best 21134.76 ΔBIC -109 | 2327 ev 38396 ms | starts 11 | central 34 ev Δχ² -0.000 | cov 17 ev | heldDup 2 | 2.30×2.49×5.14 | dims 12% 2% -42% axis 7.4°
+  fullRep: held χ² 21134.76 best 21134.76 ΔBIC -109 | 2327 ev 36143 ms | starts 11 | central 34 ev Δχ² -0.000 | cov 17 ev | heldDup 2 | 2.30×2.49×5.14 | dims 12% 2% -42% axis 7.4°
+  wall 115.9 s
+2026-10-26T17:46:44.601Z [11/22] ellipsoid-P6mmm-generic: ok 109 s
+ellipsoid-P6mmm-generic (6/mmm, ellipsoid, air) as ellipsoid: iso χ²_ν 2.077, 306 ev, 2910 ms
+  fwdH: held χ² 18405.47 best 18405.47 ΔBIC -1106 | 1915 ev 29646 ms | starts 11 | central 38 ev Δχ² -0.000 | cov 19 ev | heldDup 2 | 13.16×8.67×8.67 | dims 58% -29% -8% axis 25.0°
+  fullDrop: held χ² 18405.47 best 18405.47 ΔBIC -1106 | 1753 ev 26876 ms | starts 11 | central 38 ev Δχ² -0.000 | cov 19 ev | heldDup 2 | 13.16×8.67×8.67 | dims 58% -29% -8% axis 25.0°
+  fullRep: held χ² 18405.47 best 18405.47 ΔBIC -1106 | 3579 ev 48719 ms | starts 11 | central 38 ev Δχ² -0.000 | cov 19 ev | heldDup 2 | 13.16×8.67×8.67 | dims 58% -29% -8% axis 25.0°
+  wall 108.8 s
+2026-10-26T17:47:36.602Z [12/22] ellipsoid-Pmmm-generic: ok 90 s
+ellipsoid-Pmmm-generic (mmm, ellipsoid) as ellipsoid: iso χ²_ν 1.237, 289 ev, 4344 ms
+  fwdH: free χ² 11313.54 best 11312.81 ΔBIC -792 | 1572 ev 27253 ms | starts 11 | central 52 ev Δχ² -0.000 | cov 27 ev | 16.52×5.76×19.09 | dims 10% -18% -9% axis 1.5°
+  fullDrop: free χ² 11313.54 best 11312.81 ΔBIC -792 | 1490 ev 26161 ms | starts 11 | central 52 ev Δχ² -0.000 | cov 27 ev | 16.52×5.76×19.09 | dims 10% -18% -9% axis 1.5°
+  fullRep: free χ² 11313.54 best 11312.81 ΔBIC -792 | 1682 ev 31045 ms | starts 11 | central 52 ev Δχ² -0.000 | cov 27 ev | 5.76×19.09×16.52 | dims 10% -18% -9% axis 1.5°
+  wall 89.5 s
+2026-10-26T17:48:06.504Z [13/22] sqbox-P-3m1-on: ok 82 s
+sqbox-P-3m1-on (-3m, sqbox, po) as sqbox: iso χ²_ν 1.153, 422 ev, 4364 ms
+  fwdH: held χ² 10998.69 best 10992.14 ΔBIC -434 | 1841 ev 24839 ms | starts 11 | central 32 ev Δχ² -0.000 | cov 17 ev | 6.70×6.70×18.44 | dims -49% -49% 179% axis 73.8°
+  fullDrop: held χ² 10998.69 best 10992.14 ΔBIC -434 | 1841 ev 26711 ms | starts 11 | central 32 ev Δχ² -0.000 | cov 17 ev | 6.70×6.70×18.44 | dims -49% -49% 179% axis 73.8°
+  fullRep: held χ² 10998.69 best 10992.14 ΔBIC -434 | 1841 ev 25277 ms | starts 11 | central 32 ev Δχ² -0.000 | cov 17 ev | 6.70×6.70×18.44 | dims -49% -49% 179% axis 73.8°
+  wall 81.8 s
+2026-10-26T17:49:03.518Z [14/22] ellcyl-P6m-generic: ok 87 s
+ellcyl-P6m-generic (6/m, ellcyl) as ellcyl: iso χ²_ν 1.189, 313 ev, 2657 ms
+  fwdH: free χ² 11065.28 best 11065.28 ΔBIC -634 | 2886 ev 29553 ms | starts 11 | central 59 ev Δχ² -0.003 | cov 25 ev | 19.40×34.84×29.75 | dims -57% -40% 203% axis 28.2°
+  fullDrop: free χ² 11065.28 best 11065.28 ΔBIC -634 | 2886 ev 25927 ms | starts 11 | central 59 ev Δχ² -0.003 | cov 25 ev | 19.40×34.84×29.75 | dims -57% -40% 203% axis 28.2°
+  fullRep: free χ² 11065.28 best 11065.28 ΔBIC -634 | 2886 ev 27788 ms | starts 11 | central 59 ev Δχ² -0.003 | cov 25 ev | 19.40×34.84×29.75 | dims -57% -40% 203% axis 28.2°
+  wall 86.7 s
+2026-10-26T17:49:15.181Z [15/22] cylinder-P6m-on: ok 69 s
+cylinder-P6m-on (6/m, cylinder) as cylinder: iso χ²_ν 1.093, 282 ev, 2583 ms
+  fwdH: held χ² 10866.31 best 10866.31 ΔBIC -34 | 1423 ev 20396 ms | starts 11 | central 32 ev Δχ² -0.000 | cov 17 ev | 7.44×7.44×5.98 | dims 31% 31% -6% axis 90.0°
+  fullDrop: held χ² 10866.31 best 10866.31 ΔBIC -34 | 1423 ev 20673 ms | starts 11 | central 32 ev Δχ² -0.000 | cov 17 ev | 7.44×7.44×5.98 | dims 31% 31% -6% axis 90.0°
+  fullRep: held χ² 10866.31 best 10866.31 ΔBIC -34 | 1423 ev 24316 ms | starts 11 | central 32 ev Δχ² -0.000 | cov 17 ev | 7.44×7.44×5.98 | dims 31% 31% -6% axis 90.0°
+  wall 68.5 s
+2026-10-26T17:50:23.046Z [16/22] sqbox-P4m-on: ok 80 s
+sqbox-P4m-on (4/m, sqbox, air) as sqbox: iso χ²_ν 1.398, 337 ev, 4774 ms
+  fwdH: rejected χ² 13958.11 best 13928.86 ΔBIC -8 | 1545 ev 29209 ms | starts 11
+  fullDrop: rejected χ² 13958.11 best 13929.34 ΔBIC -8 | 1458 ev 20396 ms | starts 11
+  fullRep: rejected χ² 13958.11 best 13929.34 ΔBIC -8 | 1585 ev 24289 ms | starts 11
+  wall 79.3 s
+2026-10-26T17:50:31.086Z [17/22] ellipsoid-P-3-generic: ok 76 s
+ellipsoid-P-3-generic (-3, ellipsoid, impurity) as ellipsoid: iso χ²_ν 4.903, 318 ev, 3359 ms
+  fwdH: free χ² 47370.83 best 47370.83 ΔBIC -279 | 2190 ev 25099 ms | starts 11 | central 102 ev Δχ² -0.803 | cov 25 ev | 37.24×19.13×15.31 | dims 32% -14% -38% axis 31.1°
+  fullDrop: free χ² 47375.32 best 47375.32 ΔBIC -278 | 2128 ev 21565 ms | starts 11 | central 78 ev Δχ² -0.347 | cov 25 ev | 33.53×15.21×18.65 | dims 31% -16% -44% axis 31.6°
+  fullRep: free χ² 47371.11 best 47371.11 ΔBIC -279 | 2375 ev 24994 ms | starts 11 | central 99 ev Δχ² -0.910 | cov 25 ev | 35.08×15.23×18.82 | dims 32% -15% -42% axis 31.5°
+  wall 75.7 s
+2026-10-26T17:51:22.259Z [18/22] cylinder-Pm-3m-on: ok 59 s
+cylinder-Pm-3m-on (m-3m, cylinder, sizedist) as cylinder: iso χ²_ν 4.026, 304 ev, 1597 ms
+  fwdH: held χ² 16949.54 best 16943.18 ΔBIC -5768 | 1652 ev 21135 ms | starts 11 | central 28 ev Δχ² -0.000 | cov 15 ev | 22.93×22.93×4.78 | dims 23% 23% 29% axis 0.0°
+  fullDrop: held χ² 16949.54 best 16943.18 ΔBIC -5768 | 1518 ev 17769 ms | starts 11 | central 28 ev Δχ² -0.000 | cov 15 ev | 22.93×22.93×4.78 | dims 23% 23% 29% axis 0.0°
+  fullRep: held χ² 16949.54 best 16943.18 ΔBIC -5768 | 1542 ev 17768 ms | starts 11 | central 28 ev Δχ² -0.000 | cov 15 ev | 22.93×22.93×4.78 | dims 23% 23% 29% axis 0.0°
+  wall 59.1 s
+2026-10-26T17:51:30.022Z [19/22] box-P-3m1-near: ok 59 s
+box-P-3m1-near (-3m, box) as box: iso χ²_ν 1.028, 512 ev, 4581 ms
+  fwdH: held χ² 10072.79 best 10072.79 ΔBIC -169 | 1586 ev 18378 ms | starts 11 | central 38 ev Δχ² -0.002 | cov 19 ev | heldDup 2 | 71.56×27.27×24.82 | dims 73% -8% 19% axis 28.3°
+  fullDrop: held χ² 10072.79 best 10072.79 ΔBIC -169 | 1567 ev 16857 ms | starts 11 | central 38 ev Δχ² -0.002 | cov 19 ev | heldDup 2 | 71.56×27.27×24.82 | dims 73% -8% 19% axis 28.3°
+  fullRep: held χ² 10072.79 best 10072.79 ΔBIC -169 | 1677 ev 18353 ms | starts 11 | central 38 ev Δχ² -0.002 | cov 19 ev | heldDup 2 | 71.56×27.27×24.82 | dims 73% -8% 19% axis 28.3°
+  wall 58.8 s
+2026-10-26T17:52:17.286Z [20/22] ellcyl-Pm-3m-generic: ok 55 s
+ellcyl-Pm-3m-generic (m-3m, ellcyl) as ellcyl: iso χ²_ν 1.134, 240 ev, 1266 ms
+  fwdH: held χ² 11232.82 best 11232.82 ΔBIC -60 | 1696 ev 17472 ms | starts 11 | central 34 ev Δχ² -0.001 | cov 17 ev | heldDup 1 | 17.23×17.19×19.39 | dims 1% -67% 190% axis 26.8°
+  fullDrop: held χ² 11232.82 best 11232.82 ΔBIC -60 | 1649 ev 17429 ms | starts 11 | central 34 ev Δχ² -0.001 | cov 17 ev | heldDup 1 | 17.23×17.19×19.39 | dims 1% -67% 190% axis 26.8°
+  fullRep: held χ² 11232.82 best 11232.82 ΔBIC -60 | 1909 ev 17969 ms | starts 11 | central 34 ev Δχ² -0.001 | cov 17 ev | heldDup 1 | 17.22×17.21×19.40 | dims 1% -67% 190% axis 18.2°
+  wall 54.9 s
+2026-10-26T17:52:28.038Z [21/22] spheroid-P-3-near: ok 58 s
+spheroid-P-3-near (-3, spheroid) as spheroid: iso χ²_ν 1.161, 286 ev, 2934 ms
+  fwdH: held χ² 11540.15 best 11540.15 ΔBIC -36 | 1498 ev 19047 ms | starts 11 | central 32 ev Δχ² -0.000 | cov 17 ev | 16.21×16.21×14.58 | dims 4% 4% 11% axis 33.0°
+  fullDrop: held χ² 11540.15 best 11540.15 ΔBIC -36 | 1477 ev 18579 ms | starts 11 | central 32 ev Δχ² -0.000 | cov 17 ev | 16.21×16.21×14.58 | dims 4% 4% 11% axis 33.0°
+  fullRep: held χ² 11540.15 best 11540.15 ΔBIC -36 | 1498 ev 16707 ms | starts 11 | central 32 ev Δχ² -0.000 | cov 17 ev | 16.21×16.21×14.58 | dims 4% 4% 11% axis 33.0°
+  wall 57.9 s
+2026-10-26T17:53:05.107Z [22/22] sqbox-Pm-3-on: ok 48 s
+sqbox-Pm-3-on (m-3, sqbox) as sqbox: iso χ²_ν 1.589, 296 ev, 1723 ms
+  fwdH: held χ² 15492.83 best 15492.83 ΔBIC -227 | 1530 ev 14709 ms | starts 11 | central 30 ev Δχ² -0.001 | cov 15 ev | heldDup 1 | 15.85×15.85×15.84 | dims 46% 46% 4% axis 0.0°
+  fullDrop: held χ² 15492.83 best 15492.83 ΔBIC -227 | 1488 ev 14610 ms | starts 11 | central 30 ev Δχ² -0.001 | cov 15 ev | heldDup 1 | 15.85×15.85×15.84 | dims 46% 46% 4% axis 0.0°
+  fullRep: held χ² 15492.83 best 15492.83 ΔBIC -227 | 1683 ev 16074 ms | starts 11 | central 30 ev Δχ² -0.001 | cov 15 ev | heldDup 1 | 15.85×15.85×15.84 | dims 46% 46% 4% axis 0.0°
+  wall 47.7 s
+2026-10-26T17:53:05.108Z sub2: 22 done, 0 failed, 26.0 min

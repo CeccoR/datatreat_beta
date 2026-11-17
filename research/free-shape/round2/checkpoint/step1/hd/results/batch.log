@@ -1,0 +1,16 @@
+2026-10-31T02:30:03.448Z jobs-fill.txt: 1 of 1 to do, 1 at a time, timeout 1800 s
+2026-10-31T02:30:03.449Z jobs-none.txt: 2 of 2 to do, 2 at a time, timeout 1800 s
+2026-10-31T02:30:29.561Z [1/1] d-fill ellipsoid-Pm-3-on: ok 26 s
+ellipsoid-Pm-3-on (m-3, ellipsoid 2.4×11.7×60.0, po 0.23; exact, 10–110/0.01) as ellipsoid: draw 314 ms; iso χ²_ν 1.518, 532 ev, 1364 ms; list 14 refl, 89 members
+  today: held χ² 10192.0 best 10192.0 ΔBIC -3254 | search 1670 ev 9952 ms report 2495 ev 14333 ms | 71.94×12.34×2.44 | dims 2% 6% 20% orient 0.0° (holo 0.0°) principal 0.0°
+  wall 26.0 s
+2026-10-31T02:30:29.561Z done
+2026-10-31T02:30:44.007Z [1/2] d-none ellcyl-P6mmm-on: ok 41 s
+ellcyl-P6mmm-on (6/mmm, ellcyl 4.3×11.7×34.2; exact, 10–110/0.01) as ellcyl: draw 297 ms; iso χ²_ν 32.794, 367 ev, 1778 ms; list 20 refl, 103 members
+  today: free χ² 21161.6 best 21161.6 ΔBIC -9295 | search 5318 ev 31946 ms report 1086 ev 6371 ms | 41.37×12.23×3.73 | dims 186% 253% -89% orient 86.7° (holo 86.7°) principal 86.7°
+  wall 40.5 s
+2026-10-31T02:30:55.193Z [2/2] d-none ellcyl-P-3-on: ok 52 s
+ellcyl-P-3-on (-3, ellcyl 3.5×5.1×5.2, impurity 0.28; exact, 10–110/0.01) as ellcyl: draw 280 ms; iso χ²_ν 1.806, 304 ev, 1710 ms; list 33 refl, 91 members
+  today: free χ² 16010.6 best 16010.6 ΔBIC -1077 | search 5979 ev 41933 ms report 1059 ev 7669 ms | 5.57×4.06×3.70 | dims 17% 9% -29% orient 44.9° (holo 44.9°) principal 25.1°
+  wall 51.7 s
+2026-10-31T02:30:55.193Z done

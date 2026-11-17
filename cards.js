@@ -24,16 +24,15 @@ export const cardInfo = (several, results) => `Each analysis card can be renamed
    closes it, so does Escape; the anchor stays lit while it is open. A menu of our own
    rather than a <select>: the title's capitals would carry into a native list, which
    some systems draw with the select's own styling. */
-// (in `layer`: the module's instance's, made per tab, which is in the page while its
-// instance is; else the page's body. Its listeners on the document and the window come
-// off with destroy.)
+// (in `layer`: the module's instance's, which is in the page while its instance is. Its
+// listeners on the document and the window come off with destroy.)
 function kindMenu(kinds, layer){
   const el = document.createElement('div');
   el.className = 'an-menu';
   el.setAttribute('role', 'menu');
   el.hidden = true;
   el.innerHTML = Object.entries(kinds).map(([k, l])=> `<button type="button" role="menuitem" data-kind="${esc(k)}">${esc(l)}</button>`).join('');
-  (layer || document.body).appendChild(el);
+  layer.appendChild(el);
   const ac = new AbortController(), signal = ac.signal;
   let anchor = null, pick = null, centred = false;
   const place = ()=>{
@@ -133,8 +132,7 @@ export function nameDownloads(wrap, svgName, csvName){
 /* An undo or a redo: the history's Ctrl/⌘+Z or Y (utils.js, the only way to either), whose
    state is put back at once, inside the key's own dispatch. The key is seen first here, on
    the window's capture, and a load made while its dispatch is under way is a step of the
-   history; a load made otherwise is a tab's state or a project opened (restoreModuleState),
-   or a project's CSVs read out (runWithModuleState). */
+   history; a load made otherwise is a tab's state or a project opened (restoreModuleState). */
 let histKey = null;
 window.addEventListener('keydown', e=>{ if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z' || e.key === 'y' || e.key === 'Y')) histKey = e; }, true);
 const stepping = ()=> !!histKey && histKey.eventPhase !== Event.NONE;
@@ -142,6 +140,8 @@ const stepping = ()=> !!histKey && histKey.eventPhase !== Event.NONE;
 /* o: {
      list, addBar, addBtn       the cards' container, the "+" bar in it (cards go above it), its button
      kinds                      { type: label }, in menu order; names are settled in this order
+     title                      the head's word before the kind ('Analysis:' by default; the
+                                Figure module's plots none, the kind alone: 'XY plot')
      info(type)                 the instructions under the title
      body(rec)                  the body's markup (prefix 'an' + rec.id for its element ids)
      make(type)                 the module's own fields of a new record
@@ -165,7 +165,7 @@ const stepping = ()=> !!histKey && histKey.eventPhase !== Event.NONE;
                                 the folds of a move, which the cards come out of as they were
      commit()                   a step of the undo history
      layer                      where the kinds' menu goes: the instance's layer (utils.js
-                                makeInstance), for a module made per tab; none, the page's body
+                                makeInstance)
    }
    destroy() lets the deck go (its module's instance destroyed): its menu and the listeners
    it set on the document and the window, the animations under way. */
@@ -174,6 +174,7 @@ export function createDeck(o){
   const live = new Map();       // id → card element
   const kinds = o.kinds, types = Object.keys(kinds), several = types.length > 1;
   const menu = several ? kindMenu(kinds, o.layer) : null;
+  const title = o.title ?? 'Analysis:';
 
   const nextId = ()=> recs.reduce((m, a)=> Math.max(m, a.id), 0) + 1;
   const newRec = type => ({ id: nextId(), type, base: '', nameAuto: true, name: '', collapsed: false, ...(o.make ? o.make(type) : {}) });
@@ -197,7 +198,7 @@ export function createDeck(o){
     return `
         <div class="an-head">
           <button type="button" class="an-ic an-grip" title="Drag to move this analysis" aria-label="Move analysis">${GRIP_SVG}</button>
-          <h3 class="txt-head an-title">Analysis:<span class="an-kind">${kind}<button type="button" class="instr-info" aria-label="Toggle instructions" aria-expanded="false">${INFO_SVG}</button></span></h3>
+          <h3 class="txt-head an-title">${esc(title)}<span class="an-kind">${kind}<button type="button" class="instr-info" aria-label="Toggle instructions" aria-expanded="false">${INFO_SVG}</button></span></h3>
           <span class="an-acts">
             <button type="button" class="an-ic an-close" title="Close this analysis" aria-label="Close analysis">${X_SVG(15)}</button>
             <button type="button" class="an-ic an-fold">${CHEVRON_SVG}</button>

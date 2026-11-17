@@ -1,0 +1,26 @@
+| fit | class (k) | truth | G | replicas G*: mean, max | p | bootstrap at 5 % | the adopted rule (need) | cost (searches) |
+|---|---|---|---|---|---|---|---|---|
+| box-P-3m1-generic~m1 | -3m (1) | box r 1.17 | 21.8 | -22.8, 2.8 | 0.05 | kept | kept (16.1) | 13.8 |
+| box-P4m-generic~m1 | 4/m (1) | box r 1.40 | 14.0 | 4.2, 14.0 | 0.10 | — | — (16.1) | 17.0 |
+| cylinder-P6m-near~m1 | 6/m (1) | cylinder r 1.23 | 18.0 | 3.4, 17.8 | 0.05 | kept | kept (16.1) | 18.5 |
+| ellipsoid-P-1-near~m3 | -1 (5) | ellipsoid r 1.03 | 20.0 | 4.5, 10.9 | 0.05 | kept | — (24.7) | 20.4 |
+| ellipsoid-P-3-on~m1 | -3 (1) | ellipsoid r 1.06 | 23.6 | 2.3, 6.0 | 0.05 | kept | kept (16.1) | 15.7 |
+| ellipsoid-P-3m1-near~m4 | -3m (1) | ellipsoid r 1.03 | 12.3 | 2.4, 7.5 | 0.05 | kept | — (16.1) | 19.8 |
+| ellipsoid-P4m-near~m3 | 4/m (1) | ellipsoid r 1.11 | 31.9 | 1.9, 7.9 | 0.05 | kept | kept (16.1) | 17.6 |
+| ellipsoid-P4m-near~m4 | 4/m (1) | ellipsoid r 1.06 | 5.5 | 3.0, 8.8 | 0.30 | — | — (16.1) | 18.6 |
+| sphere-P-1-2.ellipsoid | -1 (5) | sphere | 21.1 | 5.3, 14.9 | 0.05 | kept | — (24.7) | 20.0 |
+| sphere-P-1-3.ellipsoid | -1 (5) | sphere | 1.1 | 5.2, 14.0 | 0.95 | — | — (24.7) | 20.5 |
+| sphere-P-3-1.ellipsoid | -3 (1) | sphere | 2.9 | 3.7, 13.2 | 0.55 | — | — (16.1) | 21.3 |
+| sphere-P-3m1-2.ellipsoid | -3m (1) | sphere | 9.1 | 2.8, 12.9 | 0.10 | — | — (16.1) | 18.8 |
+| sphere-P2m-1.ellipsoid | 2/m (3) | sphere | 2.0 | 5.4, 10.2 | 0.90 | — | — (20.7) | 17.8 |
+| sphere-P2m-3.ellipsoid | 2/m (3) | sphere | 5.8 | 4.7, 14.4 | 0.35 | — | — (20.7) | 20.1 |
+| sphere-P4m-2.ellipsoid | 4/m (1) | sphere | 2.1 | 1.4, 6.6 | 0.30 | — | — (16.1) | 17.8 |
+| sphere-P4mmm-1.ellipsoid | 4/mmm (1) | sphere | 3.4 | 2.6, 9.3 | 0.30 | — | — (16.1) | 18.0 |
+| sphere-P6m-1.ellipsoid | 6/m (1) | sphere | 0.7 | 2.5, 9.3 | 0.75 | — | — (16.1) | 21.7 |
+| sphere-Pm-3-3.ellipsoid | m-3 (0) | sphere | -0.1 | 1.4, 5.2 | 0.85 | — | — (13.2) | 26.6 |
+| sphere-Pm-3m-1.ellipsoid | m-3m (0) | sphere | 1.3 | 0.8, 6.6 | 0.15 | — | — (13.2) | 16.9 |
+| sphere-Pmmm-1.ellipsoid | mmm (2) | sphere | 1.9 | 3.9, 12.5 | 0.85 | — | — (18.6) | 18.7 |
+| spheroid-Pm-3-on~m2 | m-3 (0) | spheroid r 1.50 | 17.2 | 0.6, 4.6 | 0.05 | kept | kept (13.2) | 12.3 |
+| spheroid-Pm-3-on~m4 | m-3 (0) | spheroid r 1.31 | 8.4 | 1.7, 12.7 | 0.10 | — | — (13.2) | 8.2 |
+
+22 fits; the bootstrap and the adopted rule agree on 19; the bootstrap costs 17.6 searches beyond the fit's own (median; 7.2–25.6).

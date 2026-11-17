@@ -1,0 +1,198 @@
+{
+ "mode": "lor",
+ "rows": [
+  {
+   "id": "box-P-1-near",
+   "solid": "box",
+   "laue": "-1",
+   "error": "none",
+   "counts": 971,
+   "maxDev": 0.004446335909138054,
+   "excess": 0.00014769363451232805
+  },
+  {
+   "id": "sqbox-P-1-on",
+   "solid": "sqbox",
+   "laue": "-1",
+   "error": "sizedist",
+   "counts": 1409,
+   "maxDev": 0.02159805905350066,
+   "excess": 0.04480486480777762
+  },
+  {
+   "id": "cylinder-P2m-on",
+   "solid": "cylinder",
+   "laue": "2/m",
+   "error": "impurity",
+   "counts": 472,
+   "maxDev": 0.0055841994606057495,
+   "excess": 0.00004227235008136575
+  },
+  {
+   "id": "ellcyl-P2m-generic",
+   "solid": "ellcyl",
+   "laue": "2/m",
+   "error": "none",
+   "counts": 18195,
+   "maxDev": 0.0054333351204933975,
+   "excess": 0.0016557028899564044
+  },
+  {
+   "id": "ellipsoid-Pmmm-generic",
+   "solid": "ellipsoid",
+   "laue": "mmm",
+   "error": "none",
+   "counts": 1066,
+   "maxDev": 0.0029881712620210997,
+   "excess": 0.000058985318801777544
+  },
+  {
+   "id": "spheroid-Pmmm-near",
+   "solid": "spheroid",
+   "laue": "mmm",
+   "error": "air",
+   "counts": 1951,
+   "maxDev": 0.002893271719895058,
+   "excess": 0.00034960034228711265
+  },
+  {
+   "id": "box-P4m-near",
+   "solid": "box",
+   "laue": "4/m",
+   "error": "none",
+   "counts": 9487,
+   "maxDev": 0.005384602803464434,
+   "excess": 0.0007766095677301556
+  },
+  {
+   "id": "sqbox-P4m-on",
+   "solid": "sqbox",
+   "laue": "4/m",
+   "error": "air",
+   "counts": 685,
+   "maxDev": 0.0028719617553673556,
+   "excess": 0.00004065961146812677
+  },
+  {
+   "id": "cylinder-P4mmm-on",
+   "solid": "cylinder",
+   "laue": "4/mmm",
+   "error": "none",
+   "counts": 21916,
+   "maxDev": 0.0019322314277837413,
+   "excess": 0.007135977277330103
+  },
+  {
+   "id": "ellcyl-P4mmm-generic",
+   "solid": "ellcyl",
+   "laue": "4/mmm",
+   "error": "hump",
+   "counts": 451,
+   "maxDev": 0.0022848641148558433,
+   "excess": 0.00005547105551509283
+  },
+  {
+   "id": "ellipsoid-P-3-generic",
+   "solid": "ellipsoid",
+   "laue": "-3",
+   "error": "impurity",
+   "counts": 25791,
+   "maxDev": 0.0034716832077363894,
+   "excess": 0.0010378669823515201
+  },
+  {
+   "id": "spheroid-P-3-near",
+   "solid": "spheroid",
+   "laue": "-3",
+   "error": "none",
+   "counts": 1225,
+   "maxDev": 0.0026287390290287605,
+   "excess": 0.00007897520265899033
+  },
+  {
+   "id": "box-P-3m1-near",
+   "solid": "box",
+   "laue": "-3m",
+   "error": "none",
+   "counts": 906,
+   "maxDev": 0.00653733520349109,
+   "excess": 0.00008425504415146773
+  },
+  {
+   "id": "sqbox-P-3m1-on",
+   "skipped": "po"
+  },
+  {
+   "id": "cylinder-P6m-on",
+   "solid": "cylinder",
+   "laue": "6/m",
+   "error": "none",
+   "counts": 949,
+   "maxDev": 0.0019035293521546747,
+   "excess": 0.000036070535769658977
+  },
+  {
+   "id": "ellcyl-P6m-generic",
+   "solid": "ellcyl",
+   "laue": "6/m",
+   "error": "none",
+   "counts": 4107,
+   "maxDev": 0.004035456733784578,
+   "excess": 0.00029187238514972937
+  },
+  {
+   "id": "ellipsoid-P6mmm-generic",
+   "solid": "ellipsoid",
+   "laue": "6/mmm",
+   "error": "air",
+   "counts": 5063,
+   "maxDev": 0.002146801919866309,
+   "excess": 0.0001797326978114577
+  },
+  {
+   "id": "spheroid-P6mmm-near",
+   "solid": "spheroid",
+   "laue": "6/mmm",
+   "error": "hump",
+   "counts": 718,
+   "maxDev": 0.0020474052901649034,
+   "excess": 0.0006550454675150233
+  },
+  {
+   "id": "box-Pm-3-near",
+   "solid": "box",
+   "laue": "m-3",
+   "error": "impurity",
+   "counts": 506,
+   "maxDev": 0.0017917918330452064,
+   "excess": 0.000245019828440621
+  },
+  {
+   "id": "sqbox-Pm-3-on",
+   "solid": "sqbox",
+   "laue": "m-3",
+   "error": "none",
+   "counts": 4203,
+   "maxDev": 0.002636246335142738,
+   "excess": 0.00023510740419076001
+  },
+  {
+   "id": "cylinder-Pm-3m-on",
+   "solid": "cylinder",
+   "laue": "m-3m",
+   "error": "sizedist",
+   "counts": 29653,
+   "maxDev": 0.03735925850575017,
+   "excess": 2.503345757245693
+  },
+  {
+   "id": "ellcyl-Pm-3m-generic",
+   "solid": "ellcyl",
+   "laue": "m-3m",
+   "error": "none",
+   "counts": 2192,
+   "maxDev": 0.0028196335195175013,
+   "excess": 0.00019313756088525465
+  }
+ ]
+}

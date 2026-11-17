@@ -231,8 +231,8 @@ export function cellView(container, opts = {}){
     },
     redraw: request,
     /* How the cell is turned, as plain numbers (JSON-safe), null at the home view; setView
-       puts one back on the phase on show (b2v4: what the Rietveld card shows, kept as its
-       tab sleeps and in its record, xrd-rv.js shows). A rotation, or near enough to be put
+       puts one back on the phase on show (what the Rietveld card shows, kept as its tab
+       sleeps and in its record: xrd-rv.js shows). A rotation, or near enough to be put
        right; anything else (a mirror, a squashed matrix) is not a view and is ignored. */
     getView(){
       const H = viewAt(HOME_AZ, HOME_EL);

@@ -1,4 +1,4 @@
-/* What is worked out, kept (b2v3): a tab woken from sleep, an undo, a redraw take what was
+/* What is worked out, kept (v518): a tab woken from sleep, an undo, a redraw take what was
    worked out before (utils.js keeper: by the data's array and every other input), and make
    none of it again. Counted (utils.js kept.made: the results made, by name) across each
    wake; the plots drawn from what was kept, against the golden hashes the plots' test takes
@@ -8,7 +8,7 @@
    curves), DRS (every fit, a Tauc and an Urbach card), GC and EPR (their tables and
    smoothing), SEM (its thumbnails and cards, kept while the tab is asleep, its bytes let
    go). The tab woken shows under the loader; one awake shown at another width of the
-   window, too, and a project written to a file (b2v3's loader). */
+   window, too, and a project written to a file. */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -53,7 +53,7 @@ async function refine(page, sel){
 }
 const diff = (a, b)=> Object.keys(b).filter(k=> (a[k] || 0) !== b[k]);
 // The DRS cards on sample k, stepped by the first card's arrow (a tab woken shows the one it
-// showed: b2v4, b2view.test.mjs; to b2v4 the first).
+// showed: b2view.test.mjs).
 async function toSample(page, k){
   for (let n = 0; n < 4 && !(await page.textContent('#an1Idx')).startsWith(k + 1 + '/'); n++){ await page.click('#tab-tauc .an-card .an-next'); await settle(page); }
 }
@@ -202,9 +202,9 @@ test('DRS woken: every fit kept, a Tauc and an Urbach card, not made again; gold
     await settle(page);
     assert.deepEqual(diff(m5b.made, (await made(page)).made), [], 'the same width: nothing made again');
     // Left for Settings, the window changed there, another tab shown, then this one: it was
-    // drawn at the width it was left for Settings at, so under the loader (b2v3: the width
-    // taken as the other tab was shown, at which it was never drawn: shown at once, drawn
-    // in one long task)
+    // drawn at the width it was left for Settings at, so under the loader (not at the width
+    // taken as the other tab was shown, at which it was never drawn: shown at once, drawn in
+    // one long task)
     await page.click('#nav button[data-tab="settings"]'); await settle(page);
     await page.setViewportSize({ width: 1400, height: 900 }); await page.waitForTimeout(400);
     await switchTab(page, 1);
@@ -214,7 +214,7 @@ test('DRS woken: every fit kept, a Tauc and an Urbach card, not made again; gold
     // Chosen, and Settings clicked before it is shown two frames on: awake at another width
     // (its show deferred, showLater), then asleep (its wake deferred, loadTabIfActive).
     // Settings stays on show, the tab as it was; shown from there, under the loader, nothing
-    // made again (b2v3: the tab put back over Settings, the click lost)
+    // made again (not the tab put back over Settings, the click lost)
     for (const asleep of [false, true]){
       await switchTab(page, 1);
       await page.setViewportSize({ width: asleep ? 1400 : 1180, height: 900 }); await page.waitForTimeout(400);
@@ -222,7 +222,7 @@ test('DRS woken: every fit kept, a Tauc and an Urbach card, not made again; gold
       const m6 = await made(page);
       assert.equal(await page.evaluate(async ()=>{ const T = await import('./tabs.js'), t = T.TABS[0];
         document.querySelectorAll('#tabBar .ptab')[0].querySelector('.ptab-label').click();
-        for (let i = 0; i < 10; i++) await null;   // (switchTo's wait)
+        for (let i = 0; i < 10; i++) await null;   // (the tab taken a microtask after the click: tabs.js initBar)
         const pending = T.activeTab() === t && (!t.inst || t.hidAt > 0);
         document.querySelector('#nav button[data-tab="settings"]').click();
         return pending; }), true, 'Settings clicked before the tab was shown');
@@ -236,8 +236,8 @@ test('DRS woken: every fit kept, a Tauc and an Urbach card, not made again; gold
       assert.deepEqual(diff(m6.made, (await made(page)).made), [], 'nothing made again');
     }
     // From Home, Settings and then the tab clicked before Settings' own hashchange: that
-    // echo finds Settings on show already and leaves the tab's deferred show alone (b2v3d:
-    // the echo counted as a fixed section chosen anew, the tab's show given up, the click lost)
+    // echo finds Settings on show already and leaves the tab's deferred show alone (not
+    // counted as a fixed section chosen anew, the tab's show given up, the click lost)
     await page.click('#nav button[data-tab="home"]'); await settle(page);
     await page.setViewportSize({ width: 1180, height: 900 }); await page.waitForTimeout(400);
     await page.evaluate(()=>{ document.querySelector('#nav button[data-tab="settings"]').click();
@@ -290,7 +290,7 @@ test('GC, EPR and SEM woken: their tables, smoothing, thumbnails and cards kept,
     const m1 = await made(page);
     assert.deepEqual(diff(m0.made, m1.made), [], 'woken: no table, smoothing, thumbnail or card made again');
     // A crop of another width: its group's cards made; undone, redone, undone, taken as kept
-    // (b2v3: a file's last card alone, made again by each)
+    // (to v517 a file's last card alone, made again by each)
     await page.click('#semCropDef'); await settle(page);
     await page.fill('#semCropW', '128'); await page.press('#semCropW', 'Enter'); await settle(page);
     const m2 = await made(page);
@@ -298,7 +298,7 @@ test('GC, EPR and SEM woken: their tables, smoothing, thumbnails and cards kept,
     for (const redo of [false, true, false]) await undo(page, redo);
     assert.deepEqual(diff(m2.made, (await made(page)).made), [], 'undo and redo: no card made again');
     // The same files read again in another tab: what was made of them added to, not taken
-    // for the reading's; back, redone, the crop's cards taken (b2v3: made again)
+    // for the reading's; back, redone, the crop's cards taken
     await openModule(page, 'sem');
     await drop(page, 'sem', env.fx.files.sem);
     await switchTab(page, 2);

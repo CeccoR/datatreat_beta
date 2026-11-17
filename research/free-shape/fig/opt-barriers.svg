@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="700" height="430" viewBox="0 0 700 430" font-family="Inter, Helvetica, Arial, sans-serif">
+<rect width="700" height="430" fill="#fcfcfb"/>
+<text x="16" y="24" font-size="14" font-weight="600" fill="#0b0b0b">Near-equivalent minima after the c1 search: one valley or distinct? (27 runs)</text>
+<line x1="80" x2="500" y1="370" y2="370" stroke="#e4e3df" stroke-width="1"/>
+<text x="74" y="374" font-size="11" text-anchor="end" fill="#52514e">0.01</text>
+<line x1="80" x2="500" y1="306" y2="306" stroke="#e4e3df" stroke-width="1"/>
+<text x="74" y="310" font-size="11" text-anchor="end" fill="#52514e">0.1</text>
+<line x1="80" x2="500" y1="242" y2="242" stroke="#e4e3df" stroke-width="1"/>
+<text x="74" y="246" font-size="11" text-anchor="end" fill="#52514e">1</text>
+<line x1="80" x2="500" y1="178" y2="178" stroke="#e4e3df" stroke-width="1"/>
+<text x="74" y="182" font-size="11" text-anchor="end" fill="#52514e">10</text>
+<line x1="80" x2="500" y1="114" y2="114" stroke="#e4e3df" stroke-width="1"/>
+<text x="74" y="118" font-size="11" text-anchor="end" fill="#52514e">100</text>
+<line x1="80" x2="500" y1="50" y2="50" stroke="#e4e3df" stroke-width="1"/>
+<text x="74" y="54" font-size="11" text-anchor="end" fill="#52514e">1000</text>
+<line x1="80" x2="80" y1="50" y2="370" stroke="#e4e3df" stroke-width="1"/>
+<text x="80" y="386" font-size="11" text-anchor="middle" fill="#52514e">0</text>
+<line x1="164" x2="164" y1="50" y2="370" stroke="#e4e3df" stroke-width="1"/>
+<text x="164" y="386" font-size="11" text-anchor="middle" fill="#52514e">2</text>
+<line x1="248" x2="248" y1="50" y2="370" stroke="#e4e3df" stroke-width="1"/>
+<text x="248" y="386" font-size="11" text-anchor="middle" fill="#52514e">4</text>
+<line x1="332" x2="332" y1="50" y2="370" stroke="#e4e3df" stroke-width="1"/>
+<text x="332" y="386" font-size="11" text-anchor="middle" fill="#52514e">6</text>
+<line x1="416" x2="416" y1="50" y2="370" stroke="#e4e3df" stroke-width="1"/>
+<text x="416" y="386" font-size="11" text-anchor="middle" fill="#52514e">8</text>
+<line x1="500" x2="500" y1="50" y2="370" stroke="#e4e3df" stroke-width="1"/>
+<text x="500" y="386" font-size="11" text-anchor="middle" fill="#52514e">10</text>
+<line x1="80" x2="500" y1="370" y2="370" stroke="#8a8984" stroke-width="1"/>
+<text x="290" y="404" font-size="12" text-anchor="middle" fill="#0b0b0b">Δ of the minimum = (χ² − χ²_best)/χ²_ν</text>
+<text transform="translate(36,210) rotate(-90)" font-size="12" text-anchor="middle" fill="#0b0b0b">barrier on the straight path (χ²_ν)</text>
+<line x1="80" x2="500" y1="242" y2="242" stroke="#52514e" stroke-dasharray="4 3"/>
+<text x="496" y="256" font-size="11" text-anchor="end" fill="#52514e">one valley below</text>
+<text x="496" y="236" font-size="11" text-anchor="end" fill="#52514e">distinct minima above</text>
+<circle cx="280.82784253596594" cy="370" r="4.5" fill="#2a78d6" fill-opacity="0.8" stroke="#fcfcfb" stroke-width="1"><title>box-plate110-off8#2 Δ 4.78 barrier -0.32</title></circle>
+<circle cx="165.67363505130317" cy="255.98734990126485" r="4.5" fill="#2a78d6" fill-opacity="0.8" stroke="#fcfcfb" stroke-width="1"><title>box-plate111-big#1 Δ 2.04 barrier 0.60</title></circle>
+<circle cx="120.62100893850038" cy="251.6189786349488" r="4.5" fill="#2a78d6" fill-opacity="0.8" stroke="#fcfcfb" stroke-width="1"><title>box-ribbon001#1 Δ 0.97 barrier 0.71</title></circle>
+<circle cx="143.3239219697207" cy="50" r="4.5" fill="#2a78d6" fill-opacity="0.8" stroke="#fcfcfb" stroke-width="1"><title>ecyl-ribbon001#1 Δ 1.51 barrier 2241.65</title></circle>
+<circle cx="162.88779916460953" cy="50" r="4.5" fill="#2a78d6" fill-opacity="0.8" stroke="#fcfcfb" stroke-width="1"><title>ecyl-ribbon001#1 Δ 1.97 barrier 2218.80</title></circle>
+<circle cx="171.6441123890459" cy="95.1532967095003" r="4.5" fill="#eb6834" fill-opacity="0.8" stroke="#fcfcfb" stroke-width="1"><title>u02#1 Δ 2.18 barrier 197.01</title></circle>
+<circle cx="201.36971999865585" cy="50" r="4.5" fill="#eb6834" fill-opacity="0.8" stroke="#fcfcfb" stroke-width="1"><title>u03#1 Δ 2.89 barrier 5282.43</title></circle>
+<circle cx="323.02370528007725" cy="370" r="4.5" fill="#eb6834" fill-opacity="0.8" stroke="#fcfcfb" stroke-width="1"><title>u03#1 Δ 5.79 barrier -1.41</title></circle>
+<circle cx="315.21712193742326" cy="172.15508402062932" r="4.5" fill="#eb6834" fill-opacity="0.8" stroke="#fcfcfb" stroke-width="1"><title>u04#1 Δ 5.60 barrier 12.34</title></circle>
+<circle cx="407.3323061766829" cy="370" r="4.5" fill="#eb6834" fill-opacity="0.8" stroke="#fcfcfb" stroke-width="1"><title>u05#1 Δ 7.79 barrier -2.06</title></circle>
+<circle cx="98.15556045170278" cy="370" r="4.5" fill="#eb6834" fill-opacity="0.8" stroke="#fcfcfb" stroke-width="1"><title>u06#1 Δ 0.43 barrier -0.22</title></circle>
+<circle cx="164.7616416047607" cy="370" r="4.5" fill="#eb6834" fill-opacity="0.8" stroke="#fcfcfb" stroke-width="1"><title>u06#1 Δ 2.02 barrier -0.51</title></circle>
+<circle cx="250.72502317238852" cy="126.40961637047624" r="4.5" fill="#eb6834" fill-opacity="0.8" stroke="#fcfcfb" stroke-width="1"><title>u07#1 Δ 4.06 barrier 63.99</title></circle>
+<circle cx="161.41218980965425" cy="370" r="4.5" fill="#eb6834" fill-opacity="0.8" stroke="#fcfcfb" stroke-width="1"><title>u08#1 Δ 1.94 barrier -1.02</title></circle>
+<circle cx="86.23353087095883" cy="191.2562904127093" r="4.5" fill="#eb6834" fill-opacity="0.8" stroke="#fcfcfb" stroke-width="1"><title>u09#1 Δ 0.15 barrier 6.21</title></circle>
+<circle cx="91.47749994387496" cy="236.67517931622402" r="4.5" fill="#eb6834" fill-opacity="0.8" stroke="#fcfcfb" stroke-width="1"><title>u10#1 Δ 0.27 barrier 1.21</title></circle>
+<circle cx="110.05991716729731" cy="205.3183034292528" r="4.5" fill="#eb6834" fill-opacity="0.8" stroke="#fcfcfb" stroke-width="1"><title>u10#1 Δ 0.72 barrier 3.74</title></circle>
+<circle cx="312.48169596250307" cy="148.31438374979814" r="4.5" fill="#eb6834" fill-opacity="0.8" stroke="#fcfcfb" stroke-width="1"><title>u10#1 Δ 5.54 barrier 29.10</title></circle>
+<circle cx="236.7850632281894" cy="370" r="4.5" fill="#eb6834" fill-opacity="0.8" stroke="#fcfcfb" stroke-width="1"><title>u12#1 Δ 3.73 barrier -0.88</title></circle>
+<circle cx="520" cy="60" r="4.5" fill="#2a78d6"/><text x="529" y="64" font-size="11" fill="#52514e">synthetic</text>
+<circle cx="520" cy="78" r="4.5" fill="#eb6834"/><text x="529" y="82" font-size="11" fill="#52514e">sample-like</text>
+<text x="520" y="110" font-size="11" fill="#52514e">19 minima within Δ 10</text>
+<text x="520" y="126" font-size="11" fill="#52514e">of 25 runs: 10 behind a</text>
+<text x="520" y="142" font-size="11" fill="#52514e">barrier over 1</text>
+<text x="520" y="174" font-size="10" fill="#8a8984">barriers ≤ 0 (the path falls</text>
+<text x="520" y="188" font-size="10" fill="#8a8984">all the way) drawn at 0.01,</text>
+<text x="520" y="202" font-size="10" fill="#8a8984">over 1000 at 1000</text>
+</svg>

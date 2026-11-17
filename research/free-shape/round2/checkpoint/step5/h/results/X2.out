@@ -1,0 +1,10 @@
+2026-10-31T07:22:46.326Z jobs-X2.txt: 396 jobs, 396 to run, 3 at a time
+2026-10-31T07:23:29.594Z ok X2 box-P-1-near box 43 s
+2026-10-31T07:24:20.821Z ok X2 box-P-1-near ellcyl 51 s
+2026-10-31T07:24:33.630Z ok X2 box-P-1-near sqbox 107 s
+2026-10-31T07:24:59.240Z ok X2 box-P-1-near ellipsoid 38 s
+2026-10-31T07:25:02.756Z ok X2 box-P-1-near cylinder 136 s
+2026-10-31T07:25:15.198Z ok X2 box-P2m-generic box 16 s
+2026-10-31T07:25:21.890Z ok X2 box-P2m-generic sqbox 19 s
+2026-10-31T07:25:29.242Z ok X2 box-P2m-generic cylinder 14 s
+2026-10-31T07:25:29.703Z ok X2 box-P-1-near spheroid 56 s

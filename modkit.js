@@ -8,7 +8,8 @@ import { decodeText } from './textdata.js';
    - its files: `all`, every file loaded, in list order, and `files`, the included ones,
      which the analysis sees (utils: INCLUDED FILES). Both arrays stay the same objects,
      changed in place, so a module names them once;
-   - the file list and its steps (remove, move, include, label, colour, palette, remove
+   - the trace list (the file list to v531: a row a file, here, unless `traces` says
+     otherwise) and its steps (remove, move, include, label, colour, palette, remove
      all), the per-sample arrays (`slots`) kept aligned with the included files;
    - the alerts under the drop zone, each dismissed by its button;
    - text files dropped, decoded and read (textdata.js), and those not readable or
@@ -32,6 +33,10 @@ import { decodeText } from './textdata.js';
                        (to v501 `cols`, columns of the module's own, a lead one left of
                        the label)
      noteHead          that column's header, plain text (GC: SAMPLE); none: no header
+     tip(f, i)         a trace's tooltip over its name, plain text (Iodometry: its metadata)
+     traces(cb)        the trace list's rows and callbacks, { rows, cb }, where a file is
+                       not one trace (Custom: a row a series): `cb` the kit's, for the
+                       module to keep or override; none, a row a file with the kit's
      noteChange(i, v, again)  a select in a file's note changed (GC's Sample): file
                        all[i], `v` its value; the module takes it, then the list is drawn
                        again (the other rows' choices may follow) and redraw('note'), a step
@@ -41,6 +46,9 @@ import { decodeText } from './textdata.js';
                        changed, from where the walk began
      cleared()         every file removed: the module empties what it keeps per sample
      snapshot()        the module's own state, beside its files
+     view              the keys of that state that hold the view alone: a step of the
+                       history, no change unsaved (utils.js VIEW_KEYS; a card's fold is
+                       one in every module)
      file(f)           a file's record as a restore reads it (a project read in may hold
                        anything: RESTORED, below): what it holds taken only as what it
                        should be, or null when it holds nothing to show (left out)
@@ -49,27 +57,26 @@ import { decodeText } from './textdata.js';
                        its per-sample arrays drop (without)
      redrawTab()       the tab shown or resized
      csv()             the CSV export's files, [{ name, text }]
-     root, key, layer  a module made per tab (utils.js registerModule): its instance's
-                       section, where its elements are found (root-scoped, whether or not
-                       it is in the page), the key its registries go by, and its layer (the
-                       deck's menu goes there). None: the page's ids, the module's name, the
-                       body, as a module with one instance
+     root, key, layer  its instance's (utils.js registerModule): its section, where its
+                       elements are found (root-scoped, whether or not it is in the page),
+                       the key its registries go by, and its layer (the deck's menu goes
+                       there)
    }
    kit.destroy() lets the kit go with its instance: its deck. */
 export function moduleKit(mod, o){
-  const root = o.root || null, key = o.key || mod;
-  const all = [], files = [], $ = id => root ? root.querySelector('#' + id) : document.getElementById(id);
+  const { root, key } = o;
+  const all = [], files = [], $ = id => root.querySelector('#' + id);
   const parts = Object.fromEntries(['invalid', 'upload', ...(o.parts || [])].map(k=> [k, '']));
   const slots = ()=> o.slots ? o.slots() : [];
   const kit = { all, files, alerts: parts };
 
   /* ---- Alerts: each dismiss button (data-action "<mod>-dismiss-<part>") empties its part,
      or does what o.dismiss says. ---- */
-  const tab = root || $('tab-' + mod), pre = mod + '-dismiss-';
+  const pre = mod + '-dismiss-';
   kit.drawAlerts = ()=> o.alerts(parts);
   const clearAlerts = ()=>{ for (const k in parts) parts[k] = ''; };
-  tab.addEventListener('click', e=>{
-    const btn = e.target.closest('[data-action]'), act = btn && tab.contains(btn) ? btn.dataset.action : '';
+  root.addEventListener('click', e=>{
+    const btn = e.target.closest('[data-action]'), act = btn && root.contains(btn) ? btn.dataset.action : '';
     if (!act.startsWith(pre)) return;
     const part = act.slice(pre.length);
     if (o.dismiss && o.dismiss[part]) o.dismiss[part](); else parts[part] = '';
@@ -90,6 +97,7 @@ export function moduleKit(mod, o){
     onInclude(i, on){ setIncluded(all, i, on, slots()); changed('include'); },
     onIncludeAll(on){ all.forEach((_, j)=> setIncluded(all, j, on, slots())); changed('include'); },
     onLabelChange(i, v){ all[i].label = v; o.redraw('label'); kit.commit(); },
+    tip: o.tip,
     onColorChange(i, v){ all[i].color = v; o.redraw('color'); kit.commit(); },
     onPaletteChange(colors){ all.forEach((f, i)=>{ f.color = colors[i % colors.length]; }); changed('palette'); },
     onRemoveAll(){ all.length = 0; clearAlerts(); if (o.cleared) o.cleared(); changed('clear'); },
@@ -99,7 +107,8 @@ export function moduleKit(mod, o){
   kit.showFiles = ()=>{
     files.splice(0, files.length, ...includedOf(all));
     setTabLoaded(key, all.length);
-    renderUnifiedFileList($(mod + 'FileTableWrap'), all, cb, o.note, o.noteHead);
+    const list = o.traces ? o.traces(cb) : { rows: all, cb };
+    renderUnifiedFileList($(mod + 'FileTableWrap'), list.rows, list.cb, o.note, o.noteHead);
     kit.drawAlerts();
   };
   /* (on the list's box, which stays: the list inside is drawn anew at each change, its
@@ -173,7 +182,7 @@ export function moduleKit(mod, o){
     const lost = raw.length - all.length;
     if (lost) parts.invalid = buildAlertsHtml([], [`${lost} file${lost > 1 ? 's' : ''} in the project with no data to show: left out.`], 'Restored, with a caveat:', '', pre + 'invalid');
     kit.drawAlerts();
-  });
+  }, { view: o.view });
   kit.commit = ()=> hist.commit();
   // The cards, in the module's list above its "+" bar; each change a step of the history.
   let deck = null;

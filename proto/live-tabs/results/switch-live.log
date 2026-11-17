@@ -1,2 +1,0 @@
-live display {"xrd":{"n":7,"med":63.6,"p90":78.4,"max":78.4,"longMsMed":0,"longMaxMed":0},"sem":{"n":7,"med":54.4,"p90":63.6,"max":63.6,"longMsMed":0,"longMaxMed":0},"drs":{"n":7,"med":54.4,"p90":72,"max":72,"longMsMed":0,"longMaxMed":0},"gc":{"n":7,"med":49.6,"p90":65.1,"max":65.1,"longMsMed":0,"longMaxMed":0},"epr":{"n":7,"med":48.5,"p90":52.6,"max":52.6,"longMsMed":0,"longMaxMed":0}}
-errors []

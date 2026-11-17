@@ -3,10 +3,11 @@
    spaces, a trailing separator), the numbers with either decimal mark, and the separator
    found per file: the DRS spectrum and the GC export of the fixtures written in every dialect
    read back to the same numbers as the files the tests load; a GC export with ',' as both
-   separator and decimal mark is not read. */
+   separator and decimal mark is not read. The Figure module's tables (readColumns, v527): any
+   columns, a header or none, text columns, a title over them; a header's names and units. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { textEncoding, decodeText, textLines, splitFields, parseNum, isNum, readXY, readTable } from '../textdata.js';
+import { textEncoding, decodeText, textLines, splitFields, parseNum, isNum, readXY, readTable, readColumns, nameUnit } from '../textdata.js';
 import { drsCsv, gcCsv } from './fixtures.mjs';
 
 const utf16 = (s, be, bom)=>{
@@ -163,4 +164,45 @@ test("GC: ',' as both separator and decimal mark is not read; a column the heade
   // Wider than the header with no number cut in two, or with a trailing ',': read.
   assert.deepEqual(gcRead(H + '10/20/2026 9:00:00 AM,0.5089,0.2011,run 3\n10/20/2026 9:30:00 AM,0.61,0.25,\n').h2, [0.5089, 0.61]);
   assert.deepEqual(gcRead(H.replace(/,/g, ';') + '10/20/2026 9:00:00 AM;0,5089;0,2011;7;8\n').h2, [0.5089]);
+});
+
+test('readTable: the header function given every line and its own place, for a header of several lines (v539)', ()=>{
+  // A header whose gas is named on a line under it, a cell to the right, as GC's alternative export.
+  const text = 'No.\tTime\tAmount\n\t\t\tHydrogen\n1\t9:00\t50\n2\t9:30\t60\n';
+  const seen = [];
+  const head = (f, sep, rows, h)=>{
+    seen.push([sep, h, rows.length]);
+    if (f[1] !== 'Time') return null;
+    const gas = rows[h + 1], shift = gas.length - f.length;
+    return { t: 1, v: 2, gas: gas[2 + shift] };
+  };
+  const t = readTable(textLines(text), head, (r, c)=> /^\d+:\d\d$/.test(r[c.t] || ''));
+  assert.equal(t.sep, '\t');
+  assert.equal(t.cols.gas, 'Hydrogen');
+  assert.deepEqual(t.rows.filter(r=> /:/.test(r[1])).map(r=> +r[t.cols.v]), [50, 60]);
+  assert.ok(seen.some(([sep, h, n])=> sep === '\t' && h === 0 && n === 4), 'the lines and the header\'s place');
+});
+
+test('Figure: a table of columns in each dialect, its header or none, text columns, a title over it; names and units', ()=>{
+  const read = t => readColumns(textLines(t));
+  const cols = { n: 3, head: ['t (s)', 'a', 'b'], rows: [['1', '2.5', '3'], ['2', '3.5', '4']] };
+  for (const [sep, dec] of [[',', '.'], [';', ','], ['\t', ','], ['\t', '.'], ['  ', ',']]){
+    const t = read(`t (s)${sep}a${sep}b\n` + cols.rows.map(r=> r.map(c=> c.replace('.', dec)).join(sep)).join('\n'));
+    assert.equal(t.sep, sep === '  ' ? '  ' : sep, `${JSON.stringify(sep)} and ${dec}`);
+    assert.deepEqual(t.head, cols.head);
+    assert.deepEqual(t.rows.map(r=> r.map(parseNum)), cols.rows.map(r=> r.map(Number)));
+  }
+  // No header; a title of one field over a header; a column of names; a short row padded.
+  assert.equal(read('1;2\n3;4\n').head, null);
+  assert.deepEqual(read('My run\nSample;Rate;sd\nP25;12,5;1\nCN;15\n'), { sep: ';', n: 3, head: ['Sample', 'Rate', 'sd'], titles: null, rows: [['P25', '12,5', '1'], ['CN', '15', '']] });
+  // A line of series' titles over the header (v529): each over its group, blanks between.
+  const tt = read('series 1,,,series 2,\nt,a,b,t,c\n1,2,3,1,5\n2,3,4,2,6\n');
+  assert.deepEqual([tt.head, tt.titles], [['t', 'a', 'b', 't', 'c'], ['series 1', '', '', 'series 2', '']]);
+  assert.deepEqual(read('"S1";;"S2";\nx;y;x;y\n1;2,5;1;3\n').titles, ['S1', '', 'S2', ''], 'in quotes, under ;');
+  // None: no header under it; one title; a title on every column; a number; the first field blank.
+  for (const t of ['series 1,,series 2\n1,2,3\n', 'My run,,\nt,a,b\n1,2,3\n', 'A,B,C\nt,a,b\n1,2,3\n', 'S1,,2\nt,a,b\n1,2,3\n', ',S1,,S2\nt,a,b,c\n1,2,3,4\n'])
+    assert.equal(read(t).titles, null, JSON.stringify(t));
+  assert.equal(read('no numbers here\nat all\n'), null);
+  assert.deepEqual(['Wavelength (nm)', 'Abs [a.u.]', 'E / eV', 'Abs', '(nm)'].map(nameUnit),
+    [{ name: 'Wavelength', unit: 'nm' }, { name: 'Abs', unit: 'a.u.' }, { name: 'E', unit: 'eV' }, { name: 'Abs', unit: '' }, { name: '(nm)', unit: '' }]);
 });

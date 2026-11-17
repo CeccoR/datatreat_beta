@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1020" height="400" viewBox="0 0 1020 400" font-family="Inter, Helvetica, Arial, sans-serif" font-size="11">
+<rect width="1020" height="400" fill="#fcfcfb"/>
+<text x="12" y="20" font-size="13" font-weight="600" fill="#0b0b0b">Is there a shape at all? The gain the search finds on isotropic data, against the thresholds</text>
+<text x="12" y="37" fill="#52514e">Gain in χ²_ν; ln N = 8.59 (5384 points). The app keeps a shape at ΔBIC &lt; −10.</text>
+<text x="70" y="72" font-weight="600" fill="#0b0b0b">three widths (iso-7 as a box)</text>
+<line x1="70" x2="70" y1="80" y2="300" stroke="#e4e3df"/>
+<text x="70" y="314" text-anchor="middle" fill="#52514e">0.3</text>
+<line x1="152.90192245798738" x2="152.90192245798738" y1="80" y2="300" stroke="#e4e3df"/>
+<text x="152.90192245798738" y="314" text-anchor="middle" fill="#52514e">1</text>
+<line x1="228.54903877100634" x2="228.54903877100634" y1="80" y2="300" stroke="#e4e3df"/>
+<text x="228.54903877100634" y="314" text-anchor="middle" fill="#52514e">3</text>
+<line x1="311.4509612289937" x2="311.4509612289937" y1="80" y2="300" stroke="#e4e3df"/>
+<text x="311.4509612289937" y="314" text-anchor="middle" fill="#52514e">10</text>
+<line x1="387.0980775420127" x2="387.0980775420127" y1="80" y2="300" stroke="#e4e3df"/>
+<text x="387.0980775420127" y="314" text-anchor="middle" fill="#52514e">30</text>
+<line x1="470" x2="470" y1="80" y2="300" stroke="#e4e3df"/>
+<text x="470" y="314" text-anchor="middle" fill="#52514e">100</text>
+<line x1="70" x2="470" y1="300" y2="300" stroke="#52514e"/>
+<line x1="70" x2="70" y1="80" y2="300" stroke="#52514e"/>
+<text x="270" y="330" text-anchor="middle" fill="#52514e">gain over the isotropic size, (χ²_iso − χ²)/χ²_ν</text>
+<polyline points="248.4,300.0 248.4,80.0" fill="none" stroke="#a3a29c" stroke-width="1.4" stroke-dasharray="4 3"/>
+<text x="251.3579553655162" y="92" text-anchor="start" font-weight="400" font-size="10" fill="#a3a29c">AIC 4</text>
+<polyline points="292.7,300.0 292.7,80.0" fill="none" stroke="#52514e" stroke-width="1.4"/>
+<text x="295.6927436211877" y="104" text-anchor="start" font-weight="400" font-size="10" fill="#52514e">null max 7.6</text>
+<polyline points="380.3,300.0 380.3,80.0" fill="none" stroke="#eb6834" stroke-width="1.4" stroke-dasharray="4 3"/>
+<text x="383.3068077970345" y="116" text-anchor="start" font-weight="400" font-size="10" fill="#eb6834">ΔBIC −10 held 27</text>
+<polyline points="426.2,300.0 426.2,80.0" fill="none" stroke="#eb6834" stroke-width="1.4" stroke-dasharray="4 3"/>
+<text x="429.22693078433184" y="128" text-anchor="start" font-weight="400" font-size="10" fill="#eb6834">free 53</text>
+<circle cx="255.3" cy="256.0" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 4.42</title></circle>
+<circle cx="260.9" cy="233.3" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 4.80</title></circle>
+<circle cx="179.9" cy="247.3" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 1.48</title></circle>
+<circle cx="256.8" cy="224.7" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 4.52</title></circle>
+<circle cx="191.8" cy="238.7" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 1.76</title></circle>
+<circle cx="111.6" cy="252.7" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 0.55</title></circle>
+<circle cx="203.4" cy="230.0" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 2.08</title></circle>
+<circle cx="70.0" cy="244.0" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 0.10</title></circle>
+<circle cx="118.5" cy="221.4" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 0.61</title></circle>
+<circle cx="216.1" cy="235.4" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 2.51</title></circle>
+<circle cx="223.8" cy="249.4" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 2.80</title></circle>
+<circle cx="263.9" cy="226.7" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 5.01</title></circle>
+<circle cx="158.4" cy="240.7" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 1.08</title></circle>
+<circle cx="90.2" cy="254.8" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 0.40</title></circle>
+<circle cx="281.6" cy="232.1" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 6.48</title></circle>
+<circle cx="200.5" cy="246.1" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 2.00</title></circle>
+<circle cx="205.9" cy="223.4" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 2.16</title></circle>
+<circle cx="237.1" cy="237.4" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 3.39</title></circle>
+<circle cx="104.6" cy="251.5" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 0.50</title></circle>
+<circle cx="228.9" cy="228.8" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 3.01</title></circle>
+<circle cx="270.2" cy="242.8" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 5.49</title></circle>
+<circle cx="243.5" cy="220.1" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 3.73</title></circle>
+<circle cx="292.7" cy="234.1" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 7.62</title></circle>
+<circle cx="320.6" cy="153.3" r="3.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="1"><title>box-block-rand#1 (box) truth's gain 11.4</title></circle>
+<circle cx="249.5" cy="126.1" r="3.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="1"><title>box-block-rand#2 (box) truth's gain 4.1</title></circle>
+<circle cx="228.7" cy="142.9" r="3.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="1"><title>box-block-rand#3 (box) truth's gain 3.0</title></circle>
+<circle cx="319.8" cy="115.8" r="3.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="1"><title>ecyl-rand#1 (ellcyl) truth's gain 11.3</title></circle>
+<circle cx="344.4" cy="132.6" r="3.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="1"><title>ecyl-rand#2 (ellcyl) truth's gain 16.1</title></circle>
+<circle cx="363.8" cy="149.4" r="3.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="1"><title>ell-block-t25#1 (ellipsoid) truth's gain 21.4</title></circle>
+<text x="74" y="285.33333333333337" text-anchor="start" font-weight="400" font-size="10" fill="#2a78d6">isotropic truths: 23</text>
+<text x="74" y="182.66666666666669" text-anchor="start" font-weight="400" font-size="10" fill="#1baf7a">rejected anisotropic truths: 6</text>
+<text x="540" y="72" font-weight="600" fill="#0b0b0b">two widths (iso-20 as a cylinder)</text>
+<line x1="540" x2="540" y1="80" y2="300" stroke="#e4e3df"/>
+<text x="540" y="314" text-anchor="middle" fill="#52514e">0.3</text>
+<line x1="622.9019224579874" x2="622.9019224579874" y1="80" y2="300" stroke="#e4e3df"/>
+<text x="622.9019224579874" y="314" text-anchor="middle" fill="#52514e">1</text>
+<line x1="698.5490387710063" x2="698.5490387710063" y1="80" y2="300" stroke="#e4e3df"/>
+<text x="698.5490387710063" y="314" text-anchor="middle" fill="#52514e">3</text>
+<line x1="781.4509612289937" x2="781.4509612289937" y1="80" y2="300" stroke="#e4e3df"/>
+<text x="781.4509612289937" y="314" text-anchor="middle" fill="#52514e">10</text>
+<line x1="857.0980775420127" x2="857.0980775420127" y1="80" y2="300" stroke="#e4e3df"/>
+<text x="857.0980775420127" y="314" text-anchor="middle" fill="#52514e">30</text>
+<line x1="940" x2="940" y1="80" y2="300" stroke="#e4e3df"/>
+<text x="940" y="314" text-anchor="middle" fill="#52514e">100</text>
+<line x1="540" x2="940" y1="300" y2="300" stroke="#52514e"/>
+<line x1="540" x2="540" y1="80" y2="300" stroke="#52514e"/>
+<text x="740" y="330" text-anchor="middle" fill="#52514e">gain over the isotropic size, (χ²_iso − χ²)/χ²_ν</text>
+<polyline points="670.6,300.0 670.6,80.0" fill="none" stroke="#a3a29c" stroke-width="1.4" stroke-dasharray="4 3"/>
+<text x="673.6299389117519" y="92" text-anchor="start" font-weight="400" font-size="10" fill="#a3a29c">AIC 2</text>
+<polyline points="747.7,300.0 747.7,80.0" fill="none" stroke="#52514e" stroke-width="1.4"/>
+<text x="750.7371624765625" y="104" text-anchor="start" font-weight="400" font-size="10" fill="#52514e">null max 6.1</text>
+<polyline points="824.1,300.0 824.1,80.0" fill="none" stroke="#eb6834" stroke-width="1.4" stroke-dasharray="4 3"/>
+<text x="827.1493456444982" y="116" text-anchor="start" font-weight="400" font-size="10" fill="#eb6834">ΔBIC −10 held 19</text>
+<polyline points="869.2,300.0 869.2,80.0" fill="none" stroke="#eb6834" stroke-width="1.4" stroke-dasharray="4 3"/>
+<text x="872.2177109443352" y="128" text-anchor="start" font-weight="400" font-size="10" fill="#eb6834">free 36</text>
+<circle cx="540.0" cy="256.0" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain -0.01</title></circle>
+<circle cx="747.7" cy="233.3" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 6.13</title></circle>
+<circle cx="602.5" cy="247.3" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 0.74</title></circle>
+<circle cx="657.3" cy="224.7" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 1.65</title></circle>
+<circle cx="540.0" cy="238.7" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 0.19</title></circle>
+<circle cx="584.6" cy="252.7" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 0.57</title></circle>
+<circle cx="696.8" cy="230.0" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 2.92</title></circle>
+<circle cx="696.0" cy="244.0" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 2.89</title></circle>
+<circle cx="683.4" cy="221.4" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 2.41</title></circle>
+<circle cx="696.0" cy="235.4" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 2.89</title></circle>
+<circle cx="662.2" cy="249.4" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 1.77</title></circle>
+<circle cx="689.0" cy="226.7" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 2.61</title></circle>
+<circle cx="540.0" cy="240.7" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain -0.17</title></circle>
+<circle cx="619.4" cy="254.8" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 0.95</title></circle>
+<circle cx="540.0" cy="232.1" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain -0.88</title></circle>
+<circle cx="694.6" cy="246.1" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 2.83</title></circle>
+<circle cx="611.8" cy="223.4" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 0.85</title></circle>
+<circle cx="650.1" cy="237.4" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 1.48</title></circle>
+<circle cx="686.2" cy="251.5" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 2.51</title></circle>
+<circle cx="540.0" cy="228.8" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 0.21</title></circle>
+<circle cx="591.3" cy="242.8" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 0.63</title></circle>
+<circle cx="666.8" cy="220.1" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 1.89</title></circle>
+<circle cx="738.5" cy="234.1" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>null gain 5.36</title></circle>
+<circle cx="778.4" cy="153.3" r="3.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="1"><title>sph-mild001#3 (spheroid) truth's gain 9.6</title></circle>
+<circle cx="783.7" cy="126.1" r="3.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="1"><title>sqbox-block-rand#1 (sqbox) truth's gain 10.3</title></circle>
+<circle cx="780.1" cy="142.9" r="3.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="1"><title>sqbox-block-rand#2 (sqbox) truth's gain 9.8</title></circle>
+<circle cx="715.2" cy="115.8" r="3.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="1"><title>sqbox-block-rand#3 (sqbox) truth's gain 3.8</title></circle>
+<text x="544" y="285.33333333333337" text-anchor="start" font-weight="400" font-size="10" fill="#2a78d6">isotropic truths: 23</text>
+<text x="544" y="182.66666666666669" text-anchor="start" font-weight="400" font-size="10" fill="#1baf7a">rejected anisotropic truths: 4</text>
+<circle cx="70.0" cy="350.0" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>isotropic truth: the gain the app's search finds (early route)</title></circle><text x="80" y="354" text-anchor="start" font-weight="400" font-size="11" fill="#0b0b0b">isotropic truth: the gain the app's search finds (early route)</text>
+<circle cx="70.0" cy="366.0" r="4" fill="#1baf7a" stroke="#fcfcfb" stroke-width="1"><title>anisotropic truth the app rejects: the gain of the truth's own refinement</title></circle><text x="80" y="370" text-anchor="start" font-weight="400" font-size="11" fill="#0b0b0b">anisotropic truth the app rejects: the gain of the truth's own refinement</text>
+</svg>

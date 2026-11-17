@@ -1,14 +1,14 @@
-import { settings, fmtNum, csvLine, cumtrapz, maxArr, minArr, meanArr, stdArr, buildAlertsHtml, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, confirmBanner, esc, registerModule, fixed, keeper, objId, exactKey } from './utils.js';
+import { settings, fmtNum, csvLine, cumtrapz, maxArr, minArr, meanArr, stdArr, buildAlertsHtml, alertHtml, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, confirmBanner, esc, registerModule, fixed, keeper, objId, exactKey } from './utils.js';
 import { Plot, svgEl } from './plot.js';
 import { cardInfo, fileSafe, nameDownloads } from './cards.js';
 import { moduleKit, wideCsv, isObj, isArr, num, numStr, oneOf, dateOf, arrOf, without, cardList } from './modkit.js';
 import { CSV_ICON, plotWrap, viewOf, setView, viewKey, chipRow, toggleChip, valueBars } from './modcharts.js';
-import { textLines, readTable, parseNum } from './textdata.js';
+import { textLines, readTable, parseNum, width } from './textdata.js';
 
 /* =========================================================
    GC MODULE
 
-   MADE PER TAB (b2): createGc is the module's factory (utils.js registerModule), each open
+   MADE PER TAB (v518): createGc is the module's factory (utils.js registerModule), each open
    GC tab that is awake an instance of its own, made of its copy of index.html's section
    (root) and a layer (the kinds' menu). Its elements are found in root, a card's in its
    card and in its section of the Results, never in the page: its ids are the page's only
@@ -16,37 +16,372 @@ import { textLines, readTable, parseNum } from './textdata.js';
    on show: hidden (a state read out for its CSVs) it works out its tables and rates, which
    the CSVs are made of, and draws nothing; its redraw draws all as it is shown; a tab shown
    again with nothing changed and at the same width draws nothing (its draw key). It has no
-   job that runs on while hidden. API.md says how a module is made so.
+   job that runs on while hidden. utils.js registerModule says how a module is made so.
 ========================================================= */
 /* A sample's tables (computeTables: each gas's times, readings, flows and their integral),
    kept by its first gas's readings (utils.js keeper: while a state, a tab asleep or a
    history holds the file) under all they are made from: the injections' dates, the gases'
    readings, the light-on instant, the injection delay and the flow's rate, temperature,
    pressure and the mass. A tab woken, an undo, a redraw and the CSVs take them as made (to
-   b2v3 every redraw made them again). The integral from the interval's start (FmInt) is
+   v517 every redraw made them again). The integral from the interval's start (FmInt) is
    the card's own, made at each change of the interval: it lies on a copy. */
 const tablesKept = keeper('gc-tables', 8);
+
+/* ---- The gases, the flow and the pressure (pure: the module's, for every instance) ---- */
+// Axis titles. The SVG form carries the g⁻¹/h⁻¹ superscripts; the plain form is the
+// matching CSV header.
+const SUP1 = '<tspan baseline-shift="super" font-size="8">-1</tspan>';
+const SUP2 = '<tspan baseline-shift="super" font-size="8">-2</tspan>';
+const LBL_RATE_SVG = `Production Rate (mmol g${SUP1} h${SUP1})`;
+const LBL_CUM_SVG  = `Production (mmol g${SUP1})`;
+const LBL_RATE_CSV = 'Production Rate (mmol g^-1 h^-1)';
+const LBL_CUM_CSV  = 'Production (mmol g^-1)';
+/* What a card's rates are normalised by (v540), one choice a card so that its plots and its
+   bar chart never mix units: the photocatalyst's mass m (mg, as to v539), the rate in
+   mmol g⁻¹ h⁻¹ and the production in mmol g⁻¹, or, for a film, its area A (cm²), in
+   µmol cm⁻² h⁻¹ and µmol cm⁻². A gas's flow in µmol/h over m in mg is µmol mg⁻¹ h⁻¹, which
+   is mmol g⁻¹ h⁻¹; over A in cm², µmol cm⁻² h⁻¹. Each with its labels: the axis titles
+   (SVG), the CSV headers, the column of the parameter table and of gc_info.csv. */
+const NORM = {
+  mass: { rateSvg: LBL_RATE_SVG, cumSvg: LBL_CUM_SVG, rateCsv: LBL_RATE_CSV, cumCsv: LBL_CUM_CSV, unitCsv: 'mmol g^-1 h^-1',
+    col: 'm (mg)', colCsv: 'm (mg)' },
+  area: { rateSvg: `Production Rate (µmol cm${SUP2} h${SUP1})`, cumSvg: `Production (µmol cm${SUP2})`, rateCsv: 'Production Rate (umol cm^-2 h^-1)',
+    cumCsv: 'Production (umol cm^-2)', unitCsv: 'umol cm^-2 h^-1', col: 'A (cm²)', colCsv: 'A (cm^2)' },
+};
+const NORMS = Object.keys(NORM);
+
+/* The gases the module can read, in display order. `col` finds the column: the name
+   has to carry the formula as a word of its own, or "O2" would also match the "CO2"
+   column that sits beside it in a typical GC export. Both gases get the identical
+   treatment — %mol, molar flow, per gram, integrated — since the instrument hands
+   over calibrated mole fractions for each. */
+const GASES = [
+  { key:'h2', label:'H<sub>2</sub>', csv:'H2', dash:'',    bar:'#3aa0ff',
+    col:/(^|[^a-z0-9])h2([^a-z0-9]|$)/ },
+  { key:'o2', label:'O<sub>2</sub>', csv:'O2', dash:'5,4', bar:'#ff7a59',
+    col:/(^|[^a-z0-9])o2([^a-z0-9]|$)/ },
+];
+// Plain-text form for series names, where markup would be drawn literally.
+const gasTxt = g => g.csv.replace('2', '₂');
+/* A cell with no value: blank or not a number at parse (NaN), null once a project has
+   been through JSON. It is left out of its gas's series (computeTables). A sample has
+   a gas when its column holds a value in at least one injection. */
+const noValue = v => !Number.isFinite(v);
+const hasGas = (f, k)=> !!f.gas[k] && !f.gas[k].every(noValue);
+/* The injection date is stamped when the run starts, and the sample is injected a
+   little later: every injection is moved on by this delay, in seconds, before it is
+   set against light-on. "Auto" is the method's own figure, shown in the field. */
+const INJ_DELAY_AUTO = 60.6;
+/* The molar volume the flow Q is turned into moles with: an ideal gas at the temperature
+   T (°C) and the absolute pressure p the flow is measured at, V_m = R·T/p, 22.414 L/mol
+   at 0 °C and 1 atm, 24.465 at 25 °C. T is each card's, all/one as m and Q are: 25 °C in
+   a new card and for a new file, 0 °C in a project saved before it existed, whose rates
+   were worked out at 22.41396954 L/mol (to v500, whatever the flow meter's). p the same
+   way: 1 atm in a new card, for a new file and in a project saved before it, whose rates
+   were worked out at it (to v500 p was 1 atm, fixed). */
+const R_ATM = 0.0820573661;    // R, L·atm/(mol·K)
+const molarVolume = (T, p)=> R_ATM*(T + 273.15)/(p/P_ATM);
+const T_NEW = 25, T_OLD = 0, okT = v => v >= -273;
+/* p is kept in Pa, as typed in its unit; the unit, the card's, is only how it is shown
+   and written, so switching it never moves the pressure. Each unit's size in Pa is a
+   fraction, so that a value typed goes to Pa and back exactly where it can (760 Torr is
+   101325 Pa); shown to 12 digits, which leaves out the last bit a conversion may add
+   (1.1 bar is 110000.00000000001 Pa). Torr is mmHg to 1 part in 7 million. */
+const P_ATM = 101325, P_MAX = 1e300;   // (a p below P_MAX in its unit is a number in Pa)
+const P_UNITS = { atm: [P_ATM, 1], bar: [1e5, 1], kPa: [1000, 1], mbar: [100, 1], Torr: [P_ATM, 760], psi: [6894.757293168361, 1] };
+const toPa = (v, u)=> v*P_UNITS[u][0]/P_UNITS[u][1];
+const inUnit = (pa, u)=> +(pa*P_UNITS[u][1]/P_UNITS[u][0]).toPrecision(12);
+/* A pressure as the fields make one: above 0, and at most P_MAX in the largest unit (atm),
+   so that it is a number in every unit. One restored or kept for a file past these is
+   taken as the default, as a mass or a flow is (a hand-edited project's 1e307 Pa was
+   shown as Infinity in Torr, and written so in the CSVs). */
+const okP = v => v > 0 && v <= P_MAX*P_ATM;
+// A card's per-sample arrays, as its state names them.
+const PER_SAMPLE = ['ms', 'Qs', 'Ts', 'Ps', 'startArr', 'endArr', 'lightOnDates'];
+// (a number however a project's .json writes it: the count goes into markup)
+function blankCounts(f){ return GASES.map(g=> f.gas[g.key] ? f.gas[g.key].filter(noValue).length + (+f.emptyRows || 0) : 0); }
+
+/* ---- Reading a file ---- */
+/* An injection date, as both exports write it (one reader for both, v539): day, month and
+   year between '/', the month a number or an English name (Nov, November; any case), the
+   year of 4 digits or 2 (26 is 2026); then the time, h:mm or h:mm:ss (no seconds: 00),
+   with AM or PM or in 24 hours without. 'M/D/YYYY h:mm:ss AM|PM' is the default export's,
+   '13/Nov/26 14:13:01' and '13/Nov/2026 14:13' the alternative's. → its fields as they
+   stand, [a, b, year, h, min, s, AM|PM], or null for a field of another shape (no line of
+   data: 'n.a.', a header). To v538 only the default's, its seconds and AM/PM required. */
+const MONTH_NAMES = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+const MON = 'jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?';
+const GC_DATE = new RegExp(`^(\\d{1,2}|${MON})\\/(\\d{1,2}|${MON})\\/(\\d{4}|\\d{2})\\s+(\\d{1,2}):(\\d{2})(?::(\\d{2}))?(?:\\s*(AM|PM))?$`, 'i');
+// A month's number from its name (1–12), 0 for a number.
+const monthOf = s =>{ const i = /^\d/.test(s) ? -1 : MONTH_NAMES.indexOf(s.slice(0, 3).toLowerCase()); return i + 1; };
+const dateFields = s =>{ const m = String(s || '').trim().match(GC_DATE); return m && !(monthOf(m[1]) && monthOf(m[2])) ? m.slice(1) : null; };
+// Whether those fields name their month (the order then is theirs: no day/month to find).
+const namesMonth = m => !!(monthOf(m[0]) || monthOf(m[1]));
+/* The moment those fields are, the day first when `dm` (a file read as day/month), or
+   null when there is none: a month 1–12, a day 1 to the month's length (29 February in a
+   leap year), the hour 1–12 with AM or PM and 0–23 without, minutes and seconds 0–59. A
+   month named is the month where it stands, the other number the day, whatever `dm`. To
+   v509 none was checked and the Date rolled over: 13/10/2025 was 10 January 2026,
+   2/30/2025 2 March, 13:00:00 PM 1 PM. */
+const MONTH_DAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+function parseGCDate(m, dm){
+  const [a, b, yy, h, mi, se, ap] = m, na = monthOf(a), nb = monthOf(b);
+  const mo = nb || na || +(dm ? b : a), da = nb ? +a : na ? +b : +(dm ? a : b);
+  const y = yy.length === 2 ? 2000 + +yy : +yy, hh = +h, s = se === undefined ? 0 : +se;
+  const len = mo === 2 && !(y % 4) && (y % 100 || !(y % 400)) ? 29 : MONTH_DAYS[mo - 1];
+  if (!(da >= 1 && da <= len && (ap ? hh >= 1 && hh <= 12 : hh <= 23) && +mi <= 59 && s <= 59)) return null;
+  return new Date(y, mo - 1, da, ap ? hh % 12 + (/pm/i.test(ap) ? 12 : 0) : hh, +mi, s);
+}
+
+/* A GC export, as textdata.js reads a table (its encoding, separator, decimal mark and
+   quotes found from the file). Its header names the injection date and at least one
+   gas, each in a column of its own: whichever gases it has are read, the rest simply are
+   not there for that sample. The header is the first line that names them (to v489 it
+   had to be the first line), the data the lines under it with an injection date.
+   The dates are read in the instrument's order, month/day, where every one exists so (a
+   file of days up to 12 too, either way). A file where some do not is read day/month
+   (`dayMonth`) when every one exists so and the times so read go on as the rows do,
+   back by an hour at most (a clock put back at the end of summer time): a file saved
+   day first. Any other is read month/day, the rows whose date does not exist so left
+   out (`badDates`): a month/day file with a mistyped date that would exist day first
+   (16/10 among 10/5 and 10/6), whose times would go back months, and one whose dates
+   fail both ways. The alert says both (dateAlertsHtml); a file with no injection left
+   for a date that does not exist is refused with why. To v509 every date was
+   month/day, rolled over. A date that names its month (13/Nov/26) has no order to find:
+   it is the same either way, and a file of those alone is never day/month
+   (`monthNames`: the alert then names no order).
+   A cell that is no number ('n.a.', any case, as a blank: parseNum gives NaN) is no value
+   for that gas alone; a line that is no data (blank, only separators or tabs, 'n.a.' for
+   its date) is passed over unsaid, as ever.
+   Two layouts: the default (gcColumns), a header naming the injection date and each
+   gas's %mol; the alternative (altColumns, v539), the instrument's .txt, its gases in
+   ppm, its files said in an info alert (`altExport`, altAlertsHtml). */
+function gcColumns(fields){
+  const lo = fields.map(h=> h.toLowerCase()), date = lo.findIndex(h=> h.includes('injection date')), gas = {};
+  for (const g of GASES){ const i = lo.findIndex(h=> g.col.test(h) && h.includes('%mol')); if (i >= 0 && i !== date) gas[g.key] = i; }
+  return date >= 0 && Object.keys(gas).length ? { date, gas } : null;
+}
+/* The alternative export (v539): the instrument's .txt, tab-separated, a header of four
+   lines over the injections: the columns' names (No., Inject Time, Area ×3, Amount ×3),
+   their units, the channel, and the gas of each Area and Amount column (Hydrogen,
+   Nitrogen, Oxygen), the three under the first shifted a cell right by a leading tab. Its
+   header is a line naming Inject Time and Amount over a line naming H₂ or O₂, before the
+   first line with a date. Its columns are the data's (the lines with a date under it, as
+   wide as most of them are), each header line set against them by its right end, where
+   they all end whatever their lead (a trailing separator adds none). H₂ and O₂ are the
+   Amount columns of Hydrogen and Oxygen, in ppm (readGc: %mol = ppm/10⁴); the Area
+   columns and the other gases are left. → { date, gas, alt: true } in the data's columns,
+   or null. */
+const ALT_GAS = { hydrogen: 'h2', h2: 'h2', oxygen: 'o2', o2: 'o2' };
+const cellName = c => String(c || '').toLowerCase().replace(/\s+/g, ' ').trim();
+const isAmount = c => /^amount\b/.test(cellName(c));
+function altColumns(fields, rows, h){
+  const at = fields.map(cellName).indexOf('inject time');
+  if (at < 0 || !fields.some(isAmount)) return null;
+  const below = rows.slice(h + 1), dated = r => r.some(c=> dateFields(c)), first = below.findIndex(dated);
+  const gasLine = first < 0 ? null : below.slice(0, first).reverse().find(r=> r.some(c=> ALT_GAS[cellName(c)]));
+  if (!gasLine) return null;
+  // The data's width: the most common among the lines with a date (on a tie the wider).
+  const ws = new Map();
+  let n = 0, most = 0;
+  below.slice(first).filter(dated).forEach(r=>{ const w = width(r); ws.set(w, (ws.get(w) || 0) + 1); });
+  ws.forEach((k, w)=>{ if (k > most || (k === most && w > n)){ n = w; most = k; } });
+  // Each header line's cell over data column d, by the right ends.
+  const o1 = width(fields) - n, og = width(gasLine) - n, date = at - o1, gas = {};
+  if (date < 0 || date >= n) return null;
+  for (let d = 0; d < n; d++){
+    const k = isAmount(fields[d + o1]) && ALT_GAS[cellName(gasLine[d + og])];
+    if (k && !(k in gas)) gas[k] = d;
+  }
+  return Object.keys(gas).length ? { date, gas, alt: true } : null;
+}
+function readGc(text){
+  const t = readTable(textLines(text), (f, sep, rows, h)=> gcColumns(f) || altColumns(f, rows, h), (r, c)=> !!dateFields(r[c.date]));
+  if (!t) return null;
+  const { date, gas: idx, alt } = t.cols, injDates = [], gas = {};
+  // The lines with a date, and its fields; day first when every date exists so and not
+  // month first, its times never back by more than an hour.
+  const rows = t.rows.map(r=> [r, dateFields(r[date])]).filter(x=> x[1]);
+  const md = rows.map(x=> parseGCDate(x[1], false)), df = rows.map(x=> parseGCDate(x[1], true));
+  const dm = !md.every(Boolean) && df.every((d, i)=> d && (!i || d - df[i - 1] >= -3600e3));
+  const named = rows.every(x=> namesMonth(x[1]));
+  let emptyRows = 0, badDates = 0, lost = 0;
+  for (const k in idx) gas[k] = [];
+  for (const [i, [r]] of rows.entries()){
+    const d = (dm ? df : md)[i], vals = {};
+    let any = false;
+    // (the alternative's ppm as %mol, the unit every table, plot and CSV is in)
+    for (const k in idx){ const v = parseNum(r[idx[k]]); vals[k] = isFinite(v) ? (alt ? v/1e4 : v) : NaN; if (isFinite(v)) any = true; }
+    // (`lost`: a row with a value whose date does not exist, an injection but for it)
+    if (!d){ badDates++; if (any) lost++; continue; }
+    // One row, every gas kept on the same time axis; a blank cell stays NaN so the
+    // columns never slip out of step with the dates. The analysis leaves it out of
+    // that gas's series (computeTables) and the alerts count it (blankAlertsHtml). A
+    // row with no gas at all is left out, as it was, and the alert counts it too (to
+    // v474 it went unsaid).
+    if (any){ injDates.push(d); for (const k in idx) gas[k].push(vals[k]); }
+    else emptyRows++;
+  }
+  /* No injection left: refused with why when a row with a value went for its date (the
+     other rows, none with a gas value, counted beside it); by its name alone when no row
+     had a value, whatever its date, as at v509. (dayMonth, badDates, monthNames and
+     altExport only where they apply: any other file's record is as it was.) */
+  const rest = rows.length - lost;
+  if (!injDates.length) return lost ? { error: `no injection to read: ${lost} row${lost > 1 ? 's' : ''} with an injection date that does not exist${rest ? `, ${rest} with no gas value` : ''}` } : null;
+  for (const k in gas) fixed(gas[k]);
+  return { injDates, gas, emptyRows, ...(dm && { dayMonth: true }), ...(badDates && { badDates }), ...(named && { monthNames: true }), ...(alt && { altExport: true }) };
+}
+
+// The first injection, to the minute: the field shows and sets minutes only, so a
+// default carrying the seconds would change the moment the field was merely tabbed
+// through — results shifting, and an undo step, with nothing touched.
+function firstInjection(f){
+  const d = new Date(Math.min(...f.injDates.map(Number))); d.setSeconds(0, 0);
+  return d;
+}
+
+/* ---- The cards' parts: cells, lines, legends ---- */
+// A numeric text cell; `state` = 'on' (editable), 'ro' (read-only) or 'off' (disabled).
+function numCell(cls, attrs, value, state){
+  const dis = state==='off' ? 'disabled' : (state==='ro' ? 'readonly' : '');
+  return `<input class="${cls}" ${attrs} type="text" inputmode="decimal" value="${esc(value)}" ${dis} style="width:100%">`;
+}
+const modeChip = (pair, mode)=> `<button type="button" class="mode-chip gc-toggle" data-pair="${pair}" title="Switch all / one">${esc(mode)}</button>`;
+// A header over a field: its name on the field's left edge, its all/one pill on the
+// field's right edge.
+const thHead = (label, chip)=> `<div class="gc-th"><span>${label}</span>${chip}</div>`;
+
+// Parse a raw field string into a finite number, or null if incomplete/invalid.
+function parseIntervalField(v){
+  const s = String(v).trim().replace(',', '.');   // accept comma decimals
+  if (s==='' || s==='-' || s==='+' || s==='.' || s==='-.' || s==='+.') return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+
+// The trapezoid integral `cum` of `f` over `t`, read at any time: the segment it
+// falls in integrated up to it. Before the first point there is nothing yet.
+function cumAt(t, f, cum, at){
+  if (!t.length || at <= t[0]) return 0;
+  const n = t.length;
+  if (at >= t[n-1]) return cum[n-1];
+  let a = 0; while (a + 1 < n && t[a+1] <= at) a++;
+  const fa = f[a], fat = fa + (f[a+1] - fa)*(at - t[a])/((t[a+1] - t[a]) || 1);
+  return cum[a] + (at - t[a])*(fa + fat)/2;
+}
+
+/* One line per sample per gas, the sample's colour throughout and the gas told by
+   the dash pattern, so a sample stays recognisable across both gases. The name
+   carries the gas only when more than one is on show. */
+function drawGasLines(plot, tables, shown, key){
+  tables.forEach(d=>{
+    shown.forEach(g=>{
+      const q = d.gas[g.key];
+      if (!q) return;
+      // On the gas's own times: an injection it has no value for is not one of its points.
+      plot.line(q.t, q[key], d.color, 1.3, g.dash, { label: seriesName(d.label, g, shown), key: d.name + '/' + g.key });
+    });
+  });
+}
+const seriesName = (label, g, shown)=> shown.length > 1 ? `${label} ${gasTxt(g)}` : label;
+
+// Legend entries follow the same rule, with a dashed key for a dashed gas.
+function gasLegendHtml(d, shown){
+  return shown.filter(g=>d.gas[g.key]).map(g=>{
+    const key = g.dash
+      ? `<i class="mk-dash" style="color:${esc(d.color)}"></i>`
+      : `<i style="background:${esc(d.color)}"></i>`;
+    return `<span>${key}${esc(seriesName(d.label, g, shown))}</span>`;
+  }).join('');
+}
+
+/* The top of a time plot's y-range: the highest value of `key` from light-on on
+   (t ≥ 0), so what comes before it (a spike, a purge) does not flatten the run; of
+   all the points when none is that late. The bottom is always 0. */
+function yTop(tables, shown, key){
+  let hi = -Infinity, any = false;
+  const take = after => tables.forEach(d=> shown.forEach(g=>{
+    const q = d.gas[g.key]; if (!q) return;
+    q.t.forEach((t, i)=>{
+      const v = q[key][i];
+      if (!isFinite(v) || (after && t < 0)) return;
+      hi = Math.max(hi, v); any = true;
+    });
+  }));
+  take(true);
+  if (!any) take(false);
+  return hi;
+}
+
+// The straight line between the injections either side of `at`, read there.
+function lineAt(t, v, at){
+  let a = 0; while (a + 2 < t.length && t[a+1] <= at) a++;
+  const w = t[a+1] - t[a];
+  return w ? v[a] + (v[a+1] - v[a])*(at - t[a])/w : v[a];
+}
+
+/* ---- A card's markup, its kinds and instructions ---- */
+const P = a => 'gc' + a.id;
+// A plot of a card's, with the gas chips of its section (`sec`: 'a' Analysis, 'r' Results) over it.
+const gasPlot = (id, sec, o)=> plotWrap(id, { mod: 'gc', extra: `\n              <span class="gc-gas-sel" data-gas-sec="${sec}"></span>`, ...o });
+const cardBody = a => `
+      <div class="peak-box" style="margin-top:0;margin-bottom:14px">
+        <div class="peak-box-head">
+          <span class="txt-mini">Parameters</span>
+          <button class="btn table-csv-btn" data-csv-mod="gc" data-csv-names="gc_info.csv" title="Download CSV">${CSV_ICON}</button>
+        </div>
+        <div class="gc-param-wrap" id="${P(a)}ParamTableWrap"></div>
+      </div>
+      <div class="row" style="align-items:flex-start">
+        <div class="col">
+          <p class="txt-caption">Production Rate</p>${gasPlot(P(a) + 'Svg1', 'a', { cls: 'plot-strip', csv: 'gc_raw.csv', name: 'GC_rate.svg', legend: P(a) + 'Legend' })}
+        </div>
+      </div>
+      <div id="${P(a)}Legend" class="legend" style="margin-top:8px"></div>`;
+const resHtml = a => `
+      <h4 class="res-an-title"></h4>
+      <div class="row res-row">
+        <div class="col">
+          <p class="txt-caption">Production Rate</p>${gasPlot(P(a) + 'SvgRate', 'r', { csv: 'gc_results.csv', name: 'GC_results_rate.svg', legend: P(a) + 'ResLegend' })}
+        </div>
+        <div class="col">
+          <p class="txt-caption">Production</p>${gasPlot(P(a) + 'SvgCum', 'r', { csv: 'gc_results.csv', name: 'GC_results_cumulative.svg', legend: P(a) + 'ResLegend' })}
+        </div>
+      </div>
+      <div id="${P(a)}ResLegend" class="legend" style="margin-top:8px"></div>
+      <p class="txt-caption" style="margin-top:14px">Mean Production Rate</p>${gasPlot(P(a) + 'SvgBar', 'r', { cls: 'plot-wide', csv: 'mean_rates.csv', name: 'GC_results.svg', legend: P(a) + 'BarLegend' })}
+      <div id="${P(a)}BarLegend" class="legend" style="margin-top:8px"></div>`;
+// The analyses' kinds (cards.js), as the menu lists them.
+const KINDS = { rate: 'Production Rate' };
+// What T and p are (their columns' titles, and the card's instructions).
+const T_TITLE = 'the temperature the flow Q refers to — for a mass-flow controller (sccm, slpm), the reference temperature of its standard units (Alicat: 25 °C), not that of the gas in the lines or the reactor; for a flow measured as a volume, the gas temperature where it is measured';
+const P_TITLE = 'the absolute pressure the flow Q refers to — for a mass-flow controller, the reference pressure of its standard units (Alicat: 14.696 psia = 1 atm), not that of the gas in the lines or the reactor; for a flow measured as a volume, the absolute pressure of the gas where it is measured (ambient ≈ 1 atm)';
+const GC_INFO = `Set catalyst mass (m) or, for a film, its area (A), carrier gas flow rate (Q), its temperature (T) and pressure (p), the light-on time and the integration interval for each sample to compute mean H₂ and O₂ production rates; <b>Normalize by</b>, on the injection delay's row, chooses for the whole card what the rates are divided by: the photocatalyst's <b>mass</b> m in mg (rates in mmol g⁻¹ h⁻¹, production in mmol g⁻¹; the default, and how a project saved before v540 opens) or its <b>area</b> A in cm² (µmol cm⁻² h⁻¹ and µmol cm⁻², the usual units for films); with area the m column becomes A, with its own all / one, the masses and the areas both kept, so that switching back loses neither; the plots, the bar chart, the CSVs and their headers follow the choice. the <b>H₂ / O₂</b> chips on each plot choose the gases drawn, for Analysis and for Results; the CSVs have every gas, whichever is drawn. Two layouts are read. The <b>default</b>: a header naming the Injection Date and each gas's %mol column (H₂, O₂). The <b>alternative</b>, the instrument's tab-separated .txt export: a header naming Inject Time and its Area and Amount columns, over a line naming each column's gas (Hydrogen, Nitrogen, Oxygen); H₂ and O₂ are read from the Amount columns, in ppm, and worked out as %mol (ppm / 10⁴), gc_raw.csv writing them in ppm (its column headed so), the Area columns and N₂ left out, and an info alert under the drop zone names each file read so. An empty H₂ or O₂ cell, or one reading n.a., leaves that injection out of that gas only, and the alert under the drop zone says how many were skipped; a blank line, a line of separators alone and a row with no date (n.a.) are passed over. An injection date is the day, the month and the year between slashes, the month a number or an English name (Nov, November), the year of 4 digits or 2 (26 is 2026), then the time, h:mm or h:mm:ss, with AM/PM or in 24 hours (14:13). Numeric dates are read month/day, as the instrument writes them, or day/month in a file where some do not exist so and every one does that way, its times going on as the rows do; a month named is read where it stands (13/Nov/26 is 13 November). A row whose date does not exist (2/30, 13/13, 31/Nov, 13:00 PM) is left out, and the alert says either. Use the <b>all / one</b> toggles to share a value across samples or set it per sample. <b>T</b> is ${T_TITLE}. <b>p</b> is ${P_TITLE}; its unit (atm, bar, kPa, mbar, Torr = mmHg, psi) is chosen in its column's header, which converts the values shown, not the pressure. A <b>mass-flow controller</b> (an Alicat MC, say) gives a mass flow as the volume it would take at its reference conditions (sccm, slpm), so the molar flow is n/t = p<sub>ref</sub>·Q/(R·T<sub>ref</sub>) with the controller's reference T and p: the real temperature and pressure of the gas, in the lines or in the reactor, do not enter. Set T and p to its standard conditions: Alicat's default is 25 °C and 14.696 psia (1 atm) for its standard units, 0 °C and 1 atm for its normal ones (NCCM, NLPM), and the device's STP/NTP menu can change them. Its reading is right for the gas it is set to: another gas or a mixture needs that gas chosen on the device, or its correction factor. The flow is turned into moles with the molar volume of an ideal gas at that temperature and pressure, V<sub>m</sub> = RT/p (22.414 L/mol at 0 °C and 1 atm, 24.465 L/mol at 25 °C and 1 atm). A new analysis starts at 25 °C and 1 atm; a project saved before T existed keeps the 0 °C its rates were worked out at, and one saved before p, the 1 atm. The <b>injection delay</b> moves every injection on from its logged date to the moment the sample is actually injected; <b>Auto</b> uses 60.6 s. In per-sample interval mode the vertical lines are coloured by sample — hover or select a table row to highlight its interval on the plot (and vice-versa). <b>Replicates</b>: the <b>Sample</b> column of the file list says which sample each file is — its own (as it starts), or another file's, named by that file's label (a label renamed shows at once and changes no link); a file that heads a group, set to another, takes its group along, and a head removed leaves its group to its next file. The time plots stay one per file; the mean-rate bar chart has one bar per sample, named after its head's label (the first included file's, the head left out), its height the mean of its included files' mean rates, each worked out with its own parameters, and its error bar the files' standard deviation (n − 1 under it; none for a single file); a file left out is out of the mean and of n. With replicates (a sample of more than one included file), mean_rates.csv has a row per sample (each gas's mean, ± and n) and mean_rates_by_file.csv a row per file, as mean_rates.csv has without them. ${cardInfo(false, true)}`;
+
 // A GC tab's instance (utils.js makeInstance: ctx { key, root, layer, shown }).
 function createGc({ key, root, layer, shown }){
   const $ = id => root.querySelector('#' + id);
-  /* Hidden, nothing is drawn (API.md §6): `drawable()` says whether to draw, and when not
-     marks the instance to be drawn whole as it is shown (stale). `drawnAt`: the width it was
-     last drawn whole at, its draw key (redrawTab). */
+  /* Hidden, nothing is drawn (utils.js registerModule): `drawable()` says whether to draw,
+     and when not marks the instance to be drawn whole as it is shown (stale). `drawnAt`:
+     the width it was last drawn whole at, its draw key (redrawTab). */
   let stale = false, drawnAt = '';
   const drawable = ()=> shown() || !(stale = true);
   /* The module (modkit.js): every file loaded, in list order, {name, label,
-     injDates:[Date], gas:{h2:[number], o2:[number]} (the gases it has), emptyRows, and
-     dayMonth: true, badDates: n where they apply (readGc), and sample, the file it is a
-     replicate of, where it is one (REPLICATES)}, and the included ones, which the analysis
-     sees, `files`, with which the per-sample arrays each card keeps are aligned; the
-     alerts under the drop zone, the dates read day first or left out and the empty cells
-     skipped among them; each card's settings in the history. A gas's values, which
+     injDates:[Date], gas:{h2:[number], o2:[number]} (the gases it has, in %mol), emptyRows,
+     and dayMonth: true, badDates: n, monthNames: true, altExport: true where they apply
+     (readGc), and sample, the file it is a replicate of, where it is one (REPLICATES)},
+     and the included ones, which the analysis sees, `files`, with which the per-sample
+     arrays each card keeps are aligned; the alerts under the drop zone, the dates read day
+     first or left out, the empty cells skipped and the files read as the alternative
+     export among them; each card's settings in the history. A gas's values, which
      nothing changes once read, are fixed (db.js: the same array in a tab's states and its
-     parked state; to b2v2 a parked state held a copy). */
+     parked state). */
   const kit = moduleKit('gc', {
     root, key, layer,
-    alerts: p =>{ $('gcAlerts').innerHTML = p.invalid + dateAlertsHtml() + blankAlertsHtml() + p.upload; },
-    dismiss: { blank: ()=> allFiles.forEach(f=> blankSeen.add(f.gas)), dates: ()=> allFiles.forEach(f=> dateSeen.add(f.gas)) },
+    // (the plots' gas chips, H₂ / O₂: the view alone, a step but no change unsaved; utils.js VIEW_KEYS)
+    view: ['gasSel'],
+    alerts: p =>{ $('gcAlerts').innerHTML = p.invalid + dateAlertsHtml() + blankAlertsHtml() + altAlertsHtml() + p.upload; },
+    dismiss: { blank: ()=> allFiles.forEach(f=> blankSeen.add(f.gas)), dates: ()=> allFiles.forEach(f=> dateSeen.add(f.gas)), alt: ()=> allFiles.forEach(f=> altSeen.add(f.gas)) },
     // Every card's per-sample arrays. An excluded file holds its own values; one with none
     // (never so far, or in a card added since) gets the upload defaults.
     slots: ()=> cards().flatMap(a=> live.get(a.id).slots()),
@@ -58,7 +393,7 @@ function createGc({ key, root, layer, shown }){
     // A label or a colour changed: the zoom kept (the data are the same), a folded card not
     // drawn (to v494 it was, hidden, at no size, and lost its zoom). A file's sample: the
     // mean-rate bars alone, the only plot per sample.
-    redraw: what => what === 'note' ? each(c=> c.bars()) : each((c, a)=>{ if (what === 'label') c.renderTable(); if (!deck.isFolded(a)) c.compute(true); else c.computeQuiet(); }),
+    redraw: what => what === 'note' ? each(c=> c.bars()) : (what === 'label' && sampleNames(), each((c, a)=>{ if (what === 'label') c.renderTable(); if (!deck.isFolded(a)) c.compute(true); else c.computeQuiet(); })),
     cleared: ()=> each(c=> c.clear()),
     snapshot: ()=> ({ cards: cards().map(a=> ({ ...deck.saved(a), ...live.get(a.id).snapshot() })) }),
     /* A file as a restore takes it (modkit RESTORED): its injections, each with a date that
@@ -104,8 +439,9 @@ function createGc({ key, root, layer, shown }){
   /* ---- REPLICATES ----
      Each file is a sample of its own, or a replicate of another file's: its record's
      `sample`, the name of the file that heads the group, which the list's Sample column
-     chooses. Linked by the file's name, its identity in the list (the drop loads no name
-     twice), not by its label: a label renamed changes nothing. No chains: a file is linked
+     chooses, by the head's label (v535; its name to v534). Linked by the file's name, its
+     identity in the list (the drop loads no name twice), not by its label: a label renamed
+     changes no link, only the name shown. No chains: a file is linked
      to a head alone (a file linked to none), and a head linked to another takes its group
      along. Every plot and CSV stays per file but the mean-rate bars and mean_rates.csv,
      one per sample (samplesOf, sampleRates). */
@@ -133,12 +469,20 @@ function createGc({ key, root, layer, shown }){
   }
   // A file's head: the file it is linked to, or itself.
   const headOf = (f, by)=> (!isHead(f) && by.get(f.sample)) || f;
-  /* The file list's Sample column: a select of the file's own name and the heads', in list
-     order, on its head's; dimmed with the row when the file is left out, as its label is. */
+  /* The file list's Sample column: a select of the file itself and the heads, in list
+     order, on its head's; each option the file's name as its value (the link) and its label
+     as its text (to v534 its name), the name in its title; dimmed with the row when the
+     file is left out, as its label is. A label renamed is shown at once (sampleNames). */
+  const sampleOpt = (g, h)=> `<option value="${esc(g.name)}" title="${esc(g.name)}"${g === h ? ' selected' : ''}>${esc(g.label)}</option>`;
   function sampleCell(f, i){
     const h = headOf(f, byName().by);
-    return `<select class="file-sample" data-i="${i}" aria-label="Sample" title="The sample this file is: its own, or the one another file heads (its replicates)">${
-      allFiles.filter(g=> g === f || isHead(g)).map(g=> `<option value="${esc(g.name)}"${g === h ? ' selected' : ''}>${esc(g.name)}</option>`).join('')}</select>`;
+    return `<select class="file-sample" data-i="${i}" aria-label="Sample" title="The sample this trace is: its own, or the one another trace heads (its replicates), by its label">${
+      allFiles.filter(g=> g === f || isHead(g)).map(g=> sampleOpt(g, h)).join('')}</select>`;
+  }
+  // The Sample column's options after a label renamed: each its file's label again.
+  function sampleNames(){
+    const { by } = byName();
+    root.querySelectorAll('#gcFileTableWrap select.file-sample option').forEach(o=>{ const g = by.get(o.value); if (g && o.textContent !== g.label) o.textContent = g.label; });
   }
   /* File i's sample chosen (modkit noteChange): its own, it heads one again; a head's, it
      joins that one's, with the files it headed. A walk through its select's options
@@ -169,63 +513,8 @@ function createGc({ key, root, layer, shown }){
     return [...out.values()];
   }
 
-  // Axis titles. The SVG form carries the g⁻¹/h⁻¹ superscripts; the plain form is the
-  // matching CSV header.
-  const SUP1 = '<tspan baseline-shift="super" font-size="8">-1</tspan>';
-  const LBL_RATE_SVG = `Production Rate (mmol g${SUP1} h${SUP1})`;
-  const LBL_CUM_SVG  = `Production (mmol g${SUP1})`;
-  const LBL_RATE_CSV = 'Production Rate (mmol g^-1 h^-1)';
-  const LBL_CUM_CSV  = 'Production (mmol g^-1)';
-
-  /* The gases the module can read, in display order. `col` finds the column: the name
-     has to carry the formula as a word of its own, or "O2" would also match the "CO2"
-     column that sits beside it in a typical GC export. Both gases get the identical
-     treatment — %mol, molar flow, per gram, integrated — since the instrument hands
-     over calibrated mole fractions for each. */
-  const GASES = [
-    { key:'h2', label:'H<sub>2</sub>', csv:'H2', dash:'',    bar:'#3aa0ff',
-      col:/(^|[^a-z0-9])h2([^a-z0-9]|$)/ },
-    { key:'o2', label:'O<sub>2</sub>', csv:'O2', dash:'5,4', bar:'#ff7a59',
-      col:/(^|[^a-z0-9])o2([^a-z0-9]|$)/ },
-  ];
-  // Plain-text form for series names, where markup would be drawn literally.
-  const gasTxt = g => g.csv.replace('2', '₂');
-  /* A cell with no value: blank or not a number at parse (NaN), null once a project has
-     been through JSON. It is left out of its gas's series (computeTables). A sample has
-     a gas when its column holds a value in at least one injection. */
-  const noValue = v => !Number.isFinite(v);
-  const hasGas = (f, k)=> !!f.gas[k] && !f.gas[k].every(noValue);
+  // A gas on show: one of the included samples has it (hasGas).
   const gasPresent = k => files.some(f=> hasGas(f, k));
-  /* The injection date is stamped when the run starts, and the sample is injected a
-     little later: every injection is moved on by this delay, in seconds, before it is
-     set against light-on. "Auto" is the method's own figure, shown in the field. */
-  const INJ_DELAY_AUTO = 60.6;
-  /* The molar volume the flow Q is turned into moles with: an ideal gas at the temperature
-     T (°C) and the absolute pressure p the flow is measured at, V_m = R·T/p, 22.414 L/mol
-     at 0 °C and 1 atm, 24.465 at 25 °C. T is each card's, all/one as m and Q are: 25 °C in
-     a new card and for a new file, 0 °C in a project saved before it existed, whose rates
-     were worked out at 22.41396954 L/mol (to v500, whatever the flow meter's). p the same
-     way: 1 atm in a new card, for a new file and in a project saved before it, whose rates
-     were worked out at it (to v500 p was 1 atm, fixed). */
-  const R_ATM = 0.0820573661;    // R, L·atm/(mol·K)
-  const molarVolume = (T, p)=> R_ATM*(T + 273.15)/(p/P_ATM);
-  const T_NEW = 25, T_OLD = 0, okT = v => v >= -273;
-  /* p is kept in Pa, as typed in its unit; the unit, the card's, is only how it is shown
-     and written, so switching it never moves the pressure. Each unit's size in Pa is a
-     fraction, so that a value typed goes to Pa and back exactly where it can (760 Torr is
-     101325 Pa); shown to 12 digits, which leaves out the last bit a conversion may add
-     (1.1 bar is 110000.00000000001 Pa). Torr is mmHg to 1 part in 7 million. */
-  const P_ATM = 101325, P_MAX = 1e300;   // (a p below P_MAX in its unit is a number in Pa)
-  const P_UNITS = { atm: [P_ATM, 1], bar: [1e5, 1], kPa: [1000, 1], mbar: [100, 1], Torr: [P_ATM, 760], psi: [6894.757293168361, 1] };
-  const toPa = (v, u)=> v*P_UNITS[u][0]/P_UNITS[u][1];
-  const inUnit = (pa, u)=> +(pa*P_UNITS[u][1]/P_UNITS[u][0]).toPrecision(12);
-  /* A pressure as the fields make one: above 0, and at most P_MAX in the largest unit (atm),
-     so that it is a number in every unit. One restored or kept for a file past these is
-     taken as the default, as a mass or a flow is (a hand-edited project's 1e307 Pa was
-     shown as Infinity in Torr, and written so in the CSVs). */
-  const okP = v => v > 0 && v <= P_MAX*P_ATM;
-  // A card's per-sample arrays, as its state names them.
-  const PER_SAMPLE = ['ms', 'Qs', 'Ts', 'Ps', 'startArr', 'endArr', 'lightOnDates'];
   /* The empty cells skipped, per file and gas: the blank cells of a row kept, and the
      rows with none of the file's gases (dropped at parse, `emptyRows`, an empty cell for
      each gas it has). Read off the loaded files each time, not kept from the drop, so it
@@ -235,8 +524,6 @@ function createGc({ key, root, layer, shown }){
      so a file dropped anew (a same-named one too), a reopened project, a tab brought back
      are named again, and a dismissal in one tab leaves the others' files named. */
   const blankSeen = new WeakSet();
-  // (a number however a project's .json writes it: the count goes into markup)
-  function blankCounts(f){ return GASES.map(g=> f.gas[g.key] ? f.gas[g.key].filter(noValue).length + (+f.emptyRows || 0) : 0); }
   function blankAlertsHtml(){
     const lines = [];
     allFiles.forEach(f=>{
@@ -253,95 +540,28 @@ function createGc({ key, root, layer, shown }){
   const dateSeen = new WeakSet();
   function dateAlertsHtml(){
     const lines = [];
+    let order = false;
     allFiles.forEach(f=>{
       // (a project's .json may hold anything: only true and a whole count go into markup)
-      const dm = f.dayMonth === true, n = num(f.badDates, 0, v=> Number.isInteger(v) && v > 0), say = [];
+      // A file whose dates name their month (monthNames) has no order: none is named.
+      const dm = f.dayMonth === true, named = f.monthNames === true && !dm, n = num(f.badDates, 0, v=> Number.isInteger(v) && v > 0), say = [];
       if (dm) say.push('dates read as day/month (as month/day, some do not exist)');
-      if (n) say.push(`${n} row${n > 1 ? 's' : ''} left out: ${n > 1 ? 'their' : 'its'} injection date does not exist (as ${dm ? 'day/month' : 'month/day'})`);
-      if (say.length && !dateSeen.has(f.gas)) lines.push(esc(f.name) + ': ' + say.join('; '));
+      if (n) say.push(`${n} row${n > 1 ? 's' : ''} left out: ${n > 1 ? 'their' : 'its'} injection date does not exist${named ? '' : ` (as ${dm ? 'day/month' : 'month/day'})`}`);
+      if (say.length && !dateSeen.has(f.gas)){ lines.push(esc(f.name) + ': ' + say.join('; ')); if (!named) order = true; }
     });
-    return lines.length ? buildAlertsHtml([], lines, 'Injection dates (the instrument writes them month/day):', '', 'gc-dismiss-dates') : '';
+    return lines.length ? buildAlertsHtml([], lines, `Injection dates${order ? ' (the instrument writes them month/day)' : ''}:`, '', 'gc-dismiss-dates') : '';
   }
 
-  /* An injection date as the instrument writes it, 'M/D/YYYY h:mm:ss AM|PM': its fields as
-     they stand, or null for a field of another shape (no line of data). */
-  const GC_DATE = /^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)$/i;
-  const dateFields = s =>{ const m = String(s || '').trim().match(GC_DATE); return m && m.slice(1); };
-  /* The moment those fields are, the day first when `dm` (a file read as day/month), or
-     null when there is none: a month 1–12, a day 1 to the month's length (29 February in a
-     leap year), the hour 1–12, minutes and seconds 0–59. To v509 none was checked and the
-     Date rolled over: 13/10/2025 was 10 January 2026, 2/30/2025 2 March, 13:00:00 PM 1 PM. */
-  const MONTH_DAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-  function parseGCDate(m, dm){
-    const [a, b, y, h, mi, se, ap] = m.map((v, i)=> i < 6 ? +v : v), mo = dm ? b : a, da = dm ? a : b;
-    const len = mo === 2 && !(y % 4) && (y % 100 || !(y % 400)) ? 29 : MONTH_DAYS[mo - 1];
-    if (!(da >= 1 && da <= len && h >= 1 && h <= 12 && mi <= 59 && se <= 59)) return null;
-    return new Date(y, mo - 1, da, h % 12 + (/pm/i.test(ap) ? 12 : 0), mi, se);
+  /* The files read as the alternative export (readGc, `altExport`), said in an info alert
+     (v539): a file name a line, read off the loaded files and dismissed as the empty cells
+     are (blankSeen), on a mark of its own. */
+  const altSeen = new WeakSet();
+  function altAlertsHtml(){
+    const lines = allFiles.filter(f=> f.altExport === true && !altSeen.has(f.gas)).map(f=> esc(f.name));
+    return lines.length ? alertHtml('info', 'Read as the alternative export (Inject Time, Amount in ppm), not the default format:', lines, 'gc-dismiss-alt') : '';
   }
 
-  /* A GC export, as textdata.js reads a table (its encoding, separator, decimal mark and
-     quotes found from the file). Its header names the injection date and at least one
-     gas, each in a column of its own: whichever gases it has are read, the rest simply are
-     not there for that sample. The header is the first line that names them (to v489 it
-     had to be the first line), the data the lines under it with an injection date.
-     The dates are read in the instrument's order, month/day, where every one exists so (a
-     file of days up to 12 too, either way). A file where some do not is read day/month
-     (`dayMonth`) when every one exists so and the times so read go on as the rows do,
-     back by an hour at most (a clock put back at the end of summer time): a file saved
-     day first. Any other is read month/day, the rows whose date does not exist so left
-     out (`badDates`): a month/day file with a mistyped date that would exist day first
-     (16/10 among 10/5 and 10/6), whose times would go back months, and one whose dates
-     fail both ways. The alert says both (dateAlertsHtml); a file with no injection left
-     for a date that does not exist is refused with why. To v509 every date was
-     month/day, rolled over. */
-  function gcColumns(fields){
-    const lo = fields.map(h=> h.toLowerCase()), date = lo.findIndex(h=> h.includes('injection date')), gas = {};
-    for (const g of GASES){ const i = lo.findIndex(h=> g.col.test(h) && h.includes('%mol')); if (i >= 0 && i !== date) gas[g.key] = i; }
-    return date >= 0 && Object.keys(gas).length ? { date, gas } : null;
-  }
-  function readGc(text){
-    const t = readTable(textLines(text), gcColumns, (r, c)=> !!dateFields(r[c.date]));
-    if (!t) return null;
-    const { date, gas: idx } = t.cols, injDates = [], gas = {};
-    // The lines with a date, and its fields; day first when every date exists so and not
-    // month first, its times never back by more than an hour.
-    const rows = t.rows.map(r=> [r, dateFields(r[date])]).filter(x=> x[1]);
-    const md = rows.map(x=> parseGCDate(x[1], false)), df = rows.map(x=> parseGCDate(x[1], true));
-    const dm = !md.every(Boolean) && df.every((d, i)=> d && (!i || d - df[i - 1] >= -3600e3));
-    let emptyRows = 0, badDates = 0, lost = 0;
-    for (const k in idx) gas[k] = [];
-    for (const [i, [r]] of rows.entries()){
-      const d = (dm ? df : md)[i], vals = {};
-      let any = false;
-      for (const k in idx){ const v = parseNum(r[idx[k]]); vals[k] = isFinite(v) ? v : NaN; if (isFinite(v)) any = true; }
-      // (`lost`: a row with a value whose date does not exist, an injection but for it)
-      if (!d){ badDates++; if (any) lost++; continue; }
-      // One row, every gas kept on the same time axis; a blank cell stays NaN so the
-      // columns never slip out of step with the dates. The analysis leaves it out of
-      // that gas's series (computeTables) and the alerts count it (blankAlertsHtml). A
-      // row with no gas at all is left out, as it was, and the alert counts it too (to
-      // v474 it went unsaid).
-      if (any){ injDates.push(d); for (const k in idx) gas[k].push(vals[k]); }
-      else emptyRows++;
-    }
-    /* No injection left: refused with why when a row with a value went for its date (the
-       other rows, none with a gas value, counted beside it); by its name alone when no row
-       had a value, whatever its date, as at v509. (dayMonth and badDates only where they
-       apply: any other file's record is as it was.) */
-    const rest = rows.length - lost;
-    if (!injDates.length) return lost ? { error: `no injection to read: ${lost} row${lost > 1 ? 's' : ''} with an injection date that does not exist${rest ? `, ${rest} with no gas value` : ''}` } : null;
-    for (const k in gas) fixed(gas[k]);
-    return { injDates, gas, emptyRows, ...(dm && { dayMonth: true }), ...(badDates && { badDates }) };
-  }
   kit.dropText(readGc, ()=> afterFilesChange());
-
-  // The first injection, to the minute: the field shows and sets minutes only, so a
-  // default carrying the seconds would change the moment the field was merely tabbed
-  // through — results shifting, and an undo step, with nothing touched.
-  function firstInjection(f){
-    const d = new Date(Math.min(...f.injDates.map(Number))); d.setSeconds(0, 0);
-    return d;
-  }
 
   // (The alerts are drawn with the list, kit.showFiles: the empty-cell alert follows the files.)
   // (all drawn, on show: its draw key, the width it was drawn at)
@@ -355,121 +575,12 @@ function createGc({ key, root, layer, shown }){
     kit.commit();
   }
 
-  // A numeric text cell; `state` = 'on' (editable), 'ro' (read-only) or 'off' (disabled).
-  function numCell(cls, attrs, value, state){
-    const dis = state==='off' ? 'disabled' : (state==='ro' ? 'readonly' : '');
-    return `<input class="${cls}" ${attrs} type="text" inputmode="decimal" value="${esc(value)}" ${dis} style="width:100%">`;
-  }
-  const modeChip = (pair, mode)=> `<button type="button" class="mode-chip gc-toggle" data-pair="${pair}" title="Switch all / one">${esc(mode)}</button>`;
-  // A header over a field: its name on the field's left edge, its all/one pill on the
-  // field's right edge.
-  const thHead = (label, chip)=> `<div class="gc-th"><span>${label}</span>${chip}</div>`;
-
-  // Parse a raw field string into a finite number, or null if incomplete/invalid.
-  function parseIntervalField(v){
-    const s = String(v).trim().replace(',', '.');   // accept comma decimals
-    if (s==='' || s==='-' || s==='+' || s==='.' || s==='-.' || s==='+.') return null;
-    const n = Number(s);
-    return Number.isFinite(n) ? n : null;
-  }
-
-  // The trapezoid integral `cum` of `f` over `t`, read at any time: the segment it
-  // falls in integrated up to it. Before the first point there is nothing yet.
-  function cumAt(t, f, cum, at){
-    if (!t.length || at <= t[0]) return 0;
-    const n = t.length;
-    if (at >= t[n-1]) return cum[n-1];
-    let a = 0; while (a + 1 < n && t[a+1] <= at) a++;
-    const fa = f[a], fat = fa + (f[a+1] - fa)*(at - t[a])/((t[a+1] - t[a]) || 1);
-    return cum[a] + (at - t[a])*(fa + fat)/2;
-  }
-
-  /* One line per sample per gas, the sample's colour throughout and the gas told by
-     the dash pattern, so a sample stays recognisable across both gases. The name
-     carries the gas only when more than one is on show. */
-  function drawGasLines(plot, tables, shown, key){
-    tables.forEach(d=>{
-      shown.forEach(g=>{
-        const q = d.gas[g.key];
-        if (!q) return;
-        // On the gas's own times: an injection it has no value for is not one of its points.
-        plot.line(q.t, q[key], d.color, 1.3, g.dash, { label: seriesName(d.label, g, shown), key: d.name + '/' + g.key });
-      });
-    });
-  }
-  const seriesName = (label, g, shown)=> shown.length > 1 ? `${label} ${gasTxt(g)}` : label;
-
-  // Legend entries follow the same rule, with a dashed key for a dashed gas.
-  function gasLegendHtml(d, shown){
-    return shown.filter(g=>d.gas[g.key]).map(g=>{
-      const key = g.dash
-        ? `<i class="mk-dash" style="color:${esc(d.color)}"></i>`
-        : `<i style="background:${esc(d.color)}"></i>`;
-      return `<span>${key}${esc(seriesName(d.label, g, shown))}</span>`;
-    }).join('');
-  }
-
-  /* The top of a time plot's y-range: the highest value of `key` from light-on on
-     (t ≥ 0), so what comes before it (a spike, a purge) does not flatten the run; of
-     all the points when none is that late. The bottom is always 0. */
-  function yTop(tables, shown, key){
-    let hi = -Infinity, any = false;
-    const take = after => tables.forEach(d=> shown.forEach(g=>{
-      const q = d.gas[g.key]; if (!q) return;
-      q.t.forEach((t, i)=>{
-        const v = q[key][i];
-        if (!isFinite(v) || (after && t < 0)) return;
-        hi = Math.max(hi, v); any = true;
-      });
-    }));
-    take(true);
-    if (!any) take(false);
-    return hi;
-  }
-
-  // The straight line between the injections either side of `at`, read there.
-  function lineAt(t, v, at){
-    let a = 0; while (a + 2 < t.length && t[a+1] <= at) a++;
-    const w = t[a+1] - t[a];
-    return w ? v[a] + (v[a+1] - v[a])*(at - t[a])/w : v[a];
-  }
-
   /* =========================================================
      A CARD: one analysis of the samples — its masses, flows, light-on times,
      integration intervals and injection delay, its plot, and its section of the
      Results. `a` is its record (cards.js), `card` its element; the state lives here,
      and goes to the history through snapshot / restore.
   ========================================================= */
-  const P = a => 'gc' + a.id;
-  // A plot of a card's, with the gas chips of its section (`sec`: 'a' Analysis, 'r' Results) over it.
-  const gasPlot = (id, sec, o)=> plotWrap(id, { mod: 'gc', extra: `\n              <span class="gc-gas-sel" data-gas-sec="${sec}"></span>`, ...o });
-  const cardBody = a => `
-        <div class="peak-box" style="margin-top:0;margin-bottom:14px">
-          <div class="peak-box-head">
-            <span class="txt-mini">Parameters</span>
-            <button class="btn table-csv-btn" data-csv-mod="gc" data-csv-names="gc_info.csv" title="Download CSV">${CSV_ICON}</button>
-          </div>
-          <div class="gc-param-wrap" id="${P(a)}ParamTableWrap"></div>
-        </div>
-        <div class="row" style="align-items:flex-start">
-          <div class="col">
-            <p class="txt-caption">Production Rate</p>${gasPlot(P(a) + 'Svg1', 'a', { cls: 'plot-strip', csv: 'gc_raw.csv', name: 'GC_rate.svg', legend: P(a) + 'Legend' })}
-          </div>
-        </div>
-        <div id="${P(a)}Legend" class="legend" style="margin-top:8px"></div>`;
-  const resHtml = a => `
-        <h4 class="res-an-title"></h4>
-        <div class="row res-row">
-          <div class="col">
-            <p class="txt-caption">Production Rate</p>${gasPlot(P(a) + 'SvgRate', 'r', { csv: 'gc_results.csv', name: 'GC_results_rate.svg', legend: P(a) + 'ResLegend' })}
-          </div>
-          <div class="col">
-            <p class="txt-caption">Production</p>${gasPlot(P(a) + 'SvgCum', 'r', { csv: 'gc_results.csv', name: 'GC_results_cumulative.svg', legend: P(a) + 'ResLegend' })}
-          </div>
-        </div>
-        <div id="${P(a)}ResLegend" class="legend" style="margin-top:8px"></div>
-        <p class="txt-caption" style="margin-top:14px">Mean Production Rate</p>${gasPlot(P(a) + 'SvgBar', 'r', { cls: 'plot-wide', csv: 'mean_rates.csv', name: 'GC_results.svg', legend: P(a) + 'BarLegend' })}
-        <div id="${P(a)}BarLegend" class="legend" style="margin-top:8px"></div>`;
 
   // (its elements found in its card, `card`, and its section of the Results, `res`, whether
   // or not they are in the page)
@@ -485,7 +596,7 @@ function createGc({ key, root, layer, shown }){
     // The plots' gas chips, the card's and its section's.
     const gasEls = ()=> [...card.querySelectorAll('.gc-gas-sel'), ...res.querySelectorAll('.gc-gas-sel')];
 
-    let ms=[], Qs=[], Ts=[], Ps=[], startArr=[], endArr=[], lightOnDates=[];
+    let ms=[], As=[], Qs=[], Ts=[], Ps=[], startArr=[], endArr=[], lightOnDates=[];
     let dataTables=[];
     let plot1;
     /* Analysis and Results choose their gases separately, but every plot inside a
@@ -505,9 +616,13 @@ function createGc({ key, root, layer, shown }){
       return chosen.length ? chosen : there;
     }
     // all/one per parameter: 'all' = one shared value for every sample; 'one' = per-sample.
-    // Each of m, Q, T, p, start and end toggles independently. Default: everything shared ('all').
-    let mMode='all', qMode='all', tMode='all', pMode='all', startMode='all', endMode='all';
-    let mShared=15, qShared=2, tShared=T_NEW, pShared=P_ATM, startShared=0, endShared=24;
+    // Each of m, A, Q, T, p, start and end toggles independently. Default: everything shared ('all').
+    let mMode='all', aMode='all', qMode='all', tMode='all', pMode='all', startMode='all', endMode='all';
+    let mShared=15, aShared=1, qShared=2, tShared=T_NEW, pShared=P_ATM, startShared=0, endShared=24;
+    /* What the rates are normalised by (NORM, v540): 'mass' (m, as to v539) or 'area' (A,
+       a film's), the card's one choice. The masses and the areas are both kept, each with
+       its all/one, whichever is in force: switching back and forth loses neither. */
+    let norm = 'mass';
     let pUnit = 'atm';
     let delayAuto = true, delayMan = INJ_DELAY_AUTO;
     const injDelay = ()=> delayAuto ? INJ_DELAY_AUTO : delayMan;
@@ -522,6 +637,9 @@ function createGc({ key, root, layer, shown }){
 
     // Effective per-sample values (respect each parameter's all/one mode).
     const mOf     = k => mMode==='all'     ? mShared     : ms[k];
+    const aOf     = k => aMode==='all'     ? aShared     : As[k];   // cm²
+    // What sample k's rates are divided by: its mass in mg, or its area in cm².
+    const perOf   = k => norm==='area' ? aOf(k) : mOf(k);
     const qOf     = k => qMode==='all'     ? qShared     : Qs[k];
     const tOf     = k => tMode==='all'     ? tShared     : Ts[k];
     const pOf     = k => pMode==='all'     ? pShared     : Ps[k];   // Pa
@@ -531,7 +649,7 @@ function createGc({ key, root, layer, shown }){
     const intPerSample = () => startMode==='one' || endMode==='one';
 
     // A card added with samples loaded starts from the upload defaults for each.
-    files.forEach(f=>{ ms.push(15); Qs.push(2); Ts.push(T_NEW); Ps.push(P_ATM); startArr.push(0); endArr.push(24); lightOnDates.push(firstInjection(f)); });
+    files.forEach(f=>{ ms.push(15); As.push(1); Qs.push(2); Ts.push(T_NEW); Ps.push(P_ATM); startArr.push(0); endArr.push(24); lightOnDates.push(firstInjection(f)); });
 
     // Warning when a sample's light-on time is before (or at) its first injection
     function lightOnWarn(i){
@@ -568,16 +686,23 @@ function createGc({ key, root, layer, shown }){
       // p's unit is chosen in its header, where the other columns name theirs: in the
       // header's own type, its box let out of the line's height as the pill's is (-3 px),
       // so that p's name and pill sit level with the others' and the box with the pill.
+      /* The m column is the area A where the card normalises by it (NORM, v540): its own
+         values, all/one and field (data-f "a"), the masses kept as they were. The choice
+         on the delay's row, under T and p. */
+      const isA = norm === 'area', nf = isA ? 'a' : 'm', nMode = isA ? aMode : mMode, nShared = isA ? aShared : mShared, nOf = isA ? aOf : mOf;
+      const nTitle = isA ? ' title="A: the area of the photocatalyst (a film\'s), in cm²: the rates are per cm²"' : '';
+      const normSel = `<label class="pp-check gc-norm-lab" title="What the rates are divided by, for every sample of this card: the photocatalyst's mass (mmol g⁻¹ h⁻¹) or, for a film, its area (µmol cm⁻² h⁻¹)">Normalize by <select class="gc-norm" aria-label="Normalize by" style="width:auto;margin:-3px 0;padding:0 2px;border-radius:5px;font:inherit;color:var(--text)">${
+        NORMS.map(v=> `<option value="${v}"${v === norm ? ' selected' : ''}>${v}</option>`).join('')}</select></label>`;
       const unitSel = `<select class="gc-unit" aria-label="Unit of p" title="The unit p is shown and written in: switching it converts the values, not the pressure (Torr: mmHg)" style="width:auto;margin:-3px 0;padding:0 2px;border-radius:5px;font:inherit;color:inherit">${
         Object.keys(P_UNITS).map(u=> `<option value="${u}"${u === pUnit ? ' selected' : ''}>${u}</option>`).join('')}</select>`;
       let html = `<div style="overflow-x:auto"><table class="gc-param-table gc-delay" style="width:100%;table-layout:fixed">${cg}<tbody>
         <tr><td class="fname">Injection delay (s)</td>
           <td>${numCell('gcDelay', 'title="From the logged injection date to the actual injection, in seconds"', injDelay(), delayAuto ? 'off' : 'on')}</td>
           <td><label class="pp-check" title="Use the method's delay, ${INJ_DELAY_AUTO} s"><input type="checkbox" class="gcDelayAuto"${delayAuto ? ' checked' : ''}> Auto</label></td>
-          <td colspan="6"></td></tr></tbody></table>
+          <td colspan="2">${normSel}</td><td colspan="4"></td></tr></tbody></table>
         <table class="gc-param-table" style="width:100%;table-layout:fixed">${cg}<thead>
         <tr><th rowspan="2">${thHead('Sample', '')}</th>
-          <th rowspan="2">${thHead('m (mg)', modeChip('m',mMode))}</th>
+          <th rowspan="2"${nTitle}>${thHead(NORM[norm].col, modeChip(nf,nMode))}</th>
           <th rowspan="2">${thHead('Q (mL/min)', modeChip('q',qMode))}</th>
           <th rowspan="2" title="T: ${T_TITLE}">${thHead('T (°C)', modeChip('t',tMode))}</th>
           <th rowspan="2" title="p: ${P_TITLE}">${thHead('p ' + unitSel, modeChip('p',pMode))}</th>
@@ -587,7 +712,7 @@ function createGc({ key, root, layer, shown }){
         <tr><th>${thHead('start', modeChip('start',startMode))}</th><th>${thHead('end', modeChip('end',endMode))}</th></tr></thead><tbody>`;
       // Shared "all" row
       html += `<tr class="gc-all-row"><td class="fname">All</td>
-        <td>${numCell('gcShared','data-f="m"',mShared,shareState(mMode))}</td>
+        <td>${numCell('gcShared',`data-f="${nf}"`,nShared,shareState(nMode))}</td>
         <td>${numCell('gcShared','data-f="q"',qShared,shareState(qMode))}</td>
         <td>${numCell('gcShared','data-f="t"',tShared,shareState(tMode))}</td>
         <td>${numCell('gcShared','data-f="p"',inUnit(pShared, pUnit),shareState(pMode))}</td>
@@ -599,7 +724,7 @@ function createGc({ key, root, layer, shown }){
       files.forEach((f,i)=>{
         html += `<tr class="gc-row" data-i="${i}">
           <td class="fname" title="${esc(f.label)}">${esc(f.label)}</td>
-          <td>${numCell('gcCell','data-i="'+i+'" data-f="m"',mOf(i),cellState(mMode))}</td>
+          <td>${numCell('gcCell','data-i="'+i+'" data-f="'+nf+'"',nOf(i),cellState(nMode))}</td>
           <td>${numCell('gcCell','data-i="'+i+'" data-f="q"',qOf(i),cellState(qMode))}</td>
           <td>${numCell('gcCell','data-i="'+i+'" data-f="t"',tOf(i),cellState(tMode))}</td>
           <td>${numCell('gcCell','data-i="'+i+'" data-f="p"',inUnit(pOf(i), pUnit),cellState(pMode))}</td>
@@ -634,6 +759,16 @@ function createGc({ key, root, layer, shown }){
         wrap.querySelectorAll('input[data-f="p"]').forEach(inp=>{ inp.value = inUnit(inp.classList.contains('gcShared') ? pShared : pOf(+inp.dataset.i), pUnit); });
         kit.commit();
       });
+      // What the rates are normalised by: the m column shown again as the one in force, the
+      // rates and their labels worked out anew; the focus kept on the select (an arrow key
+      // on it is a change at once).
+      const normIn = wrap.querySelector('.gc-norm');
+      normIn.addEventListener('change', ()=>{
+        norm = oneOf(normIn.value, NORMS);
+        renderGcParamTable();
+        wrap.querySelector('.gc-norm').focus({ preventScroll: true });
+        computeAndRenderGc(); kit.commit();
+      });
 
       // all/one toggles: flip a parameter, seeding across the boundary (one→all from
       // sample 0, all→one from the shared value), then re-render + recompute. An interval
@@ -650,6 +785,7 @@ function createGc({ key, root, layer, shown }){
         if (why){ flashFieldInvalid(btn); confirmBanner(why, 'OK'); return; }
         switch (pair){
           case 'm':     mMode     = flip(mMode,     mShared,     ms,       v=>mShared=v);     break;
+          case 'a':     aMode     = flip(aMode,     aShared,     As,       v=>aShared=v);     break;
           case 'q':     qMode     = flip(qMode,     qShared,     Qs,       v=>qShared=v);     break;
           case 't':     tMode     = flip(tMode,     tShared,     Ts,       v=>tShared=v);     break;
           case 'p':     pMode     = flip(pMode,     pShared,     Ps,       v=>pShared=v);     break;
@@ -672,6 +808,9 @@ function createGc({ key, root, layer, shown }){
       wrap.querySelectorAll('.gcShared[data-f="m"]').forEach(inp=> mMode==='all' && wireNum(inp, v=>mShared=v));
       wrap.querySelectorAll('.gcShared[data-f="q"]').forEach(inp=> qMode==='all' && wireNum(inp, v=>qShared=v));
       wrap.querySelectorAll('.gcCell[data-f="m"]').forEach(inp=>{ if(mMode==='one'){ const i=+inp.dataset.i; wireNum(inp, v=>ms[i]=v); }});
+      // A, where it is in force, as m: above 0 (v540).
+      wrap.querySelectorAll('.gcShared[data-f="a"]').forEach(inp=> aMode==='all' && wireNum(inp, v=>aShared=v));
+      wrap.querySelectorAll('.gcCell[data-f="a"]').forEach(inp=>{ if(aMode==='one'){ const i=+inp.dataset.i; wireNum(inp, v=>As[i]=v); }});
       wrap.querySelectorAll('.gcCell[data-f="q"]').forEach(inp=>{ if(qMode==='one'){ const i=+inp.dataset.i; wireNum(inp, v=>Qs[i]=v); }});
       wrap.querySelectorAll('.gcShared[data-f="t"]').forEach(inp=> tMode==='all' && wireNum(inp, v=>tShared=v, -273));
       wrap.querySelectorAll('.gcCell[data-f="t"]').forEach(inp=>{ if(tMode==='one'){ const i=+inp.dataset.i; wireNum(inp, v=>Ts[i]=v, -273); }});
@@ -759,10 +898,11 @@ function createGc({ key, root, layer, shown }){
     function computeTables(){
       dataTables = files.map((f,h)=>{
         const ks = Object.keys(f.gas), lightOn = lightOnDates[h];
-        const key = exactKey([f.injDates.map(d=> +d), ks.map(k=> [k, objId(f.gas[k])]), +lightOn, injDelay(), qOf(h), tOf(h), pOf(h), mOf(h)]);
+        const key = exactKey([f.injDates.map(d=> +d), ks.map(k=> [k, objId(f.gas[k])]), +lightOn, injDelay(), qOf(h), tOf(h), pOf(h), norm === 'area' ? ['A', aOf(h)] : mOf(h)]);
         const made = tablesKept(ks.length ? f.gas[ks[0]] : null, key, ()=> tablesOf(f, h, lightOn)), gas = {};
         for (const k in made.gas) gas[k] = { ...made.gas[k], FmInt: made.gas[k].cum };
-        return {t: made.t, gas, name:f.name, label:f.label, color:f.color};
+        // (ppm: read from the alternative export, its concentrations written in its unit, gc_raw.csv)
+        return {t: made.t, gas, name:f.name, label:f.label, color:f.color, ppm: f.altExport === true};
       });
     }
     function tablesOf(f, h, lightOn){
@@ -789,7 +929,7 @@ function createGc({ key, root, layer, shown }){
         const tHours = pts.map(p=> hours(p.d));
         const pct = pts.map(p=> p.v);
         const flow = pct.map(v=> v/100*F*1e6);             // umol/h of this gas
-        const flowM = flow.map(v=> v/mOf(h));              // per mg -> mmol/(g h)
+        const flowM = flow.map(v=> v/perOf(h));            // per mg -> mmol/(g h); per cm² -> µmol/(cm² h)
         // From the first injection on; FmInt, from the interval's start (updateRegression).
         const cum = cumtrapz(tHours, flowM);
         gas[k] = { t: tHours, pct, flow, Fm: flowM, cum };
@@ -852,7 +992,7 @@ function createGc({ key, root, layer, shown }){
 
     function renderGcPlots(){
       const legend = $('Legend'); legend.innerHTML='';
-      plot1 = new Plot($('Svg1'), {xlabel:'Time (h)', ylabelSvg:LBL_RATE_SVG});
+      plot1 = new Plot($('Svg1'), {xlabel:'Time (h)', ylabelSvg:NORM[norm].rateSvg});
       const resLegend = $('ResLegend'); resLegend.innerHTML='';
       legend.innerHTML   = dataTables.map(d=> gasLegendHtml(d, shownGases('a'))).join('');
       resLegend.innerHTML = dataTables.map(d=> gasLegendHtml(d, shownGases('r'))).join('');
@@ -1033,8 +1173,8 @@ function createGc({ key, root, layer, shown }){
         drawGasLines(p, cut, shown, key);
         p.attachTools(svg.closest('.plot-wrap'));
       };
-      mk('SvgRate', LBL_RATE_SVG, 'Fm');
-      mk('SvgCum',  LBL_CUM_SVG,  'FmInt');
+      mk('SvgRate', NORM[norm].rateSvg, 'Fm');
+      mk('SvgCum',  NORM[norm].cumSvg,  'FmInt');
     }
 
     /* The mean rates per sample (samplesOf), of each gas: the mean over the sample's files
@@ -1064,7 +1204,7 @@ function createGc({ key, root, layer, shown }){
        section's visibility is updateRegression's. */
     function drawBarChart(){
       const svg = $('SvgBar'), sm = sampleRates();
-      valueBars(svg, { cats: sm, digits: 4, yLabel: LBL_RATE_SVG, legend: $('BarLegend'),
+      valueBars(svg, { cats: sm, digits: 4, yLabel: NORM[norm].rateSvg, legend: $('BarLegend'),
         series: shownGases('r').map(g=> ({ name: gasTxt(g), color: g.bar, vals: sm.map(s=> s.rate[g.key]), errs: sm.map(s=> s.err[g.key]) })),
         chips: svg.closest('.plot-wrap').querySelector('.gc-gas-sel') });
     }
@@ -1075,12 +1215,14 @@ function createGc({ key, root, layer, shown }){
     // The card's CSVs, named after it.
     function exportEntries(n){
       if (!dataTables.length) return [];
-      const entries = [];
+      const entries = [], U = NORM[norm];
       // One block of columns per sample (each keeps its own time axis). gc_raw.csv carries
       // the full series with every intermediate quantity; gc_results.csv keeps only the
       // three plotted columns, between the interval's lines as plotted.
-      // Only what the Results plots are showing: pick H2, O2 or both and it follows.
-      const shown = shownGases('r');
+      /* Every gas the samples have, whichever the chips show (v530): the chips are a view of
+         the plots alone (no change unsaved, v528), so the CSVs never follow them; to v529
+         they held only the gases the Results plots showed. */
+      const shown = GASES.filter(g=> gasPresent(g.key));
       const buildSeriesCsv = (tables, full)=>{
         const cols=[];
         tables.forEach(d=>{
@@ -1103,11 +1245,15 @@ function createGc({ key, root, layer, shown }){
           cols.push({h:`Time (h) [${d.label}]`, v:rows.map(r=>fmtNum(r.t,5))});
           qs.forEach(([g, q], j)=>{
             if (full){
-              cols.push({h:`${g.csv} (%mol) [${d.label}]`,      v:col(j, q.pct)});
+              /* The concentration in the file's unit: %mol, or the alternative export's ppm
+                 (v539), as it read them (%mol × 10⁴), whose values below 1 ppm %mol to five
+                 decimals would lose (0.141 ppm is 0.0000141 %mol). */
+              cols.push(d.ppm ? {h:`${g.csv} (ppm) [${d.label}]`, v:col(j, q.pct.map(v=> v*1e4))}
+                : {h:`${g.csv} (%mol) [${d.label}]`,      v:col(j, q.pct)});
               cols.push({h:`${g.csv} (umol h^-1) [${d.label}]`, v:col(j, q.flow)});
             }
-            cols.push({h:`${g.csv} ${LBL_RATE_CSV} [${d.label}]`, v:col(j, q.Fm)});
-            cols.push({h:`${g.csv} ${LBL_CUM_CSV} [${d.label}]`,  v:col(j, q.FmInt)});
+            cols.push({h:`${g.csv} ${U.rateCsv} [${d.label}]`, v:col(j, q.Fm)});
+            cols.push({h:`${g.csv} ${U.cumCsv} [${d.label}]`,  v:col(j, q.FmInt)});
           });
         });
         return wideCsv(cols);
@@ -1125,7 +1271,7 @@ function createGc({ key, root, layer, shown }){
       // The columns after the rates, and file k's.
       const tailHead = [...(perGas ? shown.map(g=>`${g.csv} interval duration (h)`) : ['Interval duration (h)']), `p (${pUnit})`, 'T (°C)'];
       const tail = k =>{ const c = costResults[k]; return [...(perGas ? durs(c) : [durs(c).find(Boolean) || fmtNum(c.span,4)]), asSet(inUnit(pOf(k), pUnit)), asSet(tOf(k))]; };
-      let t2 = csvLine(['Sample', ...shown.map(g=>`Mean ${g.csv} ${LBL_RATE_CSV}`), ...tailHead]);
+      let t2 = csvLine(['Sample', ...shown.map(g=>`Mean ${g.csv} ${U.rateCsv}`), ...tailHead]);
       costResults.forEach((c, k)=> t2 += csvLine([c.label, ...shown.map(g=>fmtNum(c.rate[g.key],6)), ...tail(k)]));
       /* With replicates (a sample of more than one included file), mean_rates.csv has a row
          per sample: its name (its bar's), each gas's mean, ± and n (sampleRates), then its
@@ -1136,7 +1282,7 @@ function createGc({ key, root, layer, shown }){
       const sm = sampleRates();
       if (sm.some(s=> s.ks.length > 1)){
         const one = vs =>{ const w = vs.filter(v=> v !== ''); return w.every(v=> v === w[0]) ? (w[0] || '') : w.join('/'); };
-        let t4 = csvLine(['Sample', ...shown.flatMap(g=> [`Mean ${g.csv} ${LBL_RATE_CSV}`, `${g.csv} SD (mmol g^-1 h^-1)`, `${g.csv} n`]), ...tailHead]);
+        let t4 = csvLine(['Sample', ...shown.flatMap(g=> [`Mean ${g.csv} ${U.rateCsv}`, `${g.csv} SD (${U.unitCsv})`, `${g.csv} n`]), ...tailHead]);
         sm.forEach(s=>{
           const tails = s.ks.map(tail);
           t4 += csvLine([s.label, ...shown.flatMap(g=> [fmtNum(s.rate[g.key],6), fmtNum(s.err[g.key],6), String(s.n[g.key])]), ...tailHead.map((_, j)=> one(tails.map(t=> t[j])))]);
@@ -1149,8 +1295,9 @@ function createGc({ key, root, layer, shown }){
       const pad = n => String(n).padStart(2, '0');
       const fmtDate = v =>{ if (!v) return ''; const d = new Date(v);
         return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
-      let t3 = csvLine(['Sample','m (mg)','Q (mL/min)','T (°C)',`p (${pUnit})`,'Light-on','Interval start (h)','Interval end (h)','Injection delay (s)']);
-      dataTables.forEach((d,k)=> t3 += csvLine([d.label, asSet(mOf(k)), asSet(qOf(k)), asSet(tOf(k)), asSet(inUnit(pOf(k), pUnit)), fmtDate(lightOnDates[k]), asSet(startOf(k)), asSet(endOf(k)), asSet(injDelay())]));
+      // (the mass, or the area where the card normalises by it: its column, v540)
+      let t3 = csvLine(['Sample',U.colCsv,'Q (mL/min)','T (°C)',`p (${pUnit})`,'Light-on','Interval start (h)','Interval end (h)','Injection delay (s)']);
+      dataTables.forEach((d,k)=> t3 += csvLine([d.label, asSet(perOf(k)), asSet(qOf(k)), asSet(tOf(k)), asSet(inUnit(pOf(k), pUnit)), fmtDate(lightOnDates[k]), asSet(startOf(k)), asSet(endOf(k)), asSet(injDelay())]));
       entries.push({name:`${n} - gc_info.csv`, text:t3});
       return entries;
     }
@@ -1161,6 +1308,7 @@ function createGc({ key, root, layer, shown }){
       slots: ()=> [
         // (a value held through an exclusion, as a restore takes it: modkit RESTORED)
         { key: a.id + ':m', arr:ms, make: v=> num(v, 15, x=> x > 0) },
+        { key: a.id + ':A', arr:As, make: v=> num(v, 1, x=> x > 0) },
         { key: a.id + ':Q', arr:Qs, make: v=> num(v, 2, x=> x > 0) },
         { key: a.id + ':T', arr:Ts, make: v=> num(v, T_NEW, okT) },
         { key: a.id + ':p', arr:Ps, make: v=> num(v, P_ATM, okP) },
@@ -1168,13 +1316,13 @@ function createGc({ key, root, layer, shown }){
         { key: a.id + ':end', arr:endArr, make: v=> num(v, 24) },
         { key: a.id + ':lightOn', arr:lightOnDates, make: (v, f)=> dateOf(v) || (f ? firstInjection(f) : null) },
       ],
-      clear(){ [ms,Qs,Ts,Ps,startArr,endArr,lightOnDates].forEach(x=> x.length=0); dataTables=[]; costResults=[]; },
+      clear(){ [ms,As,Qs,Ts,Ps,startArr,endArr,lightOnDates].forEach(x=> x.length=0); dataTables=[]; costResults=[]; },
       unselect(){ gcSel = gcHov = null; },
-      /* What it shows beside its state (b2v4, gc.js shows): the sample picked in its table or
-         on its plot, its interval highlighted (intervals one per sample), by its file's name,
-         given back as its tab wakes or the page is reloaded, the card restored, where that
-         file is still a sample and the intervals still one per sample. */
-      shows: ()=> gcSel != null && intPerSample() && files[gcSel] ? { sel: files[gcSel].name } : null,
+      /* What it shows beside its state (the instance's shows, below): the sample picked in
+         its table or on its plot, its interval highlighted (intervals one per sample), by
+         its file's name, given back as its tab wakes or the page is reloaded, the card
+         restored, where that file is still a sample and the intervals still one per sample. */
+      shows(){ return gcSel != null && intPerSample() && files[gcSel] ? { sel: files[gcSel].name } : null; },
       showNext(v){ const k = v && typeof v.sel === 'string' && intPerSample() ? files.findIndex(f=> f.name === v.sel) : -1; if (k >= 0) gcSel = k; },
       // (a file's sample changed: the bars alone are per sample)
       bars(){ if (files.length && drawable()) drawBarChart(); },
@@ -1198,10 +1346,11 @@ function createGc({ key, root, layer, shown }){
           mMode, qMode, tMode, pMode, startMode, endMode, mShared, qShared, tShared, pShared, startShared, endShared, pUnit,
           gasSel: { a:gasSel.a.slice(), r:gasSel.r.slice() },
           delayAuto, delayMan,
+          norm, As: As.slice(), aMode, aShared,
         };
       },
-      /* Each value as it should be (modkit RESTORED): a mode 'all' or 'one', a mass and a
-         flow above 0, a pressure as the fields take it (okP), a temperature from −273 °C,
+      /* Each value as it should be (modkit RESTORED): a mode 'all' or 'one', a mass, an area
+         and a flow above 0, the normalisation 'mass' or 'area' (mass when none), a pressure as the fields take it (okP), a temperature from −273 °C,
          p's unit one of its own, a bound and the delay numbers, a light-on a date (else the sample's first injection),
          every per-sample array one entry a sample (to v500 an array that was none threw, a
          value that was no number drew NaN). */
@@ -1237,17 +1386,16 @@ function createGc({ key, root, layer, shown }){
         // One from before the pressure was worked out at 1 atm, where a new card starts too.
         pMode = mode(s.pMode); pShared = num(s.pShared, P_ATM, okP); Ps = arrOf(s.Ps, n, v=> num(v, pShared, okP));
         pUnit = oneOf(s.pUnit, Object.keys(P_UNITS));
+        // What the rates are normalised by (v540): a project from before it, by the mass, as
+        // its rates were worked out; its areas, 1 cm², kept for a switch to them.
+        norm = oneOf(s.norm, NORMS);
+        aMode = mode(s.aMode); aShared = num(s.aShared, 1, pos); As = arrOf(s.As, n, v=> num(v, 1, pos));
         gcSel=gcHov=null;
       },
     };
   }
 
   /* ---- The cards (cards.js), and the Results: each card's section under its name ---- */
-  const KINDS = { rate: 'Production Rate' };
-  // What T and p are (their columns' titles, and the card's instructions).
-  const T_TITLE = 'the temperature at which the flow Q is measured — for a mass-flow controller, the reference temperature of its standard units (often 0 °C or 20 °C: see its datasheet), not the temperature of its body';
-  const P_TITLE = 'the absolute pressure the flow Q refers to — for a mass-flow controller, the reference pressure of its standard units (usually 1 atm, 1.01325 bar: see its datasheet); for a flow measured as a volume, the absolute pressure of the gas where it is measured (ambient ≈ 1 atm)';
-  const GC_INFO = `Set catalyst mass (m), carrier gas flow rate (Q), its temperature (T) and pressure (p), the light-on time and the integration interval for each sample to compute mean H₂ and O₂ production rates; the <b>H₂ / O₂</b> chips on each plot choose the gases drawn, for Analysis and for Results. An empty H₂ or O₂ cell leaves that injection out of that gas only, and the alert under the drop zone says how many were skipped. The injection dates are read month/day, as the instrument writes them, or day/month in a file where some do not exist so and every one does that way, its times going on as the rows do; a row whose date does not exist (2/30, 13/13, 13:00 PM) is left out, and the alert says either. Use the <b>all / one</b> toggles to share a value across samples or set it per sample. <b>T</b> is ${T_TITLE}. <b>p</b> is ${P_TITLE}; its unit (atm, bar, kPa, mbar, Torr = mmHg, psi) is chosen in its column's header, which converts the values shown, not the pressure. The flow is turned into moles with the molar volume of an ideal gas at that temperature and pressure, V<sub>m</sub> = RT/p (22.414 L/mol at 0 °C and 1 atm, 24.465 L/mol at 25 °C and 1 atm). A new analysis starts at 25 °C and 1 atm; a project saved before T existed keeps the 0 °C its rates were worked out at, and one saved before p, the 1 atm. The <b>injection delay</b> moves every injection on from its logged date to the moment the sample is actually injected; <b>Auto</b> uses 60.6 s. In per-sample interval mode the vertical lines are coloured by sample — hover or select a table row to highlight its interval on the plot (and vice-versa). <b>Replicates</b>: the <b>Sample</b> column of the file list says which sample each file is — its own (as it starts), or another file's, by that file's name (a label renamed changes nothing); a file that heads a group, set to another, takes its group along, and a head removed leaves its group to its next file. The time plots stay one per file; the mean-rate bar chart has one bar per sample, named after its head's label (the first included file's, the head left out), its height the mean of its included files' mean rates, each worked out with its own parameters, and its error bar the files' standard deviation (n − 1 under it; none for a single file); a file left out is out of the mean and of n. With replicates (a sample of more than one included file), mean_rates.csv has a row per sample (each gas's mean, ± and n) and mean_rates_by_file.csv a row per file, as mean_rates.csv has without them. ${cardInfo(false, true)}`;
   const resList = $('gcResList');
   const live = new Map();       // id → the card's analysis (gcCard)
   let cardsNext = null;         // what the cards of a tab woken or reloaded showed (showNext), by id
@@ -1291,12 +1439,12 @@ function createGc({ key, root, layer, shown }){
      A GC tab, hidden, holds little beyond its sleeping form (0.2 MB of heap for 10
      exports), most of it its parameter table and file list, which it shows as they are;
      its plots let go gave back nothing measurable, their tool buttons still holding their
-     Plots (NOTES-gc-epr.md). */
+     Plots (measured at v518). */
   return {
     // Let go (its tab closed or put to sleep; a state read out for its CSVs): the deck's
     // menu and its listeners. Its section and layer are the shell's to take out.
     destroy(){ kit.destroy(); },
-    /* What it shows beside its state (b2v4: tabs.js, utils.js shownOf): each card's own, by
+    /* What it shows beside its state (tabs.js, utils.js shownOf): each card's own, by
        its id (the sample picked), given back as its tab wakes or the page is reloaded, to
        the restore. */
     shows(){

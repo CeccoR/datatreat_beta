@@ -1,4 +1,4 @@
-/* SEM made per tab (b2): each SEM tab an instance of its own, awake while it is shown or
+/* SEM made per tab (v518): each SEM tab an instance of its own, awake while it is shown or
    was lately, in one page. Two tabs awake at once, each its own files, view and undo
    history, a switch to one awake only showing it (the same section, nothing restored); a
    file in both one array of bytes, and one reading worker for both; a reading going on in
@@ -85,9 +85,8 @@ const storeKeys = page => page.evaluate(()=> new Promise((res, rej)=>{
   r.onerror = ()=> rej(r.error);
 }));
 const shown = (page, i)=> page.locator('#tabBar .ptab').nth(i).locator('.ptab-label').click();
-// Tab i's history, by file: [its RawRefs, its arrays of bytes], one of each a file (b2v3: a
-// history woken held a copy of the array at each step that held its file, its RawRefs not the
-// file's own).
+// Tab i's history, by file: [its RawRefs, its arrays of bytes], one of each a file (not a
+// copy of the array at each step that held its file, nor RawRefs other than the file's own).
 const census = (page, i)=> page.evaluate(async i=>{ const u = await import('./utils.js'), t = (await import('./tabs.js')).TABS[i], refs = {}, arrs = {};
   for (const s of u.getModuleHistory(t.id).states) for (const f of s.files){ (refs[f.name] ||= new Set()).add(f.raw); (arrs[f.name] ||= new Set()).add(f.raw.bytes); }
   return Object.fromEntries(Object.keys(refs).sort().map(k=> [k, [refs[k].size, arrs[k].size]])); }, i);
@@ -191,7 +190,7 @@ test('hidden: the editor\'s image let go at once and nothing else till it sleeps
     await thumbs(page, 3);
     // (its thumbnails' and cards' canvases marked: the same elements when it is shown again)
     await page.evaluate(()=> document.querySelectorAll('#semThumbs .sem-thumb canvas, #semGroups .sem-gimg canvas').forEach(c=>{ c.dataset.mark = '1'; }));
-    // Hidden 9 minutes: as it was left, its thumbnails and cards drawn (no trim).
+    // Hidden 9 minutes: as it was left, its thumbnails and cards drawn.
     await openModule(page, 'sem');
     await tick(page, 9*MIN);
     assert.deepEqual(await page.evaluate(async ()=>{ const r = (await import('./tabs.js')).TABS[0].inst.root;
@@ -371,7 +370,7 @@ test('a wake reading its files: one read for two wakes asked, left or closed mea
     assert.deepEqual(await labels(page), ['B'], 'an undo, a.tif lost there too');
     // Its files' read failing as a whole (an error injected): the wake given up, the tab
     // asleep as it was, Home on show, said so; its record and the store holding its files
-    // still (b2v3: woken without them, its record written so, its files swept); shown again,
+    // still (not woken without them, its record written so, its files swept); shown again,
     // read and woken.
     await tick(page, 11*MIN);
     await until(()=> light(page, 0), { what: 'its bytes let go' });
@@ -387,7 +386,7 @@ test('a wake reading its files: one read for two wakes asked, left or closed mea
     assert.ok(await page.evaluate(()=> document.querySelector('#tab-home').classList.contains('active') && !document.querySelector('.module-loader.show')), 'Home on show, the loader off');
     await page.evaluate(()=>{ IDBDatabase.prototype.transaction = window.__T; });
     // (the first tab's record: its order is its own number, kept since the tab before it was
-    // closed, b2v4, not its place)
+    // closed (v518; to v517 its place in the bar))
     const id0 = await page.evaluate(async ()=> (await import('./tabs.js')).TABS[0].id);
     await until(async ()=>{ const r = (await idb(page, 'tabs')).find(x=> x.id === id0); return r && r.state.files.length === 1 && r.refs.includes(sha(C().buffer)); }, { what: 'its record as it was' });
     await page.evaluate(async ()=> (await import('./db.js')).sweep());

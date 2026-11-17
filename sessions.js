@@ -8,20 +8,20 @@
    state until the next change.
 ========================================================= */
 import { MODULES, MODULE_LABELS, esc, moduleStateKey, getModuleState,
-         moduleHasData, runCsvExport, X_SVG, confirmBanner, normalizeProjIcons, refreshProjBar, onSectionChange,
-         moduleBusy, onAnyChange, withState } from './utils.js';
+         moduleHasData, runCsvExport, confirmBanner, normalizeProjIcons, refreshProjBar, onSectionChange,
+         moduleBusy, onAnyChange, withState, viewOnlyChange } from './utils.js';
 import { allProjects, putProject, deleteProject, retitleProject, readProject, exportedProject, uid, encode, decode,
          hydrate, sweepSoon, dbBlocked, onDbBlocked, onDbClosing, onDbClosed } from './db.js';
 import { activeTab, tabById, tabByProject, openTab, closeTab, setTabTitle,
          setTabDirty, setTabProject, onTabActivated, onTabLoaded, onCloseSave, initTabs,
          persistTab, persistMoved, isRestoring, isLive, ensureLive, notice, renderTabs,
-         keyOf, tabOfKey, stateOf, isEmpty, UNTITLED, underLoader } from './tabs.js';
+         stateOf, isEmpty, UNTITLED, underLoader } from './tabs.js';
 
 // Row action icons: the exact CSV/JSON glyphs used in the module toolbars
-// (text over a right-pointing arrow) and the rounded X for delete.
+// (text over a right-pointing arrow).
 const ROW_DOC = (txt, fs) => '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="'+fs+'" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">'+txt+'</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg>';
-const ROW_CSV = ROW_DOC('CSV', 8.5), ROW_JSON = ROW_DOC('JSON', 8.5), ROW_X = X_SVG(16);
-// Trash glyph for delete actions — same visual weight as the X it replaces.
+const ROW_CSV = ROW_DOC('CSV', 8.5), ROW_JSON = ROW_DOC('JSON', 8.5);
+// Trash glyph for delete actions — same visual weight as the X it replaced.
 const ROW_TRASH = '<svg class="x-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
 
 function fmtDate(ts){ try { return new Date(ts).toLocaleString(); } catch(e){ return ''; } }
@@ -36,9 +36,8 @@ function downloadTextFile(name, text, type){
    A tab IS the open project: its `projectId` is the saved record it belongs to (or
    null when it was never saved) and its `dirty` flag drives the "*". The project bar is
    the active tab's; a save, the autosave and the unsaved marker are each tab's own,
-   on show or not (b2: a tab made per tab changes hidden, as its job goes on). */
+   on show or not (a tab hidden changes as its job goes on). */
 const curProject = ()=>{ const t = activeTab(); return t && t.projectId ? { id:t.projectId, title:t.title } : null; };
-const isDirty = ()=>{ const t = activeTab(); return !!(t && t.dirty); };
 
 /* ---- Autosave ----
    5 s after the last change a tab's state is written back to the tabs store, so a
@@ -106,8 +105,8 @@ function restoreSaveBtns(mod){
    from these: an edit undone, or a value set back by hand, is not one. */
 const _savedKey = new Map();
 const _savedRead = new Map();   // tab id → its saved { state, title } read, the key not yet taken (takeSavedKey)
-// (of a tab live: its instance's, or its module's)
-const stateKey = t => { try { return moduleStateKey(keyOf(t)); } catch(e){ return null; } };
+// (of a tab awake: its instance's)
+const stateKey = t => { try { return moduleStateKey(t.id); } catch(e){ return null; } };
 // The changes made in each tab, counted (by tab id): a save tells by them what was changed
 // while it was written (markWritten).
 const _edits = new Map();
@@ -116,7 +115,8 @@ const edits = t => t ? _edits.get(t.id) || 0 : 0;
 function recheckDirty(t){
   if (!t || !isLive(t)) return;
   _edits.set(t.id, edits(t) + 1);
-  if (!t.projectId){ markDirty(t); return; }
+  // (a change of the view alone, v528: no change unsaved, nor in a tab never saved)
+  if (!t.projectId){ if (!viewOnlyChange(t.id)) markDirty(t); return; }
   const base = _savedKey.get(t.id);
   const same = !!base && base.title === (t.title || '') && base.key === stateKey(t);
   if (same){ if (t.dirty) markSaved(t); }
@@ -129,7 +129,7 @@ function markSaved(t){
   // The tab record is kept for saved projects too — it is the persistent working
   // state that comes back on the next load. Re-persist it so it records the saved
   // (not-dirty) status, and drop the "*" from the tab.
-  // A tab just activated is not live yet: onTabLoaded below takes what it holds then.
+  // A tab just activated may not be awake yet: onTabLoaded below takes what it holds then.
   if (!t) return;
   setTabDirty(t.id, false); if (!isRestoring()) persistTab(t); if (t.projectId && isLive(t)) _savedKey.set(t.id, { key: stateKey(t), title: t.title || '' });
   if (t !== activeTab()) return;
@@ -177,9 +177,9 @@ function flashInvalid(inp){
 }
 // Returns true when the project was actually written, false on any abort (no data,
 // missing name, or a declined overwrite) — callers like "New project" rely on this.
-// The tab on show, or any other (its close's Save): awake, its instance's state, asleep
-// or parked, the one it holds; its name, the bar's field on show, else its own.
-const hasData = t => isLive(t) ? moduleHasData(keyOf(t)) : !isEmpty(t);
+// The tab on show, or any other (its close's Save): awake, its instance's state, asleep,
+// the one it holds; its name, the bar's field on show, else its own.
+const hasData = t => !isEmpty(t);
 async function doSave(t, asNew){
   if (!t) return false;
   const mod = t.module, shown = t === activeTab();
@@ -305,13 +305,13 @@ async function exportJson(t){
   const w = ensureLive(); if (w) await w;
   if (!t) return;
   const mod = t.module;
-  if (!moduleHasData(keyOf(t))){ await confirmBanner('No data loaded in ' + (MODULE_LABELS[mod]||mod) + '.', 'OK'); return; }
+  if (!moduleHasData(t.id)){ await confirmBanner('No data loaded in ' + (MODULE_LABELS[mod]||mod) + '.', 'OK'); return; }
   const inp = nameInput(mod);
   const now = Date.now();
   const cur = curProject();
   const title = (inp && inp.value.trim()) || (cur ? cur.title : (MODULE_LABELS[mod]||mod));
   // (under the loader: its files' bytes written as base64, a task of 1.7 s for 8 SEM images)
-  await underLoader(()=> downloadProject({ module: mod, title, createdAt: now, updatedAt: now, state: encode(getModuleState(keyOf(t))) }));
+  await underLoader(()=> downloadProject({ module: mod, title, createdAt: now, updatedAt: now, state: encode(getModuleState(t.id)) }));
 }
 
 /* ---- Save as… — custom in-page modal (no browser prompt) ---- */
@@ -418,6 +418,7 @@ async function importProjectFile(file){
 /* ---- Projects list rendering ---- */
 let _cache = [];
 let _sortKey = 'updatedAt', _sortDir = -1;
+let _listDraw = 0, _redrawing = false;
 function sortRows(rows){
   const k = _sortKey;
   return rows.sort((a,b)=>{
@@ -449,7 +450,10 @@ function updateBulkState(){
   });
 }
 async function renderList(){
-  _cache = (await allProjects()).sort((a,b)=> (b.updatedAt||0) - (a.updatedAt||0));
+  // (the latest call's read alone is drawn: an older one ending after it draws nothing)
+  const n = ++_listDraw, all = await allProjects();
+  if (n !== _listDraw) return;
+  _cache = all.sort((a,b)=> (b.updatedAt||0) - (a.updatedAt||0));
   const wrap = document.getElementById('sessListWrap');
   if (!wrap) return;
   const rows = sortRows(_cache.filter(passesFilter));
@@ -475,8 +479,26 @@ async function renderList(){
       + '</div></td></tr>';
   });
   html += '</tbody></table></div>';
-  wrap.innerHTML = html;
+  drawRows(wrap, html, rows);
   updateBulkState();
+}
+/* A name being typed in the list stays as it is when the list is drawn again (v526): its
+   row's new field takes the text, the caret and the focus. To v525 the list drawn anew
+   threw the field away: the Projects button shows the list drawn before and draws it again
+   a moment later, and a rename draws it again as its write is done, so a name typed then
+   (in another row's field, clicked as the rename before it is written) lost the focus and
+   what was typed after, or was renamed half typed (Chromium ends the edit of a field taken
+   out of the page). */
+function drawRows(wrap, html, rows){
+  const a = document.activeElement;
+  const tr = a && a.classList.contains('proj-rename') && wrap.contains(a) ? a.closest('tr.sess-row') : null;
+  const keep = tr && rows.some(r=> r.id === tr.dataset.id)
+    ? { id: tr.dataset.id, value: a.value, from: a.selectionStart, to: a.selectionEnd, dir: a.selectionDirection } : null;
+  _redrawing = !!keep;   // (the old field's focusout, as it leaves the page, commits nothing)
+  try { wrap.innerHTML = html; } finally { _redrawing = false; }
+  if (!keep) return;
+  const inp = [...wrap.querySelectorAll('tr.sess-row')].find(r=> r.dataset.id === keep.id).querySelector('.proj-rename');
+  inp.value = keep.value; inp.focus(); inp.setSelectionRange(keep.from, keep.to, keep.dir);
 }
 function recById(id){ return _cache.find(s=> s.id === id); }
 // (the record and its files' bytes read first, v517: to v516 the list's copy held them)
@@ -485,7 +507,7 @@ async function exportProjectCsv(rec){
   try { got = await readProject(rec.id); }
   catch(e){ notice('“' + rec.title + '”: its files could not be read from this browser\'s storage.'); return; }
   if (!got){ goneProject(rec); return; }
-  // (a module made per tab: in an instance of its own, the tabs' left as they are)
+  // (in an instance of its own, the tabs' left as they are: utils.js withState)
   withState(rec.module, decode(got.state), k=> runCsvExport(k));
 }
 async function renameProject(rec, t){
@@ -518,7 +540,7 @@ async function deleteOpenProject(){
   const cur = curProject();
   // An empty file list means there is nothing to lose, named or not: delete the
   // stored project (if any) and close the tab without asking.
-  if (!moduleHasData(keyOf(t))){
+  if (!moduleHasData(t.id)){
     if (cur) await deleteProject(cur.id);
     closeTab(t.id);
     renderList();
@@ -533,8 +555,6 @@ async function deleteOpenProject(){
   closeTab(t.id);
   renderList();
 }
-// New project: force a Save / Don't save / cancel choice when there are unsaved
-// changes, then start from a clean default module. Saved+clean starts fresh at once.
 // New project: pick a technique in the mini-home modal, then open it in a tab of
 // its own. Nothing about the current tab changes — the new project sits beside it,
 // so there is nothing to save or discard first.
@@ -551,7 +571,7 @@ function closeTechniqueModal(){
 }
 
 /* ---- Wiring ---- */
-// Capture each Save button's pristine markup once, before any state swap, so the
+// Capture each Save button's pristine markup once, before any tab is shown, so the
 // disk icon / "Save project" text can always be restored (and never captured
 // while showing the check or the dirty-asterisk variant).
 document.querySelectorAll('.proj-save').forEach(b=>{ if (b.dataset.origHtml === undefined) b.dataset.origHtml = b.innerHTML; });
@@ -560,18 +580,17 @@ document.querySelectorAll('.proj-save').forEach(b=>{ if (b.dataset.origHtml === 
 document.addEventListener('click', async e=>{
   const b = e.target.closest('.proj-save, .proj-saveas, .proj-csv, .proj-json, .proj-del, .proj-new');
   if (!b || b.disabled) return;
-  // (the bar is the active tab's: its buttons act on it)
-  // the module holds the active tab's state, not the one before a switch (a wake reading
-  // its files' bytes waited for)
+  // (the bar is the active tab's: its buttons act on it, woken first where it is chosen and
+  // not woken yet, a wake reading its files' bytes waited for)
   const w = ensureLive(); if (w) await w;
   const t = activeTab();
   const isExport = b.classList.contains('proj-save') || b.classList.contains('proj-saveas')
                 || b.classList.contains('proj-csv')  || b.classList.contains('proj-json');
   // Save / Save as / export need files; with an empty list say so (delete & new are fine).
-  if (isExport && !(t && moduleHasData(keyOf(t)))){ await confirmBanner('Project file list is empty.', 'OK'); return; }
+  if (isExport && !(t && moduleHasData(t.id))){ await confirmBanner('Project file list is empty.', 'OK'); return; }
   if (b.classList.contains('proj-save'))        doSave(t, false);
   else if (b.classList.contains('proj-saveas')) doSave(t, true);
-  else if (b.classList.contains('proj-csv'))    runCsvExport(keyOf(t));
+  else if (b.classList.contains('proj-csv'))    runCsvExport(t.id);
   else if (b.classList.contains('proj-json'))   exportJson(t);
   else if (b.classList.contains('proj-del'))    deleteOpenProject();
   else if (b.classList.contains('proj-new'))    newProject();
@@ -606,7 +625,7 @@ document.querySelectorAll('.project-name-input').forEach(inp=>{
     refreshProjBar(mod);
     const t = activeTab();
     if (t) setTabTitle(t.id, inp.value.trim());   // the tab label tracks the field
-    if (t && isLive(t) && moduleHasData(keyOf(t))){ recheckDirty(t); scheduleAutosave(t); }
+    if (t && isLive(t) && moduleHasData(t.id)){ recheckDirty(t); scheduleAutosave(t); }
   });
   inp.addEventListener('focus', ()=> fitNameField(modOf()));   // click triggers adaptivity
   inp.addEventListener('blur',  ()=> fitNameField(modOf()));   // empty → ghost width; filled → ellipsis
@@ -699,21 +718,24 @@ document.getElementById('sessListWrap').addEventListener('keydown', e=>{
   document.addEventListener('mouseup', ()=> wrap.querySelectorAll('.sess-row.row-press').forEach(r=>r.classList.remove('row-press')));
 })();
 document.getElementById('sessListWrap').addEventListener('change', e=>{
-  if (e.target.classList.contains('sess-check')){ updateBulkState(); return; }
-  if (e.target.classList.contains('proj-rename')){
-    const tr = e.target.closest('tr.sess-row'); const rec = recById(tr && tr.dataset.id);
-    if (rec) renameProject(rec, e.target.value);
-  }
+  if (e.target.classList.contains('sess-check')) updateBulkState();
+});
+// A name is committed as its field loses the focus (Enter blurs it): on focusout, not on
+// change, which a name carried over to a field drawn anew (drawRows) never fires (v526).
+document.getElementById('sessListWrap').addEventListener('focusout', e=>{
+  if (_redrawing || !e.target.classList.contains('proj-rename')) return;
+  const tr = e.target.closest('tr.sess-row'); const rec = recById(tr && tr.dataset.id);
+  if (rec) renameProject(rec, e.target.value);
 });
 
 document.querySelector('#nav button[data-tab="projects"]').addEventListener('click', renderList);
 renderList();
 
 /* ---- Tab wiring ---- */
-// Every history's change, by its key: the tab whose instance (or module) changed, on show
-// or not (a job's end in a tab hidden). A state read in and out for its CSVs is none.
+// Every history's change, by its key: the tab whose instance changed, on show or not (a
+// job's end in a tab hidden). An instance of no tab (withState's) is none.
 onAnyChange(k=>{
-  const t = tabOfKey(k);
+  const t = tabById(k);
   if (!t) return;
   scheduleAutosave(t);
   // A tab that was never saved is unsaved by definition; a saved one only while it
@@ -722,7 +744,7 @@ onAnyChange(k=>{
 });
 
 /* ---- The single project bar ----
-   One bar serves every module: only one tab is live, so its selectors (name field,
+   One bar serves every module: it is the tab on show's, so its selectors (name field,
    Save buttons) are bound to the active module by rewriting the data-module of the
    bar and its buttons. The bar hides on the fixed sections. */
 const TECH_INFO = {
@@ -731,6 +753,8 @@ const TECH_INFO = {
   gc:   'Gas Chromatography for H₂ and O₂ production-rate assessment. Computes mean H₂ and O₂ production rates over a chosen integration interval from time-resolved injection measurements.',
   epr:  'Electron Paramagnetic Resonance. Spectra comparison, smoothing and normalization.',
   sem:  'Scanning Electron Microscopy. Tescan images read with their metadata (pixel size, magnification, beam, detector), cropped, normalised in intensity, grouped by scale and laid out into figures with scale bars.',
+  fig:  'Custom plots of your own data: CSV and text files of columns, each column given a role (x, y, their errors), plotted as XY plots, bar charts and box plots and composed into figures.',
+  iodo: 'Iodometry: iodide oxidised to triiodide by H₂O₂, followed as the absorbance of the triiodide band against time. Each trace is aligned on the injection of its analyte and read at a fixed time after it, as an absorbance or, with a calibration (typed in or fitted to standards), a concentration.',
 };
 const projectBar = document.getElementById('projectBar');
 const barInfoBtn = projectBar.querySelector('.pbar-info');
@@ -750,8 +774,8 @@ barInfoBtn.addEventListener('click', ()=>{
   barInfoBtn.setAttribute('aria-expanded', String(open));
 });
 
-// Called by the tab manager once a tab's state is live in its module: point the
-// bar at that module and put it in the tab's shape (name, saved/dirty buttons).
+// Called by the tab manager as a tab is chosen, before it is awake or put in the page:
+// point the bar at its module and put it in the tab's shape (name, saved/dirty buttons).
 onTabActivated(tab=>{
   if (!tab) return;
   const mod = tab.module;
@@ -765,8 +789,8 @@ onTabActivated(tab=>{
   else {
     restoreSaveBtns(mod); setSaveDirtyIcon(mod, !!tab.projectId && tab.dirty);
     // A tab that came back with unsaved changes (a reload): what was saved is the
-    // project's record, read into the module and out again without touching it (the read
-    // going on, _savedReading: the tab's load waits for it under the loader, onTabLoaded).
+    // project's record, read into an instance of its own and out again (the read going on,
+    // _savedReading: the tab's load waits for it under the loader, onTabLoaded).
     if (tab.projectId && !_savedKey.has(tab.id) && !_savedRead.has(tab.id) && !_savedReading.has(tab.id)){
       const p = readProject(tab.projectId).then(got=>{
         if (!got || !got.rec.state || _savedKey.has(tab.id) || activeTab() !== tab) return;
@@ -780,7 +804,7 @@ onTabActivated(tab=>{
   normalizeProjIcons(mod);
   requestAnimationFrame(()=>{ fitNameField(mod); projectBar.classList.remove('no-anim'); });
 });
-// The bar belongs to a live tab only — hide it (and close its info panel) whenever
+// The bar belongs to a tab only — hide it (and close its info panel) whenever
 // a fixed section shows.
 onSectionChange(tab=>{
   if (!MODULES.includes(tab)){
@@ -791,7 +815,7 @@ onSectionChange(tab=>{
     projectBar.style.display = '';
   }
 });
-// A saved, unchanged tab is what was saved: once its state is live, that is what later
+// A saved, unchanged tab is what was saved: once it is awake, that is what later
 // changes are compared with. One changed whose saved record is being read: the read, which
 // its load waits for, the loader on (tabs.js), so that its key is taken there.
 const _savedReading = new Map();   // tab id → the read of its saved record going on
@@ -801,17 +825,15 @@ onTabLoaded(tab=>{
 });
 /* The saved record of a tab that came back with unsaved changes is read with its files'
    bytes (v517: to v516 the list's copy held them, and the key was taken at once), and its
-   key taken once that tab is live and no job runs in its module: else at its next load.
-   Until then a change is unsaved, as one made before the list was read. The key is a
-   state's as its module gives it back: of a module made per tab, read out of an instance
-   of its own, which draws nothing (utils.js withState; to b2v3 the tab's own, which drew
-   the saved state and its own again after a reload, 0.47 s for an XRPD tab of 12 refined
-   patterns, the loader gone); of one that is not, its one instance's, as in v517. */
+   key taken once that tab is awake and no job runs in it: else at its next load. Until
+   then a change is unsaved, as one made before the list was read. The key is a state's as
+   its module gives it back, read out of an instance of its own, which draws nothing
+   (utils.js withState). */
 function takeSavedKey(tab){
   const r = _savedRead.get(tab.id);
   if (!r) return;
   if (_savedKey.has(tab.id) || !tabById(tab.id)){ _savedRead.delete(tab.id); return; }
-  if (!isLive(tab) || moduleBusy(keyOf(tab))) return;
+  if (!isLive(tab) || moduleBusy(tab.id)) return;
   _savedRead.delete(tab.id);
   let key = null;
   try { key = withState(tab.module, decode(r.state), k=> moduleStateKey(k)); } catch(e){}
@@ -828,7 +850,7 @@ sweepSoon(30000);
 // (the bar drawn meanwhile, its + included: tabs can be opened while the restore waits)
 onDbBlocked(()=>{ renderTabs(); notice('DataTreat is open in another window of an older version: reload or close that window for this one to read and save your projects.'); });
 // (what it holds that its records do not: the tab on show, those with a write to come, those
-// moved, those whose view changed; to b2v4 every record, written again)
+// moved, those whose view changed)
 onDbClosing(()=>{ try { flushTabs(); persistMoved(true); } catch(e){} });
 onDbClosed(()=> notice('DataTreat was updated in another window: reload this one to go on saving your work.'));
 
@@ -836,7 +858,7 @@ onDbClosed(()=> notice('DataTreat was updated in another window: reload this one
 // desktop⇄mobile switch reloads the page, tab close, refresh) so changes made in
 // the last few seconds aren't lost to the debounce. Best-effort: visibilitychange
 // (hidden) fires early enough for IndexedDB to commit; pagehide is the backstop.
-// (and every tab whose trailing write is still to come: a tab hidden changes too, b2)
+// (and every tab whose trailing write is still to come: a tab hidden changes too)
 function flushTabs(){
   const t = activeTab(); if (t) persistTab(t);
   for (const [id, timer] of _autosave){ clearTimeout(timer); _autosave.delete(id); const u = tabById(id); if (u && u !== t) persistTab(u); }

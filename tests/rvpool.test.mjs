@@ -1,7 +1,7 @@
-/* The Rietveld workers' pool (backlog 23, xrd-rv-pool.js): Refine all runs its patterns on
+/* The Rietveld workers' pool (v518, xrd-rv-pool.js): Refine all runs its patterns on
    several workers at once (its lanes), at most the cap's (localStorage
    'datatreat-rv-workers', else the cores less one) for every run of every page of the app
-   (windows, live tabs' frames: Web Locks). With three lanes the results are those of one,
+   (windows, browser tabs: Web Locks). With three lanes the results are those of one,
    bit for bit, written in the patterns' order, one step; answers out of order wait for
    those before them; Cancel writes those done and not the ones under way; an error stops
    the patterns not started, those under way written; two windows on a cap of two run two

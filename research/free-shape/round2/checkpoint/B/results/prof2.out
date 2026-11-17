@@ -1,0 +1,4 @@
+box-Pm-3-near today: search 4076 ev 60857 ms; in phasePattern 59149 ms (14.51 ms/ev); outside 1708 ms = 2.8 %; iterations 161; in Jacobians 3428 ev 13.46 ms/ev, elsewhere 648 ev 20.07 ms/ev
+box-Pm-3-near fwd: search 2523 ev 44790 ms; in phasePattern 42800 ms (16.96 ms/ev); outside 1990 ms = 4.4 %; iterations 192; in Jacobians 1832 ev 14.86 ms/ev, elsewhere 691 ev 22.54 ms/ev
+ellcyl-P2m-generic today: search 4319 ev 93648 ms; in phasePattern 92085 ms (21.32 ms/ev); outside 1563 ms = 1.7 %; iterations 140; in Jacobians 4046 ev 19.48 ms/ev, elsewhere 273 ev 48.64 ms/ev
+ellcyl-P2m-generic fwd: search 2147 ev 48961 ms; in phasePattern 47831 ms (22.28 ms/ev); outside 1130 ms = 2.3 %; iterations 141; in Jacobians 1883 ev 19.02 ms/ev, elsewhere 264 ev 45.55 ms/ev

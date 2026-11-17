@@ -1,0 +1,3 @@
+cylinder-P6m-on (6/m, cylinder 5.7×5.7×6.4; exact, 10–110/0.01) as spheroid: draw 408 ms; iso χ²_ν 0.998, 284 ev, 8491 ms; list 21 refl, 93 members
+  today: held χ² 9914.0 best 9914.0 ΔBIC -43 | search 2512 ev 70424 ms report 2083 ev 56268 ms | 7.39×7.39×6.40
+  wall 135.7 s

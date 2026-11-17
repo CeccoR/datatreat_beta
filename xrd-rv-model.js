@@ -29,7 +29,7 @@ function prepPhase(text, fileName){
   const own = cif.ops && cif.ops.length > 1;
   const atoms = expandAtoms(own ? cif.ops : [], cif.sites);
   const sc = structureCell(cif.cell, atoms), sym = sc.sym;
-  const comp = checkComposition(atoms, cif.formulaSum, cif.Z);
+  const comp = checkComposition(atoms, cif.formulaSum, cif.Z, { structural: cif.formulaStructural, sumAsCell: true });
   const notes = [], warnings = [...(cif.warnings || [])];
   if (sc.basis){
     const c = sc.cell, r = v => +v.toFixed(4), V = metric(c).V/metric(cif.cell).V;
@@ -116,9 +116,9 @@ const adpOpt = v => v === 'overall' || v === 'site' || v === 'aniso' ? v : 'cif'
    v428's: an isotropic size and strain, the rest off. */
 const MODES = [
   { k: 'size', label: 'Crystallite size', on: true, list: [['iso', 'isotropic'], ...SHAPES.filter(([k])=> k).map(([k, t])=> [k, 'free shape: ' + t.replace(' (two axes equal)', '')])],
-    title: "The crystallites' size broadening, Y_s/cosθ above the instrument's. Off: none (Y_s held at 0). Isotropic: one size. Free shape: a solid of any proportions and orientation, each reflection of a family with its own width; it tries several starting shapes (tens of seconds a sample, minutes with many reflections or log-normal sizes) and is kept only when the data support it against the isotropic size. Size models need the standard's profile" },
+    title: "The crystallites' size broadening, Y_s/cosθ above the instrument's. Off: none (Y_s held at 0). Isotropic: one size. Free shape: a solid of any proportions and orientation, each reflection of a family with its own width, drawn by the size line the Refinement settings choose (Shape size line: a Lorentzian by default, or its exact line, WPPM, the more accurate; WPPM always under the WPPM profile); it tries several starting shapes (tens of seconds a sample, minutes with many reflections or log-normal sizes) and is kept only when its gain over the isotropic size is over what noise gives a sphere in the phase's Laue class. Size models need the standard's profile" },
   { k: 'wppm', label: 'WPPM (size profile)', on: false, list: [['wppm', 'one size'], ['lognormal', 'log-normal sizes']],
-    title: "The size broadening's profile. Off: a Lorentzian, the size read with Scherrer's K = 0.9 (an apparent size: spheres of one size read 1.0–1.7 times theirs). On: Whole Powder Pattern Modelling, each line the Fourier transform of the crystallites' own common-volume function with the instrument's, the strain's and the faults' coefficients: the true dimensions, of one size or over a log-normal distribution of sizes (σ refined). Needs the crystallite size and the standard's profile" },
+    title: "The size broadening's profile. Off: a Lorentzian, the size read with Scherrer's K = 0.9 (an apparent size: spheres of one size read 1.0–1.7 times theirs); a free shape is drawn so too unless the Refinement settings ask for its exact line (Shape size line). On: Whole Powder Pattern Modelling, each line the Fourier transform of the crystallites' own common-volume function with the instrument's, the strain's and the faults' coefficients: the true dimensions, of one size or over a log-normal distribution of sizes (σ refined). Needs the crystallite size and the standard's profile" },
   { k: 'strain', label: 'Microstrain', on: true, list: [['iso', 'isotropic'], ['aniso', 'anisotropic (Stephens)']],
     title: "Off: none (X_s held at 0). Isotropic: one microstrain, the Lorentzian 4ε·tanθ. Anisotropic (Stephens): ε² a quartic form of the reflection's direction that the Laue group leaves unchanged (1 more term for a cubic phase, up to 14 for a triclinic one): a strain that depends on hkl. Anisotropic needs the standard's profile" },
   { k: 'faults', label: 'Planar faults', on: false, list: FAULTS,
@@ -215,15 +215,20 @@ const FITS = [
     title: "How far the cell search scales the CIF's cell lengths, ± this: a sample's cell may be a few per cent off the file's (doping, a DFT cell, temperature). A lone phase not found is searched again over twice it. Wider: slower, and more room for a false minimum. Samples only." },
   { k: 'zeroRange', label: 'Zero scan range (°)', role: 'std', said: v => `zero scan ±${v}°`,
     title: "The standard's zero is scanned over ± this before its refinement (the zero and the specimen's displacement together). Beyond 1° its bounds widen with it. The standard only." },
-  { k: 'shapeStarts', label: 'Shape trial starts', int: true, shape: true, said: v => `${v} shape starts`,
-    title: "The free shape's search: the starting shapes beside the sphere-like one. The plates and needles along the low-index directions are always run, random shapes fill up to this. More: slower, less likely to miss the best solid." },
   { k: 'shapeFull', label: 'Shape full refinements', int: true, shape: true, said: v => `${v} shape starts refined fully`,
-    title: "The free shape's best trial starts refined to convergence." },
+    title: "The free shape's search starts from the sphere-like shape and from plates and needles along the low-index directions and on the lines the isotropic fit leaves most and least broadened, each refined briefly: this many of the best are refined to convergence, before every minimum they fall into is refined to the same level. More: slower, less likely to miss the best solid." },
+  { k: 'shapeTiltSets', label: 'Shape extra tilt sets', int: true, shape: true, said: v => `${v} extra shape tilt set${v === 1 ? '' : 's'}`,
+    title: "The free shape's starts are each tilted 6° in one fixed direction, so that no symmetry holds their axes where they start. Each set adds the same starts again, tilted in another fixed direction, their best refined fully and every minimum they fall into refined with the search's: about one more search each (its time again), less likely to miss a solid that only some tilts reach. The directions are fixed (no random number): the same data and settings give the same result." },
+  // (v528: a choice, its values and their names; the engine's p.lorentzShape)
+  { k: 'shapeLine', label: 'Shape size line', choice: [['lorentz', 'Lorentzian'], ['exact', 'exact, from the solid']], shape: true,
+    said: v => v === 'exact' ? "the shape's exact size line" : "the shape's Lorentzian size line",
+    title: "The free shape's size line, where a phase's size profile is the Lorentzian: a Lorentzian of the solid's width along each member (Scherrer's calibration, as the isotropic size reads it), or the exact line, the transform of the solid's own common-volume function along it (WPPM). The exact line is the more accurate one: the Lorentzian reads a solid's extents 13–25 % long and pulls solids toward equant (the free-shape research, rounds 2 and 3), and the search's thresholds were tuned on the exact line. Under the Lorentzian the isotropic size is the Scherrer reading. A phase whose size profile is WPPM is drawn by its exact line either way. A result keeps the line it was refined with; refined from it with the other, its solid is searched again." },
 ];
 const FIT = Object.fromEntries(FITS.map(m=> [m.k, m]));
 // A setting as shown (twelve significant digits: 7.3 % is 0.073, not 0.07300000000000001).
 const fitTxt = v => String(+(+v).toPrecision(12));
 FITS.forEach(m=>{ if (m.bool) return;
+  if (m.choice){ m.full = `${m.title} Default: ${m.choice.find(([v])=> v === FIT_DEF[m.k])[1]}.`; return; }
   m.lo = fitSettings({ [m.k]: -Infinity })[m.k]; m.hi = fitSettings({ [m.k]: Infinity })[m.k];
   const s = v => fitTxt(m.pct ? v*100 : v), u = m.pct ? ' %' : m.k === 'zeroRange' ? '°' : '';
   m.range = `${s(m.lo)}–${s(m.hi)}`;
@@ -245,12 +250,14 @@ function readFit(m, raw){
   if (m.pct) v = +(v/100).toPrecision(12);
   return v >= m.lo && v <= m.hi ? v : null;
 }
-// Settings as saved, made valid: a key unknown, out of range or at its default is dropped.
+// Settings as saved, made valid: a key unknown (shapeStarts, the free shape's random starts, a
+// setting to v523), out of range or at its default is dropped.
 function cleanFit(s){
   const out = {};
   if (s && typeof s === 'object') FITS.forEach(m=>{
     const v = s[m.k];
-    if (m.bool ? v === true || v === false : typeof v === 'number' && readFit({ ...m, pct: false }, v) === v && v !== FIT_DEF[m.k]) out[m.k] = v;
+    if (m.bool ? v === true || v === false : m.choice ? m.choice.some(([c])=> c === v) && v !== FIT_DEF[m.k]
+      : typeof v === 'number' && readFit({ ...m, pct: false }, v) === v && v !== FIT_DEF[m.k]) out[m.k] = v;
   });
   return out;
 }
@@ -435,12 +442,16 @@ function resultPhases(r, all, own){
 }
 // The curves themselves: the phases with the free shape when its parameters are there
 // and the models the result used (a size or strain switched off among them), whatever
-// the settings say now.
+// the settings say now. A solid refined to v522 under the Lorentzian profile was drawn by
+// its Lorentzian line (lorentzShape, which the engine keeps): from v523 a
+// solid is drawn by WPPM, and a Refine from such a result searches it again. From v528 the
+// Lorentzian line is the setting shapeLine's default: a result refined under it says so the
+// same way (its models' profile 'lorentz'), and is drawn by it whatever the setting now.
 function curvesFrom(f, r, list, std){
   const ph = phaseData(list, std).map(q=>{
-    const md = (r.models || {})[q.id] || {};
-    return { ...q, shape: shapeOfParams(r.params, q.id), po: r.textures && r.textures[q.id] ? r.textures[q.id].hkl : null, size: md.size !== false,
-      profile: profileOpt(md.profile), strain: md.strain === 'off' ? 'off' : strainOpt(md.strain), faults: md.faults || null, adp: adpOpt(md.adp),
+    const md = (r.models || {})[q.id] || {}, shape = shapeOfParams(r.params, q.id), profile = profileOpt(md.profile);
+    return { ...q, shape, lorentzShape: !!shape && profile === 'lorentz', po: r.textures && r.textures[q.id] ? r.textures[q.id].hkl : null, size: md.size !== false,
+      profile, strain: md.strain === 'off' ? 'off' : strainOpt(md.strain), faults: md.faults || null, adp: adpOpt(md.adp),
       occ: Array.isArray(md.occ) ? md.occ : null };
   });
   // Built as the result's model was: its background terms and reflection list are those
@@ -540,10 +551,14 @@ function sizeMarks(fs, results, sizeBy, colorOf){
 
 // The Refinement settings a result was refined with that are not the defaults (r.fit,
 // the worker's; none in a result of v428 or older), those that acted on it: the cell
-// search's range on a sample, the zero scan's on the standard, the shape's with a shape.
+// search's range on a sample, the zero scan's on the standard, the shape's with a shape (a
+// key no longer a setting, as a result of v523 or older may carry shapeStarts, is not said).
 function fitUsed(r, std){
   if (!r || !r.fit) return [];
   const fs = fitSettings(r.fit), isS = roleOf(r) ?? std, shaped = Object.values(r.models || {}).some(m=> m && m.shape);
+  // (a result of v527 or older has no shapeLine: its line is its models' — a shaped phase
+  // under WPPM drawn by the exact line, as from v523, else by the Lorentzian, as to v522)
+  if (!('shapeLine' in r.fit)) fs.shapeLine = Object.values(r.models || {}).some(m=> m && m.shape && m.profile && m.profile !== 'lorentz') ? 'exact' : 'lorentz';
   return FITS.filter(m=> fs[m.k] !== FIT_DEF[m.k] && (m.role !== 'std' || isS) && (m.role !== 'sample' || !isS) && (!m.shape || shaped))
     .map(m=> ({ k: m.k, v: fs[m.k], said: m.said(fs[m.k]) }));
 }
@@ -580,7 +595,7 @@ function csvTables(pre, files, results, { curves, stale, std }, { data: fmtData,
     // The Refinement settings it was refined with, those not the defaults (as the card
     // says them): the engine's values and units (cellRange a fraction, bgInv 1 or 0), in
     // full, with the export's decimal mark.
-    fitUsed(r, std).forEach(u=> s += csvLine([f.label, '', 'fit_' + u.k, typeof u.v === 'boolean' ? (u.v ? '1' : '0') : fitTxt(u.v).replace('.', decimal), '', num(st.Rwp*100, 3), num(st.Rexp*100, 3), num(st.chi2, 3)]));
+    fitUsed(r, std).forEach(u=> s += csvLine([f.label, '', 'fit_' + u.k, typeof u.v === 'boolean' ? (u.v ? '1' : '0') : typeof u.v === 'string' ? u.v : fitTxt(u.v).replace('.', decimal), '', num(st.Rwp*100, 3), num(st.Rexp*100, 3), num(st.chi2, 3)]));
   });
   out.push({ name: pre + 'rietveld_results.csv', text: s });
   // The peak widths of every refined sample.
@@ -683,10 +698,9 @@ function resultsOf(s){
   return results;
 }
 
-export { PHASE_COLORS, prepPhase, textKey, prepOf, cellKey, frozen, SHAPES, shapeOpt, TEXTURE_AXES, textureOpt, profileOpt, strainOpt, FAULTS, faultOpt, adpOpt,
-  MODES, MODE, STD_NA, siteList, listOf, depOf, defSettings, stdSettings, cleanSettings, migrateSettings, engineOf,
-  HOLDS, HOLD_KEYS, HOLD_DEFAULT, STD_HOLD_NA, START_RULE, FIT_DEF, FITS, FIT, fitTxt, DEC, readFit, cleanFit, formulaOf,
-  SIZE_ROWS, SIZE_KINDS, hklShow, hklPlain, hklRuns, plotRuns,
-  instrOf, LAB6_ID, roleOf, irfOf, IRF_KEYS, sameIrf, phaseData, shapeOfParams, lastUnusable, bgTerms, payloadFor, resultRecord,
+export { PHASE_COLORS, prepPhase, textKey, prepOf, cellKey, frozen, MODES, MODE, siteList, listOf, depOf, defSettings, stdSettings, cleanSettings, migrateSettings, engineOf,
+  HOLDS, HOLD_KEYS, HOLD_DEFAULT, START_RULE, FIT_DEF, FITS, FIT, fitTxt, readFit, cleanFit, formulaOf,
+  SIZE_KINDS, hklShow, hklPlain, hklRuns, plotRuns,
+  instrOf, LAB6_ID, irfOf, sameIrf, lastUnusable, payloadFor, resultRecord,
   resultPhases, curvesFrom, exactJson, scanRange, tickRows, groupTicks,
   sizesOf, sizeKinds, sizeMarks, fitUsed, csvTables, rowsFor, fitShown, naOf, autoInvOf, fitRefusal, stateOf, readState, resultsOf };

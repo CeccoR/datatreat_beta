@@ -1,0 +1,15 @@
+import fs from 'node:fs';
+import { readResult } from '../harness/lib.mjs';
+const f = process.argv[2];
+const o = readResult(fs.readFileSync(f, 'utf8'));
+const r = o.records[0], u = r.info && r.info.uniq;
+const F = (x, d=1) => x == null || !Number.isFinite(x) ? '∞' : x.toFixed(d);
+console.log(o.case, o.seed, 'truth', o.truth && o.truth.dims.join('×'), 'iso χ²ν', F(o.iso.chi2nu,3), 'kept', r.kept, 'held', r.held);
+if (!u) process.exit(0);
+console.log(' app kind', u.app.kind, JSON.stringify(u.app.groups), u.app.axes.map(a=> `${a.role}:${F(a.D,2)}±${F(a.Desd,2)} ${a.label||''} esdAng ${F(a.esdAngle,1)} res ${a.resolved}`).join(' | '));
+console.log(' nu0', F(u.nu0,3), 'cost', JSON.stringify(u.cost));
+const c0 = u.minima[0].chi;
+for (const m of u.minima) console.log('  min', m.src, 'Δ', F((m.chi - c0)/u.nu0, 2), 'dims', m.solid.dims.map(d=>F(d,2)).join('×'), 'sLogW', m.sLogW.map(x=>F(x,3)).join(','), 'sTilt', m.sTilt.map(x=>F(x,1)).join(','), 'held', m.held, 'merged', m.merged||0);
+if (u.profile) console.log(' profile', JSON.stringify(u.profile.map(p=> ({ W: +p.W.toFixed(3), th: p.sides.thinner && [p.sides.thinner.s1, p.sides.thinner.s2].map(x=> x==null?null:+x.toFixed(3)), lo: p.sides.longer && [p.sides.longer.s1, p.sides.longer.s2].map(x=> x==null?null:+x.toFixed(3)) }))));
+console.log(' ends', u.ends.length, 'bootFree', JSON.stringify(u.bootFree && u.bootFree.map(x=> x && +x.toFixed(1))));
+console.log(' tried', JSON.stringify(u.tried).slice(0, 600));

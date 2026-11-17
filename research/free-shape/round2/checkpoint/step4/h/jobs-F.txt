@@ -1,0 +1,5 @@
+F0 . default default default default default box-P4m-near CK_METHOD=min,MIN_OFF=1
+F0 . default default default default default sphere-P6m-3 CK_METHOD=min,MIN_OFF=1
+F1 . default default default default default box-P-3m1-near CK_METHOD=min
+F1 . default default default default default sqbox-P4m-on CK_METHOD=min
+F1 . default default default default default cylinder-P4mmm-on CK_METHOD=min

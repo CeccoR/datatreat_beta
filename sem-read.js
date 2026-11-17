@@ -77,8 +77,8 @@ const LITTLE = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
    would refuse the file refuses it here too. view: the pixels a Uint16Array over the
    file's own bytes where they are its grey levels as they are (16 bits in this machine's
    order, at an even offset, the strips one after another, black the lowest level, the
-   pixels square): no copy (b2, sem.js: a decoded image costs nothing but the file it
-   is); else a copy, as without it.
+   pixels square): no copy (sem.js: a decoded image costs nothing but the file it is);
+   else a copy, as without it.
    Throws SemReadError with the reason a file is not taken. */
 function readTescanTiff(bytes, fileName = '', opts = {}){
   if (bytes.length < 8) throw new SemReadError('not a TIFF');
@@ -257,7 +257,7 @@ function hashBytes(b){
   return (h >>> 0).toString(16).padStart(8, '0') + '-' + b.length;
 }
 // A file's base64 read into its bytes: a project of v517 or before held it so (sem.js
-// semRestore; b2 keeps the bytes, and makes no base64). The browser's own (fromBase64),
+// semRestore; from v518 the bytes are kept, and no base64 made). The browser's own (fromBase64),
 // where it has it, gives the same, sooner.
 function fromB64(b64){
   if (Uint8Array.fromBase64) return Uint8Array.fromBase64(b64);
@@ -343,11 +343,11 @@ function cardKey(c, w, h){
 function cardLevels(r, c, w, h){ const K = cardKey(c, w, h); return { ...K, px: resample(r.pixels, r.width, c, K.w, K.h) }; }
 /* A file dropped, read whole: { id, r (its pixels viewed in its bytes where they can
    be), small, st (its default crop's statistics), card (its card as its own group takes
-   it whole), bytes }. Throws SemReadError where it is not taken. To b2 its base64 too,
+   it whole), bytes }. Throws SemReadError where it is not taken. To v517 its base64 too,
    11.9 MB for a 2048 × 2176 image of 8.9 MB, kept beside it. */
 function readFile(bytes, name){
   const id = hashBytes(bytes), r = readTescanTiff(bytes, name, { view: true }), c = { x: 0, y: 0, w: r.width, h: r.imageH };
   return { id, r, small: reducedCopy(r), st: cropStats(r.pixels, r.width, c), card: cardLevels(r, c, r.width, r.imageH), bytes };
 }
 
-export { readTescanTiff, SemReadError, keyValues, hashBytes, fromB64, reducedCopy, cropStats, resample, cardKey, cardLevels, readFile, squarePixels, axisWeights, MAX_SIDE, MAX_PIXELS };
+export { readTescanTiff, SemReadError, hashBytes, fromB64, reducedCopy, cropStats, resample, cardKey, cardLevels, readFile, squarePixels };

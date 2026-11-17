@@ -1,0 +1,90 @@
+2026-10-26T18:47:36.002Z fullsub: 22 of 22 runs to do (sub), 2 at a time; methods cuts
+2026-10-26T18:50:31.991Z [1/22] box-P-1-near: ok 176 s
+box-P-1-near (-1, box) as box: iso χ²_ν 2.529, 997 ev, 76497 ms
+  cuts: free χ² 13090.69 best 13090.69 ΔBIC -4760 | 1815 ev 98372 ms | starts 11 | central 64 ev Δχ² -0.000 | cov 33 ev | 18.14×7.73×71.49 | dims 15% 32% 19% axis 3.7°
+  wall 175.8 s
+2026-10-26T18:51:21.166Z [2/22] sqbox-P-1-on: ok 225 s
+sqbox-P-1-on (-1, sqbox, sizedist) as sqbox: iso χ²_ν 3.439, 1003 ev, 78477 ms
+  cuts: free χ² 14666.74 best 14666.74 ΔBIC -5681 | 2395 ev 145406 ms | starts 11 | central 64 ev Δχ² -0.002 | cov 31 ev | 3.91×3.91×13.82 | dims 16% 16% 39% axis 3.9°
+  wall 224.9 s
+2026-10-26T18:51:53.513Z [3/22] ellcyl-P2m-generic: ok 82 s
+ellcyl-P2m-generic (2/m, ellcyl) as ellcyl: iso χ²_ν 4.641, 595 ev, 20827 ms
+  cuts: free χ² 16415.58 best 16415.58 ΔBIC -6401 | 2075 ev 59712 ms | starts 11 | central 56 ev Δχ² -0.000 | cov 29 ev | 71.56×28.36×17.26 | dims 4% 19% 18% axis 18.3°
+  wall 81.3 s
+2026-10-26T18:52:30.445Z [4/22] cylinder-P2m-on: ok 69 s
+cylinder-P2m-on (2/m, cylinder, impurity) as cylinder: iso χ²_ν 1.458, 745 ev, 23555 ms
+  cuts: free χ² 11824.16 best 11824.16 ΔBIC -1847 | 1562 ev 44959 ms | starts 11 | central 48 ev Δχ² -0.000 | cov 25 ev | 11.67×11.67×43.22 | dims 4% 4% -28% axis 6.1°
+  wall 69.1 s
+2026-10-26T18:52:38.911Z [5/22] spheroid-P6mmm-near: ok 45 s
+spheroid-P6mmm-near (6/mmm, spheroid, hump) as spheroid: iso χ²_ν 3.195, 338 ev, 3794 ms
+  cuts: held χ² 28764.65 best 28764.65 ΔBIC -973 | 2384 ev 40886 ms | starts 9 | central 32 ev Δχ² -0.000 | cov 17 ev | 3.77×3.77×6.75 | dims -36% -36% 185% axis 89.1°
+  wall 45.3 s
+2026-10-26T18:53:17.275Z [6/22] spheroid-Pmmm-near: ok 38 s
+spheroid-Pmmm-near (mmm, spheroid, air) as spheroid: iso χ²_ν 2.241, 374 ev, 6538 ms
+  cuts: held χ² 18951.93 best 18951.93 ΔBIC -1520 | 1497 ev 31162 ms | starts 11 | central 36 ev Δχ² -0.000 | cov 19 ev | 10.75×10.75×15.63 | dims 8% 8% 7% axis 6.1°
+  wall 38.2 s
+2026-10-26T18:53:28.985Z [7/22] box-P4m-near: ok 59 s
+box-P4m-near (4/m, box) as box: iso χ²_ν 2.660, 511 ev, 5262 ms
+  cuts: held χ² 15449.07 best 15449.07 ΔBIC -4160 | 4244 ev 52406 ms | starts 11 | central 87 ev Δχ² -0.000 | cov 19 ev | heldDup 1 | 12.45×18.00×57.89 | dims 37% -1% -4% axis 5.5°
+  wall 58.4 s
+2026-10-26T18:53:54.241Z [8/22] ellcyl-P4mmm-generic: ok 37 s
+ellcyl-P4mmm-generic (4/mmm, ellcyl, hump) as ellcyl: iso χ²_ν 1.080, 260 ev, 3073 ms
+  cuts: free χ² 10652.80 best 10652.80 ΔBIC -80 | 2203 ev 33053 ms | starts 11 | central 76 ev Δχ² -0.014 | cov 25 ev | 5.47×7.60×12.25 | dims -53% -42% 270% axis 4.2°
+  wall 36.8 s
+2026-10-26T18:54:15.078Z [9/22] cylinder-P4mmm-on: ok 46 s
+cylinder-P4mmm-on (4/mmm, cylinder) as cylinder: iso χ²_ν 16.552, 333 ev, 4137 ms
+  cuts: held χ² 159072.33 best 159072.33 ΔBIC -366 | 2408 ev 41024 ms | starts 11 | central 32 ev Δχ² -0.001 | cov 17 ev | 7.48×7.48×7.31 | dims 19% 19% 13% axis 0.0°
+  wall 45.9 s
+2026-10-26T18:54:24.203Z [10/22] box-Pm-3-near: ok 30 s
+box-Pm-3-near (m-3, box, impurity) as box: iso χ²_ν 2.144, 222 ev, 1509 ms
+  cuts: held χ² 21134.76 best 21134.70 ΔBIC -109 | 1909 ev 27828 ms | starts 7 | central 34 ev Δχ² -0.003 | cov 17 ev | heldDup 2 | 2.30×2.49×5.14 | dims 12% 2% -42% axis 7.4°
+  wall 29.8 s
+2026-10-26T18:54:39.935Z [11/22] ellipsoid-P6mmm-generic: ok 25 s
+ellipsoid-P6mmm-generic (6/mmm, ellipsoid, air) as ellipsoid: iso χ²_ν 2.077, 306 ev, 3014 ms
+  cuts: held χ² 18405.47 best 18405.47 ΔBIC -1106 | 1472 ev 20990 ms | starts 9 | central 38 ev Δχ² -0.000 | cov 19 ev | heldDup 2 | 13.16×8.67×8.67 | dims 58% -29% -8% axis 25.0°
+  wall 24.7 s
+2026-10-26T18:54:54.447Z [12/22] ellipsoid-Pmmm-generic: ok 30 s
+ellipsoid-Pmmm-generic (mmm, ellipsoid) as ellipsoid: iso χ²_ν 1.237, 289 ev, 4827 ms
+  cuts: free χ² 11313.54 best 11312.81 ΔBIC -792 | 1490 ev 24698 ms | starts 11 | central 52 ev Δχ² -0.000 | cov 27 ev | 16.52×5.76×19.09 | dims 10% -18% -9% axis 1.5°
+  wall 30.1 s
+2026-10-26T18:55:06.707Z [13/22] sqbox-P-3m1-on: ok 27 s
+sqbox-P-3m1-on (-3m, sqbox, po) as sqbox: iso χ²_ν 1.153, 422 ev, 3972 ms
+  cuts: held χ² 10998.69 best 10992.21 ΔBIC -434 | 1672 ev 21999 ms | starts 9 | central 32 ev Δχ² -0.000 | cov 17 ev | 6.70×6.70×18.44 | dims -49% -49% 179% axis 73.8°
+  wall 26.6 s
+2026-10-26T18:55:25.157Z [14/22] ellcyl-P6m-generic: ok 31 s
+ellcyl-P6m-generic (6/m, ellcyl) as ellcyl: iso χ²_ν 1.189, 313 ev, 2578 ms
+  cuts: free χ² 11065.28 best 11065.28 ΔBIC -634 | 2611 ev 27347 ms | starts 9 | central 59 ev Δχ² -0.003 | cov 25 ev | 19.40×34.84×29.75 | dims -57% -40% 203% axis 28.2°
+  wall 30.5 s
+2026-10-26T18:55:29.951Z [15/22] cylinder-P6m-on: ok 23 s
+cylinder-P6m-on (6/m, cylinder) as cylinder: iso χ²_ν 1.093, 282 ev, 2405 ms
+  cuts: held χ² 10866.31 best 10866.31 ΔBIC -34 | 1222 ev 20029 ms | starts 9 | central 32 ev Δχ² -0.000 | cov 17 ev | 7.44×7.44×5.98 | dims 31% 31% -6% axis 90.0°
+  wall 23.1 s
+2026-10-26T18:55:54.288Z [16/22] sqbox-P4m-on: ok 29 s
+sqbox-P4m-on (4/m, sqbox, air) as sqbox: iso χ²_ν 1.398, 337 ev, 3990 ms
+  cuts: rejected χ² 13958.11 best 13929.34 ΔBIC -8 | 1458 ev 24303 ms | starts 11
+  wall 29.0 s
+2026-10-26T18:55:57.574Z [17/22] ellipsoid-P-3-generic: ok 28 s
+ellipsoid-P-3-generic (-3, ellipsoid, impurity) as ellipsoid: iso χ²_ν 4.903, 318 ev, 2706 ms
+  cuts: free χ² 47375.32 best 47375.32 ΔBIC -278 | 2128 ev 24034 ms | starts 11 | central 78 ev Δχ² -0.347 | cov 25 ev | 33.53×15.21×18.65 | dims 31% -16% -44% axis 31.6°
+  wall 27.4 s
+2026-10-26T18:56:11.403Z [18/22] cylinder-Pm-3m-on: ok 17 s
+cylinder-Pm-3m-on (m-3m, cylinder, sizedist) as cylinder: iso χ²_ν 4.026, 304 ev, 1612 ms
+  cuts: held χ² 16949.54 best 16947.60 ΔBIC -5768 | 1244 ev 14672 ms | starts 7 | central 28 ev Δχ² -0.000 | cov 15 ev | 22.93×22.93×4.78 | dims 23% 23% 29% axis 0.0°
+  wall 17.0 s
+2026-10-26T18:56:17.533Z [19/22] box-P-3m1-near: ok 20 s
+box-P-3m1-near (-3m, box) as box: iso χ²_ν 1.028, 512 ev, 4391 ms
+  cuts: held χ² 10072.79 best 10072.78 ΔBIC -169 | 1294 ev 14572 ms | starts 9 | central 38 ev Δχ² -0.001 | cov 19 ev | heldDup 2 | 71.51×27.26×24.80 | dims 73% -8% 19% axis 28.3°
+  wall 19.8 s
+2026-10-26T18:56:25.348Z [20/22] ellcyl-Pm-3m-generic: ok 14 s
+ellcyl-Pm-3m-generic (m-3m, ellcyl) as ellcyl: iso χ²_ν 1.134, 240 ev, 1229 ms
+  cuts: held χ² 11232.82 best 11232.82 ΔBIC -60 | 1098 ev 11706 ms | starts 7 | central 34 ev Δχ² -0.001 | cov 17 ev | heldDup 1 | 17.22×17.21×19.39 | dims 1% -67% 190% axis 0.6°
+  wall 13.8 s
+2026-10-26T18:56:38.900Z [21/22] sqbox-Pm-3-on: ok 14 s
+sqbox-Pm-3-on (m-3, sqbox) as sqbox: iso χ²_ν 1.589, 296 ev, 1820 ms
+  cuts: held χ² 15492.83 best 15492.83 ΔBIC -227 | 1226 ev 11023 ms | starts 7 | central 44 ev Δχ² -0.010 | cov 15 ev | heldDup 1 | 15.85×15.85×15.86 | dims 46% 46% 4% axis 0.0°
+  wall 13.4 s
+2026-10-26T18:56:39.420Z [22/22] spheroid-P-3-near: ok 22 s
+spheroid-P-3-near (-3, spheroid) as spheroid: iso χ²_ν 1.161, 286 ev, 2994 ms
+  cuts: held χ² 11540.15 best 11540.15 ΔBIC -36 | 1477 ev 18154 ms | starts 11 | central 32 ev Δχ² -0.000 | cov 17 ev | 16.21×16.21×14.58 | dims 4% 4% 11% axis 33.0°
+  wall 21.7 s
+2026-10-26T18:56:39.420Z fullsub: 22 done, 0 failed, 9.1 min

@@ -584,17 +584,14 @@ function readXrdmlInstrumentText(text, k){
   if (!isXrdml(text)) return null;
   return readInstrument(LITE_ACCESS, parseXmlLite(text, measIdx(k)), measIdx(k));
 }
-// The scans (readScans): every one, from a parsed DOM Document; the first, from that or
-// from the raw file.
+// The scans (readScans): every one, from a parsed DOM Document; the first, from the raw
+// file (Node's tests and harnesses, no DOM).
 function readXrdmlScans(xmlDoc){
   return xmlDoc ? readScans(DOM_ACCESS, xmlDoc) : [{ error: 'no document' }];
-}
-function readXrdmlScan(xmlDoc){
-  return readXrdmlScans(xmlDoc)[0];
 }
 function readXrdmlScanText(text){
   text = asText(text);
   return isXrdml(text) ? readScans(LITE_ACCESS, parseXmlLite(text))[0] : { error: 'not an .xrdml file' };
 }
 
-export { readXrdmlInstrument, readXrdmlInstrumentText, readXrdmlScan, readXrdmlScans, readXrdmlScanText, decodeXml, noiseCountScale };
+export { readXrdmlInstrument, readXrdmlInstrumentText, readXrdmlScans, readXrdmlScanText, decodeXml, noiseCountScale };

@@ -505,11 +505,11 @@ function equivIso(Uij, G, Gs){
 }
 
 // CIF text → { name, block, cell (with dG, its rounding, when its digits hide some), hm,
-// itNumber, hall, ops, sites, formulaSum, formula, Z, defaultB (the labels of the sites given
-// no displacement parameter), warnings }. Reads the first data block that has fractional atom
-// sites. Throws (with a message for the user) when the file has no data block, no such atom
-// sites, or no cell: whatever it returns is usable. Everything else it can work around is in
-// `warnings`.
+// itNumber, hall, ops, sites, formulaSum, formulaStructural, formula, Z, defaultB (the labels
+// of the sites given no displacement parameter), warnings }. Reads the first data block that
+// has fractional atom sites. Throws (with a message for the user) when the file has no data
+// block, no such atom sites, or no cell: whatever it returns is usable. Everything else it
+// can work around is in `warnings`.
 function parseCif(text){
   const { blocks, warnings: lexWarnings } = cifBlocks(String(text ?? ''));
   if (!blocks.length) throw new Error('Not a CIF: no data_ block found.');
@@ -734,10 +734,12 @@ function parseCif(text){
     if (!whole) throw new Error(`The CIF names ${groupName} but lists ${onlyIdentity ? 'only the identity (x, y, z) as its symmetry operations' : 'no symmetry operations'}, and they are not generated from the symbol: the ${sites.length} site${sites.length > 1 ? 's' : ''} given cannot be the whole cell (${why.join('; ')}). A CIF with its operations (_space_group_symop_operation_xyz${magName || parent ? '; in a magnetic CIF, _space_group_symop_magn_operation.xyz' : ''}) is needed: COD, ICSD and the Materials Project (symmetrized CIF) give them${magName || parent ? ', MAGNDATA the magnetic ones' : ''}.`);
     warnings.push(`The CIF lists ${onlyIdentity ? 'only the identity (x, y, z) as its symmetry operation' : 'no symmetry operations'}${hm ? ` for ${hm.trim()}` : ''}: the atoms are taken as they are (P1), so the cell is filled only if they are all listed.`);
   }
-  const name = item(b, '_chemical_name_mineral') || item(b, '_chemical_formula_structural')
+  const structural = item(b, '_chemical_formula_structural');
+  const name = item(b, '_chemical_name_mineral') || structural
     || (formula ? formulaText(formula) : null) || item(b, '_chemical_name_common') || b.name;
   return { name: String(name).trim(), block: b.name, cell, hm: hm ? hm.trim() : null, itNumber, hall: hall ? hall.trim() : null,
-           ops, sites, formulaSum: formulaSum ? formulaSum.trim() : null, formula, Z, defaultB, warnings };
+           ops, sites, formulaSum: formulaSum ? formulaSum.trim() : null, formulaStructural: structural ? String(structural).trim() : null,
+           formula, Z, defaultB, warnings };
 }
 
 /* ---------- cell contents ---------- */
@@ -836,9 +838,17 @@ function formulaRounding(f){
    Z from the most abundant element alone, and skipped the check when it had no atom). The
    CIF's own site multiplicities, when given, are compared too: they are the most direct
    evidence. H missing from the sites (not located by X-rays) is only noted.
+   Two more readings are taken when the file has them (v537), the cell passing if any one
+   fits: opts.structural, _chemical_formula_structural × Z (left out when it has brackets or
+   anything but elements and numbers: 'Ca3(PO4)2', a hydrate's '·'), and, with
+   opts.sumAsCell, _chemical_formula_sum as the whole cell's content (× 1). pymatgen writes
+   the sum for the whole cell ('Ti4 O8') and Z per reduced formula (TiO2, Z 4): read × Z as
+   the CIF standard has it, a right file gave Ti 16, O 32. A mismatch then names the
+   structural formula, when there is one. (parseCif's test of a file with no operations
+   leaves the sum × 1 out: an asymmetric unit holds it whenever it holds one formula unit.)
    → { ok, checked, expected, found, Z, message, note (when ok only by counting partly
        occupied sites full) }. */
-function checkComposition(atoms, formulaSum, Z){
+function checkComposition(atoms, formulaSum, Z, { structural = null, sumAsCell = false } = {}){
   const found = cellContents(atoms), full = {}, occSlack = {};
   const occE = roundingOf(atoms.filter(a => a.occEps == null && (a.occ ?? 1) < 1).map(a => [String(a.occ)]));
   let ie = 0;
@@ -863,17 +873,64 @@ function checkComposition(atoms, formulaSum, Z){
     msgs.push(`Site multiplicities differ from the CIF's: ${badMult.map(e => `${e.label} ${e.n} (CIF ${e.mult})`).join(', ')}.`);
   }
 
+  // What element el may count, in atoms: [lo, hi].
+  const lo = el => (found[el] || 0) - (occSlack[el] || 0) - 1e-6, hi = el => (full[el] || 0) + (occSlack[el] || 0) + 1e-6;
+  // One reading, formula × z (fe: the formula's rounding, per formula unit) → { ok, expected,
+  // msgs (on success, the first is the match), note }.
+  const compare = (formula, fe, z) => {
+    const els = Object.keys(formula), noH = formula.H && !found.H, out = [];
+    const cmp = els.filter(el => !(noH && el === 'H'));
+    const expected = {};
+    for (const el of els) expected[el] = formula[el]*z;
+    const allEls = [...new Set([...cmp, ...Object.keys(found)])];
+    const off = allEls.filter(el => { const e = expected[el] || 0, s = z*(fe[el] || 0); return e + s < lo(el) || e - s > hi(el); });
+    let cOk = true, cNote = null;
+    if (off.length){
+      cOk = false;
+      // One factor k for every element, and not 1 (a whole cell read twice, or half of one):
+      // some k puts k × the formula × Z within every element's bounds. v426 asked every
+      // ratio within 2 % of the first, which a large cell passes with a site missing
+      // (Y24Al40O95 read as 2 × Y3Al5O12 × 4) and a vacancy of a doubled cell may not.
+      let klo = 0, khi = Infinity;
+      for (const el of allEls){
+        const e = expected[el] || 0, sl = z*(fe[el] || 0);
+        if (!(e > 0)){ klo = Infinity; break; }
+        klo = Math.max(klo, lo(el)/(e + sl)); khi = Math.min(khi, e > sl ? hi(el)/(e - sl) : Infinity);
+      }
+      const uniform = klo <= khi && !(klo <= 1 && 1 <= khi);
+      const r0 = Math.min(Math.max(allEls.reduce((m, el)=> m + (found[el] || 0)*(expected[el] || 0), 0)/allEls.reduce((m, el)=> m + (expected[el] || 0)**2, 0), klo), khi);
+      out.push(`The symmetry operations fill the cell with ${fmt(found)}, but ${formulaText(formula)} × Z = ${fmtCount(z)} is ${fmt(expected)}`
+        + (uniform ? ` (every element ${fmtCount(+r0.toFixed(3))}× the formula: Z is wrong, or the coordinates belong to another origin choice or setting than the operations).`
+                   : '. The coordinates and the symmetry operations may belong to different origin choices or settings, or sites are missing.'));
+    } else {
+      out.push(`Cell contents ${fmt(found)} = ${formulaText(formula)} × ${fmtCount(z)}.`);
+      // Within only by counting partly occupied sites full (a vacancy against a nominal
+      // formula): a partly occupied site left out (half of a split site) reads the same, so
+      // it is said.
+      const short = cmp.filter(el => (expected[el] || 0) - z*(fe[el] || 0) > (found[el] || 0) + (occSlack[el] || 0) + 1e-6);
+      if (short.length){
+        cNote = `the occupancies give ${short.map(el => `${el} ${fmtCount(found[el] || 0)}`).join(', ')}, the formula × Z ${short.map(el => fmtCount(expected[el])).join(', ')}: vacancies on sites the formula counts full, or a partly occupied site is missing`;
+        out.push(cNote[0].toUpperCase() + cNote.slice(1) + '.');
+      }
+    }
+    if (noH) out.push('No H atoms in the sites (often not located by X-rays): H left out of the check.');
+    return { ok: cOk, expected, msgs: out, note: cNote };
+  };
+
   const formula = typeof formulaSum === 'string' ? parseFormula(formulaSum) : formulaSum;
   let expected = null, z = Z > 0 ? Z : null;
+  // The structural formula, when it reads as elements and numbers alone.
+  const sText = typeof structural === 'string' ? structural.trim() : '';
+  const sForm = sText && /^[A-Za-z0-9.\s]+$/.test(sText) ? parseFormula(sText) : null;
+  const sRead = sForm && Z > 0 ? compare(sForm, formulaRounding(sText), Z) : null;
+  if (sRead) checked = true;
+  let sumRead = null, cellRead = null;
   if (formula && Object.keys(formula).length){
-    const els = Object.keys(formula), fe = formulaRounding(formulaSum);
-    const noH = formula.H && !found.H;
-    const cmp = els.filter(el => !(noH && el === 'H'));
-    // What element el may count, in atoms: [lo, hi], and the formula's rounding × z.
-    const lo = el => (found[el] || 0) - (occSlack[el] || 0) - 1e-6, hi = el => (full[el] || 0) + (occSlack[el] || 0) + 1e-6;
+    const fe = formulaRounding(formulaSum);
     if (!z){
       // Every element bounds Z; the whole number in all the bounds nearest the least-squares
       // ratio, else the nearest whole number (which then fails).
+      const cmp = Object.keys(formula).filter(el => !(formula.H && !found.H && el === 'H'));
       let zlo = 0, zhi = Infinity;
       for (const el of cmp){
         const f = formula[el], e = fe[el] || 0;
@@ -887,42 +944,26 @@ function checkComposition(atoms, formulaSum, Z){
         msgs.push(`Z not given, and no whole number of formula units fits the cell contents${zlo <= zhi ? ` (they hold ${fmtCount(+r.toFixed(3))}: give Z in the CIF if it is not whole)` : ''}: compared with the nearest, ${z}.`);
       }
     }
-    if (z){
-      checked = true;
-      expected = {};
-      for (const el of els) expected[el] = formula[el]*z;
-      const allEls = [...new Set([...cmp, ...Object.keys(found)])];
-      const off = allEls.filter(el => { const e = expected[el] || 0, s = z*(fe[el] || 0); return e + s < lo(el) || e - s > hi(el); });
-      if (off.length){
-        ok = false;
-        // One factor k for every element, and not 1 (a whole cell read twice, or half of one):
-        // some k puts k × the formula × Z within every element's bounds. v426 asked every
-        // ratio within 2 % of the first, which a large cell passes with a site missing
-        // (Y24Al40O95 read as 2 × Y3Al5O12 × 4) and a vacancy of a doubled cell may not.
-        let klo = 0, khi = Infinity;
-        for (const el of allEls){
-          const e = expected[el] || 0, sl = z*(fe[el] || 0);
-          if (!(e > 0)){ klo = Infinity; break; }
-          klo = Math.max(klo, lo(el)/(e + sl)); khi = Math.min(khi, e > sl ? hi(el)/(e - sl) : Infinity);
-        }
-        const uniform = klo <= khi && !(klo <= 1 && 1 <= khi);
-        const r0 = Math.min(Math.max(allEls.reduce((m, el)=> m + (found[el] || 0)*(expected[el] || 0), 0)/allEls.reduce((m, el)=> m + (expected[el] || 0)**2, 0), klo), khi);
-        msgs.push(`The symmetry operations fill the cell with ${fmt(found)}, but ${formulaText(formula)} × Z = ${fmtCount(z)} is ${fmt(expected)}`
-          + (uniform ? ` (every element ${fmtCount(+r0.toFixed(3))}× the formula: Z is wrong, or the coordinates belong to another origin choice or setting than the operations).`
-                     : '. The coordinates and the symmetry operations may belong to different origin choices or settings, or sites are missing.'));
-      } else {
-        msgs.unshift(`Cell contents ${fmt(found)} = ${formulaText(formula)} × ${fmtCount(z)}.`);
-        // Within only by counting partly occupied sites full (a vacancy against a nominal
-        // formula): a partly occupied site left out (half of a split site) reads the same, so
-        // it is said.
-        const short = cmp.filter(el => (expected[el] || 0) - z*(fe[el] || 0) > (found[el] || 0) + (occSlack[el] || 0) + 1e-6);
-        if (short.length){
-          note = `the occupancies give ${short.map(el => `${el} ${fmtCount(found[el] || 0)}`).join(', ')}, the formula × Z ${short.map(el => fmtCount(expected[el])).join(', ')}: vacancies on sites the formula counts full, or a partly occupied site is missing`;
-          msgs.push(note[0].toUpperCase() + note.slice(1) + '.');
-        }
-      }
-      if (noH) msgs.push('No H atoms in the sites (often not located by X-rays): H left out of the check.');
-    }
+    checked = true;
+    sumRead = compare(formula, fe, z);
+    if (sumAsCell && Z > 0 && Z !== 1) cellRead = compare(formula, fe, 1);
+  }
+  // The first reading that fits, else the structural formula's (or the sum's) mismatch, and
+  // what else was compared.
+  const pass = [sRead, sumRead, cellRead].find(r => r && r.ok);
+  if (pass){
+    expected = pass.expected;
+    msgs.unshift(pass.msgs[0] + (pass === cellRead ? ` (_chemical_formula_sum taken as the whole cell; Z = ${fmtCount(Z)} counts another formula unit)` : ''));
+    msgs.push(...pass.msgs.slice(1));
+    note = pass.note;
+  } else if (sRead || sumRead){
+    ok = false;
+    const shown = sRead || sumRead;
+    expected = shown.expected;
+    const same = (a, b) => Object.keys({ ...a, ...b }).every(el => Math.abs((a[el] || 0) - (b[el] || 0)) < 1e-9);
+    const also = [sumRead && sRead && !same(sumRead.expected, sRead.expected) ? `${formulaText(formula)} (_chemical_formula_sum) × Z, ${fmt(sumRead.expected)}` : null,
+      cellRead ? `${formulaText(formula)} as the whole cell` : null].filter(Boolean);
+    msgs.push(shown.msgs[0] + (also.length ? ` Nor is it ${also.join(', nor ')}.` : ''), ...shown.msgs.slice(1));
   }
   if (!checked) msgs.push('No formula (or Z) to compare with: composition not checked.');
   return { ok, checked, expected, found, Z: z, message: msgs.join(' '), ...(note ? { note } : {}) };

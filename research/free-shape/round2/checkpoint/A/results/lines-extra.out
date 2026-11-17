@@ -1,0 +1,15 @@
+| ball (any direction) | 0.830 | 0.889 | 0.627, 0.267 | 0.30 | 4.5 % | 0.048 | 0.0159 |
+| box along an edge | 0.886 | 1.000 | 0.728, 0.143 | 0.16 | 8.0 % | -0.000 | 0.0000 |
+| box, face diagonal | 0.786 | 0.750 | 0.531, 0.354 | 0.40 | 3.9 % | 0.068 | 0.0169 |
+| box, body diagonal | 0.741 | 0.667 | 0.437, 0.438 | 0.50 | 2.5 % | 0.076 | 0.0190 |
+| cylinder along the axis | 0.886 | 1.000 | 0.728, 0.143 | 0.16 | 8.0 % | -0.000 | 0.0000 |
+| cylinder at 45° (scaled) | 0.774 | 0.735 | 0.510, 0.376 | 0.42 | 3.2 % | 0.070 | 0.0170 |
+| cylinder across | 0.850 | 0.925 | 0.661, 0.226 | 0.25 | 5.8 % | 0.032 | 0.0133 |
+ball      δ 0.1 | lor: spread read/true 0.00, mean ⟨L⟩_V read 1.158 | lsq: spread read/true 0.00, mean ⟨L⟩_V read 0.995
+ball      δ 0.2 | lor: spread read/true 0.00, mean ⟨L⟩_V read 1.146 | lsq: spread read/true 0.48, mean ⟨L⟩_V read 0.982
+ball      δ 0.3 | lor: spread read/true 0.00, mean ⟨L⟩_V read 1.127 | lsq: spread read/true 0.90, mean ⟨L⟩_V read 0.980
+ball      δ 0.5 | lor: spread read/true 0.00, mean ⟨L⟩_V read 1.081 | lsq: spread read/true 1.00, mean ⟨L⟩_V read 0.981
+box edge  δ 0.1 | lor: spread read/true 0.00, mean ⟨L⟩_V read 1.187 | lsq: spread read/true 0.00, mean ⟨L⟩_V read 0.993
+box edge  δ 0.2 | lor: spread read/true 0.00, mean ⟨L⟩_V read 1.168 | lsq: spread read/true 0.00, mean ⟨L⟩_V read 0.973
+box edge  δ 0.3 | lor: spread read/true 0.00, mean ⟨L⟩_V read 1.146 | lsq: spread read/true 0.90, mean ⟨L⟩_V read 0.968
+box edge  δ 0.5 | lor: spread read/true 0.00, mean ⟨L⟩_V read 1.101 | lsq: spread read/true 1.03, mean ⟨L⟩_V read 0.967

@@ -601,7 +601,7 @@ export { matMul, axisAngle, reortho, viewAt, readTheme };
    arrows' length L), each axis an arrow in its colour, a red, b green, c blue as
    crystallographic programs draw them, named in italics past its tip; the far ones
    first, and dimmed. axes: the three unit vectors, in the frame R turns. */
-export const AXIS_COLORS = ['#e8453c', '#3fb950', '#4f8ff7'];
+const AXIS_COLORS = ['#e8453c', '#3fb950', '#4f8ff7'];
 export function drawTriad(g, R, axes, at, T, fs){
   const [r00, r01, r02, r10, r11, r12, r20, r21, r22] = R;
   const ax = axes.map((u, i) => ({ i, sx: r00*u[0] + r01*u[1] + r02*u[2], sy: -(r10*u[0] + r11*u[1] + r12*u[2]), z: r20*u[0] + r21*u[1] + r22*u[2] }))

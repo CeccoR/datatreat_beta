@@ -17,15 +17,15 @@
                 the page's thread, for eight 2048² 16-bit SEM images.
    Only putRec writes a state holding hashes, its refs with it: a record put any other way
    with {__t:'u8'|'b64', h} in it and no refs loses those bytes at the next sweep. A tab
-   asleep may hold such references in the page too, its bytes let go (b2: unload, load). A
+   asleep may hold such references in the page too, its bytes let go (v518: unload, load). A
    file's bytes are never changed once read (the modules only read them, as utils.js
    bytesKey takes for granted too): their hash is taken once per array and kept.
 ========================================================= */
 const DB_NAME = 'datatreat', STORE = 'sessions', TABS_STORE = 'tabs', BYTES = 'bytes', DB_VER = 4;
 
-/* The origin's storage asked to be kept (b2v4), once a load, as this module loads, where it
+/* The origin's storage asked to be kept (v518), once a load, as this module loads, where it
    is not so already: without it a browser short of disk space may clear the origin's
-   IndexedDB, the projects saved, the open tabs and, since b2, the only copy of a SEM tab
+   IndexedDB, the projects saved, the open tabs and, since v518, the only copy of a SEM tab
    asleep's files. Nothing is said either way: Chrome and Edge grant it or not by their own
    measures (an app installed, a site bookmarked or much used), asking nothing; Firefox may
    ask the user, in its own words. A browser without the API (a page not served over https
@@ -153,7 +153,6 @@ function retitleProject(id, title, updatedAt){
 }
 
 /* ---- Open tabs ---- */
-async function allTabRecs(){ return txRun(TABS_STORE, 'readonly', t=> reqP(t.objectStore(TABS_STORE).getAll())); }
 const putTabRec = (rec, also)=> putRec(TABS_STORE, rec, also);
 const deleteTabRec = id => deleteRec(TABS_STORE, id);
 
@@ -163,7 +162,7 @@ const deleteTabRec = id => deleteRec(TABS_STORE, id);
    and a failure writes neither. The bytes go one file after the other, each from the
    callback of the one before: a task each, not megabytes copied in one. `also`: a value
    whose bytes the record holds too without holding the value (a tab asleep: its undo
-   history's, b2), stored with it and kept from the sweep by its refs while it holds them. */
+   history's), stored with it and kept from the sweep by its refs while it holds them. */
 const _wrote = new Map();   // store + id → the hashes this window last wrote in that record
 function putRec(store, rec, also){
   return queued(async ()=>{
@@ -261,15 +260,14 @@ const fromB64Fast = t => Uint8Array.fromBase64 ? Uint8Array.fromBase64(t) : from
    itself, wherever they are, neither copied nor encoded; decode gives them back as they
    are. To v516 a parked tab held them as base64, copied at each switch. An array fixed
    (below) is the module's own too, in park's form and back from decode: to v517 a tab
-   parked held a copy of each, beside its history's, which shares them (b2: a tab asleep
-   keeps both). */
+   parked held a copy of each, beside its history's, which shares them (a tab asleep keeps
+   both). */
 /* Arrays of numbers (or of anything but objects) that nothing changes once made, fixed by
    the module that makes them: XRPD's patterns (2θ, intensities, variance factors) and its
    results' lists, DRS's and EPR's spectra, GC's gases. park and decode take one as it is,
-   shared, not copied, and utils.js stateKey by a hash kept for it (numsKey). To b2v2 such
-   arrays were frozen (XRPD's; DRS's and EPR's were copied into every state parked), which
-   in Chromium holds each double in 16 bytes, not 8 (NOTES-drs.md). No module writes into
-   one; the tests have each frozen as it is fixed (window.__freezeFixed), so that a write
+   shared, not copied, and utils.js stateKey by a hash kept for it (numsKey). To v517
+   XRPD's were frozen, which in Chromium holds each double in 16 bytes, not 8 (measured for
+   v518), and DRS's and EPR's copied into every state parked. No module writes into one; the tests have each frozen as it is fixed (window.__freezeFixed), so that a write
    throws. */
 const _fixed = new WeakSet();
 function fixed(a){
@@ -347,18 +345,18 @@ function decode(v){
    compares the whole text. One file a task. */
 const _hash = new WeakMap();   // a Uint8Array or a text holder → its hash (false: kept inline)
 const _texts = new Map();      // a hash → WeakRef of a text holder of those bytes
-const _arrs = new Map();       // a hash → WeakRef of an array of those bytes the page holds (b2: load)
+const _arrs = new Map();       // a hash → WeakRef of an array of those bytes the page holds (load)
 const isObj = x => x !== null && typeof x === 'object';
-// (a text holder: an object of an id and a b64 string alone, as SEM's RawRef and its copies to b2)
+// (a text holder: an object of an id and a b64 string alone, as SEM's RawRef and its copies to v517)
 const isText = x => !!x && typeof x === 'object' && typeof x.b64 === 'string' && !Array.isArray(x)
   && Object.keys(x).length === 2 && Object.prototype.hasOwnProperty.call(x, 'id');
-/* A file's bytes and its id alone: SEM's RawRef since b2, and its copies (park's; unload's,
+/* A file's bytes and its id alone: SEM's RawRef since v518, and its copies (park's; unload's,
    its bytes a reference by hash). Written as v517 writes its text holder, { id, b64 }: in a
    record and a project saved (stored) its b64 {__t:'b64', h}, under the bytes' SHA-256 as
    the array is stored (nothing stored twice), in a project file (encode) the base64; read
-   back (fill) as { id, bytes }. So v517 reads b2's SEM tabs and projects as its own (to
-   b2v4 they held { id, bytes }, which v517 read as no file: a v517 window, or the app
-   rolled back, showed none and wrote the tab's record without them, its bytes swept). */
+   back (fill) as { id, bytes }. So v517 reads SEM's tabs and projects as its own (a v517
+   window, or the app rolled back, would read { id, bytes } as no file, and write the tab's
+   record without it, its bytes swept). */
 const isRaw = x => !!x && typeof x === 'object' && !Array.isArray(x) && !ArrayBuffer.isView(x) && typeof x.id === 'string'
   && (x.bytes instanceof Uint8Array || (isObj(x.bytes) && x.bytes.__t === 'u8' && typeof x.bytes.h === 'string'))
   && Object.keys(x).length === 2;
@@ -495,10 +493,9 @@ function refsIn(v, set = new Set()){
 }
 // The records of a store (all, or the one of an id) with the bytes they hold, read in one
 // transaction: a record and its bytes as they were written together, whatever another
-// window writes or sweeps meanwhile. lazy(rec): a record whose bytes are not read (b2: a
-// tab that comes back asleep, its bytes read as it wakes). All of them by a cursor, each
-// record read in a task of its own (b2v3: with any number of tabs open, getAll read 60 XRPD
-// tabs' records in one task of 0.47 s).
+// window writes or sweeps meanwhile. lazy(rec): a record whose bytes are not read (a tab
+// that comes back asleep, its bytes read as it wakes). All of them by a cursor, each record
+// read in a task of its own (getAll would read 60 XRPD tabs' records in one task of 0.47 s).
 function readRecs(store, id, lazy){
   const out = { recs: [], hs: new Set(), got: new Map(), lost: 0 };   // (lost: the files whose bytes could not be read)
   return txRun([store, BYTES], 'readonly', t=>{
@@ -562,7 +559,7 @@ function fill(v, got){
   const one = x => typeof x.h === 'string' ? arr(x.h) : bytesOf(x.v);
   // An object met again gives the one made for it (unload's value shares an object where
   // the value it was made of did: SEM's RawRef in every step of a history that holds its
-  // file, one array of bytes; to b2v3 a copy of the array at every step but the first). A
+  // file, one array of bytes, not a copy of the array at every step but the first). A
   // record shares none: park and encode make an object a place.
   const done = new Map();
   const go = x =>{
@@ -581,8 +578,8 @@ function fill(v, got){
       return byId.get(x.ref);
     }
     if (isRef(x)) return null;   // ({__t:'b64'} out of a text holder)
-    // a text holder as stored (SEM's RawRef, v517's and b2's): its bytes back as { id, bytes }
-    // (isRaw), the array known by its hash (to b2v4 its text, which semRestore read again)
+    // a text holder as stored (SEM's RawRef, v517's and since): its bytes back as { id, bytes }
+    // (isRaw), the array known by its hash
     const t = x.b64 && typeof x.b64 === 'object' && x.b64.__t === 'b64' && typeof x.b64.h === 'string' ? x.b64.h : null;
     if (t && got.get(t) && typeof x.id === 'string' && Object.keys(x).length === 2) return { id: x.id, bytes: arr(t) };
     const o = Object.create(Object.getPrototypeOf(x));   // (an object of a class, unload's, one again)
@@ -619,7 +616,7 @@ function expand(v, got){
   return go(v);
 }
 
-/* ---- A tab asleep without its files' bytes (b2: tabs.js lighten) ----
+/* ---- A tab asleep without its files' bytes (tabs.js lighten) ----
    unload: a value the page keeps (a tab asleep: its parked state and its undo history, as
    one value) with each array of bytes this page hashed, and so a write put in the store
    with a record that holds it (putRec), in its place as {__t:'u8', h}: one object for one
@@ -679,5 +676,5 @@ async function load(v){
 const unread = v => refsIn(v).size > 0;
 
 export { allProjects, putProject, deleteProject, retitleProject, readProject, exportedProject,
-         allTabRecs, allTabStates, putTabRec, deleteTabRec, uid, encode, decode, park, stored,
+         allTabStates, putTabRec, deleteTabRec, uid, encode, decode, park, stored,
          hydrate, sweep, sweepSoon, dbBlocked, onDbBlocked, onDbClosing, onDbClosed, unload, load, unread, refsIn, fixed, isFixed };

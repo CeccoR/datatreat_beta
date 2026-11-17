@@ -1,0 +1,4 @@
+K0005a . default default default default default cylinder-Pm-3m-on CK_METHOD=min,MIN_SET=kick=0.005
+K0005b . default default default default default cylinder-Pm-3m-on CK_METHOD=min,MIN_SET=kick=0.005,PROTO_TURNSEED=777
+K005a . default default default default default cylinder-Pm-3m-on CK_METHOD=min,MIN_SET=kick=0.05
+K005b . default default default default default cylinder-Pm-3m-on CK_METHOD=min,MIN_SET=kick=0.05,PROTO_TURNSEED=777

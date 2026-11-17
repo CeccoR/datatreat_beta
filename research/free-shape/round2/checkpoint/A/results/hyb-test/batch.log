@@ -1,0 +1,6 @@
+2026-10-26T19:47:17.544Z hyb-test: 1 of 1 runs to do (sqbox-Pm-3-on), 1 at a time; line lsq, profile lorentz; --method hybrid
+2026-10-26T19:48:17.312Z [1/1] sqbox-Pm-3-on: ok 60 s
+sqbox-Pm-3-on (m-3, sqbox 10.9×10.9×15.2; exact, 10–110/0.01) as sqbox: draw 490 ms; iso χ²_ν 1.171, 262 ev, 1660 ms; list 14 refl, 89 members
+  hybrid: free χ² 10000.5 best 10540.7 ΔBIC -1365 | search 3209 ev 28478 ms report 867 ev 16732 ms | 10.88×10.88×15.32 | dims -0% -0% 1% orient 0.7° (holo 0.7°) principal 0.7°
+  wall 59.6 s
+2026-10-26T19:48:17.312Z hyb-test: 1 done, 0 failed, 1.0 min

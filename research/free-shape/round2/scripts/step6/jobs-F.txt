@@ -1,0 +1,4 @@
+# the frozen engine: its defaults against the P records (two rows), v522's switches against the pilot's record (one row)
+F1 spheroid-P-3-near p -
+F1 box-P-1-near p -
+F2 sqbox-P4m-on p PROTO_LINE=lor,PROTO_SEARCH=today,PROTO_WPPM=,CHECK_SET=on=false,MIN_SET=on=false,KEEP_SET=rule=bic

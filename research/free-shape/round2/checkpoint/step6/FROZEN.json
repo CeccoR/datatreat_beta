@@ -1,0 +1,87 @@
+{
+ "at": "2026-10-31T11:02:02.381Z",
+ "note": "frozen after the confirmation on the 154 tuning runs; the validation part is scored once on this engine",
+ "eng": {
+  "db.js": "fa88bd51e0b3200326a8ca0c7db0fb9124839b5f52fa4048a91c5304946ae017",
+  "xrd-broad.js": "2fabfe532b6c00902f285406820796d7cceec7ea4634cce725b031e8ef0ba49e",
+  "xrd-cryst.js": "3113ecaf59d90c3812f216e789f2c15afd0414e2b0c4329ca47665b567e1d189",
+  "xrd-data.js": "ac423feb6bad9f7f9a98abcf8d2b479768f1cc04c98d544f47b93a45469c8b82",
+  "xrd-instr.js": "f43d9f1dafe7a0fa40682f45c6253b290d152792a5bbc96502b25df48ceef8ba",
+  "xrd-math.js": "d4ee08782447258b8f6f503ffbcca03de3d99badf5408bc593d8c4af7af5725b",
+  "xrd-rietveld.js": "a1dc73d65ba8f915d847f119580df7c6f0cf94c9f805ec3c45d11685b4db7834",
+  "xrd-rv-model.js": "acaddf044d2199ba6340e91a1474a556419b2a57de339325f83349e5e002a39c",
+  "xrd-sg.js": "1441e0a148b0a3e599c165b1cb869389521a4be0c01575ef285452415b9c1aad",
+  "xrd-sizeline.js": "f7c8b9a9c029ec853f117ff809f4f77dae8c68aee6d2aa411b1c88157bfc3ba5",
+  "xrd-widths.js": "cea885b2c9bd86ccad6ef99999bad19b2e5eb54ea8903b2edfc2e5e63ee38468"
+ },
+ "app": {
+  "xrd-rietveld.js": "da6b65f13ddb784777dd9cf7b019fed1715b59f77e2607e2798b9560c43a1d9c",
+  "xrd-broad.js": "8e451deae01bf62e7bea3899ff26c14cf8361b1327286f6f419678bd905e40bc",
+  "xrd-sizeline.js": "f7c8b9a9c029ec853f117ff809f4f77dae8c68aee6d2aa411b1c88157bfc3ba5",
+  "sw.js": "5c03d10bff27475ba5520a3dc065b70e10652e60d9f70c0e31a6a30c14787f01",
+  "RIETVELD.md": "16a645e66a349c89afbbd7c9334ed3b3ee9fe45f23645b71a9995975953e7212"
+ },
+ "tunables": {
+  "SHAPE_FILL": "0",
+  "SHAPE_CENTRAL": "true",
+  "SHAPE_MODE": {
+   "line": "exact",
+   "search": "v2"
+  },
+  "SHAPE_FWD": "briefs",
+  "WPPM_OPT": {
+   "fast": true,
+   "pair": true,
+   "axial": true
+  },
+  "SHAPE_CHECK": {
+   "on": true,
+   "z": 3.09,
+   "bin": 1,
+   "minsep": 0.3,
+   "jack": true,
+   "groups": 20,
+   "iter": 4,
+   "retest": false
+  },
+  "SHAPE_MINIMA": {
+   "on": true,
+   "collect": 30,
+   "preLn": 0.1,
+   "preDeg": 5,
+   "max": 6,
+   "kick": 0.02,
+   "rounds": 10,
+   "gain": 0.5,
+   "shift": 0,
+   "k": 2,
+   "floorLn": 0.02,
+   "floorDeg": 1,
+   "capDeg": 10,
+   "delta": 16,
+   "deltaMisfit": 25,
+   "keep": 30,
+   "kappa": 1.2
+  },
+  "SHAPE_KEEP": {
+   "rule": "lrt",
+   "alpha": 0.001,
+   "margin": 2,
+   "misfit": true,
+   "bic": 10,
+   "early": 0.5,
+   "record": false
+  },
+  "SHAPE_FAMILY": {
+   "solids": "none",
+   "margin": 14,
+   "marginMisfit": 35,
+   "nest": {
+    "box": 3.84,
+    "cyl": 5.99,
+    "ball": 5.99
+   },
+   "nestMisfit": 25
+  }
+ }
+}

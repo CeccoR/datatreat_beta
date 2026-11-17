@@ -1,0 +1,9 @@
+Checkpoint 2026-10-31T19:42Z
+
+Batches, newest first:
+
+Workflow journal (last events):
+{"type":"started","key":"v2:75486f85307271694f11fd85008f3612cdcdd9bb124b8349b9f5a1d6a8df5320","agentId":"a3567b8287a3759e4","label":"fix:line-shape","phase":"Fi
+{"type":"result","key":"v2:75486f85307271694f11fd85008f3612cdcdd9bb124b8349b9f5a1d6a8df5320","agentId":"a3567b8287a3759e4","result":{"tried":[{"name":"lor: toda
+{"type":"started","key":"v2:3f90683592c8243c5e56b59861257680f9b9ab1ca9d113fc1e4111b4fb38b82c","agentId":"a4a0e6e93b3374154","label":"write","phase":"Write"}
+{"type":"result","key":"v2:3f90683592c8243c5e56b59861257680f9b9ab1ca9d113fc1e4111b4fb38b82c","agentId":"a4a0e6e93b3374154","result":{"file":"/home/user/datatrea

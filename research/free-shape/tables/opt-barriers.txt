@@ -1,0 +1,46 @@
+box-needle111#1: search 1877 evals; analysis 1507 evals 10.7 s, 4 extra refinements, 1 minima; best 28.2×3.9×5.1
+box-plate110#1: search 1383 evals; analysis 270 evals 2.3 s, 1 extra refinements, 1 minima; best 10.0×2.0×12.1
+box-plate110-off8#2: search 1237 evals; analysis 1022 evals 8.8 s, 4 extra refinements, 2 minima; best 13.9×14.3×3.0
+   Δ 4.78  barrier -0.3  3.1×14.2×21.2  vs best: dims 2% 48% 0% axis 5.8°  (full)
+box-plate110-t20#1: search 1564 evals; analysis 210 evals 1.7 s, 1 extra refinements, 1 minima; best 10.9×2.0×13.8
+box-plate111-big#1: search 1325 evals; analysis 73 evals 0.6 s, 1 extra refinements, 2 minima; best 22.2×54.5×2.0
+   Δ 2.04  barrier 0.6  19967.6×2.0×19.7  vs best: dims -11% 36551% -1% axis 4.6°  (full)
+box-ribbon001#1: search 1651 evals; analysis 290 evals 3.2 s, 1 extra refinements, 2 minima; best 3.0×9.8×51.4
+   Δ 0.97  barrier 0.7  3.0×9.9×6536.2  vs best: dims -0% 1% 12610% axis 3.5°  (full)
+cyl-disc111-off8#1: search 893 evals; analysis 0 evals 0.0 s, 0 extra refinements, 1 minima; best 14.1×14.1×2.1
+ecyl-rand#1: rejected
+ecyl-ribbon001#1: search 2822 evals; analysis 808 evals 6.5 s, 4 extra refinements, 3 minima; best 58.8×10.8×3.7
+   Δ 1.51  barrier 2241.6  4.1×11.5×54.7  vs best: dims -80% -62% 1368% axis 48.8°  (full)
+   Δ 1.97  barrier 2218.8  11.7×4.1×37.0  vs best: dims -80% -62% 891% axis 50.5°  (full)
+ell-plate110#1: search 1011 evals; analysis 485 evals 4.6 s, 4 extra refinements, 1 minima; best 11.1×3.1×16.1
+ell-ribbon-rand#1: search 1685 evals; analysis 1124 evals 10.1 s, 6 extra refinements, 1 minima; best 12.2×2.9×13.6
+iso-7#1: rejected
+sph-oblate-rand#1: search 657 evals; analysis 136 evals 1.1 s, 2 extra refinements, 2 minima; best 24.8×24.8×4.1
+sqbox-plate-rand#1: search 1259 evals; analysis 170 evals 1.2 s, 1 extra refinements, 1 minima; best 21.4×21.4×3.9
+sqbox-plate110-t15#1: search 1047 evals; analysis 0 evals 0.1 s, 0 extra refinements, 1 minima; best 16.0×16.0×2.5
+u01#1: search 1471 evals; analysis 352 evals 3.2 s, 1 extra refinements, 1 minima; best 27.9×2.0×12.6
+u02#1: search 2018 evals; analysis 995 evals 10.1 s, 2 extra refinements, 3 minima; best 1.6×32.2×17.1
+   Δ 2.18  barrier 197.0  13.5×1.6×63.9  vs best: dims -1% 98% -21% axis 53.2°  (full)
+u03#1: search 1823 evals; analysis 295 evals 3.7 s, 2 extra refinements, 3 minima; best 20.3×82.8×1.4
+   Δ 2.89  barrier 5282.4  ∞×1.4×15.7  vs best: dims -23% 0% 1% axis 55.5°  (full)
+   Δ 5.79  barrier -1.4  22.5×214.2×1.4  vs best: dims 11% 159% -1% axis 1.1°  (extra)
+u04#1: search 1390 evals; analysis 211 evals 2.1 s, 1 extra refinements, 2 minima; best 2.4×24.5×17.9
+   Δ 5.60  barrier 12.3  20.3×14.7×2.4  vs best: dims 2% -17% -18% axis 54.0°  (full)
+u05#1: search 2192 evals; analysis 386 evals 4.6 s, 1 extra refinements, 3 minima; best 9.7×1.2×209.9
+   Δ 7.79  barrier -2.1  9.9×1.2×30.0  vs best: dims 2% 4% -86% axis 1.1°  (full)
+u06#1: search 1544 evals; analysis 631 evals 5.7 s, 3 extra refinements, 5 minima; best 62.5×18.9×1.8
+   Δ 0.43  barrier -0.2  131.3×18.9×1.8  vs best: dims 110% 0% -1% axis 0.4°  (polish)
+   Δ 2.02  barrier -0.5  19.5×1.9×36.4  vs best: dims -42% 3% 1% axis 0.7°  (full)
+u07#1: search 1426 evals; analysis 92 evals 1.1 s, 1 extra refinements, 2 minima; best 11.4×1.6×22.1
+   Δ 4.06  barrier 64.0  18.7×12.1×1.6  vs best: dims 7% 3% -15% axis 52.4°  (full)
+u08#1: search 1496 evals; analysis 435 evals 4.3 s, 3 extra refinements, 3 minima; best 19.0×24.8×2.0
+   Δ 1.94  barrier -1.0  18.2×2.1×19.4  vs best: dims -4% -22% 3% axis 50.6°  (full)
+u09#1: search 1314 evals; analysis 460 evals 4.3 s, 3 extra refinements, 2 minima; best 15.4×26.1×2.1
+   Δ 0.15  barrier 6.2  2.1×14.1×170.6  vs best: dims -9% 555% -2% axis 28.3°  (full)
+u10#1: search 2022 evals; analysis 15 evals 0.4 s, 0 extra refinements, 4 minima; best 15.1×1.5×∞
+   Δ 0.27  barrier 1.2  14.6×1.5×∞  vs best: dims -3% -0% 0% axis 14.0°  (full)
+   Δ 0.72  barrier 3.7  15.0×1.5×90.7  vs best: dims -1% 0% -100% axis 34.8°  (full)
+   Δ 5.54  barrier 29.1  20.3×1.5×19.2  vs best: dims 28% 4% -100% axis 52.2°  (full)
+u11#1: search 1146 evals; analysis 255 evals 2.2 s, 3 extra refinements, 5 minima; best 2.3×30.6×24.7
+u12#1: search 2148 evals; analysis 207 evals 1.6 s, 1 extra refinements, 5 minima; best 15.1×30.1×1.7
+   Δ 3.73  barrier -0.9  15.7×38.8×1.6  vs best: dims 4% 29% -1% axis 0.8°  (polish)

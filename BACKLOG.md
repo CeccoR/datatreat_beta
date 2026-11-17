@@ -37,6 +37,15 @@ was proposed; nothing here is in the code yet.
   in widths, a peak left unpaired at a cost, in place of the sweep; (2) with a CIF at
   hand (the Rietveld card's phases), each peak given its calculated hkl, so that the
   reflections are named, (110), (200)…, alike in every sample.
+- **Free shape: a size distribution and a texture refined with the solid (round 2's open
+  limits).** Round 2 (research/free-shape/round2/VALIDATION.md) leaves both as model errors
+  the solid takes up: a log-normal size distribution gives every sphere carrying one a
+  shape, texture almost every one (49–54 of 60), and both push the solid's family wrong
+  beyond any margin; the per-line check flags about half. To try: the solid's scale as a
+  log-normal with a refined σ (the line the volume-weighted mean of A(L), tabulated in σ so
+  the exact line stays cheap; σ kept only when it pays, as the keep test does), and
+  March–Dollase refined with the shape on a low-index axis. Measure whether shape and σ,
+  shape and texture separate, on a design with these errors over-represented.
 - **Free shape: starts chosen from the peak widths, and the near-equivalent minima
   (prototype, v472).** Tried outside the app, in a copy of the engine that counts the
   pattern's evaluations, on 20 cases with the box and the Sr site refined: the twelve
@@ -186,9 +195,11 @@ was proposed; nothing here is in the code yet.
   origin of its own (a custom domain for the Pages site, or a dedicated host), and until
   then publish nothing else under `ceccor.github.io` that runs untrusted code.
 - **Number arrays as typed arrays.** The patterns, spectra and curves are plain arrays of
-  numbers. Chromium stores a frozen one at 16 bytes an element against 8 (measured with
-  the b2 prototype, proto/live-tabs-b2/NOTES-drs.md), which is why v518 shares them through
-  a registry instead of freezing them. `Float64Array` would hold them at 8 bytes,
-  contiguous, and hand them to the workers without conversion. Against: map, filter and
-  slice return typed arrays, JSON writes them as objects, so the code that builds them
-  and every saved format would change. To take only if memory comes to need it.
+  numbers. Chromium stores a frozen one at 16 bytes an element against 8 (measured for
+  v518 in Chromium 141: 400 arrays of 5000 doubles, the heap after a GC; the prototype's
+  notes, proto/live-tabs-b2/NOTES-drs.md, are in commit fabb05b), which is why v518
+  shares them through a registry instead of freezing them. `Float64Array` would hold them
+  at 8 bytes, contiguous, and hand them to the workers without conversion. Against: map,
+  filter and slice return typed arrays, JSON writes them as objects, so the code that
+  builds them and every saved format would change. To take only if memory comes to need
+  it.

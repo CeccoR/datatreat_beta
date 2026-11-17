@@ -1,0 +1,2 @@
+clean nulls: bic: 5/360 go on, 947 evaluations a search; lrt: 9/360 go on, 953 evaluations a search; the isotropic fit 300
+error nulls: bic: 147/300 go on, 1359 evaluations a search; lrt: 157/300 go on, 1378 evaluations a search; the isotropic fit 313

@@ -1,0 +1,22 @@
+box-P-1-near               WPPM 0.445 % 0.0001 | fast,axial 0.445 % 0.0001 | against WPPM 7.51e-11 of the peak
+sqbox-P-1-on               WPPM 2.160 % 0.0448 | fast,axial 2.160 % 0.0448 | against WPPM 3.61e-11 of the peak
+cylinder-P2m-on            WPPM 0.558 % 0.0000 | fast,axial 0.558 % 0.0000 | against WPPM 4.50e-11 of the peak
+ellcyl-P2m-generic         WPPM 0.543 % 0.0017 | fast,axial 0.543 % 0.0017 | against WPPM 5.63e-12 of the peak
+ellipsoid-Pmmm-generic     WPPM 0.299 % 0.0001 | fast,axial 0.299 % 0.0001 | against WPPM 7.55e-11 of the peak
+spheroid-Pmmm-near         WPPM 0.289 % 0.0003 | fast,axial 0.289 % 0.0003 | against WPPM 1.11e-10 of the peak
+box-P4m-near               WPPM 0.538 % 0.0008 | fast,axial 0.538 % 0.0008 | against WPPM 9.47e-12 of the peak
+sqbox-P4m-on               WPPM 0.287 % 0.0000 | fast,axial 0.287 % 0.0000 | against WPPM 7.07e-11 of the peak
+cylinder-P4mmm-on          WPPM 0.193 % 0.0071 | fast,axial 0.193 % 0.0071 | against WPPM 1.71e-10 of the peak
+ellcyl-P4mmm-generic       WPPM 0.228 % 0.0001 | fast,axial 0.228 % 0.0001 | against WPPM 9.32e-11 of the peak
+ellipsoid-P-3-generic      WPPM 0.347 % 0.0010 | fast,axial 0.347 % 0.0010 | against WPPM 6.71e-12 of the peak
+spheroid-P-3-near          WPPM 0.263 % 0.0001 | fast,axial 0.263 % 0.0001 | against WPPM 6.51e-11 of the peak
+box-P-3m1-near             WPPM 0.654 % 0.0001 | fast,axial 0.654 % 0.0001 | against WPPM 1.10e-11 of the peak
+cylinder-P6m-on            WPPM 0.190 % 0.0000 | fast,axial 0.190 % 0.0000 | against WPPM 5.89e-11 of the peak
+ellcyl-P6m-generic         WPPM 0.404 % 0.0003 | fast,axial 0.404 % 0.0003 | against WPPM 7.64e-12 of the peak
+ellipsoid-P6mmm-generic    WPPM 0.215 % 0.0002 | fast,axial 0.215 % 0.0002 | against WPPM 2.75e-11 of the peak
+spheroid-P6mmm-near        WPPM 0.205 % 0.0007 | fast,axial 0.205 % 0.0007 | against WPPM 5.26e-11 of the peak
+box-Pm-3-near              WPPM 0.179 % 0.0002 | fast,axial 0.179 % 0.0002 | against WPPM 1.05e-10 of the peak
+sqbox-Pm-3-on              WPPM 0.264 % 0.0002 | fast,axial 0.264 % 0.0002 | against WPPM 1.51e-11 of the peak
+cylinder-Pm-3m-on          WPPM 3.736 % 2.5033 | fast,axial 3.736 % 2.5033 | against WPPM 4.47e-11 of the peak
+ellcyl-Pm-3m-generic       WPPM 0.282 % 0.0002 | fast,axial 0.282 % 0.0002 | against WPPM 5.51e-12 of the peak
+21 rows: WPPM max|Δ| 0.29 % (90 %: 0.65), excess 0.0002 (max 2.503); fast,axial 0.29 % (0.65), 0.0002 (2.503); against WPPM max 1.71e-10 (median 4.50e-11)

@@ -1,0 +1,14 @@
+cylinder-Pm-3m-on
+box-Pm-3-near
+sqbox-Pm-3-on
+ellcyl-Pm-3m-generic
+box-P-3m1-near
+sqbox-P-3m1-on
+cylinder-P6m-on
+ellcyl-P6m-generic
+ellipsoid-P6mmm-generic
+spheroid-P6mmm-near
+sphere-P6mmm-1
+sqbox-Pm-3m-near
+box-P6m-generic
+spheroid-P6m-on

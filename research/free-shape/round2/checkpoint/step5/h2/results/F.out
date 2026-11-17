@@ -1,0 +1,11 @@
+2026-10-31T09:30:56.990Z jobs-F.txt: 9 jobs, 9 to run, 3 at a time
+2026-10-31T09:31:11.206Z ok F0 spheroid-P-3-near  14 s
+2026-10-31T09:31:22.986Z ok F0 sphere-P6mmm-1  26 s
+2026-10-31T09:31:24.542Z ok F0 box-P-3m1-near  28 s
+2026-10-31T09:31:25.474Z ok F1 spheroid-P-3-near  14 s
+2026-10-31T09:31:38.033Z ok F1 ellipsoid-P-3-on~m1  15 s
+2026-10-31T09:31:47.470Z ok F1 sphere-P-1-2 ellipsoid 22 s
+2026-10-31T09:31:50.608Z ok F1 sphere-P6mmm-1  26 s
+2026-10-31T09:33:06.460Z ok F2 cylinder-P6m-on  79 s
+2026-10-31T09:33:27.567Z ok F2 box-P-3m1-near  110 s
+2026-10-31T09:33:27.567Z jobs-F.txt: done, 9 ok, 0 failed

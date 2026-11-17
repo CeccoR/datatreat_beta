@@ -1,0 +1,1070 @@
+diff --git a/RIETVELD.md b/RIETVELD.md
+index 5fa85b6..528649e 100644
+--- a/RIETVELD.md
++++ b/RIETVELD.md
+@@ -1289,6 +1289,13 @@ Without a shape, the body is a sphere of diameter D. With a free shape (§10), e
+ 
+ **Cost.** On a synthetic SrTiO₃ pattern (2θ 15–120°, 5251 points), a sphere refines in about 3 s, a log-normal distribution in 8–16 s, and a free cylinder in 35–50 s. A free solid with log-normal sizes takes minutes: about 5 on the user's 33A. A broad distribution holds large crystallites whose narrow profiles set the grid, and every trial shape of the search pays for it. The log-normal average of a cylinder or a box is tabulated in ln ℓ₀ every σ/10 for each member and read by cubic interpolation (to 4·10⁻⁶); computed point by point, that case took 17–23 minutes.
+ 
++**Shortcuts** (a prototype after v522: `WPPM_OPT` in `xrd-broad.js`, each switch on by default and `false` for v522's arithmetic; round 2 of the free-shape research, `research/free-shape/round2/STEP2.md`). In a free shape's fit by WPPM the read-out had taken 62 % of the CPU, the axial nodes 23 %, the FFTs 7 %, the common factor 3 % and the members' size coefficients 1 %. The read-out now takes each point's sinθ and cosθ from a table made once per grid and its cell by an integer truncation (the same numbers to the bit); and
++- `fast`: the common factor's exponentials by recurrence in L and the read-out by reciprocals (within 2·10⁻¹² of the peak);
++- `pair`: a reflection's Kα1 and Kα2 lines on one grid, the finer step and the wider window of the two, by one FFT: each line's coefficients are Hermitian, so the first in the real part and the second in the imaginary part come back as the two profiles; the size coefficients, a function of L alone, made once (within 1.5·10⁻⁵ of the peak of the lines drawn apart);
++- `axial`: a line with one axial node takes its shift from the Soller cells at the two nearest multiples of 10⁻⁴ rad in θ, linearly (within 10⁻⁹ of the peak), so that a cell parameter's Jacobian column no longer computes every line's cells again; the cells are kept for the 2048 lines last used (512, the oldest first, before).
++
++On round 2's 22 sub-screen runs a free shape's whole fit by WPPM cost 0.42× the CPU of v522's fit by the Lorentzian (2.13× before), with the same outcome, reach and accuracy, and the generator's exact patterns are drawn as before (0.29 % of the peak off, median).
++
+ **Needs the standard's profile** (§6.5). Without it, H and η would hold the sample's broadening too.
+ 
+ ### 7.4 A log-normal distribution of sizes
+@@ -1711,7 +1718,11 @@ w(\mathbf u) = 0.75\,\frac{|\mathbf t|}{\langle L\rangle_{V,\text{base}}(\hat{\m
+ - **W** holds the solid's parameters: the widths (°) of spheres of its diameters, edges or axes.
+ - **Dimensions.** D = Kλ/(W·π/180): an ellipsoid's full axes, a cylinder's diameter and height, a box's edges, each read as the isotropic size is. By the Lorentzian model that is a Scherrer reading, not a true dimension (§7.2: spheres of one size read 1.0–1.7× their diameter); by WPPM the true one (below).
+ - **In the profile.** The member's width enters the Lorentzian as (Y + w)/cosθ, Y being the instrument's (Kα2's w is λ2/λ1 times Kα1's, §3.8). The solid's widths are the whole size: the phase's isotropic Y_s is held at 0 during the shape fit, and while the shape is in use neither profile reads it (a Y_s set by hand changes nothing; refined, it is undetermined). The legacy ellipsoid (`ellipsoidL`, Lorentzian only) is the exception: its widths add to Y_s, and its reported sizes include it.
++- **The lsq line** (a prototype after v522: `SHAPE_MODE.line` 'lsq', step 1's default; 'lor' v522's Lorentzian above; round 2 of the free-shape research, `research/free-shape/round2/AB.md` §3). The member's width w enters the Lorentzian as kl·w and the Gaussian as kg·w, in quadrature with the instrument's: (kg, kl) make the TCH line that best fits the solid's exact line along the member, by weighted least squares over |x| ≤ 6/⟨L⟩_V with weights 1/(p + 0.2). They are read from tables (`xrd-sizeline.js`, written by `research/free-shape/round2/proto/build-sizeline.mjs`) by the reduced shape along the member: one entry for the ball family; for the cylinder and the elliptic cylinder the angle ψ from the axis in the scaled body, every 0.5°, linear between; for the box the sorted direction ratios β = b/a, γ = c/a, every 0.025, bilinear. The isotropic sphere of a phase whose free shape is asked for takes the ball's entry, so that the shape is kept or not against its like (§10.8); other phases keep the Lorentzian Y_s.
++  - **Why.** The Lorentzian is 11.5–21 % of the peak off every solid's exact line and reads ⟨L⟩_V 13–25 % long; the lsq line is 2.5–8 % off and reads it within 1.5 % out of sample. A reflection's members of different widths add up to a line more Lorentzian than one, so the Lorentzian model also collapses their spread: it pulls a solid toward equant the more members a reflection has (in m−3m it read a quarter of the anisotropy). On round 2's 77 synthetic screening runs the lsq line kept 65 of 66 true shapes against 60, read the thinnest extent +1 % against +20 % and the worst +16 % against +42 % (medians), at the same cost.
++  - **What it changes.** The dimensions are then read as the solid's, within a few per cent, not as Scherrer readings, and so is the isotropic size of a phase with a free shape asked for, smaller than the Lorentzian's (which read ⟨L⟩_V 13–25 % long). Its line errors are 2.5–8 % of the peak: in expectation two of round 2's 11 clean rows go to the wrong family of solid (§10.8); WPPM (§7.3) has none.
+ - **By WPPM** (§7.3), each member's line is instead the transform of the base body's common-volume function along it, at ℓ = L·|**t**|·(π/180)/(Kλ₁). The widths W then read as the solid's dimensions with no calibration: the sphere's 0.75 above does not enter.
++- **The exact line** (`SHAPE_MODE.line` 'exact', the prototype's default since round 2's step 2, `research/free-shape/round2/STEP2.md`): a phase with a body for its free shape is built as a WPPM phase whatever size profile it names, so its members' lines are the exact ones above and its isotropic sphere the ball's. With §7.3's shortcuts a fit costs less than the lsq line's (0.42× against 0.74× v522's CPU on round 2's 22 sub-screen runs), and in expectation it puts none of round 2's 11 clean rows in the wrong family of solid, where lsq puts two.
+ 
+ | Solid | Base | Width parameters | Turns | Notes |
+ |---|---|---|---|---|
+@@ -1761,6 +1772,15 @@ This chart has no gimbal lock. Its esds are small turns about the body's own axe
+ 3. **Full:** the best 3 (`SHAPE_FULL`, the setting `shapeFull`, 1–20) are refined to convergence (60 iterations: 1.5 × `maxIter`, as are the polish and the refinements of §10.6–10.7).
+ 4. **Polish:** up to 2 more refinements from the best, turned by 0.02 rad about a random axis. The refinement can stop where the axes sit on a symmetric orientation: there the first-order effects of a turn cancel over a family, the esds blow up, and the shift test passes at once.
+ 
++**Search v2** (a prototype after v522: `SHAPE_MODE.search`, 'v2' by default, 'today' v522's above; round 2, AB.md §4 and STEP1.md). The same stages at about 0.6× the cost:
++- the brief trials take their Jacobian by forward differences (one displaced point a column, the pattern at the current values reused; at an upper bound the point below: refine's `forward`); the full refinements, the polish, the exact faces, the held frames and the refit keep central differences (`SHAPE_FWD` 'briefs'; 'all' puts them on forward differences too). No refinement of the search makes a covariance (`noCov`, which no one read). Forward differences everywhere made 0.48× the evaluations, but in a flat valley a full refinement could stall short of where central differences went on: with the lsq line a synthetic 18.7 × 3.7 nm cylinder ended an unbounded disc, 1693 χ²_ν above v522's fit;
++- the fit kept is refined once more by central differences, its covariance from that pass (`SHAPE_CENTRAL`). It lowered χ² by 0.0003 χ²_ν at the median, at most 0.61, where forward differences had stopped short in a flat valley;
++- the starts are the class's distinct ones alone: the sphere-like one, and a plate and a needle per low-index family (11 in the six lower classes, 9 in −3m, 6/m and 6/mmm, 7 in cubic). No random fill (`SHAPE_FILL` = 0): where it existed it cost 15 % of the evaluations and, with the Lorentzian line, changed no outcome; with the lsq line it changed one (an ellipsoid whose isotropic fit read no size: every start of the class stopped at once, near zero width, where one of v522's random starts had got away). The setting `shapeStarts` above its default adds random starts, drawn from a stream of their own;
++- the turns before the polish and the refit draw from the seeded stream past v522's random starts, so they are v522's whatever the starts: in a flat valley the turn alone decides which free minimum is returned (up to 7.5 χ²_ν on a synthetic cylinder);
++- a held frame that a rotation of the class takes onto one tried already is not refined again (§10.7).
++
++On round 2's 77 synthetic screening runs, with the lsq line, it made 0.62× v522's pattern evaluations (0.80× the CPU of a whole fit, on 22 of them); the outcome (held, free, rejected) was the same on 76, and 64 of 65 runs reached the lowest χ² known against 64 of 66. With WPPM: 0.62× the evaluations, 0.75× the CPU, the same outcome on 75, the same reach (62 of 66). The legacy ellipsoid keeps v522's search.
++
+ ### 10.6 Flat faces: rounded for the search, exact for the result
+ 
+ **The problem.** A flat face makes the column length kink wherever a direction lies in it. Every member of a family lying in a face is then a V-shaped valley of χ² in the orientation, which least squares cannot settle into. A disc on the user's SrTiO₃ stopped anywhere between χ² 6364 and 6427, depending on its start.
+@@ -1780,7 +1800,7 @@ A crystallite's faces are lattice planes more often than not, and a held axis is
+ 1. **The first axis** is chosen among the axes lying within 10° of a lattice direction: the one whose width (∝ 1/dimension) stands farthest from the other two (a plate's normal). For a body of revolution it is its own axis. It is snapped to its simplest lattice direction within 10°. Choosing merely the axis nearest a lattice direction had held a plate's whole frame on an in-plane axis 0.5° from [1-13].
+ 2. **The second axis.** For a body with three axes, the second axis goes, in turn, on each of the lattice directions (indices ≤ 3) lying within 0.01° of normal to the first that are among the 3 simplest, or the simplest within 10° of one of the free fit's other two axes (the first axis's rule). Each placement is a candidate frame: the candidate goes to whichever of the two axes it is nearer, and the third axis completes the frame, right-handed. A body of revolution holds its axis alone. Up to v426 only the 3 simplest were tried: a synthetic 16 × 10 × 3 nm box with its edges on [120] and [-210] about [001] was tried on [100], [010] and [110] alone and stayed free (Δχ² 29–40 for the nearest of them); it is now held on [120] in 2 draws of 2 (Δχ² 2.7 and 4.1 for its three turns).
+ 
+-**Refinement.** Each candidate frame is refined with its orientation fully held.
++**Refinement.** Each candidate frame is refined with its orientation fully held. With search v2 (§10.5) a frame that a rotation of the Laue class takes onto one tried already, axis for axis (equal axes either way where the body lets them swap), is not refined again: the refinement is equivariant, and such frames ended at the same χ² (29 of 124 held refinements on round 2's 77 runs, in the eight classes with a 3-, 4- or 6-fold axis).
+ 
+ **The free fit refined again.** The free orientation includes the held one, so at its minimum its χ² is at most the held fit's. When the best held fit comes out below the free fit, the free search ended in a worse valley, and the free fit is refined again from the held frame, turned 0.02 rad as in the polish (§10.5): from the frame itself, on lattice directions, the refinement stops at once. It replaces the free fit when lower. On a synthetic 16 × 12 × 2.4 nm plate the free fit refined from the held frame itself stayed on it, 0.2 χ²_ν above the one refined from it turned. Without the refit, the free fit's angles and sizes (below) would measure a worse fit: on the user's 33A, with the faces rounded after the dimensions over 2°, a box's free fit, its edges 45° off in its plate, had ended 35 χ²_ν above the held one, whose edges then took ±44° esds and lost their directions (with the v425 rounding, 1.9 χ²_ν above and 4.7° off, which set the edges' esds to ±4.7°, ±0.7° and ±4.6°). Refined again, it ended 0.2 χ²_ν below the held fit and 0.2° from it, and the edges' esds were their profiles', ±4.2° and ±0.6°. With the 1° rounding the free fit ends within 0.5° of the held one, the esds ±4.6° and ±0.6°.
+ 
+diff --git a/sw.js b/sw.js
+index bd2ba82..92ea13a 100644
+--- a/sw.js
++++ b/sw.js
+@@ -44,6 +44,7 @@ const ASSETS = [
+   './xrd-math.js',
+   './xrd-rietveld.js',
+   './xrd-broad.js',
++  './xrd-sizeline.js',
+   './xrd-rietveld.worker.js',
+   './xrd-widths.js',
+   './xrd-shape3d.js',
+diff --git a/xrd-broad.js b/xrd-broad.js
+index 3d1165c..a676c88 100644
+--- a/xrd-broad.js
++++ b/xrd-broad.js
+@@ -196,6 +196,39 @@ function addMemberCoef(out, n, dL, base, a, b, c, scale, sigma, weight){
+    there continuously, and what it leaves out goes to the background. Read between grid
+    points by cubic (Catmull–Rom) interpolation. */
+ const N_MIN = 64, N_MAX = 16384;
++/* WPPM_OPT: a WPPM evaluation made cheaper, each shortcut behind a switch, all on (false keeps
++   v522's arithmetic reachable; a script sets them before evaluating). Round 2 of the free-shape
++   research, step 2 (research/free-shape/round2/STEP2.md): on step 1's engine the read-out took
++   62 % of a WPPM fit's CPU, the axial divergence's nodes 23 %, the FFTs 7 %, the common factor
++   3 %, the members' size coefficients 1 %.
++   - fast: the same line by shorter arithmetic, not to the bit (within 2·10⁻¹² of the peak):
++     the common factor's exponentials by recurrence in L (two products a point against three
++     exponentials) and the read-out by reciprocals, the edge value taken off the period first;
++   - pair: a reflection's two lines (Kα1, Kα2) on one grid by one FFT (wppmPair; with fast's
++     arithmetic): within 1.5·10⁻⁵ of the peak of the lines drawn apart (each its own grid);
++   - axial: a line drawn with one axial node (most of a sample's lines) takes its shift from
++     the Soller cells at the two nearest multiples of 10⁻⁴ rad in θ, linearly
++     (xrd-rietveld.js sollerStats): within 10⁻⁹ of the peak; a Jacobian's column of a cell
++     parameter no longer computes every line's cells again. */
++const WPPM_OPT = { fast: true, pair: true, axial: true };
++/* The pattern's points' sin θ and cos θ (θ = 2θ/2), made once per grid and kept with it: the
++   read-out took a sine and a cosine a point over the whole window (±40 FWHM), three
++   quarters to six sevenths of a WPPM evaluation (round 2's free-shape step 2). The same
++   numbers as before, so the profile is unchanged to the bit. */
++const TRIG = new WeakMap();
++// (the read-out's unwrapped period, one array per length)
++const PADS = new Map();
++const padOf = n => { let a = PADS.get(n); if (!a){ a = new Float64Array(n); PADS.set(n, a); } return a; };
++function trigOf(x){
++  const n = x.length;
++  let t = TRIG.get(x);
++  if (t && t.n === n && t.x0 === x[0] && t.x1 === x[n - 1]) return t;
++  const S = new Float64Array(n), C = new Float64Array(n);
++  for (let i = 0; i < n; i++){ const th = x[i]*D2R/2; S[i] = Math.sin(th); C[i] = Math.cos(th); }
++  t = { n, x0: x[0], x1: x[n - 1], S, C };
++  TRIG.set(x, t);
++  return t;
++}
+ // The points a line's grid needs, uncapped (widths and spread in °): over N_MAX, its step
+ // grows.
+ const wppmPoints = (Hest, Hmin, spread, win, winMin) => 16*(Math.max(win*Hest, winMin) + spread)/Math.max(Hmin, 1e-5);
+@@ -218,11 +251,24 @@ function wppmLine(o){
+   // The common factor (instrument, Lorentzian terms), to where it no longer counts.
+   const H = o.Hi*c1, eta = o.etai, W = o.WL || 0, gq = Math.PI*Math.PI*H*H/(4*LN2);
+   let nL = N >> 1;
+-  const com = o._com && o._com.length >= nL + 1 ? o._com : new Float64Array(nL + 1);
+-  for (let i = 0; i <= nL; i++){
+-    const L = i*dL, v = (eta*Math.exp(-Math.PI*H*L) + (1 - eta)*Math.exp(-gq*L*L))*Math.exp(-Math.PI*W*L);
+-    com[i] = v;
+-    if (v < 1e-8 && i > 2){ nL = i; break; }
++  const com = o._com && o._com.length >= nL + 1 ? o._com : new Float64Array(nL + 1), fast = WPPM_OPT.fast;
++  if (fast){
++    // e1 = e^{−π(H+W)L}, e2 = e^{−gq L² − πWL} at L = i·dL: e2's ratio q grows by e^{−2gq dL²} a step
++    const r1 = Math.exp(-Math.PI*(H + W)*dL), s2 = Math.exp(-2*gq*dL*dL);
++    let e1 = 1, e2 = 1, q = Math.exp(-gq*dL*dL - Math.PI*W*dL);
++    for (let i = 0; i <= nL; i++){
++      const v = eta*e1 + (1 - eta)*e2;
++      com[i] = v;
++      if (v < 1e-8 && i > 2){ nL = i; break; }
++      e1 *= r1; e2 *= q; q *= s2;
++      if (e2 < 1e-280){ e2 = 0; q = 0; }
++    }
++  } else {
++    for (let i = 0; i <= nL; i++){
++      const L = i*dL, v = (eta*Math.exp(-Math.PI*H*L) + (1 - eta)*Math.exp(-gq*L*L))*Math.exp(-Math.PI*W*L);
++      com[i] = v;
++      if (v < 1e-8 && i > 2){ nL = i; break; }
++    }
+   }
+   const size = new Float64Array(nL + 1);
+   if (o.size) o.size(size, nL + 1, dL); else size.fill(1);
+@@ -251,19 +297,37 @@ function wppmLine(o){
+   fftPlus(p);
+   // re[m]: the profile at δ_m (m ≥ N/2 the negative side). Lowered by its edge value.
+   const edge = re[N >> 1], half = (N >> 1)*dd;
+-  const at = m => re[((m % N) + N) % N];
++  /* The period unwrapped, from m = −N/2 − 2 to N/2 + 5 (|f| ≤ N/2 and the read-out's four
++     neighbours), so that a point reads its neighbours without wrapping; m = ⌊f⌋ by an
++     integer truncation (Math.floor had cost half the read-out). The same numbers as
++     before. */
++  const off = (N >> 1) + 2, pad = padOf(N + 8);
+   const xLo = 2*Math.asin(Math.max(-1, Math.min(1, s0 - half*lam/2)))/D2R, xHi = 2*Math.asin(Math.max(-1, Math.min(1, s0 + half*lam/2)))/D2R;
++  const { S, C } = trigOf(x);
+   let i = lowerBound(x, xLo);
++  if (fast){
++    for (let k = 0; k < N + 8; k++){ const m = k - off; pad[k] = re[m < 0 ? m + N : m >= N ? m - N : m] - edge; }
++    const kf = 2/(lam*dd), ki = I*D2R/lam, gHi = N + 2;
++    for (const n = x.length; i < n; i++){
++      if (x[i] > xHi) break;
++      const g = (S[i] - s0)*kf + off;
++      if (!(g >= 2 && g <= gHi)) continue;
++      const k = g | 0, u = g - k;
++      const p0 = pad[k - 1], p1 = pad[k], p2 = pad[k + 1], p3 = pad[k + 2];
++      out[i] += ki*C[i]*(p1 + 0.5*u*(p2 - p0 + u*(2*p0 - 5*p1 + 4*p2 - p3 + u*(3*(p1 - p2) + p3 - p0))));
++    }
++  } else {
++  for (let k = 0; k < N + 8; k++){ const m = k - off; pad[k] = re[m < 0 ? m + N : m >= N ? m - N : m]; }
+   for (const n = x.length; i < n; i++){
+-    const xi = x[i];
+-    if (xi > xHi) break;
+-    const th = xi*D2R/2, dl = 2*(Math.sin(th) - s0)/lam;
++    if (x[i] > xHi) break;
++    const dl = 2*(S[i] - s0)/lam;
+     if (dl < -half || dl > half) continue;
+-    const f = dl/dd, m = Math.floor(f), u = f - m;
+-    const p0 = at(m - 1), p1 = at(m), p2 = at(m + 1), p3 = at(m + 2);
++    const f = dl/dd, t = f | 0, m = t > f ? t - 1 : t, u = f - m, k = m + off;
++    const p0 = pad[k - 1], p1 = pad[k], p2 = pad[k + 1], p3 = pad[k + 2];
+     // Catmull–Rom
+     const v = p1 + 0.5*u*(p2 - p0 + u*(2*p0 - 5*p1 + 4*p2 - p3 + u*(3*(p1 - p2) + p3 - p0)));
+-    out[i] += I*(v - edge)*Math.cos(th)*D2R/lam;
++    out[i] += I*(v - edge)*C[i]*D2R/lam;
++  }
+   }
+   // o.fwhm, when given, collects the profile as drawn (less its edge value) without the
+   // divergence's shifts, on its grid from δ = 0: lineFwhm reads the tick's width off it.
+@@ -278,6 +342,86 @@ function wppmLine(o){
+     Object.assign(o.fwhm, { s0, lam, c1 });
+   }
+ }
++/* wppmPair(o1, o2): the two lines of one reflection (Kα1 and Kα2: the same d*, the same size,
++   strain and faults; the instrument and the divergence their own) as wppmLine draws each, on one
++   grid (the finer step and the wider window of the two, in δ) by one FFT: the profile is real, so
++   a line's coefficients are Hermitian, and the first line's in the real part with the second's
++   in the imaginary part come back as the first profile in re and the second in im. The size
++   coefficients, a function of L alone, are made once. With WPPM_OPT.fast's arithmetic. Neither
++   may carry o.fwhm (the tick's, drawn alone). Round 2's free-shape step 2: half the FFTs and
++   the size coefficients of a pattern. */
++const PAIR = [{}, {}];
++function wppmPair(o1, o2){
++  const os = [o1, o2];
++  let halfD = 0, ddMin = Infinity;
++  for (let j = 0; j < 2; j++){
++    const o = os[j], P = PAIR[j], th0 = o.tt*D2R/2;
++    P.s0 = Math.sin(th0); P.c1 = Math.cos(th0)*D2R/o.lam;
++    let lo = 0, hi = 0;
++    if (o.nodes) for (const nd of o.nodes){ if (nd.d < lo) lo = nd.d; if (nd.d > hi) hi = nd.d; }
++    halfD = Math.max(halfD, (Math.max(o.win*o.Hest, o.winMin) + Math.max(-lo, hi))*P.c1);
++    ddMin = Math.min(ddMin, Math.max(o.Hmin, 1e-5)*P.c1/8);
++  }
++  let N = Math.pow(2, Math.ceil(Math.log2(Math.max(1, 2*halfD/ddMin))));
++  N = Math.min(N_MAX, Math.max(N_MIN, N));
++  const dd = 2*halfD/N, dL = 1/(N*dd), p = plan(N), re = p.re, im = p.im, H2 = N >> 1;
++  re.fill(0); im.fill(0);
++  // each line's common factor (its instrument at its angle; the Lorentzian terms alike)
++  let nLmax = 0;
++  for (let j = 0; j < 2; j++){
++    const o = os[j], P = PAIR[j], H = o.Hi*P.c1, eta = o.etai, W = o.WL || 0, gq = Math.PI*Math.PI*H*H/(4*LN2);
++    const com = P.com && P.com.length >= H2 + 1 ? P.com : (P.com = new Float64Array(Math.max(H2 + 1, 1024)));
++    const r1 = Math.exp(-Math.PI*(H + W)*dL), s2 = Math.exp(-2*gq*dL*dL);
++    let e1 = 1, e2 = 1, q = Math.exp(-gq*dL*dL - Math.PI*W*dL), nL = H2;
++    for (let i = 0; i <= nL; i++){
++      const v = eta*e1 + (1 - eta)*e2;
++      com[i] = v;
++      if (v < 1e-8 && i > 2){ nL = i; break; }
++      e1 *= r1; e2 *= q; q *= s2;
++      if (e2 < 1e-280){ e2 = 0; q = 0; }
++    }
++    P.nL = nL; if (nL > nLmax) nLmax = nL;
++  }
++  const size = new Float64Array(nLmax + 1);
++  if (o1.size) o1.size(size, nLmax + 1, dL); else size.fill(1);
++  // z = a1 + i·a2 (a_j: com·size·dL times the divergence's Σ w_k e^{−2πi L δ_k})
++  for (let j = 0; j < 2; j++){
++    const o = os[j], P = PAIR[j], nodes = o.nodes && o.nodes.length ? o.nodes : null, com = P.com, nL = P.nL;
++    const m = nodes ? nodes.length : 0, cr = new Float64Array(m), ci = new Float64Array(m), er = new Float64Array(m), ei = new Float64Array(m);
++    for (let k = 0; k < m; k++){ const a = -2*Math.PI*dL*nodes[k].d*P.c1; er[k] = Math.cos(a); ei[k] = Math.sin(a); cr[k] = nodes[k].w; }
++    for (let i = 0; i <= nL; i++){
++      let sr = 1, si = 0;
++      if (m){
++        sr = 0;
++        for (let k = 0; k < m; k++){
++          sr += cr[k]; si += ci[k];
++          const r = cr[k]*er[k] - ci[k]*ei[k]; ci[k] = cr[k]*ei[k] + ci[k]*er[k]; cr[k] = r;
++        }
++      }
++      const a = com[i]*size[i]*dL, ar = a*sr, ai = a*si;
++      if (i === 0 || i === H2){ if (j) im[i] += ar; else re[i] += ar; continue; }
++      if (j){ re[i] -= ai; im[i] += ar; re[N - i] += ai; im[N - i] += ar; }
++      else { re[i] += ar; im[i] += ai; re[N - i] += ar; im[N - i] -= ai; }
++    }
++  }
++  fftPlus(p);
++  // each line read off its own part of the period, lowered by its edge value
++  const off = H2 + 2, pad = padOf(N + 8), x = o1.x, { S, C } = trigOf(x), n = x.length;
++  for (let j = 0; j < 2; j++){
++    const o = os[j], P = PAIR[j], src = j ? im : re, edge = src[H2], out = o.out, lam = o.lam, s0 = P.s0;
++    for (let k = 0; k < N + 8; k++){ const m = k - off; pad[k] = src[m < 0 ? m + N : m >= N ? m - N : m] - edge; }
++    const half = H2*dd, kf = 2/(lam*dd), ki = o.I*D2R/lam, gHi = N + 2;
++    const xLo = 2*Math.asin(Math.max(-1, Math.min(1, s0 - half*lam/2)))/D2R, xHi = 2*Math.asin(Math.max(-1, Math.min(1, s0 + half*lam/2)))/D2R;
++    for (let i = lowerBound(x, xLo); i < n; i++){
++      if (x[i] > xHi) break;
++      const g = (S[i] - s0)*kf + off;
++      if (!(g >= 2 && g <= gHi)) continue;
++      const k = g | 0, u = g - k;
++      const p0 = pad[k - 1], p1 = pad[k], p2 = pad[k + 1], p3 = pad[k + 2];
++      out[i] += ki*C[i]*(p1 + 0.5*u*(p2 - p0 + u*(2*p0 - 5*p1 + 4*p2 - p3 + u*(3*(p1 - p2) + p3 - p0))));
++    }
++  }
++}
+ /* lineFwhm(f) → the FWHM in 2θ (°) of the profile wppmLine collected in f: the sum of its
+    parts (a solid drawn in groups of members, each on its own grid, read linearly), its
+    half maximum found between the finest grid's points. NaN if none. */
+@@ -441,4 +585,4 @@ function faultKappa(table, r, alpha){
+   return s/table.dLayer;
+ }
+ 
+-export { wppmLine, wppmPoints, N_MAX as WPPM_N_MAX, lineFwhm, addMemberCoef, covBase, supportOf, quarticInvariants, evalQuartic, faultTable, faultKappa, gaussLegendre as glNodes };
++export { WPPM_OPT, wppmLine, wppmPair, wppmPoints, N_MAX as WPPM_N_MAX, lineFwhm, addMemberCoef, covBase, supportOf, quarticInvariants, evalQuartic, faultTable, faultKappa, gaussLegendre as glNodes };
+diff --git a/xrd-rietveld.js b/xrd-rietveld.js
+index 2b68562..33dd252 100644
+--- a/xrd-rietveld.js
++++ b/xrd-rietveld.js
+@@ -24,8 +24,9 @@
+ import { metric, reflections, latticeNames, latticeParams, cellFrom, cellMass, atomOrbits, siteAdpBasis, adpU, betaOf } from './xrd-cryst.js';
+ import { lineForWavelength, f0, fprime, atomicMass } from './xrd-data.js';
+ import { noiseCountScale } from './xrd-instr.js';
+-import { wppmLine, wppmPoints, WPPM_N_MAX, lineFwhm, addMemberCoef, quarticInvariants, evalQuartic, faultTable, faultKappa } from './xrd-broad.js';
++import { WPPM_OPT, wppmLine, wppmPair, wppmPoints, WPPM_N_MAX, lineFwhm, addMemberCoef, quarticInvariants, evalQuartic, faultTable, faultKappa } from './xrd-broad.js';
+ import { gaussLegendre, lowerBound, inv3n, hklText } from './xrd-math.js';
++import { SIZE_LINE } from './xrd-sizeline.js';
+ 
+ const D2R = Math.PI/180, R2D = 180/Math.PI;
+ const LN2 = Math.LN2;
+@@ -180,6 +181,14 @@ function profileAtTheta(th, U, V, W, X, Y){
+   const HL = Math.max(0, X*t + Y/c);
+   return tch(HG, HL);
+ }
++// The same with a Gaussian size width G (°, before the 1/cosθ, as Y) added in quadrature:
++// the free shape's lsq size line (sizeLineKs).
++function profileAtThetaG(th, U, V, W, X, Y, G){
++  const t = Math.tan(th), c = Math.cos(th), g = G/c;
++  const HG = Math.sqrt(Math.max(HG2_FLOOR, U*t*t + V*t + W) + g*g);
++  const HL = Math.max(0, X*t + Y/c);
++  return tch(HG, HL);
++}
+ /* The half-width (°) a line of FWHM H, mixing eta and area A (in the units of y times
+    degrees, the scale included) is drawn over: ±max(WIN_FWHM·H, WIN_MIN), and as far as its
+    Lorentzian part, ηA·H/(2π x²) beyond a few H, stays above TAIL_NOISE of the pattern's
+@@ -425,7 +434,7 @@ function fcjNodes(th, A, H, nForce){
+    derivative by up to 10×. refine() checks the counts at its end (model.fcjAudit) and
+    runs again when the widths or the asymmetry have outgrown them. The largest shortfall
+    of a tail longer than FCJ_MAX_NODES allow is kept in model.fcjShort. */
+-function lineNodes(model, key, th, A, H, tol){
++function lineNodes(model, key, th, A, H, tol, interp){
+   // A search for where the peaks are needs only where each one's weight lies: its
+   // centroid (cellSearch; the asymmetry costs it nothing then).
+   if (model.fcjCentroid) return typeof A === 'object' ? sollerCentroid(th, A) : axialNodes(th, A, H, 1);
+@@ -437,17 +446,17 @@ function lineNodes(model, key, th, A, H, tol){
+     // (A line first met under a hold goes through lineNodesOf, which records its count:
+     // taken from here, the audit after the refinement found none recorded and ran again.)
+     const c = cache.get(key);
+-    if (c && c.th === th && c.H === H && c.tol === tol && c.g === A.key && c.n0 === n0 && !model.fcjAudit && !(model.fcjFreeze && n0 === undefined)) return c.nodes;
+-    const nodes = lineNodesOf(model, key, th, A, H, tol);
+-    cache.set(key, { th, H, tol, g: A.key, n0: model.fcjFreeze ? model.fcjFreeze.get(key) : undefined, nodes });
++    if (c && c.th === th && c.H === H && c.tol === tol && c.g === A.key && c.n0 === n0 && c.ip === !!interp && !model.fcjAudit && !(model.fcjFreeze && n0 === undefined)) return c.nodes;
++    const nodes = lineNodesOf(model, key, th, A, H, tol, interp);
++    cache.set(key, { th, H, tol, g: A.key, n0: model.fcjFreeze ? model.fcjFreeze.get(key) : undefined, ip: !!interp, nodes });
+     return nodes;
+   }
+   return lineNodesOf(model, key, th, A, H);
+ }
+-function lineNodesOf(model, key, th, A, H, tol){
++function lineNodesOf(model, key, th, A, H, tol, interp){
+   const fz = model.fcjFreeze;
+   if (!fz){
+-    const nd = axialNodes(th, A, H, undefined, tol), au = model.fcjAudit;
++    const nd = axialNodes(th, A, H, undefined, tol, interp), au = model.fcjAudit;
+     if (nd && nd.short > (model.fcjShort || 1)) model.fcjShort = nd.short;
+     // refine()'s check after a refinement: has a line outgrown its held count?
+     // (A count down to 1/1.13 of the one needed leaves the profile within 0.1 % of the
+@@ -459,13 +468,13 @@ function lineNodesOf(model, key, th, A, H, tol){
+   }
+   let n = fz.get(key);
+   if (n === undefined){
+-    const nd = axialNodes(th, A, H, undefined, tol);
++    const nd = axialNodes(th, A, H, undefined, tol, interp);
+     n = nd ? nd.n : 0;
+     fz.set(key, n);
+     if (nd && nd.short > (model.fcjShort || 1)) model.fcjShort = nd.short;
+     return nd;
+   }
+-  return axialNodes(th, A, H, n || undefined, tol);
++  return axialNodes(th, A, H, n || undefined, tol, interp);
+ }
+ 
+ /* Axial divergence through Soller slits: the full axial model of Cheary & Coelho, J. Appl.
+@@ -557,12 +566,17 @@ function sollerGrid(g){
+ /* A line's cells: their shifts' means and variances, which depend on θ and the geometry
+    alone (the width only bins them): kept for the last SOLLER_LINES_MAX lines, so that a
+    refinement recomputes them only where θ or L moved (on the user's samples, refined in
+-   4–5 s with them computed at every call, against under 1 s with FCJ). */
+-const SOLLER_LINES = new Map(), SOLLER_LINES_MAX = 512;
++   4–5 s with them computed at every call, against under 1 s with FCJ). The least recently
++   used goes first, and 2048 are kept (512 up to round 2's free-shape step 2): a Jacobian's
++   column of a cell parameter moves every line's θ, and the oldest dropped first then took
++   the lines at v with it, to be computed again at the next column; and WPPM's lines keep two
++   cells each (sollerStats), 856 for a triclinic phase's 214 reflections. The same numbers,
++   kept longer. */
++const SOLLER_LINES = new Map(), SOLLER_LINES_MAX = 2048;
+ function sollerCells(th, g){
+   const key = g.key + '|' + th;
+   let C = SOLLER_LINES.get(key);
+-  if (C) return C;
++  if (C){ SOLLER_LINES.delete(key); SOLLER_LINES.set(key, C); return C; }
+   const G = sollerGrid(g);
+   const tt = 2*th, c2 = Math.cos(tt), s2 = Math.sin(tt);
+   if (G.empty || Math.abs(s2) < 1e-9) return null;
+@@ -605,7 +619,29 @@ function sollerCells(th, g){
+   SOLLER_LINES.set(key, C);
+   return C;
+ }
+-function sollerNodes(th, g, H, nForce, tol = SOLLER_TOL){
++/* interp (WPPM_OPT.axial, a WPPM line's): where the line takes one node, its shift, spread and
++   reach from the cells at the two nearest multiples of SOLLER_DQ in θ, linearly. A Jacobian's
++   column of a cell parameter (and a trial step) moves θ by far less than that, and every such
++   θ had cost the whole of sollerCells (a few thousand arccosines; on step 1's engine the axial
++   nodes took 23 % of a WPPM fit's CPU), now an interpolation between two kept. Linear in θ over
++   10⁻⁴ rad: the shift within about 10⁻⁷° of the cells' own at 2θ = 10° (its second derivative
++   there ≈ 14°/rad²), continuous in θ; the patterns within 10⁻⁹ of the peak of the cells'
++   own (round 2's free-shape step 2). */
++const SOLLER_DQ = 1e-4;
++function sollerStats(th, g){
++  const f = th/SOLLER_DQ, k = Math.floor(f), t = f - k, a = sollerCells(k*SOLLER_DQ, g), b = sollerCells((k + 1)*SOLLER_DQ, g);
++  if (!a || !b) return null;
++  const l = (p, q) => p + t*(q - p);
++  return { mean: l(a.mean, b.mean), sd: l(a.sd, b.sd), lo: l(a.lo, b.lo), hi: l(a.hi, b.hi) };
++}
++function sollerNodes(th, g, H, nForce, tol = SOLLER_TOL, interp = false){
++  if (interp && !(nForce > 1)){
++    const st = sollerStats(th, g);
++    if (st){
++      const r = st.sd/H;
++      if (nForce ? nForce === 1 : st.hi - st.lo < 0.05*H || 4*r*r <= tol){ const one = [{ d: st.mean, w: 1 }]; one.n = 1; return one; }
++    }
++  }
+   const C = sollerCells(th, g);
+   if (!C) return null;
+   const { mu, va, cw, lo, hi, mean, sd } = C, nc = cw.length, span = hi - lo, r = sd/H;
+@@ -653,8 +689,8 @@ function sollerCentroid(th, g){
+ /* The axial divergence of a model: FCJ's A, a number (none at 0), or the Soller model's
+    geometry, an object (axialOf); its nodes, and the reach of its shifts (deg). tol: the
+    Soller nodes' error allowed, of the peak (sollerTol). */
+-function axialNodes(th, A, H, nForce, tol){
+-  if (A && typeof A === 'object') return sollerNodes(th, A, H, nForce, tol);
++function axialNodes(th, A, H, nForce, tol, interp){
++  if (A && typeof A === 'object') return sollerNodes(th, A, H, nForce, tol, interp);
+   return A > 0 ? fcjNodes(th, A, H, nForce) : null;
+ }
+ /* The Soller nodes' error allowed for a line of area Sarea (the scale in it), FWHM H and
+@@ -957,6 +993,57 @@ function textureWeights(q, v){
+     return o;
+   });
+ }
++/* Round 2 of the free-shape research (a prototype after v522: research/free-shape/round2/
++   AB.md §1, its two results adopted), each behind a switch that keeps v522's behaviour
++   reachable for comparison (a test or a script sets it before building a model):
++   - line, the size line of a free shape's members and of its phase's isotropic sphere:
++     'exact', the solid's own line by WPPM (§7.3): a phase with a body for its free shape is
++     built as a WPPM phase (read when the model is built), each member's line the transform
++     of the solid's common-volume function along it, its isotropic sphere the ball's;
++     'lsq', in the Lorentzian profile the engine's TCH pseudo-Voigt with the Gaussian and
++     Lorentzian FWHM that best fit the solid's exact line along the member (sizeLineKs; AB
++     §3); or 'lor', v522's Lorentzian of FWHM 0.675/⟨L⟩_V (a WPPM phase reads neither). The
++     Lorentzian is 11.5–21 % of the peak off every solid's exact line, reads ⟨L⟩_V 13–25 %
++     long, and pulls a solid toward equant the more members a reflection has (m−3m read a
++     quarter of the anisotropy); lsq is 2.5–8 % off at the same cost and puts two of 11
++     clean rows in the wrong family of solid in expectation; the exact line none. With
++     WPPM_OPT's shortcuts (xrd-broad.js: the read-out from tables, a reflection's two lines
++     by one FFT, the axial shift interpolated in θ) a fit by the exact line cost 0.42× v522's
++     CPU on the 22 sub-screen rows (lsq 0.74×, WPPM before them 2.13×), with WPPM's outcome,
++     reach and accuracy (STEP2.md);
++   - search, freeShapeRun's: 'v2' (AB §4, STEP1.md: forward differences in the brief
++     trials, no covariance in the search's refinements, the returned fit refined once more
++     by central differences with its covariance, a held frame refined once per orbit of the
++     class, the class's distinct starts alone, the turns on a stream of their own) or
++     'today', v522's. On the 77 screening runs v2 made 0.62× v522's evaluations with the
++     lsq line (0.80× the CPU of a fit on 22 of them) and with WPPM (0.75×), the outcome the
++     same on 76 and 75.
++   The tunables, all to be tuned on round 2's tuning runs: SHAPE_FILL, SHAPE_CENTRAL and
++   SHAPE_FWD below; the tables' steps and their fit's span and weights (xrd-sizeline.js, written by
++   research/free-shape/round2/proto/build-sizeline.mjs); the starts' families (lowIndexAxes,
++   at most 5). */
++const SHAPE_MODE = { line: 'exact', search: 'v2' };
++/* Search v2: random starts beside the class's distinct ones (the sphere-like one, a plate
++   and a needle per low-index family: 11 in the six lower classes, 9 in −3m, 6/m and 6/mmm,
++   7 in cubic), plus one for each start the setting shapeStarts asks above its default.
++   0: none (AB §4.2, symA: where v522 filled up with random starts, 35 of the 77 runs, they
++   cost 15 % of the evaluations and changed no outcome with the Lorentzian line; with the
++   lsq line one: an ellipsoid whose isotropic fit read no size, all the class's starts
++   stopping at once at w0's floor, which one of v522's random starts had escaped; STEP1.md). */
++const SHAPE_FILL = 0;
++/* Search v2: the returned fit refined once more by central differences, its covariance
++   from that pass (true), or its covariance alone (false). The pass costs an iteration (44
++   evaluations, median) against 18 for the covariance alone, and lowered χ² by 0.0003 χ²_ν
++   (median), at most 0.61, where forward differences had stopped short in a flat valley. */
++const SHAPE_CENTRAL = true;
++/* Search v2: which of the search's refinements take their Jacobian by forward differences:
++   'briefs' (the brief trials alone; the full refinements, the polish, the exact faces, the
++   held frames and the refit by central differences, still without a covariance) or 'all'.
++   On the 77 screening runs with the lsq line, 'all' made 0.48× v522's evaluations but a
++   full refinement could stall short in a flat valley: a true 18.7 × 3.7 nm cylinder ended an
++   unbounded disc 1693 χ²_ν above v522's fit, and the reach fell to 61 of 65 runs against
++   64; 'briefs' made 0.62× (1.11× the CPU of 'all') and lost neither (STEP1.md). */
++const SHAPE_FWD = 'briefs';
+ // Is the free shape in use at v (any L or W ≠ 0)? Until the shape stage it is not, and
+ // the phase is drawn as an isotropic one.
+ function shapeActive(q, v){ const ix = q.iL || q.iW; return !!ix && ix.some(i=> v[i] !== 0); }
+@@ -1023,6 +1110,47 @@ function shapeWidths(model, q, v){
+     return out;
+   });
+ }
++/* The lsq size line (SHAPE_MODE.line 'lsq'): a member's Gaussian and Lorentzian FWHM as
++   multipliers kg, kl on its width w (shapeWidths: the sphere-calibrated Lorentzian's,
++   0.675/⟨L⟩_V in d*), the line drawn as the TCH of H_G² + (kg·w/cosθ)² and H_L + kl·w/cosθ:
++   the TCH line that best fits the solid's exact line along the member (xrd-sizeline.js),
++   read off the reduced shape along it, t its direction in the scaled base body (shapeTs):
++   the ball's one entry; the cylinder's angle ψ from its axis, linear between the table's
++   steps; the cube's ratios β = b/a, γ = c/a of t's sorted components, bilinear.
++   out[o], out[o + 1] = kg, kl. */
++const SL_K = (()=> {
++  const T = SIZE_LINE, k = x => x/0.675;
++  return { ball: T.ball.map(k), cyl: Float64Array.from(T.cyl, k), cylStep: T.cylStep, nCyl: T.cyl.length/2,
++           box: Float64Array.from(T.box, k), boxStep: T.boxStep, nBox: Math.round(1/T.boxStep) + 1 };
++})();
++function sizeLineKs(base, t1, t2, t3, out, o){
++  const T = SL_K;
++  if (base === 'ball'){ out[o] = T.ball[0]; out[o + 1] = T.ball[1]; return; }
++  const a1 = Math.abs(t1), a2 = Math.abs(t2), a3 = Math.abs(t3);
++  if (base === 'cylinder'){
++    const c = T.cyl, f = Math.min(T.nCyl - 1 - 1e-9, Math.atan2(Math.hypot(a1, a2), a3)*180/Math.PI/T.cylStep), i = Math.floor(f), u = f - i;
++    out[o] = c[2*i] + u*(c[2*i + 2] - c[2*i]); out[o + 1] = c[2*i + 1] + u*(c[2*i + 3] - c[2*i + 1]);
++    return;
++  }
++  let a = a1, b = a2, cc = a3, t;
++  if (b > a){ t = a; a = b; b = t; } if (cc > a){ t = a; a = cc; cc = t; } if (cc > b){ t = b; b = cc; cc = t; }
++  if (!(a > 0)){ out[o] = T.ball[0]; out[o + 1] = T.ball[1]; return; }
++  const n = T.nBox, fb = Math.min(n - 1 - 1e-9, b/a/T.boxStep), fc = Math.min(n - 1 - 1e-9, cc/a/T.boxStep);
++  const i = Math.floor(fb), j = Math.floor(fc), u = fb - i, w = fc - j, B = T.box;
++  // (the table's lower half, γ ≤ β; the upper by symmetry)
++  const at = (p, r) => 2*(p >= r ? p*(p + 1)/2 + r : r*(r + 1)/2 + p);
++  const p00 = at(i, j), p10 = at(i + 1, j), p01 = at(i, j + 1), p11 = at(i + 1, j + 1);
++  for (let k = 0; k < 2; k++) out[o + k] = (1 - u)*(1 - w)*B[p00 + k] + u*(1 - w)*B[p10 + k] + (1 - u)*w*B[p01 + k] + u*w*B[p11 + k];
++}
++// Every member's kg, kl at v (a body's), in pairs, as shapeWidths gives their widths.
++function shapeLineKs(model, q, v){
++  const base = BODIES[q.shapeType].base;
++  return shapeTs(model, q, v).map(t=>{
++    const m = t.length/3, out = new Float64Array(2*m);
++    for (let i = 0; i < m; i++) sizeLineKs(base, t[3*i], t[3*i + 1], t[3*i + 2], out, 2*i);
++    return out;
++  });
++}
+ function shapeMatrix(L){
+   const [l11, l21, l22, l31, l32, l33] = L;
+   return [l11*l11, l11*l21, l11*l31,  l11*l21, l21*l21 + l22*l22, l21*l31 + l22*l32,  l11*l31, l21*l31 + l22*l32, l31*l31 + l32*l32 + l33*l33];
+@@ -1770,7 +1898,8 @@ function uvwStep(model, p, v, k){
+ }
+ function broadeningSetup(q, p, cell, list, add, nextIndex){
+   const prof = PROFILES.includes(p.profile) ? p.profile : 'lorentz';
+-  q.wppm = prof !== 'lorentz';
++  // (SHAPE_MODE.line 'exact': a phase with a body for its free shape is a WPPM phase)
++  q.wppm = prof !== 'lorentz' || (SHAPE_MODE.line === 'exact' && !!BODIES[shapeTypeOf(p.shape)]);
+   if (prof === 'lognormal'){ q.iLS = nextIndex(); add('LS', 0, 0, 1.5, 1e-4, { kind: 'dist' }); }
+   const trans = (p.ops || []).filter(o=> o.R.every((x, i)=> x === [1,0,0, 0,1,0, 0,0,1][i]) && o.t.some(x=> x)).map(o=> o.t);
+   if (p.strain === 'aniso'){
+@@ -2342,15 +2471,17 @@ function growFade(d, dFull){
+ // One line of one reflection with the free shape: a peak per member of the family, its
+ // Lorentzian width Y (the instrument's and the faults', and the legacy ellipsoid's
+ // isotropic Ys) + the shape's own (shapeWidths: wv, one per member, times prof.ws, the
+-// line's λ/λ1), each a 1/m share of the intensity (times its texture weight). The FCJ
+-// counts are held per member (their keys negative, apart from the isotropic lines').
++// line's λ/λ1), each a 1/m share of the intensity (times its texture weight). With the lsq
++// line (prof.ks: shapeLineKs) the shape's width w enters as kl·w in the Lorentzian and
++// kg·w in the Gaussian, in quadrature. The FCJ counts are held per member (their keys
++// negative, apart from the isotropic lines').
+ function shapeLine(model, k, r, j, th, tt, I, wv, prof, out, ticks, S, f2, d, tw){
+   const q = model.phases[k], m = wv.length, x = model.x, xa = model.x0, xb = model.x1;
+-  const { U, V, W, X, Y, A, ws = 1 } = prof;
++  const { U, V, W, X, Y, A, ws = 1, ks = null } = prof;
+   const [dLo, dHi] = axialReach(th, A);
+   let sw = 0, sH = 0, sE = 0, tSum = 0;
+   for (let i = 0; i < m; i++){
+-    const pr = profileAtTheta(th, U, V, W, X, Y + ws*wv[i]), ti = tw ? tw[i] : 1;
++    const pr = ks ? profileAtThetaG(th, U, V, W, X, Y + ws*wv[i]*ks[2*i + 1], ws*wv[i]*ks[2*i]) : profileAtTheta(th, U, V, W, X, Y + ws*wv[i]), ti = tw ? tw[i] : 1;
+     sw += ti; sH += ti*pr.H; sE += ti*pr.eta; tSum += ti;
+     const Im = I/m*ti, half = lineHalf(model, pr.H, pr.eta, S*Im), win = half/pr.H;
+     if (tt + dHi + half < xa || tt + dLo - half > xb) continue;
+@@ -2372,7 +2503,7 @@ function shapeLine(model, k, r, j, th, tt, I, wv, prof, out, ticks, S, f2, d, tw
+    one — and the axial divergence's nodes. The grid follows two widths, estimated as
+    Lorentzians of the same breadth: the line's whole (the window) and its narrowest part
+    (the step: the instrument's and the largest crystallites' sharpest member). */
+-function wppmLineOf(model, k, r, j, th, tt, I, inst, ext, out, ticks, S, f2, d, ts, tw){
++function wppmLineOf(model, k, r, j, th, tt, I, inst, ext, out, ticks, S, f2, d, ts, tw, pend){
+   const q = model.phases[k], L = model.lines[j], lam1 = model.lines[0].lam, c = Math.cos(th);
+   const { U, V, W, X, Y, A } = inst, pr = profileAtTheta(th, U, V, W, X, Y);
+   // The solid's base body for its members; the isotropic size (no shape, or the shape's
+@@ -2419,7 +2550,7 @@ function wppmLineOf(model, k, r, j, th, tt, I, inst, ext, out, ticks, S, f2, d,
+   // plate's sharp in-plane members inside a broad line): counted from the whole line's
+   // width, 3 nodes 0.1° apart drew separate bumps, 8 % of the peak.
+   // (the error allowed at the top of its narrowest component)
+-  const nodes = axialOn(A) ? lineNodes(model, (k*model.rStride + r)*4 + j, th, A, Hmin, sollerTol(model, S*I, Hmin, tq.eta)) : null;
++  const nodes = axialOn(A) ? lineNodes(model, (k*model.rStride + r)*4 + j, th, A, Hmin, sollerTol(model, S*I, Hmin, tq.eta), WPPM_OPT.axial) : null;
+   const spread = nodes ? nodes.reduce((s, nd)=> Math.max(s, Math.abs(nd.d)), 0) : 0;
+   /* The tail rule draws no further than the grid holds at its step (an eighth of Hmin):
+      a step grown for the tail costs the line's top more than the tail gains. On Si spheres
+@@ -2449,7 +2580,8 @@ function wppmLineOf(model, k, r, j, th, tt, I, inst, ext, out, ticks, S, f2, d,
+       g = { list: [mb], sw: mb[4], swx: mb[4]*mb[5] };
+     }
+     draw();
+-  } else wppmLine({ ...line, Hest, Hmin, size: sizeOf(members), fwhm: fw });
++  } else if (pend && !fw) pend.push({ ...line, Hest, Hmin, size: sizeOf(members) });   // (drawn with its pair: phasePattern)
++  else wppmLine({ ...line, Hest, Hmin, size: sizeOf(members), fwhm: fw });
+   if (tick){
+     /* The tick's FWHM (xrd-widths' expected width; the phase detection's reach of a
+        line), measured on the line as drawn. 1.23·Ys, the single sphere's, had been 1.6
+@@ -2477,6 +2609,8 @@ function phasePattern(model, v, k, out, ticks){
+   const act = shapeActive(q, v);
+   const wppm = q.wppm && !q.iL;
+   const shp = act && !wppm ? shapeWidths(model, q, v) : null, ts = act && wppm ? shapeTs(model, q, v) : null;
++  // (with the lsq line, each member's kg, kl: sizeLineKs; and below the isotropic sphere's)
++  const lsq = SHAPE_MODE.line === 'lsq' && !!q.iW, shk = shp && lsq ? shapeLineKs(model, q, v) : null;
+   const tw = textureWeights(q, v);
+   const fa = q.iFA != null ? v[q.iFA] : 0, sigma = q.iLS != null ? v[q.iLS] : 0;
+   /* The faults' layer spacing at this cell: the table's is the starting cell's, and κ goes
+@@ -2491,6 +2625,8 @@ function phasePattern(model, v, k, out, ticks){
+   }
+   const sk = model.skip, skip = sk && sk.k === k ? sk.rs : null;
+   if (sk && sk.only && sk.k !== k) return out;
++  // WPPM_OPT.pair: a reflection's two lines drawn together (wppmPair), but for the ticks' calc
++  const pend = wppm && WPPM_OPT.pair && !ticks && model.lines.length === 2 ? [] : null;
+   for (let r = 0; r < q.nRefl; r++){
+     if (skip && (sk.only ? !skip.has(r) : skip.has(r))) continue;
+     const gf = r < q.nFull ? 1 : growFade(d[r], q.dFull);
+@@ -2514,7 +2650,7 @@ function phasePattern(model, v, k, out, ticks){
+       if (!fade) continue;
+       const I = (j ? base2 : base)*L.w*lpFactor(model, th)*fade;
+       if (wppm){
+-        wppmLineOf(model, k, r, j, th, tt, I, { U: Ui, V: Vi, W: Wi, X: Xi, Y: Yi, A }, { eps, kappa, sigma, Ys: v[q.iYs] }, out, ticks && j === 0 ? ticks : null, S, f2, d, ts ? ts[r] : null, ts && tw ? tw[r] : null);
++        wppmLineOf(model, k, r, j, th, tt, I, { U: Ui, V: Vi, W: Wi, X: Xi, Y: Yi, A }, { eps, kappa, sigma, Ys: v[q.iYs] }, out, ticks && j === 0 ? ticks : null, S, f2, d, ts ? ts[r] : null, ts && tw ? tw[r] : null, pend);
+         continue;
+       }
+       // The size (Ys, read as D = Kλ1/Ys, and the shape's widths) and the faults broaden
+@@ -2524,8 +2660,11 @@ function phasePattern(model, v, k, out, ticks){
+       // Ys (held at 0 in its search), left out as WPPM leaves it; the legacy ellipsoid's
+       // widths add to Ys (shapeOf).
+       const lr = L.lam/lam1, Yr = Yi + lr*(shp && q.iW ? 0 : Ys) + (kappa > 0 ? L.lam*kappa/Math.PI*R2D : 0);
+-      if (shp){ shapeLine(model, k, r, j, th, tt, I, shp[r], { U, V, W, X: Xr, Y: Yr, A, ws: lr }, out, ticks && j === 0 ? ticks : null, S, f2, d, tw ? tw[r] : null); continue; }
+-      const pr = profileAtTheta(th, U, V, W, Xr, Yr);
++      if (shp){ shapeLine(model, k, r, j, th, tt, I, shp[r], { U, V, W, X: Xr, Y: Yr, A, ws: lr, ks: shk ? shk[r] : null }, out, ticks && j === 0 ? ticks : null, S, f2, d, tw ? tw[r] : null); continue; }
++      // The isotropic sphere of a phase whose free shape is asked for, with the lsq line: the
++      // ball's (SL_K), so that the shape is kept or not against its like (§10.8); a phase
++      // without one keeps the Lorentzian Ys.
++      const pr = lsq && Ys > 0 ? profileAtThetaG(th, U, V, W, Xr, Yr - lr*Ys*(1 - SL_K.ball[1]), lr*Ys*SL_K.ball[0]) : profileAtTheta(th, U, V, W, Xr, Yr);
+       // The axial divergence spreads the peak over shifts within [dLo, dHi] (axialReach): a
+       // line out of range by more than that is skipped before its nodes.
+       const [dLo, dHi] = axialReach(th, A);
+@@ -2537,6 +2676,7 @@ function phasePattern(model, v, k, out, ticks){
+         ticks.push({ phase: q.id, h: q.lab ? q.lab[3*r] : q.h[r], k: q.lab ? q.lab[3*r + 1] : q.k[r], l: q.lab ? q.lab[3*r + 2] : q.l[r],
+                      tt, d: d[r], mult: q.mult[r], F2: f2[r], I: S*I, H: pr.H, eta: pr.eta, j: 0, pk: k, r });
+     }
++    if (pend && pend.length){ if (pend.length === 2) wppmPair(pend[0], pend[1]); else wppmLine(pend[0]); pend.length = 0; }
+   }
+   return out;
+ }
+@@ -2709,8 +2849,12 @@ function diffStep(model, j, v){
+ /* The Jacobian columns of the free parameters at v (st the state there): exact for the
+    linear ones (∂y/∂S = the phase at scale 1, ∂y/∂c = its basis function), central
+    differences for the rest, recomputing only the phases a parameter touches (one-sided
+-   at a bound, so the model is never evaluated outside it). */
+-function jacobian(model, v, st, free, cols){
++   at a bound, so the model is never evaluated outside it). fwd (refine()'s opts.forward):
++   forward differences, one displaced point a column, the pattern at v st's (this
++   refinement's, with its FCJ counts); at the upper bound the point below. Half the
++   evaluations of a column; on the free shape's search the iterations a refinement took
++   did not change (round 2, AB §4.2). */
++function jacobian(model, v, st, free, cols, fwd = false){
+   const n = model.n, np = model.phases.length;
+   const tmpA = new Float64Array(n), tmpB = new Float64Array(n);
+   free.forEach((j, a)=>{
+@@ -2719,8 +2863,8 @@ function jacobian(model, v, st, free, cols){
+     col.fill(0);
+     const h = diffStep(model, j, v);
+     let up = v[j] + h, dn = v[j] - h;
+-    if (up > p.hi) up = v[j];
+-    if (dn < p.lo) dn = v[j];
++    if (fwd){ dn = v[j]; if (up > p.hi){ up = v[j]; dn = Math.max(p.lo, v[j] - h); } }
++    else { if (up > p.hi) up = v[j]; if (dn < p.lo) dn = v[j]; }
+     if (up === dn) return;
+     const vu = v.slice(), vd = v.slice(); vu[j] = up; vd[j] = dn;
+     const ks = p.group === 'phase' ? [p.phase] : [...Array(np).keys()];
+@@ -2729,10 +2873,12 @@ function jacobian(model, v, st, free, cols){
+       // Both displaced points with the same FCJ node counts (lineNodes): refine()'s, held
+       // over the whole refinement (a Jacobian is taken only inside one; up to v479 a
+       // column taken outside one held counts of its own, a case that never arose).
+-      if (dn === v[j]){ phasePattern(model, v, k, tmpB); phasePattern(model, vu, k, tmpA); }
++      let pu = tmpA, pd = tmpB;
++      if (fwd){ if (up === v[j]){ pu = st.pats[k]; phasePattern(model, vd, k, tmpB); } else { phasePattern(model, vu, k, tmpA); pd = st.pats[k]; } }
++      else if (dn === v[j]){ phasePattern(model, v, k, tmpB); phasePattern(model, vu, k, tmpA); }
+       else { phasePattern(model, vu, k, tmpA); phasePattern(model, vd, k, tmpB); }
+       const f = S/(up - dn);
+-      for (let i = 0; i < n; i++) col[i] += f*(tmpA[i] - tmpB[i]);
++      for (let i = 0; i < n; i++) col[i] += f*(pu[i] - pd[i]);
+     }
+   });
+   // The F² caches now hold the last displaced cell: the next evaluation at v recomputes.
+@@ -2823,7 +2969,11 @@ function hgFloored(model, v, free){
+    inverse holds the variance each would have with it held. `tied` lists each such set
+    (names), `esdHeld` those conditional esds. iterations and ms: over all the passes
+    (passes: how many), why: the last pass's; fcjBehind: the last pass still left a line
+-   behind its held FCJ count. */
++   behind its held FCJ count. For the free shape's search (v2): forward, forward
++   differences in the iterations (jacobian; the covariance stays central); noCov, no
++   covariance at the end (esd {}, cov null: a refinement whose esds nobody reads, 10 % of
++   a brief one's evaluations); covOnly, no iterations, the covariance alone (after the
++   linear parameters' solve). */
+ /* refine()'s passes with fresh FCJ counts run until no line has outgrown its count. On
+    synthetic standards (LaB6, Si; (S + H)/L 0.01–0.2 started from 0.005, 0.02, 0.05 and
+    0.08, two profiles) at most 6 were needed, 4 from ASYM_START. The cap of 4 that the
+@@ -2907,8 +3057,8 @@ function refineHeld(model, opts){
+     v = vl; st.bg.set(linSt.bg); st.yc.set(linSt.yc); st.chi2 = linSt.chi2;
+     return before - linSt.chi2 > 0.01*chiRed(before);
+   };
+-  for (; m && it < maxIter; it++){
+-    jacobian(model, v, st, free, cols);
++  for (; m && !opts.covOnly && it < maxIter; it++){
++    jacobian(model, v, st, free, cols, !!opts.forward);
+     const { A, g } = normalEq(model, cols, st);
+     const act = [];
+     for (let a = 0; a < m; a++) if (A[a*m + a] > 0 && !onBound(free[a], g[a])) act.push(a);
+@@ -2987,10 +3137,10 @@ function refineHeld(model, opts){
+      in atBound, for the reader to take the value as a limit. U, V, W with H_G² on its
+      floor have no meaningful curvature (∂y/∂W ∝ 1/√W there, the esd follows the
+      difference step): esd NaN, and listed in atBound. */
+-  st = evaluate(model, v, st);
++  if (!opts.noCov) st = evaluate(model, v, st);
+   const esd = {}, atBound = [], esdHeld = {};
+   let corr = null, cov = null, tied = [];
+-  if (m){
++  if (m && !opts.noCov){
+     jacobian(model, v, st, free, cols);
+     const { A, g } = normalEq(model, cols, st);
+     const act = [];
+@@ -3041,7 +3191,7 @@ function refineHeld(model, opts){
+   model.cov = { names: free.map(j=> model.par[j].name), cov };
+   const freeNames = free.map(j=> model.par[j].name);
+   return { params: getParams(model), esd, corr, cov, free: freeNames, atBound,
+-           undetermined: freeNames.filter(nm=> !Number.isFinite(esd[nm]) && !atBound.includes(nm)), tied, esdHeld,
++           undetermined: opts.noCov ? [] : freeNames.filter(nm=> !Number.isFinite(esd[nm]) && !atBound.includes(nm)), tied, esdHeld,
+            stats, iterations: it, converged, why, ms: Date.now() - t0 };
+ }
+ 
+@@ -4265,6 +4415,25 @@ function autoRefine(model, opts = {}){
+   return finish({ res, out, lastFree, nIn, cs });
+ }
+ 
++/* sameFrame(q, v) → (Ra, Rb) → whether two frames of phase q's body (rotation matrices,
++   the body's axes their columns), at v's widths, are one under the Laue class: a rotation
++   of the class takes each axis of Rb onto Ra's (axes without sign), or onto another of
++   Ra's of equal width where the body lets them swap (a square box's edges; any equal axes
++   of a box or an ellipsoid, never an elliptic cylinder's height). Round 2's harness decides
++   alike by the canonical form, the class's fundamental zone (AB §4.2 (3): 29 of the 124
++   held refinements on the 77 runs repeated one, in the eight classes with a 3-, 4- or
++   6-fold axis). A body of revolution has one held frame, none to compare. */
++function sameFrame(q, v){
++  const B = BODIES[q.shapeType], Wx = B.axes(q.iW.map(i=> v[i]));
++  const swaps = (i, j) => i === j || (Wx[i] === Wx[j] && (B.base !== 'cylinder' || (i < 2 && j < 2)));
++  const perms = [[0, 1, 2], [1, 0, 2], [0, 2, 1], [2, 1, 0], [1, 2, 0], [2, 0, 1]].filter(p=> p.every((j, i)=> swaps(i, j)));
++  const rots = q.laue.map(R=> cartOp(q.Bm, R));
++  return (Ra, Rb) => rots.some(C=> perms.some(p=> [0, 1, 2].every(i=>{
++    const x = Rb[i], y = Rb[3 + i], z = Rb[6 + i], j = p[i];
++    return Math.abs((C[0]*x + C[1]*y + C[2]*z)*Ra[j] + (C[3]*x + C[4]*y + C[5]*z)*Ra[3 + j] + (C[6]*x + C[7]*y + C[8]*z)*Ra[6 + j]) > 1 - 1e-9;
++  })));
++}
++
+ /* freeShape(model, k, res, free, opts) → { res, info }, { rejected, dBIC } or null: the
+    free shape of phase k (shapeSetup), from the isotropic refinement res. By the cubic
+    symmetry the pattern does not change to first order when a sphere is deformed (Σ over
+@@ -4297,23 +4466,32 @@ function freeShapeRun(model, k, res, free, opts){
+      (60 by default: a body's turns take longer than a stage), λ and the shift test as
+      everywhere. */
+   const F = fitSettings(opts.fit), nStarts = F.shapeStarts, nFull = F.shapeFull;
+-  const lmBrief = { maxIter: Math.min(8, F.maxIter), shiftTol: F.shiftTol, lambda: F.lambda };
+-  const lmFull = { maxIter: Math.round(1.5*F.maxIter), shiftTol: F.shiftTol, lambda: F.lambda };
++  /* Search v2 (SHAPE_MODE): the brief trials by forward differences (SHAPE_FWD 'all':
++     every refinement), no refinement of the search with a covariance (lmX), the returned
++     fit refined once more as v522 refined it (lmCentral), held frames once per orbit of the
++     class, the class's distinct starts. The legacy ellipsoid keeps v522's search. */
++  const v2 = SHAPE_MODE.search === 'v2' && !q.iL, lmX = v2 ? { forward: true, noCov: true } : null;
++  const lmBrief = { maxIter: Math.min(8, F.maxIter), shiftTol: F.shiftTol, lambda: F.lambda, ...lmX };
++  const lmCentral = { maxIter: Math.round(1.5*F.maxIter), shiftTol: F.shiftTol, lambda: F.lambda };
++  const lmFull = { ...lmCentral, ...lmX, ...(v2 && SHAPE_FWD === 'briefs' ? { forward: false } : null) };
+   const N = res.stats.N, chiTot = r => r.stats.chi2*Math.max(1, r.stats.N - r.stats.P);
+   const y0 = Math.max(vIso[q.iYs], 1e-3);
+-  // A seeded generator (mulberry32) and Gaussian deviates.
++  // A seeded generator (mulberry32) of Gaussian deviates.
+   // (The same sequence for every phase: a result must not change with the phases'
+   // ids, which follow the order they were added in.)
+-  let seed = 0x9e3779b9 >>> 0;
+-  const rnd = ()=> { seed = (seed + 0x6D2B79F5) >>> 0; let t = seed; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0)/4294967296; };
+-  const gauss = ()=> Math.sqrt(-2*Math.log(rnd() || 1e-12))*Math.cos(2*Math.PI*rnd());
++  const mulberry = s0 => {
++    let seed = s0 >>> 0;
++    const rnd = ()=> { seed = (seed + 0x6D2B79F5) >>> 0; let t = seed; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0)/4294967296; };
++    return ()=> Math.sqrt(-2*Math.log(rnd() || 1e-12))*Math.cos(2*Math.PI*rnd());
++  };
++  const gauss = mulberry(0x9e3779b9);
+   const unit = t => { const n = Math.hypot(...t); return t.map(x=> x/n); };
+   const cross = (a, b) => [a[1]*b[2] - a[2]*b[1], a[2]*b[0] - a[0]*b[2], a[0]*b[1] - a[1]*b[0]];
+   // A turn by phi about the unit axis n (row-major), a product, a random turn.
+   const rotation = (n, phi) => { const c = Math.cos(phi), s = Math.sin(phi), C = 1 - c, [x, y, z] = n;
+     return [c + x*x*C, x*y*C - z*s, x*z*C + y*s,  y*x*C + z*s, c + y*y*C, y*z*C - x*s,  z*x*C - y*s, z*y*C + x*s, c + z*z*C]; };
+   const mul = (P, Q) => [0,1,2].flatMap(i=> [0,1,2].map(j=> P[3*i]*Q[j] + P[3*i + 1]*Q[3 + j] + P[3*i + 2]*Q[6 + j]));
+-  const randomTurn = ()=> quatMat(unit([gauss(), gauss(), gauss(), gauss()]));
++  const randomTurn = (g = gauss)=> quatMat(unit([g(), g(), g(), g()]));
+   // Tilted a few degrees, so that no symmetry holds the axes where they start.
+   const tilt = e => unit([e[0] + 0.08*gauss(), e[1] + 0.08*gauss(), e[2] + 0.08*gauss()]);
+   const axesLow = lowIndexAxes(q);
+@@ -4365,7 +4543,19 @@ function freeShapeRun(model, k, res, free, opts){
+       starts.push(put(Wof(0.5*w0, 0.7*w0, 2.5*w0), frameAlong(e)));
+       starts.push(put(Wof(1.2*w0, 1.6*w0, 0.4*w0), frameAlong(e)));
+     }
+-    while (starts.length < nStarts + 1) starts.push(put(Wof(...[0, 1, 2].map(()=> w0*Math.exp(0.8*gauss()))), randomTurn()));
++    if (!v2) while (starts.length < nStarts + 1) starts.push(put(Wof(...[0, 1, 2].map(()=> w0*Math.exp(0.8*gauss()))), randomTurn()));
++    else {
++      /* v2: the class's distinct starts, and SHAPE_FILL random ones beside them (plus the
++         setting's starts above its default) from a stream of their own. The main stream,
++         which feeds the turns before the polish and the refit next, skips v522's random
++         starts (7 deviates each), so the turns are v522's whatever the starts: in a flat
++         valley the turn alone decides which free minimum is returned (up to 7.5 χ²_ν on a
++         synthetic cylinder, AB §4.6), and one stream for both had made the start cut look
++         like it lost minima the shifted turns lost (§5.2, B1). */
++      for (let c = starts.length; c < nStarts + 1; c++) for (let d = 0; d < 7; d++) gauss();
++      const g = mulberry(0x85ebca6b), nFill = SHAPE_FILL + Math.max(0, nStarts - SHAPE_STARTS);
++      for (let c = 0; c < nFill; c++) starts.push(put(Wof(...[0, 1, 2].map(()=> w0*Math.exp(0.8*g()))), randomTurn(g)));
++    }
+     // The orientation reached becomes the reference, r = 0: the chart is fresh at the
+     // start of each full refinement, far from |r| = π.
+     rebase = v => { const vv = v.slice(), R = bodyFrame(q, v); q.iR.forEach(i=> { vv[i] = 0; }); quatOfMat(R).forEach((t, i)=> { vv[q.iQ[i]] = t; }); return vv; };
+@@ -4472,9 +4662,13 @@ function freeShapeRun(model, k, res, free, opts){
+     const refineFrom = (v, nm) => { setParams(model, rebase(v)); try { const r = refine(model, { free: nm, ...lmFull }); return { res: r, v: model.v.slice() }; } catch(e){ return null; } };
+     if (BODIES[q.shapeType].base !== 'ball'){ const ex = refineFrom(best.v, names); if (ex) best = ex; }
+     dBICfree = bic(best.res);
+-    // The held candidates: the best of the lattice frames near the free fit.
++    // The held candidates: the best of the lattice frames near the free fit. (v2: a frame a
++    // rotation of the class takes onto one tried already ends where that one did, the
++    // refinement being equivariant, and is not refined again: sameFrame.)
+     let sn = null;
++    const tried = [], same = v2 && snaps ? sameFrame(q, best.v) : null;
+     for (const vs of (snaps ? snaps(best.v) : [])){
++      if (same){ const R = bodyFrame(q, vs); if (tried.some(T=> same(T, R))) continue; tried.push(R); }
+       const r = refineFrom(vs, names.filter(nm=> !q.iR.some(i=> model.par[i].name === nm)));
+       if (r && (!sn || chiTot(r.res) < chiTot(sn.res))) sn = r;
+     }
+@@ -4510,9 +4704,20 @@ function freeShapeRun(model, k, res, free, opts){
+   // Kept only when the data support it: ΔBIC under −10 — five more parameters always
+   // lower χ² a little, and on an isotropic sample the shape was kept in 7 of 12 noise
+   // draws with ΔBIC near +40.
+-  const cb = chiTot(best.res), dBIC = bic(best.res);
++  let cb = chiTot(best.res);
++  const dBIC = bic(best.res);
+   if (!(dBIC < -10)){ setParams(model, vIso); return { rejected: true, dBIC }; }
+   setParams(model, best.v);
++  // v2: the search's refinements made no covariance, and (with SHAPE_FWD 'all') forward
++  // differences can stop a little short in a flat valley: the fit kept is refined once
++  // more by central differences, its covariance from there (SHAPE_CENTRAL), else, or should
++  // that throw, given its covariance alone. (Its ΔBIC and outcome are the search's.)
++  if (v2){
++    let r = null;
++    if (SHAPE_CENTRAL) try { r = refine(model, { free: best.res.free, ...lmCentral }); } catch(e){ setParams(model, best.v); }
++    if (!r) try { r = refine(model, { free: best.res.free, ...lmCentral, covOnly: true }); } catch(e){ setParams(model, best.v); }
++    if (r){ best = { res: r, v: model.v.slice() }; cb = chiTot(r); }
++  }
+   return { res: best.res, info: { type: q.shapeType, starts: starts.length, full: finals.length,
+     chi2Iso: chiTot(res), chi2: cb, Piso: res.stats.P, P: best.res.stats.P, N, chi2redIso: res.stats.chi2, held, dBICfree, dBICheld, freeOff, freeW } };
+ }
+@@ -4579,4 +4784,4 @@ function displacementMm(model, disp){ return -disp*D2R*model.radius/2; }
+ export { buildModel, calc, refine, cellSearch, autoRefine, fitSettings, sizeStrain, weightFractions, shapeOf, columnLengthV, SHAPE_TYPES, shapeTypeOf,
+          solveLinear, getParams, setParams, rStats, tch, profileAtTheta, displacementMm,
+          fcjNodes, addPeak, addPeakFCJ, addLine, shapeActive, HG2_FLOOR, K_SCHERRER, cellOf, siteU, lowIndexPlanes, strainFormsAt, PROFILES, faultOf, lpFactor,
+-         phaseSites, phaseMass, OCC_MAX, axialNodes, axialOf, axialOn, axialReach, bgInvOn, KIND_GROUP, shapeNamed };
++         phaseSites, phaseMass, OCC_MAX, axialNodes, axialOf, axialOn, axialReach, bgInvOn, KIND_GROUP, shapeNamed, SHAPE_MODE, WPPM_OPT };
+diff --git a/xrd-sizeline.js b/xrd-sizeline.js
+new file mode 100644
+index 0000000..c30a59e
+--- /dev/null
++++ b/xrd-sizeline.js
+@@ -0,0 +1,212 @@
++/* The size line of a free shape's members by the lsq line (xrd-rietveld.js SHAPE_MODE.line
++   'lsq'; research/free-shape/round2/AB.md §3.1, track A (b2)): for each reduced shape of a
++   member, the TCH pseudo-Voigt's Gaussian and Lorentzian FWHM (g, l), in 1/⟨L⟩_V, that best
++   fits the solid's exact size line by weighted least squares (x = s·⟨L⟩_V over 0–6, weights
++   1/(p + 0.2), p the line at peak 1). Max deviation from the exact line 2.5–8.0 % of its peak.
++   - ball: sphere, ellipsoid, spheroid, and the isotropic sphere: one entry [g, l];
++   - cyl: the cylinder and elliptic cylinder by ψ, the angle from the axis in the scaled body,
++     0–90° every cylStep°: [g, l] per step, in order;
++   - box: by β = b/a, γ = c/a of the sorted scaled direction components a ≥ b ≥ c, 0–1 every
++     boxStep: the table is symmetric, its lower half written row by row, [g, l] at
++     (β, γ) = (i, j)·boxStep, j ≤ i, at index i(i + 1)/2 + j.
++   Written by research/free-shape/round2/proto/build-sizeline.mjs (10 s); do not edit. */
++export const SIZE_LINE = {
++  fit: { X: 6, b: 0.2 },
++  ball: [0.6267019860462624, 0.2666818875323931],
++  cylStep: 0.5,
++  cyl: [
++    0.7281238701962675, 0.14339843795011814, 0.7244091516167142, 0.147455868918507, 0.7207122340129012, 0.1514875569895862, 0.7170326797542074, 0.15549390592059215, 0.7133700721176269, 0.15947534395646942, 0.7097240292396588, 0.1634322708048087,
++    0.7060942060801196, 0.16736505511362862, 0.7024802962046625, 0.17127403228378038, 0.6988820338231111, 0.17515949690468197, 0.6952993041936335, 0.17902163851366043, 0.6917316973754608, 0.1828608544792055, 0.6881791902552813, 0.18667724217442233,
++    0.684641687936856, 0.1904709499253071, 0.6811191400788823, 0.1942420866432954, 0.6776115408646922, 0.19799072203193438, 0.6741189287345829, 0.20171688727131254, 0.6706413875417705, 0.20542057510969094, 0.6671790419173853, 0.20910174277710095,
++    0.6637320596936098, 0.21276031261024297, 0.66030064877397, 0.21639617439661143, 0.6568850554414819, 0.22000918797051497, 0.653485597912426, 0.22359917457541156, 0.6501025200426763, 0.22716596517400522, 0.6467362072484415, 0.23070933470660382,
++    0.643387036505796, 0.23422905166066546, 0.6400554110825063, 0.23772486928920927, 0.6367417576772645, 0.24119652890410323, 0.6334465242391728, 0.24464376229250556, 0.6301701777757507, 0.24806629414499742, 0.6269132115722429, 0.2514638451729023,
++    0.6236761078738557, 0.25483612759348434, 0.6204593927280873, 0.25818285386053175, 0.6172636011833894, 0.26150373067288335, 0.6140892800825425, 0.264798456167719, 0.6109370031030347, 0.26806672058866254, 0.6078073665030498, 0.2713081995893867,
++    0.6047009941646846, 0.27452254866836767, 0.6016185482511505, 0.2777093979157024, 0.5985607302981795, 0.28086834276546074, 0.5955282939495737, 0.28399893660780196, 0.5925220512403286, 0.2871006812744276, 0.5895428817454392, 0.2901730180843058,
++    0.5865917413237409, 0.2932153187688222, 0.5836696703764529, 0.29622687716617524, 0.5807778009101031, 0.2992069018557332, 0.5779173621141447, 0.3021545103644915, 0.5750896853544676, 0.3050687255232665, 0.5722962048636193, 0.3079484733035938,
++    0.5695384572472115, 0.31079258371502333, 0.566818078763808, 0.3135997943585135, 0.5641367988443436, 0.31636875634369227, 0.56149643046838, 0.31909804233147254, 0.5588988599508268, 0.3217861576896888, 0.5563460247455588, 0.32443155674361845,
++    0.5538399311192641, 0.32703263725962795, 0.5513826386075111, 0.32958773720138834, 0.5489760776673372, 0.3320953104410426, 0.5466223345771973, 0.33455366292613803, 0.5443234848088223, 0.33696111124279715, 0.5420814324558519, 0.3393160761415841,
++    0.5398982254735656, 0.34161686722835677, 0.5377758594450301, 0.34386181383252085, 0.5357162686899077, 0.34604923534165943, 0.5337214515840957, 0.34817738914322927, 0.5317934102717284, 0.35024447475846415, 0.5299341669371965, 0.35224860662759755,
++    0.5281457958194188, 0.3541878000647979, 0.526430414846367, 0.3560599624674293, 0.5247901748207853, 0.3578628924074773, 0.5232272425663128, 0.3595942926040195, 0.521743766464908, 0.3612517944018813, 0.5203418306053578, 0.3628329938976816,
++    0.5190233992080431, 0.36433549693954403, 0.517790256089777, 0.36575696860647317, 0.5166439460709067, 0.36709518103119093, 0.5155857245326148, 0.3683480533625799, 0.5146165230697334, 0.3695136778466318, 0.5137369337498257, 0.37059032876411924,
++    0.5129472148461134, 0.37157645447569343, 0.5122473118595233, 0.37247065730302603, 0.5116369210858844, 0.37327164195023, 0.51111536737011, 0.37397832324500635, 0.5106818820367984, 0.3745896214187066, 0.5103352864273448, 0.3751047091106311,
++    0.5100742270026576, 0.3755229105944992, 0.5098969997183784, 0.37584387146526305, 0.5098016152515412, 0.376067574083723, 0.5097855931485608, 0.3761945669729465, 0.5098464959280298, 0.37622568678159146, 0.5099816769202411, 0.37616238977232297,
++    0.5101887651936888, 0.376006669138278, 0.5104662168414188, 0.37576138272426346, 0.5108133970239354, 0.3754302189598467, 0.5112295234668135, 0.37501690751829325, 0.5117135305761321, 0.37452509230026176, 0.5122641098728705, 0.373958328344744,
++    0.5128797490297835, 0.37332007703567277, 0.5135587692163982, 0.37261369960842156, 0.5142993622125149, 0.3718424500199755, 0.5150996236067121, 0.37100946762544323, 0.5159575837818707, 0.37011777108669597, 0.5168712327933859, 0.36917025348970883,
++    0.5178385461998677, 0.36816968086191737, 0.5188574953818955, 0.3671186900136685, 0.5199260712653347, 0.3660197927370826, 0.5210422830236521, 0.3648753769158909, 0.522204184641996, 0.3636877135199153, 0.523409857860251, 0.3624589597426041,
++    0.5246574170321011, 0.36119117024323966, 0.5259450613174423, 0.35988628663682837, 0.5272709999243728, 0.35854616624482727, 0.528633504197421, 0.3571725719180208, 0.5300308606524404, 0.35576720401130646, 0.5314615150829952, 0.35433161083265796,
++    0.5329238647863052, 0.35286732894839845, 0.5344163965038499, 0.3513757965662384, 0.5359376542366853, 0.349858377839806, 0.5374861943175697, 0.348316404475533, 0.539060766823478, 0.3467510226539052, 0.5406600262506011, 0.34516343558899315,
++    0.542282828088276, 0.34355469196216537, 0.5439279338226324, 0.3419258568851295, 0.5455942701043508, 0.3402778772655121, 0.5472807943204016, 0.33861165429083834, 0.5489865207169551, 0.3369280313005043, 0.5507105190782097, 0.3352277959684124,
++    0.5524519128905009, 0.3335116829127006, 0.5542098773670932, 0.331780376113848, 0.5559836375397061, 0.3300345116328331, 0.557772465790358, 0.3282746800979326, 0.5595756797671199, 0.3265014293245564, 0.5613926399317873, 0.3247152669746419,
++    0.563222747445383, 0.3229166629814063, 0.5650654415769929, 0.3211060518971934, 0.566920197758523, 0.31928383541906963, 0.568786525791342, 0.31745038442575024, 0.570663966975209, 0.3156060409362169, 0.5725520930974836, 0.31375112017731815,
++    0.574450504248472, 0.31188591238718455, 0.5763588272271442, 0.31001068422907624, 0.5782767143799826, 0.3081256802886565, 0.5802038418699192, 0.306231124503602, 0.582139908545399, 0.3043272212640202, 0.5840846350552225, 0.3024141563913492,
++    0.5860377626299642, 0.3004920981360985, 0.5879990524235033, 0.2985611979403979, 0.5899682844069686, 0.2966215911666117, 0.5919452569695997, 0.2946733976120775, 0.5939297861696606, 0.2927167222524589, 0.5959217051011363, 0.29075165529874764,
++    0.5979208638643941, 0.2887782732648591, 0.5999271280228995, 0.2867966384893606, 0.6019403793165029, 0.28480680001862196, 0.6039605147550262, 0.2828087937397932, 0.6059874463810087, 0.2808026424808294, 0.6080211006200538, 0.27878835632967375,
++    0.6100614190956363, 0.27676593311576814, 0.6121083562547663, 0.2747353577546154, 0.6141618808094067, 0.2726966033133704, 0.6162219758015326, 0.2706496309889965, 0.6182886358076538, 0.2685943897483055, 0.6203618694839896, 0.2665308170985312,
++    0.6224416974324553, 0.26445883889733973, 0.624528153781394, 0.26237837005635045, 0.6266212829159484, 0.26028931374111414, 0.6287211424902607, 0.2581915624761451, 0.630827800865964, 0.25608499788183064, 0.6329413379275604, 0.25396949083780934,
++    0.635061844935243, 0.25184490214556926, 0.6371894235247999, 0.2497110820925071, 0.6393241852965242, 0.24756787068941233, 0.6414662523076846, 0.2454150981109538, 0.6436157575045727, 0.2432525853408519, 0.6457728424272945, 0.24108014334363104,
++    0.6479376588489189, 0.23889757391893485, 0.6501103667059355, 0.23670466947526642, 0.6522911361374797, 0.23450121353524347, 0.6544801452040686, 0.23228698078357188, 0.6566775823270204, 0.2300617375228933, 0.6588836419414673, 0.2278252407955814,
++    0.6610985281420556, 0.2255772393621044],
++  boxStep: 0.025,
++  box: [
++    0.7281238703879399, 0.14339843811976716,
++    0.7197918290515537, 0.15249038756493552, 0.7115837803099473, 0.16139383656089587,
++    0.7115537083760293, 0.1614477419018689, 0.7034669517930512, 0.17016590464025144, 0.6954693024781755, 0.17875548046423984,
++    0.703411491261645, 0.17026850985543035, 0.6954438826147401, 0.17880424428678385, 0.6875638923466062, 0.18721370458480305, 0.6797752334556372, 0.19549370417801062,
++    0.6953679427427919, 0.17895018086281295, 0.6875179431976066, 0.18730591784213307, 0.6797546849234444, 0.19553720770762298, 0.6720824126055132, 0.20364048316253475, 0.6645060862890135, 0.21161168128122967,
++    0.6874267017756358, 0.18748962046033027, 0.6796933762626717, 0.1956673487925321, 0.6720464759895158, 0.20372201471622345, 0.664490687581948, 0.21164975709860984, 0.6570313194645803, 0.2194463179169076, 0.6496742342220472, 0.22710713306202396,
++    0.6795923199012328, 0.19588301996390017, 0.6719752957949249, 0.2038843246299772, 0.6644448472738724, 0.21176359991332572, 0.6570059994516709, 0.21951679827250342, 0.649664304105638, 0.22713958542966414, 0.6424256059111989, 0.234627522233018,
++    0.6352963069375094, 0.2419759842236295,
++    0.6718700781757251, 0.20412602146267944, 0.6643694892209955, 0.21195214383510014, 0.6569560909233134, 0.21965697288237188, 0.6496348890558968, 0.22723654125030734, 0.6424115597795852, 0.23468655155469992, 0.6352921760514499, 0.24200261699729542,
++    0.6282824476834709, 0.24918077249572004, 0.6213885392208784, 0.2562169242581418,
++    0.6642668158366735, 0.21221320192747398, 0.6568830584920221, 0.21986526684325183, 0.6495871160501597, 0.22739679560030643, 0.6423843562464465, 0.23480369529838113, 0.6352801773546023, 0.24208209822116175, 0.6282803257076682, 0.24922797994346305,
++    0.621390522506481, 0.25623756722668595, 0.6146164756680919, 0.26310729630625446, 0.6079639308290855, 0.2698337748325198,
++    0.6567891030397504, 0.2201393125634121, 0.6495228114254492, 0.22761835647350723, 0.6423452970227083, 0.23497750645739068, 0.6352614940876529, 0.2422131747323547, 0.6282768878079095, 0.24932154485158048, 0.6213968833173913, 0.2562990643655163,
++    0.614626876742443, 0.263142379949321, 0.6079723100949487, 0.2698482969378687, 0.6014383745099839, 0.2764139402896678, 0.5950305746888975, 0.282836317785108,
++    0.6494448434893578, 0.2278982620186186, 0.6422968176471111, 0.2352054219995279, 0.6352380998679578, 0.24239375462967383, 0.628273746857458, 0.249459765225441, 0.6214088555166534, 0.25640011871637913, 0.614648516449222, 0.26321166970780313,
++    0.6079978724989215, 0.26989141921802434, 0.6014618272157679, 0.27643667395798566, 0.5950456012831381, 0.28284461835042657, 0.588754489816894, 0.28911243222744204, 0.5825940982086718, 0.2952370774558726,
++    0.6422420084026003, 0.23548414640076434, 0.6352127604571137, 0.24262090291201308, 0.6282733235191367, 0.24964008378149866, 0.6214284960052961, 0.25653856594322727, 0.6146830702353256, 0.2633134086250219, 0.6080418959788156, 0.2699618053945042,
++    0.6015095979946459, 0.27648123872105784, 0.5950911185411283, 0.2828690636227644, 0.5887914809121776, 0.2891226257760653, 0.5826160131970299, 0.2952390596804903, 0.5765703568052556, 0.3012151902462593, 0.5706607286527664, 0.3070473738520132,
++    0.6351890340640567, 0.24289083726202185, 0.6282788470901971, 0.24985908327671671, 0.6214586856257074, 0.2567113669181053, 0.6147331320376296, 0.26344489935483417, 0.608106508352891, 0.27005722697636986, 0.6015834144397263, 0.2765458284678141,
++    0.5951684415114121, 0.28290828115498345, 0.5888663511470272, 0.28914208624498366, 0.5826822068814856, 0.2952445373699109, 0.5766213769384565, 0.3012126308153412, 0.5706897877219903, 0.307042915553375, 0.5648938763929697, 0.31273146493714893,
++    0.5592406037826165, 0.3182738512512221,
++    0.6282943551546807, 0.25011247857487, 0.6215032092942925, 0.2569145578424945, 0.614801882671822, 0.2636027386416559, 0.6081946863308255, 0.27017456000491324, 0.6016858671834437, 0.27662773102188565, 0.5952797597954119, 0.28295998185469007,
++    0.5889809040514955, 0.289168950055658, 0.5827940283226208, 0.2952521005370755, 0.5767243272379959, 0.30120655918172473, 0.5707774243473775, 0.3070290580169499, 0.5649594627313671, 0.3127158694496179, 0.5592770885736114, 0.3182627915837736,
++    0.55373744579768, 0.3236651902009428, 0.5483480734015699, 0.3289180855663342,
++    0.6215664095564192, 0.2571434756764332, 0.61489358712058, 0.26378245227107405, 0.6083102528880031, 0.27030978178487697, 0.6018204041487591, 0.2767233262095818, 0.5954281330785195, 0.28302095844774605, 0.5891377410701915, 0.2892004501881719,
++    0.5829537222414988, 0.2952593979878633, 0.5768810265239053, 0.301195068258717, 0.5709250269947344, 0.3070043510888036, 0.565091565957466, 0.3126836970515246, 0.5593870119914884, 0.31822911506572077, 0.553818182812028, 0.32363620407724486,
++    0.548392279571765, 0.32890023655665346, 0.5431167609913028, 0.3340162715663661, 0.537999198910708, 0.3389792887337883,
++    0.6150132487146137, 0.26397873827981105, 0.6084578690049955, 0.2704579675852668, 0.6019913251491306, 0.2768280824884399, 0.5956175135819413, 0.28308707401496547, 0.589340426156444, 0.2892328622191418, 0.5831644230586737, 0.2952631357784612,
++    0.5770941963934346, 0.30117529571397333, 0.5711348768519031, 0.30696637338229177, 0.5652920451464474, 0.3126329834533971, 0.5595717837132689, 0.31817132656352437, 0.5539806009268031, 0.3235772197661403, 0.5485253732983708, 0.3288461771073216,
++    0.5432132258749461, 0.33397351294421684, 0.5380514026054201, 0.33895446613424957, 0.5330471248770664, 0.34378432106558976, 0.528207470600807, 0.34845851069056943,
++    0.6086430499257689, 0.2706132836378697, 0.6022038019020169, 0.2769365450682593, 0.5958526218502925, 0.283153294604106, 0.589593362293192, 0.289261536676445, 0.5834301458529567, 0.29525907526873957, 0.5773674520949487, 0.30114342286559975,
++    0.5714101851216178, 0.306911737030829, 0.5655636792146528, 0.31256078164242085, 0.559833744647192, 0.31808693366482466, 0.5542265932339822, 0.32348621504202896, 0.5487487839008129, 0.32875436912851075, 0.5434071124533075, 0.33388695763336274,
++    0.5382084910941358, 0.3388794736825541, 0.5331598234460686, 0.34372745338210786, 0.5282678926969041, 0.3484265676736424, 0.52353928101837, 0.35297267807206195, 0.5189803344176384, 0.35736184444664437,
++    0.6024637371450423, 0.2770423764579907, 0.5961391090064908, 0.283213633108882, 0.5899018071024104, 0.28928088830648263, 0.5837557733138654, 0.29524203135681304, 0.5777052974241678, 0.3010946736964502, 0.571755050004444, 0.3068360827432709,
++    0.5659101573290313, 0.3124631613613028, 0.5601761573617149, 0.3179724470319922, 0.5545589834938774, 0.32336015610792385, 0.5490648829916775, 0.32862225001852197, 0.5437003275868655, 0.3337545294943694, 0.5384718979718092, 0.33875273711590786,
++    0.5333861734045541, 0.3436126587995361, 0.5284496318445744, 0.3483302055395161, 0.5236685785549564, 0.3529014613277539, 0.5190491194636387, 0.35732268764952446, 0.5145971788979259, 0.36159027916946596, 0.5103185600733737, 0.36570067660709366,
++    0.5964834183025503, 0.2832611921741577, 0.5902718553105136, 0.2892843942945155, 0.584147045870999, 0.29520587177343777, 0.5781130797888593, 0.30102331058651316, 0.572174447059166, 0.30673407983968654, 0.5663360531387227, 0.3123352069322405,
++    0.5606031888116302, 0.3178233809636409, 0.5549815115754929, 0.32319499979863653, 0.5494769700388294, 0.3284462347977677, 0.5440957146981098, 0.33357311761507136, 0.5388439983061167, 0.3385716353958031, 0.5337280734721062, 0.3434378211550006,
++    0.5287541041317168, 0.3481678251855737, 0.5239281080771249, 0.35275795603115, 0.5192559347435608, 0.35720467978769416, 0.5147432870955064, 0.36150457603278296, 0.510395782039276, 0.36565425547499125, 0.5062190349438749, 0.36965025359144316,
++    0.5022187486311318, 0.37348892298873554,
++    0.5907104128704562, 0.2892646023616765, 0.5846105075887067, 0.29514351257701804, 0.5785970023594628, 0.3009226371875071, 0.5726742074041923, 0.3065994271160356, 0.5668468148606928, 0.31217102177553796, 0.561119885622794, 0.317634254452423,
++    0.5554988109299426, 0.3229856958456573, 0.5499892466544222, 0.32822171898277996, 0.5445970303860773, 0.3333385802658846, 0.5393280886530172, 0.33833250582738594, 0.5341883463551287, 0.34319977180412575, 0.5291836519347303, 0.347936766399391,
++    0.5243197273312917, 0.3525400218368645, 0.5196021548937177, 0.35700620898714613, 0.5150364032962736, 0.36133209274928246, 0.5106278868199445, 0.36551445311754627, 0.5063820466990347, 0.36954998575484754, 0.5023044349069838, 0.37343520161207994,
++    0.4984007703523755, 0.3771663501727889, 0.49467701891542887, 0.38073933634400975,
++    0.585153511963943, 0.29504693297853524, 0.5791640766734897, 0.30078499987364554, 0.5732609788366355, 0.3064248523242221, 0.5674487222361765, 0.31196372764394514, 0.5617321424567813, 0.3173985948775586, 0.5561163737564405, 0.3227261910680918,
++    0.5506067872234904, 0.3279430849220099, 0.5452089123191951, 0.33304575158185434, 0.5399283538351649, 0.33803065105875935, 0.5347707115382295, 0.34289429854167003, 0.529741516610471, 0.3476333163880477, 0.5248461923923141, 0.35224445784521513,
++    0.5200900491939756, 0.3567245964435203, 0.5154783129823266, 0.3610706799596583, 0.5110161850565733, 0.3652796548053203, 0.5067089202568843, 0.3693483729852298, 0.5025619047933559, 0.3732734994037139, 0.49858070959538053, 0.3770514421739047,
++    0.4947711717999685, 0.3806782706368189, 0.4911391472048875, 0.3841498999036843, 0.4876907530143794, 0.38746188738741283,
++    0.5798220709916931, 0.300601797306848, 0.5739421972450914, 0.3062021203532642, 0.5681488515173229, 0.3117054719359642, 0.5624466613338223, 0.3171089446459196, 0.5568405121016355, 0.3224094377837414, 0.5513354948575443, 0.32760371045510844,
++    0.5459368372006621, 0.3326884518976764, 0.5406498264593902, 0.3376603509992178, 0.5354797410253267, 0.34251615705373495, 0.530431797108487, 0.3472527218178633, 0.525511120298952, 0.35186701489719774, 0.52072274695586, 0.3563561077683017,
++    0.516071657354623, 0.36071712649263765, 0.5115628349522926, 0.3649471787611903, 0.5072013402666594, 0.369043267253353, 0.5029923841318255, 0.3730022049579048, 0.498941375766049, 0.37682055281888255, 0.4950540033137429, 0.3804945417791355,
++    0.491335987682972, 0.3840202588181745, 0.4877933401017945, 0.38739343290772127, 0.4844318629878035, 0.39060981317018634, 0.48125730315255877, 0.3936650874898229,
++    0.5747260157307214, 0.305922045641729, 0.5689550201601096, 0.3113874362982583, 0.5632708984284066, 0.31675687235784405, 0.5576783012158103, 0.3220274055207964, 0.5521820462709716, 0.3271959825749221, 0.5467870642350787, 0.3322595027431105,
++    0.5414983299168162, 0.3372148787640259, 0.536320805575889, 0.34205908846569977, 0.531259397293795, 0.34678920681567765, 0.5263189362242023, 0.3514024131883383, 0.5215041879793524, 0.35589597039288784, 0.5168198877482546, 0.3602671756382809,
++    0.5122708003869394, 0.3645132909251203, 0.507861789434512, 0.36863146243131106, 0.5035978845275575, 0.37261864405597256, 0.4994843240354129, 0.37647154304983904, 0.4955266324764962, 0.38018654740623065, 0.49173037653803603, 0.3837599123801702,
++    0.48810138990432433, 0.3871875686202351, 0.4846454842531347, 0.39046536533212417, 0.48136822792705114, 0.3935892244427543, 0.4782749431225679, 0.39655514286691074, 0.4753705104470629, 0.3993593585334525,
++    0.569875710299529, 0.31099985862343715, 0.5642129930595186, 0.31633298869309295, 0.5586375109201471, 0.32157109971189984, 0.5531538222466635, 0.32671131781167845, 0.5477665644892704, 0.33175074843701857, 0.5424804073635439, 0.3366865235245074,
++    0.5373000029019218, 0.3415158428271741, 0.532229954472666, 0.3462359970048121, 0.5272748056032333, 0.35084436674651914, 0.5224390564722091, 0.3553383971986989, 0.5177272029945995, 0.35971554805697603, 0.5131437936110842, 0.3639732266852332,
++    0.5086934958295318, 0.36810871423381303, 0.5043811561481243, 0.3721190976779888, 0.5002118366193485, 0.3760012234587061, 0.49619088795129457, 0.37975163155239905, 0.49232370658811103, 0.3833667425170343, 0.48861596494550297, 0.3868426635357244,
++    0.48507333305861755, 0.3901754250392523, 0.4817012587639999, 0.39336112582878746, 0.47850505486717015, 0.39639590210429404, 0.4754895752222475, 0.39927612463313755, 0.47265922525391096, 0.40199840304026463, 0.47001787921555604, 0.4045596110429417,
++    0.5652816754492382, 0.31582697810924076, 0.5597265184530476, 0.3210305884380308, 0.5542588170770935, 0.3261401899104115, 0.548882931334893, 0.3311530856434098, 0.5436032316636573, 0.33606662123437253, 0.5384240688072639, 0.3408782108713131,
++    0.5333497515450248, 0.3455853514864241, 0.5283845461767697, 0.3501856150268815, 0.5235326968443959, 0.3546766181962814, 0.5187984672868561, 0.3590559723106324, 0.5141861964727357, 0.363321219994632, 0.5097003593096833, 0.36746976804304354,
++    0.5053455745251739, 0.37149885307917213, 0.5011268617483817, 0.3754053784430233, 0.4970492532173945, 0.3791861062000753, 0.49311801112969056, 0.3828375922136267, 0.4893386256305628, 0.38635612268011293, 0.48571659968345154, 0.389737911314057,
++    0.48225723948840055, 0.3929792386050728, 0.47896575919163625, 0.39607640706696895, 0.47584696832033724, 0.39902592727464037, 0.4729053142263376, 0.40182451499491617, 0.47014477336087823, 0.4044691114534419, 0.4675688848772354, 0.40695684568903506,
++    0.46518077047507905, 0.4092849720607454,
++    0.5609541895795456, 0.32039504425346327, 0.5555055308050965, 0.32547216922036076, 0.5501442704195855, 0.3304565039019433, 0.5448744954780106, 0.33534559602399255, 0.5397002655765128, 0.3401370654464197, 0.5346256073221056, 0.3448286046471516,
++    0.5296545213302568, 0.3494179645647366, 0.5247910075511847, 0.35390292089286496, 0.520039108657292, 0.35828122445364435, 0.5154029624716175, 0.36255054187106134, 0.5108868572584612, 0.3667083956588716, 0.5064952360679635, 0.3707521363632796,
++    0.5022329276461819, 0.374678799429028, 0.4981047888424928, 0.378485282165774, 0.49411588890703306, 0.3821683001030694, 0.4902715223676649, 0.38572431607676294, 0.48657700245008945, 0.38914973150991283, 0.4830374663020768, 0.39244101362224637,
++    0.4796579919267612, 0.3955946417836468, 0.47644330280390135, 0.3986072810841421, 0.47339782422055593, 0.4014757715029795, 0.47052557716855326, 0.4041971427088396, 0.46783022634032345, 0.4067685796380392, 0.46531508882674527, 0.40918736178270476,
++    0.4629831760183991, 0.41145080003686507, 0.4608372139030062, 0.41355618930320226,
++    0.5569028254335625, 0.3246959791886702, 0.5515590630224422, 0.32965013827825124, 0.5463022753484705, 0.334513013563596, 0.5411362496884946, 0.3392824155356084, 0.5360647444631051, 0.3439562194749396, 0.5310915091883199, 0.3485323414205176,
++    0.5262203143679777, 0.3530087020435096, 0.5214549939452832, 0.3573831783433786, 0.5167994952415003, 0.36165354907560826, 0.5122579273116288, 0.3658174425979746, 0.5078345944621435, 0.3698722976123338, 0.5035340298363609, 0.3738153278962067,
++    0.4993610289119647, 0.3776435124838918, 0.4953204109654562, 0.38135373594786115, 0.4914173051228897, 0.3849426175824551, 0.4876567057949974, 0.3884068172151557, 0.48404367284359834, 0.3917429213495788, 0.4805830805568659, 0.3949476171576173,
++    0.4772795302953769, 0.3980177341756842, 0.47413737998893546, 0.400950249409562, 0.47116064813017833, 0.40374229780583876, 0.46835306270784244, 0.4063911370920738, 0.46571807251107333, 0.4088940917887298, 0.4632588859766427, 0.41124849516245077,
++    0.4609784877845881, 0.41345164570737714, 0.45887962213992867, 0.4155007964129076, 0.4569647269577578, 0.41739318696541206,
++    0.5531359976634572, 0.3287223421655095, 0.5478948694521333, 0.33355764955156825, 0.5427399091694837, 0.33830347361732993, 0.5376746297505445, 0.34295785406779167, 0.5327025463382724, 0.3475188564150192, 0.5278272160127562, 0.351984531155061,
++    0.5230522786153985, 0.35635286745447, 0.5183815021118217, 0.36062174449096235, 0.5138187884082147, 0.3647889057330773, 0.5093683794090472, 0.3688518347215802, 0.5050345707214204, 0.37280788077049554, 0.5008218528904042, 0.37665424564554184,
++    0.4967349931001182, 0.3803878589266281, 0.49277885225803497, 0.3840055527357355, 0.4889582095795785, 0.38750417370133633, 0.4852779135804325, 0.3908805026786981, 0.48174265158471824, 0.394131414042845, 0.47835687514963493, 0.39725390770765345,
++    0.4751248398064834, 0.4002451060081017, 0.47205052270104736, 0.4031022601748043, 0.4691376662472953, 0.4058227132258418, 0.46638979835018013, 0.40840384961556614, 0.4638102628577891, 0.4108430415433394, 0.4614022364007737, 0.4131376107915182,
++    0.4591687119078517, 0.415284819564982, 0.45711243889779557, 0.41728189951194977, 0.4552358202036306, 0.41912611885158346, 0.4535407772999867, 0.4208148779927567,
++    0.5496606437734564, 0.33246753718199995, 0.544519174838344, 0.3371887401157887, 0.5394627878075646, 0.34182244409110013, 0.5344947442146325, 0.34636688555161405, 0.5296184048673785, 0.35082022886131514, 0.5248372302979579, 0.3551805614842214,
++    0.520154776890478, 0.3594458765568668, 0.5155749474695418, 0.36361391510609525, 0.511101584846473, 0.3676823777327196, 0.5067389598415559, 0.37164865799242325, 0.5024913268071599, 0.37551009655246265, 0.4983632458611253, 0.37926378182412873,
++    0.4943593547847225, 0.38290672007935583, 0.49048420808272064, 0.3864359446190647, 0.48674243045537846, 0.3898484310712297, 0.48313850612605064, 0.3931412421210778, 0.4796767166215202, 0.39631155043492244, 0.47636119042032193, 0.39935662788277637,
++    0.4731958285670648, 0.4022738473301483, 0.4701843559210965, 0.40506064659274627, 0.4673303312535179, 0.40771447938803546, 0.4646371851827437, 0.41023276996584795, 0.46210822780390787, 0.4126128788942791, 0.4597466347043048, 0.41485209708778054,
++    0.457555390375187, 0.41694767262401966, 0.4555371963117019, 0.41889687167036005, 0.4536943483417042, 0.4206970634523695, 0.452028603894862, 0.4223458141720496, 0.45054106048476134, 0.42384097018783595,
++    0.5464818278125018, 0.33592607477284225, 0.5414365825531009, 0.34053830233539983, 0.5364750747305149, 0.34506516678621785, 0.5316004557374024, 0.3495049611337399, 0.5268159780125251, 0.35385588337259505, 0.5221252137559858, 0.3581159080854535,
++    0.517531652749998, 0.3622829980620466, 0.5130392026847214, 0.3663548243444297, 0.5086517513549775, 0.3703290146087985, 0.504373515643474, 0.3742029318954995, 0.5002088278996696, 0.37797383323920775, 0.4961619823960573, 0.38163897180827516,
++    0.4922374174295155, 0.38519549357751476, 0.4884395008615784, 0.38864058787017997, 0.4847724626802149, 0.3919715161233088, 0.4812404416965599, 0.39518561078084496, 0.47784740778362794, 0.3982802975575937, 0.4745971649268378, 0.4012530733500971,
++    0.4714933860791935, 0.40410147365214777, 0.46853963170770496, 0.4068230295318168, 0.46573937433646845, 0.4094152259879863, 0.46309601050420857, 0.4118754750392089, 0.46061283887681886, 0.41420111169802576, 0.4582930141004775, 0.4163894213657611,
++    0.45613945891629853, 0.4184376941640983, 0.4541547560314936, 0.4203433010692378, 0.45234102917557323, 0.4221037770251329, 0.4506998319177386, 0.42371689436562304, 0.44923206629221335, 0.4251807126194314, 0.44793793701214035, 0.42649359458140357,
++    0.5436030307820218, 0.33909318727264426, 0.538650125065091, 0.3436019154994263, 0.5337795498823015, 0.3480273717353864, 0.5289944935601569, 0.35236779636482496, 0.5242981462983147, 0.35662135996686595, 0.5196940703074578, 0.36078598410052637,
++    0.5151858015968195, 0.36485955925692704, 0.5107772112327611, 0.36883971077069566, 0.5064722647870672, 0.3727239731226072, 0.5022750758121746, 0.3765097586375223, 0.4981897121136735, 0.38019449127648147, 0.4942203706044585, 0.3837755043312594,
++    0.49037118464708596, 0.387250176139418, 0.48664616693550256, 0.39061595045873193, 0.48304926778280105, 0.3938703280827949, 0.47958429028418564, 0.39701088019420777, 0.4762549360173257, 0.40003522714547807, 0.47306480402184525, 0.4029410032807593,
++    0.47001742588348044, 0.4057258200682826, 0.4671162837537465, 0.4083872301965916, 0.4643648159492519, 0.4109227062965689, 0.46176639840226924, 0.4133296413071175, 0.45932429681738723, 0.415605374697288, 0.4570415892327586, 0.41774724252314,
++    0.45492106832473317, 0.4197526447971517, 0.45296513727930404, 0.4216191184044503, 0.45117571031231624, 0.4233444006568011, 0.44955413999371213, 0.42492647273191103, 0.44810117426622004, 0.4263635742696695, 0.4468169455669662, 0.42765419025036805,
++    0.4457009845750576, 0.4287970202421445,
++    0.5410258840125343, 0.34196491790518746, 0.5361613801195432, 0.34637561873950506, 0.5313778909367651, 0.35070497309780263, 0.5266785674237164, 0.3549511781896999, 0.5220666212114792, 0.35911235494661614, 0.5175455898383214, 0.36318637130965614,
++    0.5131191102466858, 0.3671710041288902, 0.5087909847617227, 0.3710638982133212, 0.504564992069503, 0.37486269514353027, 0.500445084149018, 0.37856491586477126, 0.49643519347975745, 0.3821680974019725, 0.49253917574990896, 0.3856698143750227,
++    0.48876086858671786, 0.38906767372113327, 0.4851040138578881, 0.39235934136424133, 0.4815722555515216, 0.39554252907419396, 0.47816916874881216, 0.3986149745163861, 0.4748982702754755, 0.40157441036939256, 0.4717630410815097, 0.4044185296643011,
++    0.4687669437029884, 0.40714495731083994, 0.4659134251012315, 0.40975123470929736, 0.4632058948045402, 0.4122348234839668, 0.46064768041788323, 0.4145931316242114, 0.45824195737201706, 0.4168235592978069, 0.4559916627241509, 0.41892355817487675,
++    0.45389940321645167, 0.42089069414388713, 0.45196737040446044, 0.42272270162682624, 0.4501972758106144, 0.4244175198874489, 0.44859031258879767, 0.4259733048929202, 0.4471471436873655, 0.42738841823529095, 0.44586790935972187, 0.4286614008969901,
++    0.44475223806942693, 0.429790945563894, 0.44379923373736546, 0.43077588862372046,
++    0.5387505529629047, 0.34453768217456443, 0.5339706140495307, 0.34885568383716864, 0.5292703922105046, 0.35309413702168263, 0.5246530522627051, 0.3572511577868913, 0.5201219163625581, 0.3613247460841605, 0.5156804761032894, 0.3653127703994939,
++    0.5113322112589395, 0.369213088826651, 0.507080801872297, 0.3730234201494924, 0.5029299251805504, 0.3767414823355735, 0.4988832766002637, 0.3803649896768193, 0.4949444829506097, 0.3838916922217446, 0.49111716622645046, 0.3873193639730294,
++    0.4874048776805987, 0.390645821996694, 0.48381110083264794, 0.39386890975383115, 0.480339283829372, 0.396986476658574, 0.4769928474375944, 0.399996349377307, 0.4737752066715649, 0.4028963029219311, 0.470689781878166, 0.4056840378487227,
++    0.46773999821910545, 0.4083571708612232, 0.46492926318295746, 0.4109132418695051, 0.4622609235040691, 0.41334973964929766, 0.4597382026660642, 0.4156641434823165, 0.45736412508745106, 0.41785397486025405, 0.45514143722181993, 0.41991685056503714,
++    0.45307253523830726, 0.4218505278067889, 0.4511594104258508, 0.4236529335335909, 0.44940361452961247, 0.42532217304173314, 0.44780624952405707, 0.4268565201509869, 0.4463679699735107, 0.42825439491347467, 0.44508898867624735, 0.4295143407924982,
++    0.4439690711939721, 0.4306350134682692, 0.44300749744282636, 0.4316151969189516, 0.44220308797019214, 0.4324537930430031,
++    0.5367756651522272, 0.34680823822612267, 0.5320765003049497, 0.3510387733352583, 0.5274558923395478, 0.35519133341857906, 0.5229170341735678, 0.35926398134198967, 0.5184631106866526, 0.3632547828112128, 0.5140975208953867, 0.3671616542386337,
++    0.5098236811820307, 0.37098249746002937, 0.5056450541465833, 0.374715191968945, 0.5015650609238572, 0.3783576345589795, 0.4975871503370081, 0.3819077278046535, 0.4937147227011384, 0.38536340527421725, 0.4899511455511028, 0.3887226234954907,
++    0.48629974632337714, 0.39198334733568435, 0.48276384411961565, 0.3951435299531727, 0.4793467589397104, 0.3982010881316325, 0.47605182593310946, 0.4011538780233803, 0.47288240434372586, 0.4039996789639831, 0.46984187240626696, 0.40673618904662756,
++    0.46693360409377804, 0.40936103475548336, 0.46416092921471985, 0.4118717961326915, 0.4615270769238376, 0.4142660437685399, 0.45903511150380005, 0.41654138328986273, 0.4566878648539354, 0.41869549927731525, 0.4544878770297481, 0.42072619167818365,
++    0.4524373498657137, 0.42263139823160045, 0.4505381193794347, 0.42440920039950764, 0.44879164526587245, 0.4260578140500246, 0.447199009683369, 0.4275755707507553, 0.44576091912230004, 0.42896089977227525, 0.44447769462102593, 0.4302123200131392,
++    0.44334924330317926, 0.4313284501403025, 0.4423749986700444, 0.4323080449247501, 0.4415539297357049, 0.4331499991460845, 0.44088428695928, 0.43385351365615593,
++    0.5350981536265451, 0.3487737559444584, 0.5304761840891662, 0.3529218579588968, 0.5259315839504585, 0.35699349430838795, 0.521467479917975, 0.3609867580659196, 0.5170870227825008, 0.36489973364687023, 0.5127934122756991, 0.3687304751182721,
++    0.5085898874772428, 0.37247702133047933, 0.5044796503691332, 0.37613742794151617, 0.5004659377103784, 0.3797097508739145, 0.49655195893778753, 0.3831920653567242, 0.4927408972729979, 0.38658245327607216, 0.48903593903791487, 0.38987899007285926,
++    0.4854402762626812, 0.39307972529812885, 0.48195712087689696, 0.39618266092845084, 0.4785897189035878, 0.3991857343236287, 0.47534135203121786, 0.40208680682167375, 0.47221532926419646, 0.404883663529159, 0.4692149646046281, 0.40757402520708064,
++    0.4663435397757008, 0.4101555718112021, 0.4636042549811113, 0.4126259748704102, 0.46100017477340505, 0.4149829347745055, 0.458534172106075, 0.4172242161385418, 0.45620887974842267, 0.4193476760877936, 0.4540266533882316, 0.42135128086517354,
++    0.45198954880783376, 0.4232331090067758, 0.45009931149400206, 0.424991342714657, 0.4483573744771514, 0.4266242529666386, 0.4467648547211637, 0.4281301855211368, 0.4453225405975445, 0.4295075563047631, 0.44403086320518526, 0.4307548617983324,
++    0.44288984943455706, 0.4318707065564741, 0.4418990508621737, 0.4328538497629215, 0.4410575522514165, 0.433703209711513, 0.4403637340086183, 0.43441801603307173, 0.4398154165331124, 0.43499771953907923,
++    0.5337128896037621, 0.3504321190384273, 0.5291644541518937, 0.3545028949244062, 0.524692167384331, 0.35849869330943385, 0.5202990251399318, 0.36241769738718405, 0.5159880313230061, 0.3662581034661227, 0.5117621689429278, 0.37001811284743746,
++    0.5076244770907768, 0.3736959143209936, 0.5035779809072358, 0.37728970650214444, 0.49962570907332843, 0.3807976909113509, 0.49577068240966216, 0.38421806166724476, 0.4920159469744136, 0.3875489938576791, 0.4883645703679146, 0.3907886256063493,
++    0.4848196537837686, 0.3939350412593246, 0.48138434441551187, 0.3969862599042248, 0.4780618320311747, 0.39994022874945184, 0.47485533753853415, 0.4027948258027539, 0.4717680922891492, 0.40554787282398325, 0.4688033040782579, 0.4081971565334512,
++    0.4659641163655058, 0.4107404564130515, 0.4632535619508611, 0.4131755744799436, 0.46067451937031806, 0.41550036323172596, 0.45822967343059917, 0.41771274672534314, 0.45592148620518375, 0.4198107320903833, 0.45375217855153516, 0.421792410797279,
++    0.45172372047530174, 0.4236559511889772, 0.44983782696926516, 0.4253995869946737, 0.44809595003607894, 0.4270216074456475, 0.4464992647377192, 0.4285203557080704, 0.4450486399347581, 0.429894239601909, 0.44374459440111313, 0.4311417559945165,
++    0.44258724222197254, 0.4322615265407497, 0.44157622270698843, 0.433252343014526, 0.4407107197514318, 0.4341131622626427, 0.4399892447114599, 0.4348432411627215, 0.4394097894601776, 0.43544203339940757, 0.43896980396495167, 0.43590921243001096,
++    0.5326121653065522, 0.3517823923394792, 0.5281335201497107, 0.3557810954376269, 0.5237296444734161, 0.3597063982358682, 0.5194033883050011, 0.3635565971487331, 0.5151575377950312, 0.36733002962389516, 0.5109949402087264, 0.37102501577060315,
++    0.5069184409818576, 0.3746398762196144, 0.5029309034567926, 0.3781729233740223, 0.4990351991422611, 0.3816224506823628, 0.4952342403981625, 0.38498672319051486, 0.49153096980710803, 0.38826396151620934, 0.4879283783304656, 0.39145233200170937,
++    0.4844295042001822, 0.3945499374399961, 0.48103743139631716, 0.39755481525002023, 0.47775527638033005, 0.4004649420215747, 0.4745861690532246, 0.4032782461272753, 0.47153322339718295, 0.4059926260343336, 0.46859950361115743, 0.4086059728764803,
++    0.4657879875435085, 0.41111619378590164, 0.4631015315621265, 0.4135212328010091, 0.460542840560232, 0.4158190861245634, 0.4581144448068948, 0.41800780985708125, 0.45581868480787774, 0.42008552014906486, 0.4536577020052585, 0.42205038730574196,
++    0.45163343194993416, 0.42390062766745323, 0.44974759470568637, 0.4256344976860123, 0.448001677945434, 0.4272502946794994, 0.4463969090452266, 0.42874636777601716, 0.44493421474434175, 0.43012113919186395, 0.44361417261633107, 0.4313731344475355,
++    0.4424369579016768, 0.43250101616432696, 0.44140228455401576, 0.43350362059807995, 0.4405094404322571, 0.4343799387019465, 0.43975706542687454, 0.4351292493905598, 0.4391434126601793, 0.4357509495443379, 0.43866613503094826, 0.43624468674409417,
++    0.43832240621584756, 0.43661027674900604,
++    0.5317851975600124, 0.3528252960261549, 0.5273724253787557, 0.3567574378132678, 0.5230328514266798, 0.36061787038165277, 0.5187691713294177, 0.3644050030370135, 0.5145840443972646, 0.36811727476738726, 0.5104801536957444, 0.37175311204761463,
++    0.506460212333345, 0.37531092378532815, 0.5025269530793063, 0.37878909189261323, 0.49868315962718024, 0.3821859640598405, 0.49493165188506766, 0.3854998412105641, 0.49127530569533484, 0.3887289726371195, 0.4877170394568788, 0.39187154797065354,
++    0.4842598202736889, 0.39492570013742323, 0.48090664649011206, 0.3978895093175592, 0.4776605319221953, 0.400761014399901, 0.4745244818934596, 0.4035382278507846, 0.4715014662326398, 0.40621915305017925, 0.4685943907661411, 0.40880180192151305,
++    0.4658060703116417, 0.4112842099367881, 0.46313920548041015, 0.4136644469665748, 0.4605963642478207, 0.4159406226348171, 0.45817996885595863, 0.41811088626413195, 0.4558922862474573, 0.4201734230763398, 0.4537354192004685, 0.42212644935195,
++    0.45171129480814176, 0.4239682096841096, 0.4498216466544908, 0.42569697972600357, 0.448067988335148, 0.4273110764900039, 0.44645157797191265, 0.42880887658102734, 0.4449733755673544, 0.4301888408799738, 0.44363399738558007, 0.4314495420904043,
++    0.44243367236139514, 0.43258969084542276, 0.4413721956294618, 0.43360816145430525, 0.4404489562060863, 0.43450397552965375, 0.4396628288994544, 0.43527635815283566, 0.43901222545094876, 0.4359247064261438, 0.4384950875134231, 0.43644858650804064,
++    0.43810889222217075, 0.43684772891447726, 0.43785062098867217, 0.43712205528505416,
++    0.5312178393325848, 0.35356350544200355, 0.5268668774415748, 0.35743482540793786, 0.5225874271733564, 0.3612361923566262, 0.5183820531688902, 0.3649661039872225, 0.5142532925209367, 0.3686230778612128, 0.510203720634107, 0.3722056079828011,
++    0.5062359394415126, 0.3757121570787991, 0.5023526058222343, 0.37914115186452796, 0.49855641983026233, 0.3824909751341704, 0.49485012787777555, 0.38575996026696757, 0.49123652631002107, 0.38894639007139054, 0.4877184528864375, 0.39204849708749073,
++    0.48429877777173785, 0.39506446880376495, 0.4809803886246447, 0.39799245590490234, 0.477766173183789, 0.4008305838979433, 0.47465899793367505, 0.4035769655074013, 0.47166168652499185, 0.406229713474212, 0.46877699925666205, 0.40878695132444764,
++    0.4660076145512284, 0.411246821311079, 0.4633561144863633, 0.41360748879176934, 0.46082497042523907, 0.4158671426196293, 0.45841653508678026, 0.41802399417245495, 0.4561330309884535, 0.4200762750463197, 0.4539765377920984, 0.4220222369693268,
++    0.4519489747099288, 0.423860155458211, 0.45005207717511125, 0.4255883389828659, 0.44828736525243035, 0.427205143485268, 0.4466561088168111, 0.42870899190134254, 0.44515928834140983, 0.4300983958310913, 0.44379755723905356, 0.4313719767046635,
++    0.4425712082206112, 0.4325284837095081, 0.44148014665174506, 0.4335668063688872, 0.44052387323973585, 0.43448597878571277, 0.43970148046785323, 0.435285182717184, 0.43901159563290665, 0.4359637723061412, 0.4384524189680334, 0.43652125047786927,
++    0.4380217117939124, 0.43695727492555436, 0.43771675963907153, 0.4372716895342695, 0.4375343596396877, 0.4374645400840918,
++    0.5308926636562367, 0.35400162714686156, 0.5265995180167342, 0.35781794283322077, 0.5223761730608776, 0.3615660352124467, 0.518225059510069, 0.36524449178262625, 0.514148623694444, 0.36885188445790823, 0.5101493404819224, 0.37238675354337847,
++    0.5062297403061671, 0.3758476056533338, 0.5023923955260942, 0.3792329077684311, 0.49863992132080964, 0.3825410832455656, 0.4949749811812137, 0.3857705120408323, 0.49140027676643316, 0.3889195297404366, 0.487918543880773, 0.3919864318966293,
++    0.4845325400081487, 0.39496947914651453, 0.4812450319252247, 0.397866905173503, 0.47805877957094106, 0.40067692550032813, 0.4749765202433956, 0.403397746694088, 0.47200095293162725, 0.40602757477034374, 0.46913472017294755, 0.40856462115232317,
++    0.46638039737193976, 0.41100710787724504, 0.46374047885522673, 0.41335326932373995, 0.46121736748226205, 0.41560135326670905, 0.4588133627772169, 0.4177496210440564, 0.4565306482321076, 0.419796348798924, 0.4543712753905613, 0.42173983115608255,
++    0.45233714351355475, 0.42357838817639504, 0.45042997443059757, 0.4253103761212645, 0.44865128350188854, 0.4269342018542844, 0.4470023478256139, 0.4284483393055883, 0.4454841730751418, 0.4298513464966896, 0.4440974629267114, 0.4311418813687784,
++    0.4428425921689867, 0.43231871482880824, 0.4417195824488836, 0.43338074015671174, 0.44072808740173686, 0.4343269779222522, 0.43986738716791174, 0.4351565759074073, 0.43913632396060237, 0.4358688487852524, 0.43853333105254805, 0.43646324906727585,
++    0.43805645492023526, 0.4369393686474346, 0.43770324540613986, 0.43729699082306456, 0.43747081676433364, 0.43753608162481045, 0.43735579902865895, 0.4376568081587123,
++    0.5307892090825239, 0.3541460531289978, 0.5265502843895971, 0.357912959889914, 0.5223794180937269, 0.36161336374089265, 0.518278955462883, 0.36524589094717547, 0.5142512559348372, 0.36880916221023957, 0.5102987073326939, 0.37230176669652787,
++    0.5064237517057326, 0.3757222607418209, 0.5026288707648477, 0.379069163368201, 0.49891658543264994, 0.38234095343050123, 0.49528946111169586, 0.3855360706283001, 0.49175009707640416, 0.3886529151116904, 0.48830112218966126, 0.39168985123946154,
++    0.4849451848099504, 0.3946452123668772, 0.48168494145843976, 0.3975173072574844, 0.47852304319746886, 0.400304427230385, 0.475462121564621, 0.40300485349042053, 0.4725047750131141, 0.4056168639751508, 0.4696535549217093, 0.40813873865525463,
++    0.46691095339964245, 0.4105687636712992, 0.4642793910109952, 0.41290523363299464, 0.4617612062325065, 0.4151464534363807, 0.4593586431254155, 0.41729073947171286, 0.4570738385074273, 0.4193364220485037, 0.45490880596778954, 0.42128184950609654,
++    0.45286541678398634, 0.42312539502373675, 0.45094537691248154, 0.42486546625342714, 0.4491502009461529, 0.4265005176099573, 0.44748118404654275, 0.428029064360601, 0.4459393723582666, 0.4294496970294137, 0.44452553563829905, 0.430761095268902,
++    0.4432401415380002, 0.4319620397441484, 0.44208333318566584, 0.43305142164547594, 0.4410549011690807, 0.434028254724744, 0.44015433439908574, 0.4348916433255288, 0.4393806202123779, 0.4356409016757777, 0.4387324825618559, 0.43627540157268674,
++    0.4382081589375452, 0.43679471577778933, 0.43780549904533295, 0.4371985538198129, 0.4375219114528575, 0.4374868032530262, 0.4373543593990945, 0.43765953923856693, 0.4372993542309676, 0.43771702827424225],
++};

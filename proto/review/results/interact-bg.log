@@ -1,5 +1,0 @@
-bg idle                   next {"n":8,"med":65,"p90":67,"max":87,"min":60} | smooth {"n":8,"med":125,"p90":131,"max":132,"min":105} | delay max 1 | long {"n":16,"sum":1351,"max":122}
-bg own run                next {"n":8,"med":74,"p90":93,"max":94,"min":59} | smooth {"n":8,"med":123,"p90":134,"max":146,"min":108} | delay max 1 | long {"n":16,"sum":1468,"max":128}
-bg 1 parked refining      next {"n":9,"med":68,"p90":87,"max":91,"min":53} | smooth {"n":7,"med":136,"p90":169,"max":169,"min":105} | delay max 7 | long(span, incl. restarts) {"n":17,"sum":1880,"max":253}
-bg 3 parked refining      next {"n":8,"med":75,"p90":90,"max":96,"min":56} | smooth {"n":8,"med":148,"p90":163,"max":211,"min":99} | delay max 3 | long(span, incl. restarts) {"n":18,"sum":2549,"max":298}
-errors []

@@ -1,0 +1,198 @@
+{
+ "mode": "mom",
+ "rows": [
+  {
+   "id": "box-P-1-near",
+   "solid": "box",
+   "laue": "-1",
+   "error": "none",
+   "counts": 971,
+   "maxDev": 0.05989084758654237,
+   "excess": 0.13299004708683343
+  },
+  {
+   "id": "sqbox-P-1-on",
+   "solid": "sqbox",
+   "laue": "-1",
+   "error": "sizedist",
+   "counts": 1409,
+   "maxDev": 0.045467882029719915,
+   "excess": 0.12341482215338814
+  },
+  {
+   "id": "cylinder-P2m-on",
+   "solid": "cylinder",
+   "laue": "2/m",
+   "error": "impurity",
+   "counts": 472,
+   "maxDev": 0.041232160666971565,
+   "excess": 0.02441729591949353
+  },
+  {
+   "id": "ellcyl-P2m-generic",
+   "solid": "ellcyl",
+   "laue": "2/m",
+   "error": "none",
+   "counts": 18195,
+   "maxDev": 0.02522652535349726,
+   "excess": 0.24187004043883342
+  },
+  {
+   "id": "ellipsoid-Pmmm-generic",
+   "solid": "ellipsoid",
+   "laue": "mmm",
+   "error": "none",
+   "counts": 1066,
+   "maxDev": 0.030999447113160404,
+   "excess": 0.03008613579706247
+  },
+  {
+   "id": "spheroid-Pmmm-near",
+   "solid": "spheroid",
+   "laue": "mmm",
+   "error": "air",
+   "counts": 1951,
+   "maxDev": 0.045296016366370886,
+   "excess": 0.25062092421776255
+  },
+  {
+   "id": "box-P4m-near",
+   "solid": "box",
+   "laue": "4/m",
+   "error": "none",
+   "counts": 9487,
+   "maxDev": 0.04015175539460054,
+   "excess": 0.23701166412489294
+  },
+  {
+   "id": "sqbox-P4m-on",
+   "solid": "sqbox",
+   "laue": "4/m",
+   "error": "air",
+   "counts": 685,
+   "maxDev": 0.064747946652913,
+   "excess": 0.038703183883683795
+  },
+  {
+   "id": "cylinder-P4mmm-on",
+   "solid": "cylinder",
+   "laue": "4/mmm",
+   "error": "none",
+   "counts": 21916,
+   "maxDev": 0.04699195624169682,
+   "excess": 4.92145173076054
+  },
+  {
+   "id": "ellcyl-P4mmm-generic",
+   "solid": "ellcyl",
+   "laue": "4/mmm",
+   "error": "hump",
+   "counts": 451,
+   "maxDev": 0.04216677727423584,
+   "excess": 0.032897218866524996
+  },
+  {
+   "id": "ellipsoid-P-3-generic",
+   "solid": "ellipsoid",
+   "laue": "-3",
+   "error": "impurity",
+   "counts": 25791,
+   "maxDev": 0.03295620942250361,
+   "excess": 0.240013870022598
+  },
+  {
+   "id": "spheroid-P-3-near",
+   "solid": "spheroid",
+   "laue": "-3",
+   "error": "none",
+   "counts": 1225,
+   "maxDev": 0.040077977617784755,
+   "excess": 0.03884908962585086
+  },
+  {
+   "id": "box-P-3m1-near",
+   "solid": "box",
+   "laue": "-3m",
+   "error": "none",
+   "counts": 906,
+   "maxDev": 0.03152047837746735,
+   "excess": 0.005641642240985341
+  },
+  {
+   "id": "sqbox-P-3m1-on",
+   "skipped": "po"
+  },
+  {
+   "id": "cylinder-P6m-on",
+   "solid": "cylinder",
+   "laue": "6/m",
+   "error": "none",
+   "counts": 949,
+   "maxDev": 0.04591862918527088,
+   "excess": 0.027424259581384693
+  },
+  {
+   "id": "ellcyl-P6m-generic",
+   "solid": "ellcyl",
+   "laue": "6/m",
+   "error": "none",
+   "counts": 4107,
+   "maxDev": 0.02620341106662203,
+   "excess": 0.061302011219696716
+  },
+  {
+   "id": "ellipsoid-P6mmm-generic",
+   "solid": "ellipsoid",
+   "laue": "6/mmm",
+   "error": "air",
+   "counts": 5063,
+   "maxDev": 0.042761390911900954,
+   "excess": 0.12668640606982645
+  },
+  {
+   "id": "spheroid-P6mmm-near",
+   "solid": "spheroid",
+   "laue": "6/mmm",
+   "error": "hump",
+   "counts": 718,
+   "maxDev": 0.04518226648741487,
+   "excess": 0.10405743008389275
+  },
+  {
+   "id": "box-Pm-3-near",
+   "solid": "box",
+   "laue": "m-3",
+   "error": "impurity",
+   "counts": 506,
+   "maxDev": 0.06029586753582912,
+   "excess": 0.1273718473591002
+  },
+  {
+   "id": "sqbox-Pm-3-on",
+   "solid": "sqbox",
+   "laue": "m-3",
+   "error": "none",
+   "counts": 4203,
+   "maxDev": 0.057994979215237316,
+   "excess": 0.20119292103035327
+  },
+  {
+   "id": "cylinder-Pm-3m-on",
+   "solid": "cylinder",
+   "laue": "m-3m",
+   "error": "sizedist",
+   "counts": 29653,
+   "maxDev": 0.010533651301707025,
+   "excess": 0.07870803608551741
+  },
+  {
+   "id": "ellcyl-Pm-3m-generic",
+   "solid": "ellcyl",
+   "laue": "m-3m",
+   "error": "none",
+   "counts": 2192,
+   "maxDev": 0.027550431765799768,
+   "excess": 0.06676270820447336
+  }
+ ]
+}

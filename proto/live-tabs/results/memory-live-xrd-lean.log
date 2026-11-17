@@ -1,6 +1,0 @@
-live xrd boot {"heap":2.9230079650878906,"heapTotal":3.78515625,"workers":0,"workerHeap":0,"renderer":{"rss":128.79296875,"pss":83.625,"priv":58.421875,"hwm":133.1875},"renderers":1,"rendererRssAll":128.79296875,"allPss":182.208984375,"allRss":349.1015625,"byType":{"browser":40,"renderer":84,"GPU":34,"network.mojom.NetworkService":25},"domNodes":1469}
-live xrd N 1 heap 14.8 workers 1 2 renderer rss/pss 193.7 141.8 all pss 249.6 dom 4191
-live xrd N 2 heap 26.1 workers 2 4 renderer rss/pss 227.4 175.7 all pss 284.7 dom 6912
-live xrd N 4 heap 46.2 workers 4 8 renderer rss/pss 286.4 234.2 all pss 347.5 dom 12354
-[{"n":1,"heapPerTab":11.9,"rssPerTab":64.9,"pssPerTab":58.2,"allPssPerTab":67.4},{"n":2,"heapPerTab":11.6,"rssPerTab":49.3,"pssPerTab":46,"allPssPerTab":51.2},{"n":4,"heapPerTab":10.8,"rssPerTab":39.4,"pssPerTab":37.6,"allPssPerTab":41.3}]
-errors []

@@ -1,0 +1,4 @@
+spheroid-P-3-near (-3, spheroid) as spheroid: iso χ²_ν 1.161, 286 ev, 3044 ms
+  fwd: held χ² 11540.15 best — ΔBIC -36 | 1498 ev 19548 ms | starts 11 | central 32 ev Δχ² -0.000 | cov 17 ev | 16.21×16.21×14.58 | dims 4% 4% 11% axis 33.0°
+  today: held χ² 11540.15 best — ΔBIC -36 | 2698 ev 31100 ms | starts 11 | 16.21×16.21×14.58 | dims 4% 4% 11% axis 33.0°
+  wall 54.5 s

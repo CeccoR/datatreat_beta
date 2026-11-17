@@ -1,0 +1,28 @@
+tag S2, Δ* 16 (flagged 25), κ 1, κ_angle 1: 77 runs, 66 kept truths
+cost: stage 122742 evaluations, search without it 141981 (P1's search 156033): 0.864×; per staged run median 0.532× (max 6.84); ms 499900 of 1320294
+staged runs 68: ends 15, candidates 2 (max 6), distinct minima within keep 1
+  Δ* 6: unique 51/68, 2: 14, 3+: 3
+  Δ* 10: unique 49/68, 2: 15, 3+: 4
+  Δ* 12.5: unique 45/68, 2: 19, 3+: 4
+  Δ* 15: unique 44/68, 2: 19, 3+: 5
+  Δ* 20: unique 42/68, 2: 19, 3+: 7
+stage's lowest below the search's free fit: 49 (Δ in χ²_ν: 0.02, 0.01, 1.03, 0.03, 0.86, 0.43, 0.00, 0.02, 0.03, 0.23, 0.00, 0.01, 0.00, 1.52, 0.00, 0.00, 0.00, 0.01, 0.00, 0.23, 0.03, 0.01, 6330.95, 0.00, 0.03, 0.03, 0.00, 0.32, 0.85, 909.16, 0.00, 0.00, 0.02, 0.00, 0.00, 0.00, 0.02, 0.00, 0.00, 0.02, 0.00, 1.24, 0.00, 0.00, 0.00, 0.00, 0.27, 10.82, 0.00)
+outcome changed against P1: 2 cylinder-Pm-3m-on held→free; spheroid-P2m-on held→free
+returned χ² against P1 (χ²_ν units): lower by >0.5 on 4 (box-Pmmm-on -0.7, cylinder-Pm-3m-on -31.1, spheroid-P2m-on -6.0, sphere-P6mmm-1 -3.6), higher by >0.5 on 1 (sqbox-P4m-on +0.8)
+accuracy (kept in both, 66): worst extent median 4.1 % (P1 4.1 %), principal median 1.30° (P1 1.23°); changed by >1 %: box-Pmmm-on 342→339, box-P-3m1-near 11→191, box-P6m-generic 37→36, sqbox-P4m-on 12→10, spheroid-P2m-on 6→10
+
+| kept truths | runs | extents (unbounded) | L local | Lw (in W) | B between alone | C combined | U union | J with jackknife | med half-width L / C / U | principal axes: L / C / J | med radius L / C |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| clean, not flagged | 33 | 82 (0) | 73/82 | 73/82 | 13/82 | 75/82 | 78/82 | 75/82 | 2.6 / 2.6 / 3.1 % | 25/32 / 29/32 / 29/32 | 2.3 / 3.8° |
+| error, not flagged | 9 | 23 (0) | 15/23 | 15/23 | 6/23 | 17/23 | 18/23 | 17/23 | 2.4 / 4.5 / 4.6 % | 8/9 / 8/9 / 8/9 | 6.2 / 6.2° |
+| error, flagged | 24 | 56 (4) | 28/56 | 27/56 | 8/56 | 30/56 | 32/56 | 51/56 | 3.2 / 3.9 / 4.4 % | 10/24 / 14/24 / 21/24 | 3.0 / 4.2° |
+| all kept | 66 | 161 (4) | 116/161 | 115/161 | 27/161 | 122/161 | 128/161 | 143/161 | 2.8 / 3.3 / 3.6 % | 43/65 / 51/65 / 58/65 | 2.8 / 4.3° |
+
+local z on clean rows (82): median |z| 0.79 (normal 0.67), 90 % 2.11, rms of |z|<5 1.21, |z|>2: 10, >3: 3, >5: 1
+
+| kept truths | unique (one minimum) | unique and L covers all | unique, L misses | several | several: L covers | several: C covers, L not | several: neither | with the jackknife (J): unique covered / several covered |
+|---|---|---|---|---|---|---|---|---|
+| clean, not flagged | 21/33 | 17 | 4 (box-P4mmm-generic, ellipsoid-P2m-near, ellipsoid-Pmmm-generic, spheroid-Pm-3-generic) | 12 | 5 | 4 | 3 (box-P4m-near, box-P6m-generic, ellcyl-Pm-3m-generic) | 17/21 / 9/12 |
+| error, not flagged | 7/9 | 3 | 4 (box-P2m-generic, sqbox-P-1-on, ellcyl-P4mmm-generic, ellipsoid-Pm-3-on) | 2 | 0 | 1 | 1 (spheroid-P6m-on) | 4/7 / 1/2 |
+| error, flagged | 15/24 | 3 | 12 (box-Pmmm-on, sqbox-P-3-generic, cylinder-P2m-on, cylinder-Pm-3m-on, ellcyl-P4m-near, ellcyl-P-3-on, ellipsoid-P4m-on, ellipsoid-P4mmm-near, ellipsoid-P-3-generic, spheroid-P-1-generic, spheroid-P2m-on, spheroid-P6mmm-near) | 9 | 0 | 2 | 7 (box-P6mmm-on, sqbox-P4m-on, sqbox-P-3m1-on, cylinder-Pm-3-generic, ellcyl-P-1-near, ellcyl-P-3m1-near, ellipsoid-P6mmm-generic) | 12/15 / 6/9 |
+| all kept | 43/66 | 23 | 20 (box-P2m-generic, box-Pmmm-on, box-P4mmm-generic, sqbox-P-1-on, sqbox-P-3-generic, cylinder-P2m-on, cylinder-Pm-3m-on, ellcyl-P4m-near, ellcyl-P4mmm-generic, ellcyl-P-3-on, ellipsoid-P2m-near, ellipsoid-Pmmm-generic, ellipsoid-P4m-on, ellipsoid-P4mmm-near, ellipsoid-P-3-generic, ellipsoid-Pm-3-on, spheroid-P-1-generic, spheroid-P2m-on, spheroid-P6mmm-near, spheroid-Pm-3-generic) | 23 | 5 | 7 | 11 (box-P4m-near, box-P6m-generic, box-P6mmm-on, sqbox-P4m-on, sqbox-P-3m1-on, cylinder-Pm-3-generic, ellcyl-P-1-near, ellcyl-P-3m1-near, ellcyl-Pm-3m-generic, ellipsoid-P6mmm-generic, spheroid-P6m-on) | 33/43 / 16/23 |

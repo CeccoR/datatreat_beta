@@ -114,15 +114,126 @@ function labelText(t, text, runs){
 // A figure composer is being opened from a plot's toolbar (figBtn, in attachTools).
 let _figOpening = false;
 /* An element by its id (a plot's svg, its legend), looked for from `from` outward: in its
-   plot's box, its card, its section or window first, then in the page. A module made per
-   tab (b2) has the same ids in each instance, only the one on show in the page: its
-   buttons find their own instance's elements, in the page or not. */
+   plot's box, its card, its section or window first, then in the page. A module has the
+   same ids in each instance, only the one on show in the page: its buttons find their own
+   instance's elements, in the page or not. */
 function near(from, id){
   if (!id) return null;
   const sel = '#' + CSS.escape(id);
   for (let a = from && from.parentElement; a; a = a.parentElement){ const e = a.querySelector(sel); if (e) return e; }
   return document.getElementById(id);
 }
+/* ---- A trace picked out (v536; v538) ----
+   Hovered, a curve or a scatter is drawn 1.5× as thick (nothing else changes: no other
+   trace dimmed, no glow) and named in a small square label by it: in the trace's colour
+   where that reads on the plot's background (a luminance contrast of 3 or more), else in
+   the background's colour with a border and text that read on it (a white trace on a white
+   plot). The crosshair, and its read-out, sit on one of the trace's own data points, never
+   between two (v538; to v537 the y was interpolated at the pointer's x): on a scatter, or
+   on a line with under one point per SPARSE_PX px across the view, the point nearest the
+   pointer on screen; on a denser line the point nearest the pointer's x. Clicked, the
+   trace stays so (locked): the crosshair takes the lock's colour and follows the pointer
+   along the trace, and ← and → move it one data point along the trace, stopping at its
+   ends (the keys are the lock's only while it holds; else they step the samples as
+   before). A click off every trace, or Esc, lets it go. All of it in the crosshair's layer
+   (.plot-cross), which nothing exports and nothing keeps: no project change, no step. Not
+   where a click is the plot's own already: a tool armed (pan, zoom), a module's pointer of
+   its own (svg._suppressReadout: XRPD's Add peak, Iodometry's injection), a plot that says
+   so (svg._noPick: XRPD's Scherrer peaks), what lies on the overlay (draggable lines), and
+   bar charts (bars are no trace: their crosshair as before). */
+const PICK_TOL = 6;                 // px from a line, beyond its half width, that hovers it
+const SPARSE_PX = 6;                // px per point across the view under which a line is sparse
+const HL_FACTOR = 1.5;              // a picked trace's line width, × its own
+const _locked = new Set();          // the svgs with a trace locked, for Esc and the arrows
+let _lastLocked = null;             // the one locked last: the arrows' when several are
+const pickOff = P => !!(P._mode || P.svg._suppressReadout || P.svg._noPick || P._stored.some(e=> e.type === 'barpx' || e.type === 'box'));
+function legendOf(svg){
+  const w = svg.closest('.plot-wrap'), d = w && w.querySelector('.plot-dl-btn');
+  return d && d.dataset.dlLegend ? near(d, d.dataset.dlLegend) : null;
+}
+function segDist(x, y, ax, ay, bx, by){
+  const dx = bx - ax, dy = by - ay, L = dx*dx + dy*dy;
+  const t = L ? Math.max(0, Math.min(1, ((x - ax)*dx + (y - ay)*dy) / L)) : 0;
+  return Math.hypot(x - ax - t*dx, y - ay - t*dy);
+}
+const finitePt = (e, i)=> isFinite(e.xs[i]) && isFinite(e.ys[i]);
+/* The index of trace e's data point the pointer at (cx, cy), px, stands for (see above):
+   the points in the view's x range only, unless it has none. -1: no finite point. */
+function nearestIndex(P, e, cx, cy){
+  const xs = e.xs, { w } = P.size(), m = P.margin, inView = i => xs[i] >= P.xmin && xs[i] <= P.xmax;
+  let n = 0;
+  for (let i = 0; i < xs.length; i++) if (finitePt(e, i) && inView(i)) n++;
+  const sparse = e.type === 'points' || n*SPARSE_PX <= w - m.l - m.r;
+  let best = -1, bk = Infinity, bd = Infinity;
+  for (let i = 0; i < xs.length; i++){
+    if (!finitePt(e, i) || (n && !inView(i))) continue;
+    const dx = Math.abs(P.px(xs[i]) - cx), dy = Math.abs(P.py(e.ys[i]) - cy);
+    // sparse: the distance on screen; dense: |dx| to the half pixel, then |dy|
+    const k = sparse ? Math.hypot(dx, dy) : Math.round(dx*2), d = sparse ? 0 : dy;
+    if (k < bk || (k === bk && d < bd)){ bk = k; bd = d; best = i; }
+  }
+  return best;
+}
+// The next finite point from i in direction dir (±1); i itself at the trace's end.
+function stepIndex(e, i, dir){
+  for (let j = i + dir; j >= 0 && j < e.xs.length; j += dir) if (finitePt(e, j)) return j;
+  return i;
+}
+/* Colours, for the label's contrast: a CSS colour as [r, g, b] (what a canvas makes of it;
+   null when it cannot read it, a var() say, or it is transparent), its relative luminance
+   and the contrast of two (WCAG 2). */
+let _cctx;
+function rgbOf(c){
+  if (c == null) return null;
+  if (_cctx === undefined) _cctx = document.createElement('canvas').getContext('2d');
+  if (!_cctx) return null;
+  _cctx.fillStyle = '#010203'; _cctx.fillStyle = String(c).trim();
+  const s = _cctx.fillStyle;
+  if (s === '#010203' && !/^#010203$/i.test(String(c).trim())) return null;
+  let m = /^#([0-9a-f]{6})$/i.exec(s);
+  if (m) return [0, 2, 4].map(i=> parseInt(m[1].slice(i, i + 2), 16));
+  m = /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)(?:\s*,\s*([\d.]+))?/i.exec(s);
+  return m && !(m[4] != null && +m[4] < 0.5) ? [m[1], m[2], m[3]].map(Number) : null;
+}
+const luminance = rgb => { const f = v => (v /= 255) <= 0.03928 ? v/12.92 : ((v + 0.055)/1.055)**2.4; return 0.2126*f(rgb[0]) + 0.7152*f(rgb[1]) + 0.0722*f(rgb[2]); };
+const contrastOf = (a, b)=>{ const A = luminance(a), B = luminance(b); return (Math.max(A, B) + 0.05)/(Math.min(A, B) + 0.05); };
+const INK_DARK = '#0b0f12', INK_LIGHT = '#ffffff';
+// Black or white, whichever reads better on the colour given.
+const inkOn = rgb => contrastOf(rgb, [11, 15, 18]) >= contrastOf(rgb, [255, 255, 255]) ? INK_DARK : INK_LIGHT;
+// What lies behind the plot: the first of it and its ancestors with an opaque background.
+function backgroundOf(el){
+  for (let a = el; a && a.nodeType === 1; a = a.parentElement){
+    const c = rgbOf(getComputedStyle(a).backgroundColor);
+    if (c) return c;
+  }
+  return [255, 255, 255];
+}
+// Esc lets every lock go; ← and → move the lock one data point along its trace. Seen first
+// (the window, capturing), so that while a lock holds the arrows step it and not the
+// samples (utils.js); not from a field, nor under a window open over the plot.
+window.addEventListener('keydown', e=>{
+  if (!_locked.size) return;
+  if (e.key === 'Escape'){
+    const list = [..._locked]; _locked.clear();
+    for (const svg of list){ svg._pick = null; if (svg._plot) svg._plot._repaintPick(); }
+    return;
+  }
+  if ((e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+  const el = document.activeElement, tag = el && el.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (el && el.isContentEditable)) return;
+  for (const svg of [..._locked]) if (!svg.isConnected){ _locked.delete(svg); if (_lastLocked === svg) _lastLocked = null; }
+  const shown = svg => svg.getClientRects().length > 0 && svg._plot && !pickOff(svg._plot)
+    && ![...document.querySelectorAll('.modal-backdrop')].some(b=> b.getClientRects().length > 0 && !b.contains(svg));
+  const svg = _lastLocked && _locked.has(_lastLocked) && shown(_lastLocked) ? _lastLocked : [..._locked].reverse().find(shown);
+  if (!svg) return;
+  const P = svg._plot, st = svg._pick, t = st && P._traces().find(t=> t.id === st.lock);
+  if (!t) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  // (no point yet, the pointer off the plot since the click: the one at the view's middle)
+  const mid = ()=> nearestIndex(P, t.e, P.px((P.xmin + P.xmax)/2), P.py((P.ymin + P.ymax)/2));
+  st.i = stepIndex(t.e, st.i >= 0 && st.i < t.e.xs.length ? st.i : mid(), e.key === 'ArrowRight' ? 1 : -1);
+  P._paintPick(null, null, true);
+}, true);
 class Plot{
   constructor(svg, opts){
     this.svg = svg;
@@ -277,12 +388,14 @@ class Plot{
     const entry = {type:'line', xs, ys, color, width, dash,
                    raw: meta && meta.raw, label: meta && meta.label, key: meta && meta.key};
     this._stored.push(entry);
+    this._pickSoon();
     return this._renderLine(entry);
   }
   // Open-circle scatter (unconnected). Only points within the x-view are drawn.
   points(xs, ys, color, r){
     const entry = {type:'points', xs, ys, color, r:r||2};
     this._stored.push(entry);
+    this._pickSoon();
     return this._renderPoints(entry);
   }
   _renderPoints(entry, proj){
@@ -295,6 +408,7 @@ class Plot{
       g.appendChild(svgEl('circle',{cx:px(xv).toFixed(2), cy:py(yv).toFixed(2), r:rr, fill:'none', stroke:entry.color, 'stroke-width':1}));
     }
     this.gData.appendChild(g);
+    entry._el = g;
     return g;
   }
   _renderLine(entry, proj){
@@ -307,6 +421,7 @@ class Plot{
     const p = svgEl('path',{d, fill:'none', stroke:entry.color, 'stroke-width':entry.width||1.5});
     if (entry.dash) p.setAttribute('stroke-dasharray', entry.dash);
     this.gData.appendChild(p);
+    entry._el = p;
     return p;
   }
   /* Separate straight segments in data units, pairs of points (xs[2i], ys[2i]) to
@@ -329,18 +444,6 @@ class Plot{
     const p = svgEl('path',{d, fill:'none', stroke:entry.color, 'stroke-width':entry.width||1});
     this.gData.appendChild(p);
     return p;
-  }
-  bar(x0, x1, y0, y1, color){
-    const entry = {type:'bar', x0, x1, y0, y1, color};
-    this._stored.push(entry);
-    return this._renderBar(entry);
-  }
-  _renderBar(entry){
-    const px0=this.px(entry.x0), px1=this.px(entry.x1);
-    const py0=this.py(entry.y0), py1=this.py(entry.y1);
-    const r = svgEl('rect',{x:Math.min(px0,px1), y:Math.min(py0,py1), width:Math.abs(px1-px0), height:Math.abs(py0-py1), fill:entry.color});
-    this.gData.appendChild(r);
-    return r;
   }
   /* Bar with a fixed PIXEL width, centred at data-x `xc` (+ optional pixel offset `dx`).
      Width stays constant regardless of the sample count or the zoom level — only the
@@ -524,7 +627,6 @@ class Plot{
       if (e.type==='line') this._renderLine(e, proj);
       else if (e.type==='segments') this._renderSegments(e, proj);
       else if (e.type==='points') this._renderPoints(e, proj);
-      else if (e.type==='bar') this._renderBar(e);
       else if (e.type==='barpx') this._renderBarPx(e);
       else if (e.type==='errbar') this._renderErrbar(e);
       else if (e.type==='box') this._renderBox(e);
@@ -533,6 +635,7 @@ class Plot{
       else if (e.type==='vline') this._renderVline(e);
       else if (e.type==='vband') this._renderVband(e);
     }
+    this._pickSoon();
   }
   _refresh(){ this.drawAxes(); this._redrawFromStored(); if (this._onView) this._onView(); }
   attachTools(wrapEl){
@@ -605,6 +708,9 @@ class Plot{
        over a composer already open (this one or the SEM figure's: a press of Enter on
        the button, still focused, reaches it under the modal). A double click before
        figure.js had loaded opened two, the first left with no way to close (to v475). */
+    // (a plot whose module keeps its figure, plot.figure = { load(), save(snap) }: the
+    // composer takes it from there and gives it back there, not to its memory: figure.js
+    // recallKept)
     figBtn.onclick = async ()=>{
       if (_figOpening) return;
       _figOpening = true;
@@ -614,7 +720,7 @@ class Plot{
       try {
         const mod = await import('./figure.js');
         if (!document.querySelector('.fig-backdrop'))
-          mod.openFigureEditor(this, { legendEl: legId ? near(dlBtn, legId) : null, name });
+          mod.openFigureEditor(this, { legendEl: legId ? near(dlBtn, legId) : null, name, ...(this.figure ? { figure: this.figure } : {}) });
       } catch(err){ console.error('figure composer failed to load', err); }
       finally { _figOpening = false; }
     };
@@ -661,7 +767,8 @@ class Plot{
       t.innerHTML = `10<tspan baseline-shift="super" font-size="8">${n < 0 ? '−' + (-n) : n}</tspan>`;
     } else t.textContent = fmtTick(Math.pow(10, yv));
   }
-  _clearCrosshair(){ if (this.gCross) this.gCross.innerHTML=''; }
+  // (a trace locked keeps its highlight)
+  _clearCrosshair(){ if (!this.gCross) return; this.gCross.innerHTML=''; if (this.svg._pick) this._paintPick(null, null); }
   // Draw a thin crosshair + a coordinate readout at the pointer (data coordinates via invX/invY)
   _drawCrosshair(clientX, clientY){
     if (!this.gCross) return;
@@ -669,18 +776,26 @@ class Plot{
     const rect=this.svg.getBoundingClientRect();
     const cx=clientX-rect.left, cy=clientY-rect.top;
     if (cx<m.l || cx>w-m.r || cy<m.t || cy>h-m.b){ this._clearCrosshair(); return; }
-    const xv=this.invX(cx), yv=this.invY(cy);
-    const fmt=v=>{ const a=Math.abs(v); return a>=1000?v.toFixed(0):a>=1?v.toFixed(3):v.toPrecision(3); };
     this.gCross.innerHTML='';
-    const add=(tag,at)=>{ this.gCross.appendChild(svgEl(tag,at)); };
-    add('line',{x1:cx,x2:cx,y1:m.t,y2:h-m.b,stroke:'#c4ccd6','stroke-width':1,'stroke-dasharray':'4,3','opacity':0.75,'class':'plot-crosshair'});
-    add('line',{x1:m.l,x2:w-m.r,y1:cy,y2:cy,stroke:'#c4ccd6','stroke-width':1,'stroke-dasharray':'4,3','opacity':0.75,'class':'plot-crosshair'});
+    this._crossAt(cx, cy, this.invX(cx), this.invY(cy), false);
+  }
+  /* The crosshair through (cx, cy), px, and its read-out of (xv, yv); `lock`, in the lock's
+     colour and kept to the plot's area, a dot on the trace where the two cross. */
+  _crossAt(cx, cy, xv, yv, lock){
+    const {w,h}=this.size(); const m=this.margin;
+    const fmt=v=>{ const a=Math.abs(v); return a>=1000?v.toFixed(0):a>=1?v.toFixed(3):v.toPrecision(3); };
+    const add=(tag,at)=>{ const el = svgEl(tag,at); this.gCross.appendChild(el); return el; };
+    const ln = lock ? {stroke:'#ff3ea5','stroke-width':1.2,'stroke-dasharray':'4,3','class':'plot-lockcross','clip-path':`url(#${this._clipId})`}
+                    : {stroke:'#c4ccd6','stroke-width':1,'stroke-dasharray':'4,3','opacity':0.75,'class':'plot-crosshair'};
+    add('line',{x1:cx,x2:cx,y1:m.t,y2:h-m.b,...ln});
+    add('line',{x1:m.l,x2:w-m.r,y1:cy,y2:cy,...ln});
+    if (lock) add('circle',{cx,cy,r:3.5,fill:'#ff3ea5','class':'plot-lockdot','clip-path':`url(#${this._clipId})`});
     // Readout: pinned to the top-left of the plot area (never follows the pointer),
     // one axis per line — x then y — as "AxisName = value unit" (the unit is pulled
     // out of the axis label's trailing parentheses). Bar plots have a categorical x
     // (no meaningful x coordinate under the pointer), so they show the y line only.
     const ylabTxt = this.ylabel || (this.ylabelSvg ? this.ylabelSvg.replace(/<[^>]*>/g,'') : '') || 'y';
-    const isBar = this._stored && this._stored.some(e=>e.type==='bar' || e.type==='barpx' || e.type==='box');
+    const isBar = this._stored && this._stored.some(e=>e.type==='barpx' || e.type==='box');
     const tx = m.l+8;
     const t=svgEl('text',{x:tx,y:m.t+14,'font-size':12,'text-anchor':'start',fill:'#f0f4f6',stroke:'#0b0f12','stroke-width':3.5,'paint-order':'stroke','font-family':'monospace','class':'plot-readout'});
     if (!isBar){ const l1=svgEl('tspan',{x:tx}); l1.textContent=axisReadout(this.xlabel||'x', xv, fmt); t.appendChild(l1); }
@@ -689,6 +804,124 @@ class Plot{
     const l2=svgEl('tspan',{x:tx,dy:isBar?0:16}); l2.textContent=axisReadout(ylabTxt, this._opts.yLog ? Math.pow(10, yv) : yv, fmt);
     t.appendChild(l2);
     this.gCross.appendChild(t);
+  }
+  /* The plot's line and point traces, each with what tells it apart across a redraw (its
+     key, else its label, else its place) and its name: its label, else the legend's entry
+     in its place, else "Series n" (as the figure composer names them). */
+  _traces(){
+    const leg = legendOf(this.svg);
+    const labels = leg ? [...leg.querySelectorAll('span')].map(s=> s.textContent.trim()) : [];
+    const out = [];
+    for (const e of this._stored){
+      if (e.type !== 'line' && e.type !== 'points') continue;
+      if (!e.xs || !e.ys || !e.xs.length) continue;
+      const n = out.length;
+      out.push({ e, id: e.key || e.label || '#' + n, name: e.label || labels[n] || 'Series ' + (n + 1) });
+    }
+    return out;
+  }
+  // The trace under (cx, cy), px: the nearest within reach, the one drawn last on a tie.
+  _hit(cx, cy){
+    const {px, py} = this._projector();
+    let best = null, bd = Infinity;
+    for (const t of this._traces()){
+      const e = t.e, xs = e.xs, ys = e.ys;
+      const tol = e.type === 'points' ? (e.r || 2) + 4 : PICK_TOL + (e.width || 1.5)/2;
+      let ax = NaN, ay = NaN;
+      for (let i = 0; i < xs.length; i++){
+        if (!isFinite(xs[i]) || !isFinite(ys[i])) continue;
+        if (e.type === 'points' && (xs[i] < this.xmin || xs[i] > this.xmax)) continue;
+        const bx = px(xs[i]), by = py(ys[i]);
+        let d = Infinity;
+        if (e.type === 'points') d = Math.hypot(bx - cx, by - cy);
+        else if (ax === ax && !((ax < cx - tol && bx < cx - tol) || (ax > cx + tol && bx > cx + tol))) d = segDist(cx, cy, ax, ay, bx, by);
+        if (d <= tol && d <= bd){ bd = d; best = t; }
+        ax = bx; ay = by;
+      }
+    }
+    return best;
+  }
+  // The trace drawn again over itself, its line HL_FACTOR× as wide (clipped as the data are).
+  _highlight(t){
+    const el = t.e._el;
+    if (!el || !el.isConnected) return;
+    const c = el.cloneNode(true);
+    if (t.e.type === 'points') c.querySelectorAll('circle').forEach(ci=> ci.setAttribute('stroke-width', (+ci.getAttribute('stroke-width') || 1)*HL_FACTOR));
+    else c.setAttribute('stroke-width', (t.e.width || 1.5)*HL_FACTOR);
+    c.setAttribute('class', 'plot-pick-hl');
+    c.setAttribute('clip-path', `url(#${this._clipId})`);
+    this.gCross.appendChild(c);
+  }
+  /* The trace's name in a small square label by (x, y) px, kept in the plot: in its colour
+     where that reads on the background, else in the background's with a border. */
+  _pickLabel(t, x, y){
+    const {w,h}=this.size(); const m=this.margin;
+    const bg = backgroundOf(this.svg), col = rgbOf(t.e.color), own = col && contrastOf(col, bg) >= 3;
+    const ink = inkOn(own ? col : bg);
+    const g = svgEl('g', {'class':'plot-pick-label'});
+    const r = svgEl('rect', own ? {x:0, y:0, width:0, height:0, fill:t.e.color}
+                                : {x:0, y:0, width:0, height:0, fill:`rgb(${bg.join(',')})`, stroke:ink, 'stroke-width':1});
+    const tx = svgEl('text', {x:0, y:0, 'font-size':11, fill:ink, 'dominant-baseline':'central'});
+    tx.textContent = t.name;
+    g.append(r, tx); this.gCross.appendChild(g);
+    const bw = (tx.getComputedTextLength() || t.name.length*6) + 10, bh = 17;
+    let lx = x + 12, ly = y - 12 - bh;
+    if (lx + bw > w - m.r) lx = x - 12 - bw;
+    if (lx < m.l) lx = m.l;
+    if (ly < m.t) ly = Math.min(y + 12, h - m.b - bh);
+    r.setAttribute('x', lx); r.setAttribute('y', ly); r.setAttribute('width', bw); r.setAttribute('height', bh);
+    tx.setAttribute('x', lx + 5); tx.setAttribute('y', ly + bh/2);
+  }
+  /* The pointer at (cx, cy), px (null: off the plot): the trace locked or hovered drawn out,
+     and the crosshair on its data point (nearestIndex). `keep`: the locked point stays the
+     one it was (an arrow key, a redraw), whatever the pointer. */
+  _paintPick(cx, cy, keep){
+    const g = this.gCross; if (!g) return;
+    g.innerHTML = '';
+    const {w,h}=this.size(); const m=this.margin;
+    const inside = cx != null && cx>=m.l && cx<=w-m.r && cy>=m.t && cy<=h-m.b;
+    const st = this.svg._pick, traces = this._traces();
+    const lock = st ? traces.find(t=> t.id === st.lock) : null;
+    if (st && !lock){ this.svg._pick = null; _locked.delete(this.svg); }
+    const hov = !lock && inside && !pickOff(this) ? this._hit(cx, cy) : null;
+    if (lock || hov) this._highlight(lock || hov);
+    // The crosshair on point i of trace t, when it is in the view.
+    const at = (t, i, locked)=>{
+      const xv = t.e.xs[i], yv = t.e.ys[i];
+      if (!(i >= 0) || !finitePt(t.e, i) || xv < this.xmin || xv > this.xmax || yv < this.ymin || yv > this.ymax) return false;
+      const X = this.px(xv), Y = this.py(yv);
+      this._crossAt(X, Y, xv, yv, locked);
+      this._pickLabel(t, X, Y);
+      return true;
+    };
+    if (lock){
+      if ((!keep && inside) || !(st.i >= 0 && st.i < lock.e.xs.length)) st.i = inside ? nearestIndex(this, lock.e, cx, cy) : -1;
+      at(lock, st.i, true);
+      return;
+    }
+    if (!inside) return;
+    if (!(hov && at(hov, nearestIndex(this, hov.e, cx, cy), false))) this._crossAt(cx, cy, this.invX(cx), this.invY(cy), false);
+  }
+  // Painted again where the pointer last was (a redraw, a release), a lock on its point.
+  _repaintPick(){
+    const l = this.svg._pickLast, r = l && this.svg.getBoundingClientRect();
+    this._paintPick(l ? l.x - r.left : null, l ? l.y - r.top : null, true);
+  }
+  // After a drawing, the lock painted again once the drawing is done.
+  _pickSoon(){
+    if (!this.svg._pick || this._pickQ) return;
+    this._pickQ = true;
+    requestAnimationFrame(()=>{ this._pickQ = false; if (this.svg._plot === this && this.svg._pick) this._repaintPick(); });
+  }
+  // A click at (clientX, clientY): the trace there locked on its point there, or the lock let go.
+  _pickClick(clientX, clientY){
+    const r = this.svg.getBoundingClientRect(), cx = clientX - r.left, cy = clientY - r.top;
+    const {w,h}=this.size(); const m=this.margin;
+    const t = cx>=m.l && cx<=w-m.r && cy>=m.t && cy<=h-m.b ? this._hit(cx, cy) : null;
+    if (t){ this.svg._pick = { lock: t.id, i: nearestIndex(this, t.e, cx, cy) }; _locked.add(this.svg); _lastLocked = this.svg; }
+    else if (this.svg._pick){ this.svg._pick = null; _locked.delete(this.svg); }
+    else return;
+    this._paintPick(cx, cy, true);
   }
   _initInteraction(){
     // View-only plots (e.g. the residual strip) get no pan/zoom interaction at all.
@@ -738,11 +971,29 @@ class Plot{
         zoomRect.setAttribute('height', Math.abs(cy-zoomStart.cy));
       } else if (P._mode || svg._suppressReadout){
         P._clearCrosshair(); // pan/zoom tool or add-peak armed → no position readout
-      } else {
+      } else if (pickOff(P)){
         P._drawCrosshair(e.clientX, e.clientY); // hover readout (no tool active)
+      } else {
+        // hover readout, and the trace under the pointer (or the one locked) picked out
+        svg._pickLast = {x:e.clientX, y:e.clientY};
+        const r = svg.getBoundingClientRect();
+        P._paintPick(e.clientX - r.left, e.clientY - r.top);
       }
     });
-    svg.addEventListener('pointerleave', ()=>{ const P = svg._plot; if (P) P._clearCrosshair(); });
+    svg.addEventListener('pointerleave', ()=>{ svg._pickLast = null; const P = svg._plot; if (P) P._clearCrosshair(); });
+    /* A click that locks a trace or lets it go: pressed and released in place, on no
+       overlay (a draggable line), with no tool armed and no pointer of the module's own.
+       The press is seen in the capture phase: a line's drag stops its propagation. */
+    let pickDown = null;
+    svg.addEventListener('pointerdown', e=>{
+      const P = svg._plot;
+      pickDown = P && e.button === 0 && !e.target.closest('.plot-goverlay') && !pickOff(P) ? {x:e.clientX, y:e.clientY} : null;
+    }, true);
+    svg.addEventListener('click', e=>{
+      const P = svg._plot, d = pickDown; pickDown = null;
+      if (!P || !d || pickOff(P) || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 4) return;
+      P._pickClick(e.clientX, e.clientY);
+    });
 
     const endDrag = ()=>{ pan=null; zoomStart=null; if (zoomRect){ zoomRect.remove(); zoomRect=null; } };
 
@@ -1020,5 +1271,5 @@ document.addEventListener('click', e=>{
 
 
 export {
-  niceStep, niceTicks, fixedTicks, fmtTick, axisReadout, svgEl, SUB_DROP, TILT_DY, Plot, downloadSvgClean
+  niceTicks, fmtTick, axisReadout, svgEl, SUB_DROP, TILT_DY, Plot
 };

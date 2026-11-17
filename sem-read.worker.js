@@ -8,7 +8,7 @@
    are the bytes'), small, st, card, buf (the bytes themselves, back) }, or { seq, error }
    with the reason it is not taken (a SemReadError), or { seq, fault, kind } for anything
    else (out of memory). One file at a time, in the order sent. One worker for every SEM
-   tab (b2, sem.js), let go when none has read for a while. To b2 it made the file's
+   tab (sem.js), let go when none has read for a while. To v517 it made the file's
    base64 too, and sent a copy of the pixels where they were the bytes.
 ========================================================= */
 import { readFile, SemReadError } from './sem-read.js';

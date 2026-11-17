@@ -1,0 +1,99 @@
+{
+ "mode": "lsq",
+ "rows": [
+  {
+   "id": "sphere-P-1-2",
+   "solid": "sphere",
+   "laue": "-1",
+   "error": "none",
+   "counts": 21164,
+   "maxDev": 0.023272684967561876,
+   "excess": 0.29096390520993914
+  },
+  {
+   "id": "sphere-P2m-3",
+   "solid": "sphere",
+   "laue": "2/m",
+   "error": "none",
+   "counts": 2609,
+   "maxDev": 0.025442351149975184,
+   "excess": 0.013043712911420776
+  },
+  {
+   "id": "sphere-Pmmm-1",
+   "solid": "sphere",
+   "laue": "mmm",
+   "error": "none",
+   "counts": 6930,
+   "maxDev": 0.026955611279375236,
+   "excess": 0.23391871232436864
+  },
+  {
+   "id": "sphere-P4m-2",
+   "solid": "sphere",
+   "laue": "4/m",
+   "error": "none",
+   "counts": 3966,
+   "maxDev": 0.037367454793065136,
+   "excess": 0.39053132196538043
+  },
+  {
+   "id": "sphere-P4mmm-3",
+   "solid": "sphere",
+   "laue": "4/mmm",
+   "error": "air",
+   "counts": 1493,
+   "maxDev": 0.029803368253498188,
+   "excess": 0.0793004788377921
+  },
+  {
+   "id": "sphere-P-3-1",
+   "solid": "sphere",
+   "laue": "-3",
+   "error": "none",
+   "counts": 6028,
+   "maxDev": 0.02840227697839725,
+   "excess": 0.5059940392810897
+  },
+  {
+   "id": "sphere-P-3m1-2",
+   "solid": "sphere",
+   "laue": "-3m",
+   "error": "none",
+   "counts": 1974,
+   "maxDev": 0.04274060384835861,
+   "excess": 0.09077648650524034
+  },
+  {
+   "id": "sphere-P6m-3",
+   "solid": "sphere",
+   "laue": "6/m",
+   "error": "impurity",
+   "counts": 5243,
+   "maxDev": 0.017982644890866005,
+   "excess": 0.01683025001934548
+  },
+  {
+   "id": "sphere-P6mmm-1",
+   "skipped": "po"
+  },
+  {
+   "id": "sphere-Pm-3-2",
+   "solid": "sphere",
+   "laue": "m-3",
+   "error": "hump",
+   "counts": 1299,
+   "maxDev": 0.04369083851461647,
+   "excess": 0.20342028894527336
+  },
+  {
+   "id": "sphere-Pm-3m-3",
+   "solid": "sphere",
+   "laue": "m-3m",
+   "error": "sizedist",
+   "counts": 24334,
+   "maxDev": 0.055391856326726864,
+   "excess": 2.401147739460169
+  }
+ ]
+}

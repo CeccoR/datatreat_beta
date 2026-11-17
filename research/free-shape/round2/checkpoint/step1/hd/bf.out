@@ -1,0 +1,6 @@
+2026-10-31T02:30:03.448Z jobs-fill.txt: 1 of 1 to do, 1 at a time, timeout 1800 s
+2026-10-31T02:30:29.561Z [1/1] d-fill ellipsoid-Pm-3-on: ok 26 s
+ellipsoid-Pm-3-on (m-3, ellipsoid 2.4×11.7×60.0, po 0.23; exact, 10–110/0.01) as ellipsoid: draw 314 ms; iso χ²_ν 1.518, 532 ev, 1364 ms; list 14 refl, 89 members
+  today: held χ² 10192.0 best 10192.0 ΔBIC -3254 | search 1670 ev 9952 ms report 2495 ev 14333 ms | 71.94×12.34×2.44 | dims 2% 6% 20% orient 0.0° (holo 0.0°) principal 0.0°
+  wall 26.0 s
+2026-10-31T02:30:29.561Z done
