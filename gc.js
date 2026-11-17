@@ -31,10 +31,24 @@ const tablesKept = keeper('gc-tables', 8);
 // Axis titles. The SVG form carries the g⁻¹/h⁻¹ superscripts; the plain form is the
 // matching CSV header.
 const SUP1 = '<tspan baseline-shift="super" font-size="8">-1</tspan>';
+const SUP2 = '<tspan baseline-shift="super" font-size="8">-2</tspan>';
 const LBL_RATE_SVG = `Production Rate (mmol g${SUP1} h${SUP1})`;
 const LBL_CUM_SVG  = `Production (mmol g${SUP1})`;
 const LBL_RATE_CSV = 'Production Rate (mmol g^-1 h^-1)';
 const LBL_CUM_CSV  = 'Production (mmol g^-1)';
+/* What a card's rates are normalised by (v540), one choice a card so that its plots and its
+   bar chart never mix units: the photocatalyst's mass m (mg, as to v539), the rate in
+   mmol g⁻¹ h⁻¹ and the production in mmol g⁻¹, or, for a film, its area A (cm²), in
+   µmol cm⁻² h⁻¹ and µmol cm⁻². A gas's flow in µmol/h over m in mg is µmol mg⁻¹ h⁻¹, which
+   is mmol g⁻¹ h⁻¹; over A in cm², µmol cm⁻² h⁻¹. Each with its labels: the axis titles
+   (SVG), the CSV headers, the column of the parameter table and of gc_info.csv. */
+const NORM = {
+  mass: { rateSvg: LBL_RATE_SVG, cumSvg: LBL_CUM_SVG, rateCsv: LBL_RATE_CSV, cumCsv: LBL_CUM_CSV, unitCsv: 'mmol g^-1 h^-1',
+    col: 'm (mg)', colCsv: 'm (mg)' },
+  area: { rateSvg: `Production Rate (µmol cm${SUP2} h${SUP1})`, cumSvg: `Production (µmol cm${SUP2})`, rateCsv: 'Production Rate (umol cm^-2 h^-1)',
+    cumCsv: 'Production (umol cm^-2)', unitCsv: 'umol cm^-2 h^-1', col: 'A (cm²)', colCsv: 'A (cm^2)' },
+};
+const NORMS = Object.keys(NORM);
 
 /* The gases the module can read, in display order. `col` finds the column: the name
    has to carry the formula as a word of its own, or "O2" would also match the "CO2"
@@ -342,7 +356,7 @@ const KINDS = { rate: 'Production Rate' };
 // What T and p are (their columns' titles, and the card's instructions).
 const T_TITLE = 'the temperature the flow Q refers to — for a mass-flow controller (sccm, slpm), the reference temperature of its standard units (Alicat: 25 °C), not that of the gas in the lines or the reactor; for a flow measured as a volume, the gas temperature where it is measured';
 const P_TITLE = 'the absolute pressure the flow Q refers to — for a mass-flow controller, the reference pressure of its standard units (Alicat: 14.696 psia = 1 atm), not that of the gas in the lines or the reactor; for a flow measured as a volume, the absolute pressure of the gas where it is measured (ambient ≈ 1 atm)';
-const GC_INFO = `Set catalyst mass (m), carrier gas flow rate (Q), its temperature (T) and pressure (p), the light-on time and the integration interval for each sample to compute mean H₂ and O₂ production rates; the <b>H₂ / O₂</b> chips on each plot choose the gases drawn, for Analysis and for Results; the CSVs have every gas, whichever is drawn. Two layouts are read. The <b>default</b>: a header naming the Injection Date and each gas's %mol column (H₂, O₂). The <b>alternative</b>, the instrument's tab-separated .txt export: a header naming Inject Time and its Area and Amount columns, over a line naming each column's gas (Hydrogen, Nitrogen, Oxygen); H₂ and O₂ are read from the Amount columns, in ppm, and worked out as %mol (ppm / 10⁴), gc_raw.csv writing them in ppm (its column headed so), the Area columns and N₂ left out, and an info alert under the drop zone names each file read so. An empty H₂ or O₂ cell, or one reading n.a., leaves that injection out of that gas only, and the alert under the drop zone says how many were skipped; a blank line, a line of separators alone and a row with no date (n.a.) are passed over. An injection date is the day, the month and the year between slashes, the month a number or an English name (Nov, November), the year of 4 digits or 2 (26 is 2026), then the time, h:mm or h:mm:ss, with AM/PM or in 24 hours (14:13). Numeric dates are read month/day, as the instrument writes them, or day/month in a file where some do not exist so and every one does that way, its times going on as the rows do; a month named is read where it stands (13/Nov/26 is 13 November). A row whose date does not exist (2/30, 13/13, 31/Nov, 13:00 PM) is left out, and the alert says either. Use the <b>all / one</b> toggles to share a value across samples or set it per sample. <b>T</b> is ${T_TITLE}. <b>p</b> is ${P_TITLE}; its unit (atm, bar, kPa, mbar, Torr = mmHg, psi) is chosen in its column's header, which converts the values shown, not the pressure. A <b>mass-flow controller</b> (an Alicat MC, say) gives a mass flow as the volume it would take at its reference conditions (sccm, slpm), so the molar flow is n/t = p<sub>ref</sub>·Q/(R·T<sub>ref</sub>) with the controller's reference T and p: the real temperature and pressure of the gas, in the lines or in the reactor, do not enter. Set T and p to its standard conditions: Alicat's default is 25 °C and 14.696 psia (1 atm) for its standard units, 0 °C and 1 atm for its normal ones (NCCM, NLPM), and the device's STP/NTP menu can change them. Its reading is right for the gas it is set to: another gas or a mixture needs that gas chosen on the device, or its correction factor. The flow is turned into moles with the molar volume of an ideal gas at that temperature and pressure, V<sub>m</sub> = RT/p (22.414 L/mol at 0 °C and 1 atm, 24.465 L/mol at 25 °C and 1 atm). A new analysis starts at 25 °C and 1 atm; a project saved before T existed keeps the 0 °C its rates were worked out at, and one saved before p, the 1 atm. The <b>injection delay</b> moves every injection on from its logged date to the moment the sample is actually injected; <b>Auto</b> uses 60.6 s. In per-sample interval mode the vertical lines are coloured by sample — hover or select a table row to highlight its interval on the plot (and vice-versa). <b>Replicates</b>: the <b>Sample</b> column of the file list says which sample each file is — its own (as it starts), or another file's, named by that file's label (a label renamed shows at once and changes no link); a file that heads a group, set to another, takes its group along, and a head removed leaves its group to its next file. The time plots stay one per file; the mean-rate bar chart has one bar per sample, named after its head's label (the first included file's, the head left out), its height the mean of its included files' mean rates, each worked out with its own parameters, and its error bar the files' standard deviation (n − 1 under it; none for a single file); a file left out is out of the mean and of n. With replicates (a sample of more than one included file), mean_rates.csv has a row per sample (each gas's mean, ± and n) and mean_rates_by_file.csv a row per file, as mean_rates.csv has without them. ${cardInfo(false, true)}`;
+const GC_INFO = `Set catalyst mass (m) or, for a film, its area (A), carrier gas flow rate (Q), its temperature (T) and pressure (p), the light-on time and the integration interval for each sample to compute mean H₂ and O₂ production rates; <b>Normalize by</b>, on the injection delay's row, chooses for the whole card what the rates are divided by: the photocatalyst's <b>mass</b> m in mg (rates in mmol g⁻¹ h⁻¹, production in mmol g⁻¹; the default, and how a project saved before v540 opens) or its <b>area</b> A in cm² (µmol cm⁻² h⁻¹ and µmol cm⁻², the usual units for films); with area the m column becomes A, with its own all / one, the masses and the areas both kept, so that switching back loses neither; the plots, the bar chart, the CSVs and their headers follow the choice. the <b>H₂ / O₂</b> chips on each plot choose the gases drawn, for Analysis and for Results; the CSVs have every gas, whichever is drawn. Two layouts are read. The <b>default</b>: a header naming the Injection Date and each gas's %mol column (H₂, O₂). The <b>alternative</b>, the instrument's tab-separated .txt export: a header naming Inject Time and its Area and Amount columns, over a line naming each column's gas (Hydrogen, Nitrogen, Oxygen); H₂ and O₂ are read from the Amount columns, in ppm, and worked out as %mol (ppm / 10⁴), gc_raw.csv writing them in ppm (its column headed so), the Area columns and N₂ left out, and an info alert under the drop zone names each file read so. An empty H₂ or O₂ cell, or one reading n.a., leaves that injection out of that gas only, and the alert under the drop zone says how many were skipped; a blank line, a line of separators alone and a row with no date (n.a.) are passed over. An injection date is the day, the month and the year between slashes, the month a number or an English name (Nov, November), the year of 4 digits or 2 (26 is 2026), then the time, h:mm or h:mm:ss, with AM/PM or in 24 hours (14:13). Numeric dates are read month/day, as the instrument writes them, or day/month in a file where some do not exist so and every one does that way, its times going on as the rows do; a month named is read where it stands (13/Nov/26 is 13 November). A row whose date does not exist (2/30, 13/13, 31/Nov, 13:00 PM) is left out, and the alert says either. Use the <b>all / one</b> toggles to share a value across samples or set it per sample. <b>T</b> is ${T_TITLE}. <b>p</b> is ${P_TITLE}; its unit (atm, bar, kPa, mbar, Torr = mmHg, psi) is chosen in its column's header, which converts the values shown, not the pressure. A <b>mass-flow controller</b> (an Alicat MC, say) gives a mass flow as the volume it would take at its reference conditions (sccm, slpm), so the molar flow is n/t = p<sub>ref</sub>·Q/(R·T<sub>ref</sub>) with the controller's reference T and p: the real temperature and pressure of the gas, in the lines or in the reactor, do not enter. Set T and p to its standard conditions: Alicat's default is 25 °C and 14.696 psia (1 atm) for its standard units, 0 °C and 1 atm for its normal ones (NCCM, NLPM), and the device's STP/NTP menu can change them. Its reading is right for the gas it is set to: another gas or a mixture needs that gas chosen on the device, or its correction factor. The flow is turned into moles with the molar volume of an ideal gas at that temperature and pressure, V<sub>m</sub> = RT/p (22.414 L/mol at 0 °C and 1 atm, 24.465 L/mol at 25 °C and 1 atm). A new analysis starts at 25 °C and 1 atm; a project saved before T existed keeps the 0 °C its rates were worked out at, and one saved before p, the 1 atm. The <b>injection delay</b> moves every injection on from its logged date to the moment the sample is actually injected; <b>Auto</b> uses 60.6 s. In per-sample interval mode the vertical lines are coloured by sample — hover or select a table row to highlight its interval on the plot (and vice-versa). <b>Replicates</b>: the <b>Sample</b> column of the file list says which sample each file is — its own (as it starts), or another file's, named by that file's label (a label renamed shows at once and changes no link); a file that heads a group, set to another, takes its group along, and a head removed leaves its group to its next file. The time plots stay one per file; the mean-rate bar chart has one bar per sample, named after its head's label (the first included file's, the head left out), its height the mean of its included files' mean rates, each worked out with its own parameters, and its error bar the files' standard deviation (n − 1 under it; none for a single file); a file left out is out of the mean and of n. With replicates (a sample of more than one included file), mean_rates.csv has a row per sample (each gas's mean, ± and n) and mean_rates_by_file.csv a row per file, as mean_rates.csv has without them. ${cardInfo(false, true)}`;
 
 // A GC tab's instance (utils.js makeInstance: ctx { key, root, layer, shown }).
 function createGc({ key, root, layer, shown }){
@@ -582,7 +596,7 @@ function createGc({ key, root, layer, shown }){
     // The plots' gas chips, the card's and its section's.
     const gasEls = ()=> [...card.querySelectorAll('.gc-gas-sel'), ...res.querySelectorAll('.gc-gas-sel')];
 
-    let ms=[], Qs=[], Ts=[], Ps=[], startArr=[], endArr=[], lightOnDates=[];
+    let ms=[], As=[], Qs=[], Ts=[], Ps=[], startArr=[], endArr=[], lightOnDates=[];
     let dataTables=[];
     let plot1;
     /* Analysis and Results choose their gases separately, but every plot inside a
@@ -602,9 +616,13 @@ function createGc({ key, root, layer, shown }){
       return chosen.length ? chosen : there;
     }
     // all/one per parameter: 'all' = one shared value for every sample; 'one' = per-sample.
-    // Each of m, Q, T, p, start and end toggles independently. Default: everything shared ('all').
-    let mMode='all', qMode='all', tMode='all', pMode='all', startMode='all', endMode='all';
-    let mShared=15, qShared=2, tShared=T_NEW, pShared=P_ATM, startShared=0, endShared=24;
+    // Each of m, A, Q, T, p, start and end toggles independently. Default: everything shared ('all').
+    let mMode='all', aMode='all', qMode='all', tMode='all', pMode='all', startMode='all', endMode='all';
+    let mShared=15, aShared=1, qShared=2, tShared=T_NEW, pShared=P_ATM, startShared=0, endShared=24;
+    /* What the rates are normalised by (NORM, v540): 'mass' (m, as to v539) or 'area' (A,
+       a film's), the card's one choice. The masses and the areas are both kept, each with
+       its all/one, whichever is in force: switching back and forth loses neither. */
+    let norm = 'mass';
     let pUnit = 'atm';
     let delayAuto = true, delayMan = INJ_DELAY_AUTO;
     const injDelay = ()=> delayAuto ? INJ_DELAY_AUTO : delayMan;
@@ -619,6 +637,9 @@ function createGc({ key, root, layer, shown }){
 
     // Effective per-sample values (respect each parameter's all/one mode).
     const mOf     = k => mMode==='all'     ? mShared     : ms[k];
+    const aOf     = k => aMode==='all'     ? aShared     : As[k];   // cm²
+    // What sample k's rates are divided by: its mass in mg, or its area in cm².
+    const perOf   = k => norm==='area' ? aOf(k) : mOf(k);
     const qOf     = k => qMode==='all'     ? qShared     : Qs[k];
     const tOf     = k => tMode==='all'     ? tShared     : Ts[k];
     const pOf     = k => pMode==='all'     ? pShared     : Ps[k];   // Pa
@@ -628,7 +649,7 @@ function createGc({ key, root, layer, shown }){
     const intPerSample = () => startMode==='one' || endMode==='one';
 
     // A card added with samples loaded starts from the upload defaults for each.
-    files.forEach(f=>{ ms.push(15); Qs.push(2); Ts.push(T_NEW); Ps.push(P_ATM); startArr.push(0); endArr.push(24); lightOnDates.push(firstInjection(f)); });
+    files.forEach(f=>{ ms.push(15); As.push(1); Qs.push(2); Ts.push(T_NEW); Ps.push(P_ATM); startArr.push(0); endArr.push(24); lightOnDates.push(firstInjection(f)); });
 
     // Warning when a sample's light-on time is before (or at) its first injection
     function lightOnWarn(i){
@@ -665,16 +686,23 @@ function createGc({ key, root, layer, shown }){
       // p's unit is chosen in its header, where the other columns name theirs: in the
       // header's own type, its box let out of the line's height as the pill's is (-3 px),
       // so that p's name and pill sit level with the others' and the box with the pill.
+      /* The m column is the area A where the card normalises by it (NORM, v540): its own
+         values, all/one and field (data-f "a"), the masses kept as they were. The choice
+         on the delay's row, under T and p. */
+      const isA = norm === 'area', nf = isA ? 'a' : 'm', nMode = isA ? aMode : mMode, nShared = isA ? aShared : mShared, nOf = isA ? aOf : mOf;
+      const nTitle = isA ? ' title="A: the area of the photocatalyst (a film\'s), in cm²: the rates are per cm²"' : '';
+      const normSel = `<label class="pp-check gc-norm-lab" title="What the rates are divided by, for every sample of this card: the photocatalyst's mass (mmol g⁻¹ h⁻¹) or, for a film, its area (µmol cm⁻² h⁻¹)">Normalize by <select class="gc-norm" aria-label="Normalize by" style="width:auto;margin:-3px 0;padding:0 2px;border-radius:5px;font:inherit;color:var(--text)">${
+        NORMS.map(v=> `<option value="${v}"${v === norm ? ' selected' : ''}>${v}</option>`).join('')}</select></label>`;
       const unitSel = `<select class="gc-unit" aria-label="Unit of p" title="The unit p is shown and written in: switching it converts the values, not the pressure (Torr: mmHg)" style="width:auto;margin:-3px 0;padding:0 2px;border-radius:5px;font:inherit;color:inherit">${
         Object.keys(P_UNITS).map(u=> `<option value="${u}"${u === pUnit ? ' selected' : ''}>${u}</option>`).join('')}</select>`;
       let html = `<div style="overflow-x:auto"><table class="gc-param-table gc-delay" style="width:100%;table-layout:fixed">${cg}<tbody>
         <tr><td class="fname">Injection delay (s)</td>
           <td>${numCell('gcDelay', 'title="From the logged injection date to the actual injection, in seconds"', injDelay(), delayAuto ? 'off' : 'on')}</td>
           <td><label class="pp-check" title="Use the method's delay, ${INJ_DELAY_AUTO} s"><input type="checkbox" class="gcDelayAuto"${delayAuto ? ' checked' : ''}> Auto</label></td>
-          <td colspan="6"></td></tr></tbody></table>
+          <td colspan="2">${normSel}</td><td colspan="4"></td></tr></tbody></table>
         <table class="gc-param-table" style="width:100%;table-layout:fixed">${cg}<thead>
         <tr><th rowspan="2">${thHead('Sample', '')}</th>
-          <th rowspan="2">${thHead('m (mg)', modeChip('m',mMode))}</th>
+          <th rowspan="2"${nTitle}>${thHead(NORM[norm].col, modeChip(nf,nMode))}</th>
           <th rowspan="2">${thHead('Q (mL/min)', modeChip('q',qMode))}</th>
           <th rowspan="2" title="T: ${T_TITLE}">${thHead('T (°C)', modeChip('t',tMode))}</th>
           <th rowspan="2" title="p: ${P_TITLE}">${thHead('p ' + unitSel, modeChip('p',pMode))}</th>
@@ -684,7 +712,7 @@ function createGc({ key, root, layer, shown }){
         <tr><th>${thHead('start', modeChip('start',startMode))}</th><th>${thHead('end', modeChip('end',endMode))}</th></tr></thead><tbody>`;
       // Shared "all" row
       html += `<tr class="gc-all-row"><td class="fname">All</td>
-        <td>${numCell('gcShared','data-f="m"',mShared,shareState(mMode))}</td>
+        <td>${numCell('gcShared',`data-f="${nf}"`,nShared,shareState(nMode))}</td>
         <td>${numCell('gcShared','data-f="q"',qShared,shareState(qMode))}</td>
         <td>${numCell('gcShared','data-f="t"',tShared,shareState(tMode))}</td>
         <td>${numCell('gcShared','data-f="p"',inUnit(pShared, pUnit),shareState(pMode))}</td>
@@ -696,7 +724,7 @@ function createGc({ key, root, layer, shown }){
       files.forEach((f,i)=>{
         html += `<tr class="gc-row" data-i="${i}">
           <td class="fname" title="${esc(f.label)}">${esc(f.label)}</td>
-          <td>${numCell('gcCell','data-i="'+i+'" data-f="m"',mOf(i),cellState(mMode))}</td>
+          <td>${numCell('gcCell','data-i="'+i+'" data-f="'+nf+'"',nOf(i),cellState(nMode))}</td>
           <td>${numCell('gcCell','data-i="'+i+'" data-f="q"',qOf(i),cellState(qMode))}</td>
           <td>${numCell('gcCell','data-i="'+i+'" data-f="t"',tOf(i),cellState(tMode))}</td>
           <td>${numCell('gcCell','data-i="'+i+'" data-f="p"',inUnit(pOf(i), pUnit),cellState(pMode))}</td>
@@ -731,6 +759,16 @@ function createGc({ key, root, layer, shown }){
         wrap.querySelectorAll('input[data-f="p"]').forEach(inp=>{ inp.value = inUnit(inp.classList.contains('gcShared') ? pShared : pOf(+inp.dataset.i), pUnit); });
         kit.commit();
       });
+      // What the rates are normalised by: the m column shown again as the one in force, the
+      // rates and their labels worked out anew; the focus kept on the select (an arrow key
+      // on it is a change at once).
+      const normIn = wrap.querySelector('.gc-norm');
+      normIn.addEventListener('change', ()=>{
+        norm = oneOf(normIn.value, NORMS);
+        renderGcParamTable();
+        wrap.querySelector('.gc-norm').focus({ preventScroll: true });
+        computeAndRenderGc(); kit.commit();
+      });
 
       // all/one toggles: flip a parameter, seeding across the boundary (one→all from
       // sample 0, all→one from the shared value), then re-render + recompute. An interval
@@ -747,6 +785,7 @@ function createGc({ key, root, layer, shown }){
         if (why){ flashFieldInvalid(btn); confirmBanner(why, 'OK'); return; }
         switch (pair){
           case 'm':     mMode     = flip(mMode,     mShared,     ms,       v=>mShared=v);     break;
+          case 'a':     aMode     = flip(aMode,     aShared,     As,       v=>aShared=v);     break;
           case 'q':     qMode     = flip(qMode,     qShared,     Qs,       v=>qShared=v);     break;
           case 't':     tMode     = flip(tMode,     tShared,     Ts,       v=>tShared=v);     break;
           case 'p':     pMode     = flip(pMode,     pShared,     Ps,       v=>pShared=v);     break;
@@ -769,6 +808,9 @@ function createGc({ key, root, layer, shown }){
       wrap.querySelectorAll('.gcShared[data-f="m"]').forEach(inp=> mMode==='all' && wireNum(inp, v=>mShared=v));
       wrap.querySelectorAll('.gcShared[data-f="q"]').forEach(inp=> qMode==='all' && wireNum(inp, v=>qShared=v));
       wrap.querySelectorAll('.gcCell[data-f="m"]').forEach(inp=>{ if(mMode==='one'){ const i=+inp.dataset.i; wireNum(inp, v=>ms[i]=v); }});
+      // A, where it is in force, as m: above 0 (v540).
+      wrap.querySelectorAll('.gcShared[data-f="a"]').forEach(inp=> aMode==='all' && wireNum(inp, v=>aShared=v));
+      wrap.querySelectorAll('.gcCell[data-f="a"]').forEach(inp=>{ if(aMode==='one'){ const i=+inp.dataset.i; wireNum(inp, v=>As[i]=v); }});
       wrap.querySelectorAll('.gcCell[data-f="q"]').forEach(inp=>{ if(qMode==='one'){ const i=+inp.dataset.i; wireNum(inp, v=>Qs[i]=v); }});
       wrap.querySelectorAll('.gcShared[data-f="t"]').forEach(inp=> tMode==='all' && wireNum(inp, v=>tShared=v, -273));
       wrap.querySelectorAll('.gcCell[data-f="t"]').forEach(inp=>{ if(tMode==='one'){ const i=+inp.dataset.i; wireNum(inp, v=>Ts[i]=v, -273); }});
@@ -856,7 +898,7 @@ function createGc({ key, root, layer, shown }){
     function computeTables(){
       dataTables = files.map((f,h)=>{
         const ks = Object.keys(f.gas), lightOn = lightOnDates[h];
-        const key = exactKey([f.injDates.map(d=> +d), ks.map(k=> [k, objId(f.gas[k])]), +lightOn, injDelay(), qOf(h), tOf(h), pOf(h), mOf(h)]);
+        const key = exactKey([f.injDates.map(d=> +d), ks.map(k=> [k, objId(f.gas[k])]), +lightOn, injDelay(), qOf(h), tOf(h), pOf(h), norm === 'area' ? ['A', aOf(h)] : mOf(h)]);
         const made = tablesKept(ks.length ? f.gas[ks[0]] : null, key, ()=> tablesOf(f, h, lightOn)), gas = {};
         for (const k in made.gas) gas[k] = { ...made.gas[k], FmInt: made.gas[k].cum };
         // (ppm: read from the alternative export, its concentrations written in its unit, gc_raw.csv)
@@ -887,7 +929,7 @@ function createGc({ key, root, layer, shown }){
         const tHours = pts.map(p=> hours(p.d));
         const pct = pts.map(p=> p.v);
         const flow = pct.map(v=> v/100*F*1e6);             // umol/h of this gas
-        const flowM = flow.map(v=> v/mOf(h));              // per mg -> mmol/(g h)
+        const flowM = flow.map(v=> v/perOf(h));            // per mg -> mmol/(g h); per cm² -> µmol/(cm² h)
         // From the first injection on; FmInt, from the interval's start (updateRegression).
         const cum = cumtrapz(tHours, flowM);
         gas[k] = { t: tHours, pct, flow, Fm: flowM, cum };
@@ -950,7 +992,7 @@ function createGc({ key, root, layer, shown }){
 
     function renderGcPlots(){
       const legend = $('Legend'); legend.innerHTML='';
-      plot1 = new Plot($('Svg1'), {xlabel:'Time (h)', ylabelSvg:LBL_RATE_SVG});
+      plot1 = new Plot($('Svg1'), {xlabel:'Time (h)', ylabelSvg:NORM[norm].rateSvg});
       const resLegend = $('ResLegend'); resLegend.innerHTML='';
       legend.innerHTML   = dataTables.map(d=> gasLegendHtml(d, shownGases('a'))).join('');
       resLegend.innerHTML = dataTables.map(d=> gasLegendHtml(d, shownGases('r'))).join('');
@@ -1131,8 +1173,8 @@ function createGc({ key, root, layer, shown }){
         drawGasLines(p, cut, shown, key);
         p.attachTools(svg.closest('.plot-wrap'));
       };
-      mk('SvgRate', LBL_RATE_SVG, 'Fm');
-      mk('SvgCum',  LBL_CUM_SVG,  'FmInt');
+      mk('SvgRate', NORM[norm].rateSvg, 'Fm');
+      mk('SvgCum',  NORM[norm].cumSvg,  'FmInt');
     }
 
     /* The mean rates per sample (samplesOf), of each gas: the mean over the sample's files
@@ -1162,7 +1204,7 @@ function createGc({ key, root, layer, shown }){
        section's visibility is updateRegression's. */
     function drawBarChart(){
       const svg = $('SvgBar'), sm = sampleRates();
-      valueBars(svg, { cats: sm, digits: 4, yLabel: LBL_RATE_SVG, legend: $('BarLegend'),
+      valueBars(svg, { cats: sm, digits: 4, yLabel: NORM[norm].rateSvg, legend: $('BarLegend'),
         series: shownGases('r').map(g=> ({ name: gasTxt(g), color: g.bar, vals: sm.map(s=> s.rate[g.key]), errs: sm.map(s=> s.err[g.key]) })),
         chips: svg.closest('.plot-wrap').querySelector('.gc-gas-sel') });
     }
@@ -1173,7 +1215,7 @@ function createGc({ key, root, layer, shown }){
     // The card's CSVs, named after it.
     function exportEntries(n){
       if (!dataTables.length) return [];
-      const entries = [];
+      const entries = [], U = NORM[norm];
       // One block of columns per sample (each keeps its own time axis). gc_raw.csv carries
       // the full series with every intermediate quantity; gc_results.csv keeps only the
       // three plotted columns, between the interval's lines as plotted.
@@ -1210,8 +1252,8 @@ function createGc({ key, root, layer, shown }){
                 : {h:`${g.csv} (%mol) [${d.label}]`,      v:col(j, q.pct)});
               cols.push({h:`${g.csv} (umol h^-1) [${d.label}]`, v:col(j, q.flow)});
             }
-            cols.push({h:`${g.csv} ${LBL_RATE_CSV} [${d.label}]`, v:col(j, q.Fm)});
-            cols.push({h:`${g.csv} ${LBL_CUM_CSV} [${d.label}]`,  v:col(j, q.FmInt)});
+            cols.push({h:`${g.csv} ${U.rateCsv} [${d.label}]`, v:col(j, q.Fm)});
+            cols.push({h:`${g.csv} ${U.cumCsv} [${d.label}]`,  v:col(j, q.FmInt)});
           });
         });
         return wideCsv(cols);
@@ -1229,7 +1271,7 @@ function createGc({ key, root, layer, shown }){
       // The columns after the rates, and file k's.
       const tailHead = [...(perGas ? shown.map(g=>`${g.csv} interval duration (h)`) : ['Interval duration (h)']), `p (${pUnit})`, 'T (°C)'];
       const tail = k =>{ const c = costResults[k]; return [...(perGas ? durs(c) : [durs(c).find(Boolean) || fmtNum(c.span,4)]), asSet(inUnit(pOf(k), pUnit)), asSet(tOf(k))]; };
-      let t2 = csvLine(['Sample', ...shown.map(g=>`Mean ${g.csv} ${LBL_RATE_CSV}`), ...tailHead]);
+      let t2 = csvLine(['Sample', ...shown.map(g=>`Mean ${g.csv} ${U.rateCsv}`), ...tailHead]);
       costResults.forEach((c, k)=> t2 += csvLine([c.label, ...shown.map(g=>fmtNum(c.rate[g.key],6)), ...tail(k)]));
       /* With replicates (a sample of more than one included file), mean_rates.csv has a row
          per sample: its name (its bar's), each gas's mean, ± and n (sampleRates), then its
@@ -1240,7 +1282,7 @@ function createGc({ key, root, layer, shown }){
       const sm = sampleRates();
       if (sm.some(s=> s.ks.length > 1)){
         const one = vs =>{ const w = vs.filter(v=> v !== ''); return w.every(v=> v === w[0]) ? (w[0] || '') : w.join('/'); };
-        let t4 = csvLine(['Sample', ...shown.flatMap(g=> [`Mean ${g.csv} ${LBL_RATE_CSV}`, `${g.csv} SD (mmol g^-1 h^-1)`, `${g.csv} n`]), ...tailHead]);
+        let t4 = csvLine(['Sample', ...shown.flatMap(g=> [`Mean ${g.csv} ${U.rateCsv}`, `${g.csv} SD (${U.unitCsv})`, `${g.csv} n`]), ...tailHead]);
         sm.forEach(s=>{
           const tails = s.ks.map(tail);
           t4 += csvLine([s.label, ...shown.flatMap(g=> [fmtNum(s.rate[g.key],6), fmtNum(s.err[g.key],6), String(s.n[g.key])]), ...tailHead.map((_, j)=> one(tails.map(t=> t[j])))]);
@@ -1253,8 +1295,9 @@ function createGc({ key, root, layer, shown }){
       const pad = n => String(n).padStart(2, '0');
       const fmtDate = v =>{ if (!v) return ''; const d = new Date(v);
         return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
-      let t3 = csvLine(['Sample','m (mg)','Q (mL/min)','T (°C)',`p (${pUnit})`,'Light-on','Interval start (h)','Interval end (h)','Injection delay (s)']);
-      dataTables.forEach((d,k)=> t3 += csvLine([d.label, asSet(mOf(k)), asSet(qOf(k)), asSet(tOf(k)), asSet(inUnit(pOf(k), pUnit)), fmtDate(lightOnDates[k]), asSet(startOf(k)), asSet(endOf(k)), asSet(injDelay())]));
+      // (the mass, or the area where the card normalises by it: its column, v540)
+      let t3 = csvLine(['Sample',U.colCsv,'Q (mL/min)','T (°C)',`p (${pUnit})`,'Light-on','Interval start (h)','Interval end (h)','Injection delay (s)']);
+      dataTables.forEach((d,k)=> t3 += csvLine([d.label, asSet(perOf(k)), asSet(qOf(k)), asSet(tOf(k)), asSet(inUnit(pOf(k), pUnit)), fmtDate(lightOnDates[k]), asSet(startOf(k)), asSet(endOf(k)), asSet(injDelay())]));
       entries.push({name:`${n} - gc_info.csv`, text:t3});
       return entries;
     }
@@ -1265,6 +1308,7 @@ function createGc({ key, root, layer, shown }){
       slots: ()=> [
         // (a value held through an exclusion, as a restore takes it: modkit RESTORED)
         { key: a.id + ':m', arr:ms, make: v=> num(v, 15, x=> x > 0) },
+        { key: a.id + ':A', arr:As, make: v=> num(v, 1, x=> x > 0) },
         { key: a.id + ':Q', arr:Qs, make: v=> num(v, 2, x=> x > 0) },
         { key: a.id + ':T', arr:Ts, make: v=> num(v, T_NEW, okT) },
         { key: a.id + ':p', arr:Ps, make: v=> num(v, P_ATM, okP) },
@@ -1272,7 +1316,7 @@ function createGc({ key, root, layer, shown }){
         { key: a.id + ':end', arr:endArr, make: v=> num(v, 24) },
         { key: a.id + ':lightOn', arr:lightOnDates, make: (v, f)=> dateOf(v) || (f ? firstInjection(f) : null) },
       ],
-      clear(){ [ms,Qs,Ts,Ps,startArr,endArr,lightOnDates].forEach(x=> x.length=0); dataTables=[]; costResults=[]; },
+      clear(){ [ms,As,Qs,Ts,Ps,startArr,endArr,lightOnDates].forEach(x=> x.length=0); dataTables=[]; costResults=[]; },
       unselect(){ gcSel = gcHov = null; },
       /* What it shows beside its state (the instance's shows, below): the sample picked in
          its table or on its plot, its interval highlighted (intervals one per sample), by
@@ -1302,10 +1346,11 @@ function createGc({ key, root, layer, shown }){
           mMode, qMode, tMode, pMode, startMode, endMode, mShared, qShared, tShared, pShared, startShared, endShared, pUnit,
           gasSel: { a:gasSel.a.slice(), r:gasSel.r.slice() },
           delayAuto, delayMan,
+          norm, As: As.slice(), aMode, aShared,
         };
       },
-      /* Each value as it should be (modkit RESTORED): a mode 'all' or 'one', a mass and a
-         flow above 0, a pressure as the fields take it (okP), a temperature from −273 °C,
+      /* Each value as it should be (modkit RESTORED): a mode 'all' or 'one', a mass, an area
+         and a flow above 0, the normalisation 'mass' or 'area' (mass when none), a pressure as the fields take it (okP), a temperature from −273 °C,
          p's unit one of its own, a bound and the delay numbers, a light-on a date (else the sample's first injection),
          every per-sample array one entry a sample (to v500 an array that was none threw, a
          value that was no number drew NaN). */
@@ -1341,6 +1386,10 @@ function createGc({ key, root, layer, shown }){
         // One from before the pressure was worked out at 1 atm, where a new card starts too.
         pMode = mode(s.pMode); pShared = num(s.pShared, P_ATM, okP); Ps = arrOf(s.Ps, n, v=> num(v, pShared, okP));
         pUnit = oneOf(s.pUnit, Object.keys(P_UNITS));
+        // What the rates are normalised by (v540): a project from before it, by the mass, as
+        // its rates were worked out; its areas, 1 cm², kept for a switch to them.
+        norm = oneOf(s.norm, NORMS);
+        aMode = mode(s.aMode); aShared = num(s.aShared, 1, pos); As = arrOf(s.As, n, v=> num(v, 1, pos));
         gcSel=gcHov=null;
       },
     };
