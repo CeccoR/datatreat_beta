@@ -128,17 +128,17 @@ How it all works, in detail (the model, the solver, the strategy, the broadening
 Assess H₂ and O₂ production rates from gas chromatography data, including light-on time and time-interval analysis.
 
 **Instrument compatibility**: Agilent Gas Chromatographer  
-**File format**: CSV with columns:
-  - "Injection date" (datetime)
-  - "H2 (B) [%Mol]" and/or "O2 (B) [%Mol]", or similar (mole percentages; a file needs at least one of them)
+**File format**: two layouts, told apart by their header:
+  - **Default**: CSV with columns "Injection date" (datetime) and "H2 (B) [%Mol]" and/or "O2 (B) [%Mol]", or similar (mole percentages; a file needs at least one of them).
+  - **Alternative** (from v539): the instrument's tab-separated `.txt` export. Its header is four lines: the columns' names (`No.`, `Inject Time`, then an `Area` and an `Amount` column for each gas), their units, the channel, and the gas of each Area and Amount column (`Hydrogen`, `Nitrogen`, `Oxygen`), the last three shifted a cell to the right by a leading tab; each header line is matched to the data's columns by its right end. H₂ and O₂ are read from the **Amount** columns, which are in **ppm**, and turned into %mol (ppm / 10⁴), so that the rates are worked out as for the default; `gc_raw.csv`, the one export that shows the concentration, writes such a file's in ppm, its column headed `H2 (ppm)` (a default file's `H2 (%mol)`, as before), which keeps every digit of a value under 1 ppm. The Area columns and N₂ are ignored, and a file with only H₂ or only O₂ is read with that gas. The trace is named after the file, as any GC file. Each file read so is named in a blue **info** alert under the drop zone (*Read as the alternative export (Inject Time, Amount in ppm), not the default format*), closed by its × as the other alerts are and said again when the project is reopened.
 
-  The header may come after title lines. Separator, decimal mark, quotes and encoding are found in each file, as for DRS; a `,`-separated file whose `,` decimals are not in quotes cannot be read either way and is refused.
+  The header may come after title lines. Separator, decimal mark, quotes and encoding are found in each file, as for DRS; a `,`-separated file whose `,` decimals are not in quotes cannot be read either way and is refused. In either layout `n.a.` (any case) in a gas cell is no value for that gas only, as an empty cell (below), and blank lines, lines of tabs or separators alone and rows whose date is `n.a.` are passed over with no alert.
 
-  The injection dates are read as the instrument writes them, month/day/year with AM or PM. A file whose dates all exist only read day/month (13/10/2025), their times going on as the rows do, is read day/month and said; a date that does not exist (2/30/2025, 13:00 PM) leaves its row out, and the alert says how many (to v509 such a date rolled over into another: 13/10/2025 was read as 10 January 2026).
+  An injection date, in either layout (from v539; to v538 only `M/D/YYYY h:mm:ss AM|PM`), is the day, the month and the year between slashes: the month a number or an English name (`Nov`, `November`, any case), the year of 4 or 2 digits (`26` is 2026); then the time, `h:mm` or `h:mm:ss` (no seconds: 00), with AM or PM (hours 1–12) or in 24 hours without (0–23): `10/20/2026 9:15:00 AM`, `13/Nov/26 14:13:01`, `13/Nov/2026 14:13`. Numeric dates are read as the instrument writes them, month/day. A file whose dates all exist only read day/month (13/10/2025), their times going on as the rows do, is read day/month and said; a month named is read where it stands (13/Nov/26 is 13 November), with no order to find. A date that does not exist (2/30/2025, 31/Nov/26, 13:00 PM, 24:00) leaves its row out, and the alert says how many (to v509 such a date rolled over into another: 13/10/2025 was read as 10 January 2026).
 
 **How to use**:
 
-1. Upload your CSV files. Each file is a trace in the trace list: a sample, with every gas measured in it (H₂ and O₂), never a trace a gas. The app auto-detects the injection date and the H₂ and O₂ columns (case-insensitive). An empty H₂ or O₂ cell leaves that injection out of that gas only (its rate, its cumulative production and its mean are computed from the injections that have a value), and an alert under the drop zone says, per file, how many empty cells were skipped.
+1. Upload your CSV files (or the instrument's `.txt` exports). Each file is a trace in the trace list: a sample, with every gas measured in it (H₂ and O₂), never a trace a gas. The app auto-detects the injection date and the H₂ and O₂ columns (case-insensitive). An empty H₂ or O₂ cell leaves that injection out of that gas only (its rate, its cumulative production and its mean are computed from the injections that have a value), and an alert under the drop zone says, per file, how many empty cells were skipped.
 2. Set parameters for each sample:
    - **m (mg)**: Catalyst mass in milligrams
    - **Q (mL/min)**: Carrier gas flow rate
@@ -163,6 +163,8 @@ Assess H₂ and O₂ production rates from gas chromatography data, including li
 The analysis is a card, as the DRS ones are: **+** under it adds another (its own masses, flows, light-on times, intervals and delay on the same samples), and each card can be renamed, folded, moved by its ≡ grip and closed; every card has its own plots in the Results, under its name, and its own CSVs.
 
 From v535: the Sample column names each sample by its trace's label, not its file's name (the links, and the projects saved before, are as they were); the instructions and the T and p titles say how to set T and p for a mass-flow controller.
+
+From v539: the instrument's tab-separated `.txt` export is read beside the default CSV (its Amount columns, in ppm, as %mol; said in a blue info alert), and both read every form of date above (a month's name, a 2-digit year, no seconds, 24 hours); a file the default way that loaded before reads to the same numbers.
 
 ⚠️ **Note**: Light-on time must be **after the first injection** in your data. If it's earlier, an orange warning appears.
 
@@ -294,6 +296,7 @@ A trace unticked in the trace list (the box beside its name) stays loaded, with 
 - **Browser compatibility**: Works on modern browsers (Chrome, Firefox, Safari, Edge). JavaScript must be enabled.
 - **File size limits**: Limited only by your browser's memory. For very large files, consider chunking data offline.
 - **Modular architecture**: New analysis modules may be added in the future without breaking existing functionality.
+- **Alerts** under a module's drop zone: red (✕) for a file that cannot be read, yellow (⚠) for what to check, and, from v539, light blue (a circled i) for what is worth knowing and needs no check (GC's files read as the instrument's alternative export). All three sit in the same place, are closed by their ×, and in both themes keep their colours.
 - **Traces in the plots** (v536; v538): in every module's plots, hovering a curve or a scatter draws its line 1.5× as wide (nothing else changes) and names it in a small square label beside the pointer: in the trace's colour where that reads on the plot's background, else (a white trace on a white plot, a black one on a dark plot) in the background's colour with a border and text that read on it. The crosshair and its read-out of x and y sit on one of the trace's own data points, never between two: on a scatter or a sparse line the point nearest the pointer, on a dense line the point nearest the pointer's x. A click locks the trace: it stays drawn out, the crosshair turns pink and follows that trace point by point, and ← / → move it one data point along the trace, stopping at its ends (while a trace is locked the arrows step it, not the samples). A click on the plot off every trace, or Esc, lets it go. It is the view alone: no change to the project, no undo step, nothing in an export or a figure. Where a click already does something it does just that, as before: XRPD's Scherrer plot (peaks picked), Add peak, the draggable lines (DRS's intervals and Suggest), Iodometry's injection click, the pan and zoom tools, the legends and the figure composer; bar charts (bars are no trace) keep their read-out as it was.
 
 ---
@@ -308,6 +311,7 @@ A trace unticked in the trace list (the box beside its name) stays loaded, with 
 **Incorrect column detection in GC?**
 - Column names are matched case-insensitively
 - Ensure your CSV contains "injection date" and "h2"/"mol" in column headers
+- For the instrument's `.txt` export: its first header line names "Inject Time" and the "Amount" columns, and a line under it, before the data, names their gases ("Hydrogen", "Oxygen"); the file is tab-separated
 
 **EPR pair not completing?**
 - Both `.DTA` and `.DSC` files must have the same stem name

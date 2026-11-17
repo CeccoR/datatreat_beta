@@ -21,6 +21,7 @@
   --good: #7fd17f;
   --warn: var(--accent);     /* warnings reuse the accent (were a near-identical orange) */
   --bad: #ff6b6b;
+  --info: #7cc4ee;           /* info alerts (v539): azure, quieter than a warning */
   --accent-hover: #ffc271;   /* primary button :hover */
   --accent-active: #e89a35;  /* primary button :active (pressed) */
   --on-accent: #06131f;      /* text drawn on top of the accent fill */
@@ -45,6 +46,7 @@
   --alert-warn-bg: #3a2c0f;  --alert-warn-line: #5a430f;
   --alert-good-bg: #0f3a26;  --alert-good-line: #1c5a3c;
   --alert-bad-bg:  #3a1212;  --alert-bad-line:  #5a1c1c;
+  --alert-info-bg: #0f2a38;  --alert-info-line: #1c4a62;
   --pending-line: #6b4d1a;
   /* Plot chrome (axes/grid/labels/crosshair) — themed via .plot-* classes below */
   --plot-border: #3a414c;
@@ -86,6 +88,7 @@
   --accent2: #9c4b93;
   --good: #2e8b4e;
   --bad: #cc3b3b;
+  --info: #1d6896;
   --accent-hover: #a75e0b;
   --accent-active: #8c4e08;
   --on-accent: var(--white);
@@ -97,6 +100,7 @@
   --alert-warn-bg: #fbf1dd;  --alert-warn-line: #e4c583;
   --alert-good-bg: #e2f4ea;  --alert-good-line: #9dd3b3;
   --alert-bad-bg:  #fbe6e6;  --alert-bad-line:  #eaa9a9;
+  --alert-info-bg: #e8f3fa;  --alert-info-line: #a6cde6;
   --pending-line: #e4c583;
   --plot-border: #c2ccd2;
   --plot-grid: #e5eaed;
@@ -983,6 +987,15 @@ svg.plot.plot-strip { aspect-ratio: 6.472; }
   color: var(--bad);
   border: 1px solid var(--alert-bad-line);
 }
+/* An info alert (v539, utils.js alertHtml): what is worth knowing and needs no check, as a
+   warning in all but its colours, azure, and its icon, a circled i drawn in the text's
+   colour where the others have a character (⚠, ✕), as wide as one with its space. */
+.alert.info {
+  background: var(--alert-info-bg);
+  color: var(--info);
+  border: 1px solid var(--alert-info-line);
+}
+.alert-ic { vertical-align: -0.15em; margin-right: 0.3em; }
 .home-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);

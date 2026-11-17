@@ -2508,15 +2508,25 @@ function confirmModal(message, confirmLabel, altLabel, o = {}){
 // page's Content-Security-Policy would refuse). The names and the header are markup:
 // the callers escape what they put in them (esc).
 function buildAlertsHtml(invalidNames, warnNames, warnHeader, dismissInvalidAction, dismissWarnAction){
-  const makeX = act => act
-    ? `<button class="alert-dismiss close-x" data-action="${act}" title="Dismiss">${X_SVG(15)}</button>`
-    : `<button class="alert-dismiss close-x" data-dismiss-alert title="Dismiss">${X_SVG(15)}</button>`;
   let html = '';
-  if (invalidNames.length)
-    html += '<div class="alert bad">✕ Invalid file(s):<br>' + invalidNames.join('<br>') + makeX(dismissInvalidAction) + '</div>';
-  if (warnNames.length)
-    html += '<div class="alert warn">⚠ ' + (warnHeader || 'Non-standard format — verify these files:') + '<br>' + warnNames.join('<br>') + makeX(dismissWarnAction) + '</div>';
+  if (invalidNames.length) html += alertHtml('bad', 'Invalid file(s):', invalidNames, dismissInvalidAction);
+  if (warnNames.length) html += alertHtml('warn', warnHeader || 'Non-standard format — verify these files:', warnNames, dismissWarnAction);
   return html;
+}
+/* One alert of a kind: 'bad' (an error, ✕), 'warn' (a warning, ⚠) or 'info' (v539: what
+   is worth knowing and needs no check, a circled i, in azure), its header and its lines
+   (markup), dismissed as buildAlertsHtml's are (`dismissAction`, or its own removal). The
+   same box, place and behaviour for every kind; only the icon and the colours differ
+   (style.css .alert.<kind>). */
+const ALERT_ICON = {
+  bad: '✕ ', warn: '⚠ ',
+  info: '<svg class="alert-ic" viewBox="0 0 16 16" width="1em" height="1em" aria-hidden="true"><circle cx="8" cy="8" r="6.9" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="4.75" r="1.05" fill="currentColor"/><path d="M8 7.4v4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
+};
+function alertHtml(kind, header, lines, dismissAction){
+  const x = dismissAction
+    ? `<button class="alert-dismiss close-x" data-action="${dismissAction}" title="Dismiss">${X_SVG(15)}</button>`
+    : `<button class="alert-dismiss close-x" data-dismiss-alert title="Dismiss">${X_SVG(15)}</button>`;
+  return `<div class="alert ${kind}">${ALERT_ICON[kind]}${header}<br>${lines.join('<br>')}${x}</div>`;
 }
 document.addEventListener('click', e=>{
   const b = e.target.closest && e.target.closest('[data-dismiss-alert]');
@@ -2673,7 +2683,7 @@ window.addEventListener('load', normalizeNavIcons);
 export {
   COLORS, colorOf, esc, stateKey, moduleStateKey, viewOnlyChange, registerBusy, moduleBusy, stopModule, colorPickerUI, CP_PALETTES, palettePickerUI, settings, fmtNum, fmtData, csvLine, downloadBlob, downloadBytes,
   X_SVG, DL_SVG, setupDropzone, renderUnifiedFileList, dropGap, includedOf, setIncluded, removeFileAt, moveFileTo, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, boxStats,
-  maxArr, minArr, NORM_OPTIONS, normOf, fitLinear, tinv, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState,
+  maxArr, minArr, NORM_OPTIONS, normOf, fitLinear, tinv, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, alertHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState,
   getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, guardNumericInput,
   guardNumberInputs, createDateTimeField, flashFieldInvalid, tiltFits, barNames, barChipYmax, confirmBanner, confirmModal, normalizeProjIcons, refreshProjBar, saveSettings, registerModule,
   makeInstance, attachInstance, detachInstance, dropKey, withState, onAnyChange, onBusyChange, busyChanged, shownOf, showAgain, zoomAgain, keeper, kept, objId, exactKey, dropsBytes, asleep, vacate,

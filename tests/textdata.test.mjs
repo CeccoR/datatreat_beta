@@ -166,6 +166,23 @@ test("GC: ',' as both separator and decimal mark is not read; a column the heade
   assert.deepEqual(gcRead(H.replace(/,/g, ';') + '10/20/2026 9:00:00 AM;0,5089;0,2011;7;8\n').h2, [0.5089]);
 });
 
+test('readTable: the header function given every line and its own place, for a header of several lines (v539)', ()=>{
+  // A header whose gas is named on a line under it, a cell to the right, as GC's alternative export.
+  const text = 'No.\tTime\tAmount\n\t\t\tHydrogen\n1\t9:00\t50\n2\t9:30\t60\n';
+  const seen = [];
+  const head = (f, sep, rows, h)=>{
+    seen.push([sep, h, rows.length]);
+    if (f[1] !== 'Time') return null;
+    const gas = rows[h + 1], shift = gas.length - f.length;
+    return { t: 1, v: 2, gas: gas[2 + shift] };
+  };
+  const t = readTable(textLines(text), head, (r, c)=> /^\d+:\d\d$/.test(r[c.t] || ''));
+  assert.equal(t.sep, '\t');
+  assert.equal(t.cols.gas, 'Hydrogen');
+  assert.deepEqual(t.rows.filter(r=> /:/.test(r[1])).map(r=> +r[t.cols.v]), [50, 60]);
+  assert.ok(seen.some(([sep, h, n])=> sep === '\t' && h === 0 && n === 4), 'the lines and the header\'s place');
+});
+
 test('Figure: a table of columns in each dialect, its header or none, text columns, a title over it; names and units', ()=>{
   const read = t => readColumns(textLines(t));
   const cols = { n: 3, head: ['t (s)', 'a', 'b'], rows: [['1', '2.5', '3'], ['2', '3.5', '4']] };

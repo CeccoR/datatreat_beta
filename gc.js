@@ -1,9 +1,9 @@
-import { settings, fmtNum, csvLine, cumtrapz, maxArr, minArr, meanArr, stdArr, buildAlertsHtml, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, confirmBanner, esc, registerModule, fixed, keeper, objId, exactKey } from './utils.js';
+import { settings, fmtNum, csvLine, cumtrapz, maxArr, minArr, meanArr, stdArr, buildAlertsHtml, alertHtml, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, confirmBanner, esc, registerModule, fixed, keeper, objId, exactKey } from './utils.js';
 import { Plot, svgEl } from './plot.js';
 import { cardInfo, fileSafe, nameDownloads } from './cards.js';
 import { moduleKit, wideCsv, isObj, isArr, num, numStr, oneOf, dateOf, arrOf, without, cardList } from './modkit.js';
 import { CSV_ICON, plotWrap, viewOf, setView, viewKey, chipRow, toggleChip, valueBars } from './modcharts.js';
-import { textLines, readTable, parseNum } from './textdata.js';
+import { textLines, readTable, parseNum, width } from './textdata.js';
 
 /* =========================================================
    GC MODULE
@@ -88,20 +88,35 @@ const PER_SAMPLE = ['ms', 'Qs', 'Ts', 'Ps', 'startArr', 'endArr', 'lightOnDates'
 function blankCounts(f){ return GASES.map(g=> f.gas[g.key] ? f.gas[g.key].filter(noValue).length + (+f.emptyRows || 0) : 0); }
 
 /* ---- Reading a file ---- */
-/* An injection date as the instrument writes it, 'M/D/YYYY h:mm:ss AM|PM': its fields as
-   they stand, or null for a field of another shape (no line of data). */
-const GC_DATE = /^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)$/i;
-const dateFields = s =>{ const m = String(s || '').trim().match(GC_DATE); return m && m.slice(1); };
+/* An injection date, as both exports write it (one reader for both, v539): day, month and
+   year between '/', the month a number or an English name (Nov, November; any case), the
+   year of 4 digits or 2 (26 is 2026); then the time, h:mm or h:mm:ss (no seconds: 00),
+   with AM or PM or in 24 hours without. 'M/D/YYYY h:mm:ss AM|PM' is the default export's,
+   '13/Nov/26 14:13:01' and '13/Nov/2026 14:13' the alternative's. → its fields as they
+   stand, [a, b, year, h, min, s, AM|PM], or null for a field of another shape (no line of
+   data: 'n.a.', a header). To v538 only the default's, its seconds and AM/PM required. */
+const MONTH_NAMES = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+const MON = 'jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?';
+const GC_DATE = new RegExp(`^(\\d{1,2}|${MON})\\/(\\d{1,2}|${MON})\\/(\\d{4}|\\d{2})\\s+(\\d{1,2}):(\\d{2})(?::(\\d{2}))?(?:\\s*(AM|PM))?$`, 'i');
+// A month's number from its name (1–12), 0 for a number.
+const monthOf = s =>{ const i = /^\d/.test(s) ? -1 : MONTH_NAMES.indexOf(s.slice(0, 3).toLowerCase()); return i + 1; };
+const dateFields = s =>{ const m = String(s || '').trim().match(GC_DATE); return m && !(monthOf(m[1]) && monthOf(m[2])) ? m.slice(1) : null; };
+// Whether those fields name their month (the order then is theirs: no day/month to find).
+const namesMonth = m => !!(monthOf(m[0]) || monthOf(m[1]));
 /* The moment those fields are, the day first when `dm` (a file read as day/month), or
    null when there is none: a month 1–12, a day 1 to the month's length (29 February in a
-   leap year), the hour 1–12, minutes and seconds 0–59. To v509 none was checked and the
-   Date rolled over: 13/10/2025 was 10 January 2026, 2/30/2025 2 March, 13:00:00 PM 1 PM. */
+   leap year), the hour 1–12 with AM or PM and 0–23 without, minutes and seconds 0–59. A
+   month named is the month where it stands, the other number the day, whatever `dm`. To
+   v509 none was checked and the Date rolled over: 13/10/2025 was 10 January 2026,
+   2/30/2025 2 March, 13:00:00 PM 1 PM. */
 const MONTH_DAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 function parseGCDate(m, dm){
-  const [a, b, y, h, mi, se, ap] = m.map((v, i)=> i < 6 ? +v : v), mo = dm ? b : a, da = dm ? a : b;
+  const [a, b, yy, h, mi, se, ap] = m, na = monthOf(a), nb = monthOf(b);
+  const mo = nb || na || +(dm ? b : a), da = nb ? +a : na ? +b : +(dm ? a : b);
+  const y = yy.length === 2 ? 2000 + +yy : +yy, hh = +h, s = se === undefined ? 0 : +se;
   const len = mo === 2 && !(y % 4) && (y % 100 || !(y % 400)) ? 29 : MONTH_DAYS[mo - 1];
-  if (!(da >= 1 && da <= len && h >= 1 && h <= 12 && mi <= 59 && se <= 59)) return null;
-  return new Date(y, mo - 1, da, h % 12 + (/pm/i.test(ap) ? 12 : 0), mi, se);
+  if (!(da >= 1 && da <= len && (ap ? hh >= 1 && hh <= 12 : hh <= 23) && +mi <= 59 && s <= 59)) return null;
+  return new Date(y, mo - 1, da, ap ? hh % 12 + (/pm/i.test(ap) ? 12 : 0) : hh, +mi, s);
 }
 
 /* A GC export, as textdata.js reads a table (its encoding, separator, decimal mark and
@@ -118,27 +133,71 @@ function parseGCDate(m, dm){
    (16/10 among 10/5 and 10/6), whose times would go back months, and one whose dates
    fail both ways. The alert says both (dateAlertsHtml); a file with no injection left
    for a date that does not exist is refused with why. To v509 every date was
-   month/day, rolled over. */
+   month/day, rolled over. A date that names its month (13/Nov/26) has no order to find:
+   it is the same either way, and a file of those alone is never day/month
+   (`monthNames`: the alert then names no order).
+   A cell that is no number ('n.a.', any case, as a blank: parseNum gives NaN) is no value
+   for that gas alone; a line that is no data (blank, only separators or tabs, 'n.a.' for
+   its date) is passed over unsaid, as ever.
+   Two layouts: the default (gcColumns), a header naming the injection date and each
+   gas's %mol; the alternative (altColumns, v539), the instrument's .txt, its gases in
+   ppm, its files said in an info alert (`altExport`, altAlertsHtml). */
 function gcColumns(fields){
   const lo = fields.map(h=> h.toLowerCase()), date = lo.findIndex(h=> h.includes('injection date')), gas = {};
   for (const g of GASES){ const i = lo.findIndex(h=> g.col.test(h) && h.includes('%mol')); if (i >= 0 && i !== date) gas[g.key] = i; }
   return date >= 0 && Object.keys(gas).length ? { date, gas } : null;
 }
+/* The alternative export (v539): the instrument's .txt, tab-separated, a header of four
+   lines over the injections: the columns' names (No., Inject Time, Area ×3, Amount ×3),
+   their units, the channel, and the gas of each Area and Amount column (Hydrogen,
+   Nitrogen, Oxygen), the three under the first shifted a cell right by a leading tab. Its
+   header is a line naming Inject Time and Amount over a line naming H₂ or O₂, before the
+   first line with a date. Its columns are the data's (the lines with a date under it, as
+   wide as most of them are), each header line set against them by its right end, where
+   they all end whatever their lead (a trailing separator adds none). H₂ and O₂ are the
+   Amount columns of Hydrogen and Oxygen, in ppm (readGc: %mol = ppm/10⁴); the Area
+   columns and the other gases are left. → { date, gas, alt: true } in the data's columns,
+   or null. */
+const ALT_GAS = { hydrogen: 'h2', h2: 'h2', oxygen: 'o2', o2: 'o2' };
+const cellName = c => String(c || '').toLowerCase().replace(/\s+/g, ' ').trim();
+const isAmount = c => /^amount\b/.test(cellName(c));
+function altColumns(fields, rows, h){
+  const at = fields.map(cellName).indexOf('inject time');
+  if (at < 0 || !fields.some(isAmount)) return null;
+  const below = rows.slice(h + 1), dated = r => r.some(c=> dateFields(c)), first = below.findIndex(dated);
+  const gasLine = first < 0 ? null : below.slice(0, first).reverse().find(r=> r.some(c=> ALT_GAS[cellName(c)]));
+  if (!gasLine) return null;
+  // The data's width: the most common among the lines with a date (on a tie the wider).
+  const ws = new Map();
+  let n = 0, most = 0;
+  below.slice(first).filter(dated).forEach(r=>{ const w = width(r); ws.set(w, (ws.get(w) || 0) + 1); });
+  ws.forEach((k, w)=>{ if (k > most || (k === most && w > n)){ n = w; most = k; } });
+  // Each header line's cell over data column d, by the right ends.
+  const o1 = width(fields) - n, og = width(gasLine) - n, date = at - o1, gas = {};
+  if (date < 0 || date >= n) return null;
+  for (let d = 0; d < n; d++){
+    const k = isAmount(fields[d + o1]) && ALT_GAS[cellName(gasLine[d + og])];
+    if (k && !(k in gas)) gas[k] = d;
+  }
+  return Object.keys(gas).length ? { date, gas, alt: true } : null;
+}
 function readGc(text){
-  const t = readTable(textLines(text), gcColumns, (r, c)=> !!dateFields(r[c.date]));
+  const t = readTable(textLines(text), (f, sep, rows, h)=> gcColumns(f) || altColumns(f, rows, h), (r, c)=> !!dateFields(r[c.date]));
   if (!t) return null;
-  const { date, gas: idx } = t.cols, injDates = [], gas = {};
+  const { date, gas: idx, alt } = t.cols, injDates = [], gas = {};
   // The lines with a date, and its fields; day first when every date exists so and not
   // month first, its times never back by more than an hour.
   const rows = t.rows.map(r=> [r, dateFields(r[date])]).filter(x=> x[1]);
   const md = rows.map(x=> parseGCDate(x[1], false)), df = rows.map(x=> parseGCDate(x[1], true));
   const dm = !md.every(Boolean) && df.every((d, i)=> d && (!i || d - df[i - 1] >= -3600e3));
+  const named = rows.every(x=> namesMonth(x[1]));
   let emptyRows = 0, badDates = 0, lost = 0;
   for (const k in idx) gas[k] = [];
   for (const [i, [r]] of rows.entries()){
     const d = (dm ? df : md)[i], vals = {};
     let any = false;
-    for (const k in idx){ const v = parseNum(r[idx[k]]); vals[k] = isFinite(v) ? v : NaN; if (isFinite(v)) any = true; }
+    // (the alternative's ppm as %mol, the unit every table, plot and CSV is in)
+    for (const k in idx){ const v = parseNum(r[idx[k]]); vals[k] = isFinite(v) ? (alt ? v/1e4 : v) : NaN; if (isFinite(v)) any = true; }
     // (`lost`: a row with a value whose date does not exist, an injection but for it)
     if (!d){ badDates++; if (any) lost++; continue; }
     // One row, every gas kept on the same time axis; a blank cell stays NaN so the
@@ -151,12 +210,12 @@ function readGc(text){
   }
   /* No injection left: refused with why when a row with a value went for its date (the
      other rows, none with a gas value, counted beside it); by its name alone when no row
-     had a value, whatever its date, as at v509. (dayMonth and badDates only where they
-     apply: any other file's record is as it was.) */
+     had a value, whatever its date, as at v509. (dayMonth, badDates, monthNames and
+     altExport only where they apply: any other file's record is as it was.) */
   const rest = rows.length - lost;
   if (!injDates.length) return lost ? { error: `no injection to read: ${lost} row${lost > 1 ? 's' : ''} with an injection date that does not exist${rest ? `, ${rest} with no gas value` : ''}` } : null;
   for (const k in gas) fixed(gas[k]);
-  return { injDates, gas, emptyRows, ...(dm && { dayMonth: true }), ...(badDates && { badDates }) };
+  return { injDates, gas, emptyRows, ...(dm && { dayMonth: true }), ...(badDates && { badDates }), ...(named && { monthNames: true }), ...(alt && { altExport: true }) };
 }
 
 // The first injection, to the minute: the field shows and sets minutes only, so a
@@ -283,7 +342,7 @@ const KINDS = { rate: 'Production Rate' };
 // What T and p are (their columns' titles, and the card's instructions).
 const T_TITLE = 'the temperature the flow Q refers to — for a mass-flow controller (sccm, slpm), the reference temperature of its standard units (Alicat: 25 °C), not that of the gas in the lines or the reactor; for a flow measured as a volume, the gas temperature where it is measured';
 const P_TITLE = 'the absolute pressure the flow Q refers to — for a mass-flow controller, the reference pressure of its standard units (Alicat: 14.696 psia = 1 atm), not that of the gas in the lines or the reactor; for a flow measured as a volume, the absolute pressure of the gas where it is measured (ambient ≈ 1 atm)';
-const GC_INFO = `Set catalyst mass (m), carrier gas flow rate (Q), its temperature (T) and pressure (p), the light-on time and the integration interval for each sample to compute mean H₂ and O₂ production rates; the <b>H₂ / O₂</b> chips on each plot choose the gases drawn, for Analysis and for Results; the CSVs have every gas, whichever is drawn. An empty H₂ or O₂ cell leaves that injection out of that gas only, and the alert under the drop zone says how many were skipped. The injection dates are read month/day, as the instrument writes them, or day/month in a file where some do not exist so and every one does that way, its times going on as the rows do; a row whose date does not exist (2/30, 13/13, 13:00 PM) is left out, and the alert says either. Use the <b>all / one</b> toggles to share a value across samples or set it per sample. <b>T</b> is ${T_TITLE}. <b>p</b> is ${P_TITLE}; its unit (atm, bar, kPa, mbar, Torr = mmHg, psi) is chosen in its column's header, which converts the values shown, not the pressure. A <b>mass-flow controller</b> (an Alicat MC, say) gives a mass flow as the volume it would take at its reference conditions (sccm, slpm), so the molar flow is n/t = p<sub>ref</sub>·Q/(R·T<sub>ref</sub>) with the controller's reference T and p: the real temperature and pressure of the gas, in the lines or in the reactor, do not enter. Set T and p to its standard conditions: Alicat's default is 25 °C and 14.696 psia (1 atm) for its standard units, 0 °C and 1 atm for its normal ones (NCCM, NLPM), and the device's STP/NTP menu can change them. Its reading is right for the gas it is set to: another gas or a mixture needs that gas chosen on the device, or its correction factor. The flow is turned into moles with the molar volume of an ideal gas at that temperature and pressure, V<sub>m</sub> = RT/p (22.414 L/mol at 0 °C and 1 atm, 24.465 L/mol at 25 °C and 1 atm). A new analysis starts at 25 °C and 1 atm; a project saved before T existed keeps the 0 °C its rates were worked out at, and one saved before p, the 1 atm. The <b>injection delay</b> moves every injection on from its logged date to the moment the sample is actually injected; <b>Auto</b> uses 60.6 s. In per-sample interval mode the vertical lines are coloured by sample — hover or select a table row to highlight its interval on the plot (and vice-versa). <b>Replicates</b>: the <b>Sample</b> column of the file list says which sample each file is — its own (as it starts), or another file's, named by that file's label (a label renamed shows at once and changes no link); a file that heads a group, set to another, takes its group along, and a head removed leaves its group to its next file. The time plots stay one per file; the mean-rate bar chart has one bar per sample, named after its head's label (the first included file's, the head left out), its height the mean of its included files' mean rates, each worked out with its own parameters, and its error bar the files' standard deviation (n − 1 under it; none for a single file); a file left out is out of the mean and of n. With replicates (a sample of more than one included file), mean_rates.csv has a row per sample (each gas's mean, ± and n) and mean_rates_by_file.csv a row per file, as mean_rates.csv has without them. ${cardInfo(false, true)}`;
+const GC_INFO = `Set catalyst mass (m), carrier gas flow rate (Q), its temperature (T) and pressure (p), the light-on time and the integration interval for each sample to compute mean H₂ and O₂ production rates; the <b>H₂ / O₂</b> chips on each plot choose the gases drawn, for Analysis and for Results; the CSVs have every gas, whichever is drawn. Two layouts are read. The <b>default</b>: a header naming the Injection Date and each gas's %mol column (H₂, O₂). The <b>alternative</b>, the instrument's tab-separated .txt export: a header naming Inject Time and its Area and Amount columns, over a line naming each column's gas (Hydrogen, Nitrogen, Oxygen); H₂ and O₂ are read from the Amount columns, in ppm, and worked out as %mol (ppm / 10⁴), gc_raw.csv writing them in ppm (its column headed so), the Area columns and N₂ left out, and an info alert under the drop zone names each file read so. An empty H₂ or O₂ cell, or one reading n.a., leaves that injection out of that gas only, and the alert under the drop zone says how many were skipped; a blank line, a line of separators alone and a row with no date (n.a.) are passed over. An injection date is the day, the month and the year between slashes, the month a number or an English name (Nov, November), the year of 4 digits or 2 (26 is 2026), then the time, h:mm or h:mm:ss, with AM/PM or in 24 hours (14:13). Numeric dates are read month/day, as the instrument writes them, or day/month in a file where some do not exist so and every one does that way, its times going on as the rows do; a month named is read where it stands (13/Nov/26 is 13 November). A row whose date does not exist (2/30, 13/13, 31/Nov, 13:00 PM) is left out, and the alert says either. Use the <b>all / one</b> toggles to share a value across samples or set it per sample. <b>T</b> is ${T_TITLE}. <b>p</b> is ${P_TITLE}; its unit (atm, bar, kPa, mbar, Torr = mmHg, psi) is chosen in its column's header, which converts the values shown, not the pressure. A <b>mass-flow controller</b> (an Alicat MC, say) gives a mass flow as the volume it would take at its reference conditions (sccm, slpm), so the molar flow is n/t = p<sub>ref</sub>·Q/(R·T<sub>ref</sub>) with the controller's reference T and p: the real temperature and pressure of the gas, in the lines or in the reactor, do not enter. Set T and p to its standard conditions: Alicat's default is 25 °C and 14.696 psia (1 atm) for its standard units, 0 °C and 1 atm for its normal ones (NCCM, NLPM), and the device's STP/NTP menu can change them. Its reading is right for the gas it is set to: another gas or a mixture needs that gas chosen on the device, or its correction factor. The flow is turned into moles with the molar volume of an ideal gas at that temperature and pressure, V<sub>m</sub> = RT/p (22.414 L/mol at 0 °C and 1 atm, 24.465 L/mol at 25 °C and 1 atm). A new analysis starts at 25 °C and 1 atm; a project saved before T existed keeps the 0 °C its rates were worked out at, and one saved before p, the 1 atm. The <b>injection delay</b> moves every injection on from its logged date to the moment the sample is actually injected; <b>Auto</b> uses 60.6 s. In per-sample interval mode the vertical lines are coloured by sample — hover or select a table row to highlight its interval on the plot (and vice-versa). <b>Replicates</b>: the <b>Sample</b> column of the file list says which sample each file is — its own (as it starts), or another file's, named by that file's label (a label renamed shows at once and changes no link); a file that heads a group, set to another, takes its group along, and a head removed leaves its group to its next file. The time plots stay one per file; the mean-rate bar chart has one bar per sample, named after its head's label (the first included file's, the head left out), its height the mean of its included files' mean rates, each worked out with its own parameters, and its error bar the files' standard deviation (n − 1 under it; none for a single file); a file left out is out of the mean and of n. With replicates (a sample of more than one included file), mean_rates.csv has a row per sample (each gas's mean, ± and n) and mean_rates_by_file.csv a row per file, as mean_rates.csv has without them. ${cardInfo(false, true)}`;
 
 // A GC tab's instance (utils.js makeInstance: ctx { key, root, layer, shown }).
 function createGc({ key, root, layer, shown }){
@@ -294,20 +353,21 @@ function createGc({ key, root, layer, shown }){
   let stale = false, drawnAt = '';
   const drawable = ()=> shown() || !(stale = true);
   /* The module (modkit.js): every file loaded, in list order, {name, label,
-     injDates:[Date], gas:{h2:[number], o2:[number]} (the gases it has), emptyRows, and
-     dayMonth: true, badDates: n where they apply (readGc), and sample, the file it is a
-     replicate of, where it is one (REPLICATES)}, and the included ones, which the analysis
-     sees, `files`, with which the per-sample arrays each card keeps are aligned; the
-     alerts under the drop zone, the dates read day first or left out and the empty cells
-     skipped among them; each card's settings in the history. A gas's values, which
+     injDates:[Date], gas:{h2:[number], o2:[number]} (the gases it has, in %mol), emptyRows,
+     and dayMonth: true, badDates: n, monthNames: true, altExport: true where they apply
+     (readGc), and sample, the file it is a replicate of, where it is one (REPLICATES)},
+     and the included ones, which the analysis sees, `files`, with which the per-sample
+     arrays each card keeps are aligned; the alerts under the drop zone, the dates read day
+     first or left out, the empty cells skipped and the files read as the alternative
+     export among them; each card's settings in the history. A gas's values, which
      nothing changes once read, are fixed (db.js: the same array in a tab's states and its
      parked state). */
   const kit = moduleKit('gc', {
     root, key, layer,
     // (the plots' gas chips, H₂ / O₂: the view alone, a step but no change unsaved; utils.js VIEW_KEYS)
     view: ['gasSel'],
-    alerts: p =>{ $('gcAlerts').innerHTML = p.invalid + dateAlertsHtml() + blankAlertsHtml() + p.upload; },
-    dismiss: { blank: ()=> allFiles.forEach(f=> blankSeen.add(f.gas)), dates: ()=> allFiles.forEach(f=> dateSeen.add(f.gas)) },
+    alerts: p =>{ $('gcAlerts').innerHTML = p.invalid + dateAlertsHtml() + blankAlertsHtml() + altAlertsHtml() + p.upload; },
+    dismiss: { blank: ()=> allFiles.forEach(f=> blankSeen.add(f.gas)), dates: ()=> allFiles.forEach(f=> dateSeen.add(f.gas)), alt: ()=> allFiles.forEach(f=> altSeen.add(f.gas)) },
     // Every card's per-sample arrays. An excluded file holds its own values; one with none
     // (never so far, or in a card added since) gets the upload defaults.
     slots: ()=> cards().flatMap(a=> live.get(a.id).slots()),
@@ -466,14 +526,25 @@ function createGc({ key, root, layer, shown }){
   const dateSeen = new WeakSet();
   function dateAlertsHtml(){
     const lines = [];
+    let order = false;
     allFiles.forEach(f=>{
       // (a project's .json may hold anything: only true and a whole count go into markup)
-      const dm = f.dayMonth === true, n = num(f.badDates, 0, v=> Number.isInteger(v) && v > 0), say = [];
+      // A file whose dates name their month (monthNames) has no order: none is named.
+      const dm = f.dayMonth === true, named = f.monthNames === true && !dm, n = num(f.badDates, 0, v=> Number.isInteger(v) && v > 0), say = [];
       if (dm) say.push('dates read as day/month (as month/day, some do not exist)');
-      if (n) say.push(`${n} row${n > 1 ? 's' : ''} left out: ${n > 1 ? 'their' : 'its'} injection date does not exist (as ${dm ? 'day/month' : 'month/day'})`);
-      if (say.length && !dateSeen.has(f.gas)) lines.push(esc(f.name) + ': ' + say.join('; '));
+      if (n) say.push(`${n} row${n > 1 ? 's' : ''} left out: ${n > 1 ? 'their' : 'its'} injection date does not exist${named ? '' : ` (as ${dm ? 'day/month' : 'month/day'})`}`);
+      if (say.length && !dateSeen.has(f.gas)){ lines.push(esc(f.name) + ': ' + say.join('; ')); if (!named) order = true; }
     });
-    return lines.length ? buildAlertsHtml([], lines, 'Injection dates (the instrument writes them month/day):', '', 'gc-dismiss-dates') : '';
+    return lines.length ? buildAlertsHtml([], lines, `Injection dates${order ? ' (the instrument writes them month/day)' : ''}:`, '', 'gc-dismiss-dates') : '';
+  }
+
+  /* The files read as the alternative export (readGc, `altExport`), said in an info alert
+     (v539): a file name a line, read off the loaded files and dismissed as the empty cells
+     are (blankSeen), on a mark of its own. */
+  const altSeen = new WeakSet();
+  function altAlertsHtml(){
+    const lines = allFiles.filter(f=> f.altExport === true && !altSeen.has(f.gas)).map(f=> esc(f.name));
+    return lines.length ? alertHtml('info', 'Read as the alternative export (Inject Time, Amount in ppm), not the default format:', lines, 'gc-dismiss-alt') : '';
   }
 
   kit.dropText(readGc, ()=> afterFilesChange());
@@ -788,7 +859,8 @@ function createGc({ key, root, layer, shown }){
         const key = exactKey([f.injDates.map(d=> +d), ks.map(k=> [k, objId(f.gas[k])]), +lightOn, injDelay(), qOf(h), tOf(h), pOf(h), mOf(h)]);
         const made = tablesKept(ks.length ? f.gas[ks[0]] : null, key, ()=> tablesOf(f, h, lightOn)), gas = {};
         for (const k in made.gas) gas[k] = { ...made.gas[k], FmInt: made.gas[k].cum };
-        return {t: made.t, gas, name:f.name, label:f.label, color:f.color};
+        // (ppm: read from the alternative export, its concentrations written in its unit, gc_raw.csv)
+        return {t: made.t, gas, name:f.name, label:f.label, color:f.color, ppm: f.altExport === true};
       });
     }
     function tablesOf(f, h, lightOn){
@@ -1131,7 +1203,11 @@ function createGc({ key, root, layer, shown }){
           cols.push({h:`Time (h) [${d.label}]`, v:rows.map(r=>fmtNum(r.t,5))});
           qs.forEach(([g, q], j)=>{
             if (full){
-              cols.push({h:`${g.csv} (%mol) [${d.label}]`,      v:col(j, q.pct)});
+              /* The concentration in the file's unit: %mol, or the alternative export's ppm
+                 (v539), as it read them (%mol × 10⁴), whose values below 1 ppm %mol to five
+                 decimals would lose (0.141 ppm is 0.0000141 %mol). */
+              cols.push(d.ppm ? {h:`${g.csv} (ppm) [${d.label}]`, v:col(j, q.pct.map(v=> v*1e4))}
+                : {h:`${g.csv} (%mol) [${d.label}]`,      v:col(j, q.pct)});
               cols.push({h:`${g.csv} (umol h^-1) [${d.label}]`, v:col(j, q.flow)});
             }
             cols.push({h:`${g.csv} ${LBL_RATE_CSV} [${d.label}]`, v:col(j, q.Fm)});

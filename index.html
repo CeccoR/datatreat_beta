@@ -305,12 +305,12 @@
     <section class="tab" id="tab-gc" role="tabpanel" tabindex="0">
       <div class="card">
         <h3 class="txt-head" style="margin:0 0 12px">File</h3>
-        <div class="instr-block" style="max-width:100%">Compatible with Agilent Gas Chromatographer. Accepts comma-separated value files with an "Injection date" column and an "H2 (B) [%Mol]" and/or "O2 (B) [%Mol]" column.</div>
+        <div class="instr-block" style="max-width:100%">Compatible with Agilent Gas Chromatographer. Accepts comma-separated value files with an "Injection date" column and an "H2 (B) [%Mol]" and/or "O2 (B) [%Mol]" column (the default format), and the instrument's tab-separated .txt export, its "Inject Time" and its Hydrogen and Oxygen "Amount" columns in ppm (the alternative, read as %mol and said in a blue info alert).</div>
         <div class="dropzone" id="gcDropzone">
           <div class="dz-icon">⤒</div>
           <div class="dz-title">Drag here your files, or click to select them.</div>
-          <div class="txt-meta">.csv</div>
-          <input type="file" id="gcFiles" multiple accept=".csv" style="display:none">
+          <div class="txt-meta">.csv, .txt</div>
+          <input type="file" id="gcFiles" multiple accept=".csv,.txt,.CSV,.TXT" style="display:none">
         </div>
         <div id="gcAlerts"></div>
         <div id="gcFileTableWrap"></div>
@@ -558,7 +558,7 @@
       </div>
     </section>
 
-    <footer>DataTreat <span class="app-version">v538</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
+    <footer>DataTreat <span class="app-version">v539</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
   </main>
 
   <!-- Save project as… dialog -->

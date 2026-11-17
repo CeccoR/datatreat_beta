@@ -127,7 +127,7 @@ export function readXY(lines){
 }
 
 // A line's fields up to the last that is not empty (a trailing separator adds none).
-const width = r =>{ let n = r.length; while (n && r[n - 1] === '') n--; return n; };
+export const width = r =>{ let n = r.length; while (n && r[n - 1] === '') n--; return n; };
 // A whole number, then digits: the halves of a number its decimal ',' cut in two.
 const cut = (a, b)=> /^[+-]?\d+$/.test(a) && /^\d+([eE][+-]?\d+)?$/.test(b || '');
 /* A table under a header the module knows: `head(fields, sep)` gives the columns a line
@@ -142,12 +142,14 @@ const cut = (a, b)=> /^[+-]?\d+$/.test(a) && /^\d+([eE][+-]?\d+)?$/.test(b || ''
    cell left blank leaves none there, and the cells after it would slip into its column.
    The header's fields are its columns, unless `head` says how many it names (cols.n: DRS,
    whose names a run of single spaces splits, 'Wavelength (nm) R (%)' two columns in four
-   fields; GC gives none, and reads as it did to v509).
+   fields; GC gives none, and reads as it did to v509). `head` is given the lines' fields
+   and the line's place too (rows, h), for a header of several lines (GC's alternative
+   export, v539: its gases named on a line under it).
    → { sep, cols, rows (those lines) } or null. */
 export function readTable(lines, head, isRow){
   return bestSep(lines, (rows, sep)=>{
     for (let h = 0; h < rows.length; h++){
-      const cols = head(rows[h], sep);
+      const cols = head(rows[h], sep, rows, h);
       if (!cols) continue;
       const n = cols.n || width(rows[h]), body = rows.slice(h + 1), data = body.filter(r=> isRow(r, cols));
       if (sep === ',' && data.some(r=> width(r) > n && r.some((c, i)=> cut(c, r[i + 1])))) return null;
