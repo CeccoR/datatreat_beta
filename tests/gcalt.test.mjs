@@ -71,8 +71,9 @@ const CONST = alt('const.txt', [0, 20, 40, 60, 80].map(m=> [`13/Nov/2026 ${10 + 
 
 // By hand: m 15 mg, Q 2 mL/min, at 25 °C and 1 atm (a new card's); the injection delay 60.6 s.
 const R = 8.314462618/101.325, F = 2/1000*60/(R*298.15);     // L·atm/(mol·K); mol/h of the flow
-const rateOfPpm = ppm => ppm/1e6*F*1e6/15;                     // µmol/h per mg = mmol g⁻¹ h⁻¹
-const rateOfPct = pct => pct/100*F*1e6/15;
+// A rate in µmol g⁻¹ h⁻¹ (v541): 1000 times v540's number, µmol/h over 15 mg (mmol g⁻¹ h⁻¹).
+const rateOfPpm = ppm => 1e3*ppm/1e6*F*1e6/15;
+const rateOfPct = pct => 1e3*pct/100*F*1e6/15;
 const DELAY = 60.6;
 
 const files = st => Object.fromEntries(st.files.map(f=> [f.name, f]));
@@ -127,7 +128,7 @@ test('the alternative export: Amount in ppm as %mol, N₂ and the areas left, n.
     const t = column(raw, `Time (h) [${L}]`), lightOn = Date.parse('2026-11-13T14:13:00Z');
     const want = MAIN.filter(Array.isArray).map(([d, g])=> ({ t: ((+new Date(Date.parse(`2026-11-13T${d.slice(10)}Z`) + DELAY*1000) - lightOn)/3600e3).toFixed(5), g }));
     for (const [gas, name] of [['h2', 'Hydrogen'], ['o2', 'Oxygen']]){
-      const ppm = column(raw, `${gas.toUpperCase()} (ppm) [${L}]`), rate = column(raw, `${gas.toUpperCase()} Production Rate (mmol g^-1 h^-1) [${L}]`);
+      const ppm = column(raw, `${gas.toUpperCase()} (ppm) [${L}]`), rate = column(raw, `${gas.toUpperCase()} Production Rate (umol g^-1 h^-1) [${L}]`);
       for (const w of want){
         const i = t.indexOf(w.t);
         assert.ok(i >= 0, `${gas} at ${w.t} h: a row`);
@@ -139,17 +140,17 @@ test('the alternative export: Amount in ppm as %mol, N₂ and the areas left, n.
     // The default twin writes %mol, the alternative ppm; their rates the same.
     assert.deepEqual(column(raw, 'H2 (ppm) [twin-alt]').filter(Boolean), ['0.00000', '412.00000', '455.00000', '521.00000', '563.00000']);
     assert.deepEqual(column(raw, 'H2 (%mol) [twin-default]').filter(Boolean), ['0.00000', '0.04120', '0.04550', '0.05210', '0.05630']);
-    for (const g of ['H2', 'O2']) assert.deepEqual(column(raw, `${g} Production Rate (mmol g^-1 h^-1) [twin-alt]`), column(raw, `${g} Production Rate (mmol g^-1 h^-1) [twin-default]`), `${g}: the twins' rates`);
+    for (const g of ['H2', 'O2']) assert.deepEqual(column(raw, `${g} Production Rate (umol g^-1 h^-1) [twin-alt]`), column(raw, `${g} Production Rate (umol g^-1 h^-1) [twin-default]`), `${g}: the twins' rates`);
 
     // The mean rate from 0.5 to 1.2 h: constant concentrations, the constant rate.
     await type(page, '#tab-gc .gcShared[data-f="start"]', '0.5');
     await type(page, '#tab-gc .gcShared[data-f="end"]', '1.2');
     z = await zip(page);
     const mean = z['mean_rates.csv'], row = lab => mean.slice(1).find(r=> r[0] === lab);
-    const H2 = mean[0].indexOf('Mean H2 Production Rate (mmol g^-1 h^-1)'), O2 = mean[0].indexOf('Mean O2 Production Rate (mmol g^-1 h^-1)');
+    const H2 = mean[0].indexOf('Mean H2 Production Rate (umol g^-1 h^-1)'), O2 = mean[0].indexOf('Mean O2 Production Rate (umol g^-1 h^-1)');
     assert.ok(Math.abs(parseFloat(row('const')[H2]) - rateOfPpm(500)) <= 1e-6, `H₂ mean ${row('const')[H2]} for ${rateOfPpm(500)}`);
     assert.ok(Math.abs(parseFloat(row('const')[O2]) - rateOfPpm(250)) <= 1e-6, `O₂ mean ${row('const')[O2]} for ${rateOfPpm(250)}`);
-    assert.ok(Math.abs(rateOfPpm(500) - 0.163497) < 1e-6, 'by hand: 500 ppm at 2 mL/min, 25 °C, 1 atm, over 15 mg');
+    assert.ok(Math.abs(rateOfPpm(500)/1e3 - 0.163497) < 1e-6, 'by hand: 500 ppm at 2 mL/min, 25 °C, 1 atm, over 15 mg: 1000 times v540\'s 0.163497');
     assert.deepEqual(row('twin-alt').slice(1), row('twin-default').slice(1), 'the twins\' mean rates');
     assert.deepEqual(errors, []);
   } finally { await close(); }
@@ -275,11 +276,11 @@ test('the default layout as before: the fixture\'s record and numbers; blank lin
     assert.deepEqual([by['alpha-junk.csv'].injDates, by['alpha-junk.csv'].gas], [fx.injDates, fx.gas], 'read as without them');
     // gc_raw.csv as before: %mol, its rate by hand.
     const raw = (await zip(page))['gc_raw.csv'];
-    const pct = column(raw, 'H2 (%mol) [alpha]'), rate = column(raw, 'H2 Production Rate (mmol g^-1 h^-1) [alpha]');
+    const pct = column(raw, 'H2 (%mol) [alpha]'), rate = column(raw, 'H2 Production Rate (umol g^-1 h^-1) [alpha]');
     assert.ok(!raw[0].some(h=> h.includes('(ppm)')));
     assert.deepEqual(pct.slice(1).filter(Boolean), vals.map(v=> parseFloat(v[1]).toFixed(5)));
     pct.forEach((p, i)=>{ if (p) assert.ok(Math.abs(parseFloat(rate[i]) - rateOfPct(parseFloat(p))) <= 6e-6, `rate at row ${i}`); });
-    assert.deepEqual(column(raw, 'O2 Production Rate (mmol g^-1 h^-1) [alpha]'), column(raw, 'O2 Production Rate (mmol g^-1 h^-1) [alpha-junk]'));
+    assert.deepEqual(column(raw, 'O2 Production Rate (umol g^-1 h^-1) [alpha]'), column(raw, 'O2 Production Rate (umol g^-1 h^-1) [alpha-junk]'));
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });

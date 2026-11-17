@@ -140,7 +140,7 @@ Assess H₂ and O₂ production rates from gas chromatography data, including li
 
 1. Upload your CSV files (or the instrument's `.txt` exports). Each file is a trace in the trace list: a sample, with every gas measured in it (H₂ and O₂), never a trace a gas. The app auto-detects the injection date and the H₂ and O₂ columns (case-insensitive). An empty H₂ or O₂ cell leaves that injection out of that gas only (its rate, its cumulative production and its mean are computed from the injections that have a value), and an alert under the drop zone says, per file, how many empty cells were skipped.
 2. Set parameters for each sample:
-   - **Normalize by** (from v540; on the injection delay's row): what the card's rates are divided by, one choice for the whole card so that its plots and its bar chart never mix units. **mass** (the default, and how a project saved before v540 opens, with the same numbers): the rates in mmol g⁻¹ h⁻¹, the production in mmol g⁻¹. **area**, for a film: the rates in µmol cm⁻² h⁻¹, the production in µmol cm⁻². Every axis title, the bar chart and every CSV header (`gc_raw.csv`, `gc_results.csv`, `mean_rates.csv` and its SD with replicates, `gc_info.csv`'s `A (cm^2)`) follow it. The masses and the areas are both kept, each with its *all / one*, so switching back and forth loses neither; the choice is a step of the undo history and is saved with the project.
+   - **Normalize by** (from v540; on the injection delay's row): what the card's rates are divided by, one choice for the whole card so that its plots and its bar chart never mix units. **mass** (the default, and how a project saved before v540 opens): the rates in µmol g⁻¹ h⁻¹, the production in µmol g⁻¹ (from v541; mmol g⁻¹ h⁻¹ and mmol g⁻¹ to v540, so a project saved before shows the same results, their numbers 1000 times what they were). **area**, for a film: the rates in µmol cm⁻² h⁻¹, the production in µmol cm⁻². Both are in µmol: the flow in µmol/h over the mass in g (the mg typed / 1000) or over the area in cm². Every axis title, the bar chart and every CSV header (`gc_raw.csv`, `gc_results.csv`, `mean_rates.csv` and its SD with replicates, `gc_info.csv`'s `A (cm^2)`) follow it. The masses and the areas are both kept, each with its *all / one*, so switching back and forth loses neither; the choice is a step of the undo history and is saved with the project.
    - **m (mg)**: Catalyst mass in milligrams; with *area*, this column is **A (cm²)**, the photocatalyst's (film's) area, 1 cm² to start with, above 0 as a mass is, with the same *all / one* and per-sample values
    - **Q (mL/min)**: Carrier gas flow rate
    - **T (°C)**: The temperature the flow Q is given at (25 °C by default; the same for every sample, or one each with *all / one*). The molar volume is V<sub>m</sub> = RT/p, so the rates scale with it: for a mass-flow controller, the reference temperature of its standard units (below), not its body's or the gas's; for a flow measured as a volume (a bubble meter), the gas temperature where it is measured. Projects saved before v495 keep 0 °C.
@@ -153,8 +153,8 @@ Assess H₂ and O₂ production rates from gas chromatography data, including li
    - White vertical lines on the plot mark these boundaries
 
 4. Two interactive plots, for the gases chosen with the **H₂ / O₂** chips (a gas no included file has is greyed out, and comes back when such a file is loaded or included):
-   - **Rate (mmol/h/g, or µmol/h/cm² by area)**: Production rate over time
-   - **Cumulative (mmol/g, or µmol/cm² by area)**: gas accumulated from the start of the interval
+   - **Rate (µmol g⁻¹ h⁻¹, or µmol cm⁻² h⁻¹ by area)**: Production rate over time
+   - **Cumulative (µmol g⁻¹, or µmol cm⁻² by area)**: gas accumulated from the start of the interval
 
 5. View results in a **bar chart** (mean production rate per sample) and a **summary table**.
 
@@ -166,6 +166,8 @@ The analysis is a card, as the DRS ones are: **+** under it adds another (its ow
 From v535: the Sample column names each sample by its trace's label, not its file's name (the links, and the projects saved before, are as they were); the instructions and the T and p titles say how to set T and p for a mass-flow controller.
 
 From v540: a card's rates can be normalised by the photocatalyst's area (µmol cm⁻² h⁻¹, µmol cm⁻²) instead of its mass, its labels and CSV headers following; mass stays the default and projects saved before open with it.
+
+From v541: by mass, the rates are in µmol g⁻¹ h⁻¹ and the production in µmol g⁻¹ (mmol g⁻¹ h⁻¹ and mmol g⁻¹ to v540), as by area they are in µmol: the same quantities, their numbers 1000 times what they were, in every plot, the bar chart and every CSV (its headers `umol g^-1 h^-1` and `umol g^-1`). Nothing saved changes: the rates are worked out as a project opens, so one saved before shows its results so. The card's instructions give the formulas from the reading to the rates, one a line, with an example: the mole fraction x (%mol / 100, or ppm × 10⁻⁶), the carrier's molar flow ṅ = Q / (1000 mL L⁻¹) × 60 min h⁻¹ / V<sub>m</sub> with V<sub>m</sub> = R·(T + 273.15) / (p / 101325 Pa atm⁻¹) and R = 0.0820573661 L atm mol⁻¹ K⁻¹, the rate r = x·ṅ·10⁶ / (m / 1000) in µmol g⁻¹ h⁻¹ (m in mg) or x·ṅ·10⁶ / A in µmol cm⁻² h⁻¹, the production P, the trapezoidal integral of r from the interval's start, and the mean rate P(t<sub>e</sub>) / (t<sub>e</sub> − t<sub>s</sub>).
 
 From v539: the instrument's tab-separated `.txt` export is read beside the default CSV (its Amount columns, in ppm, as %mol; said in a blue info alert), and both read every form of date above (a month's name, a 2-digit year, no seconds, 24 hours); a file the default way that loaded before reads to the same numbers.
 

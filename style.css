@@ -2224,6 +2224,8 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
   color: var(--muted);
   line-height: 1.6;
 }
+/* A formula of an instruction block on a line of its own, indented (GC's rates, v541). */
+.instr-eq { display: block; margin: 2px 0 2px 16px; padding-left: 14px; text-indent: -14px; }
 
 /* ===== Table wrapper box (file lists, param tables) ===== */
 .table-wrap-box {

@@ -190,7 +190,7 @@ test('the bars, one per sample: the mean of its files\' rates ± their standard 
     assert.match(await page.$eval('#tab-gc .an-instr', e=> e.textContent),
       /\. With replicates \(a sample of more than one included file\), mean_rates\.csv has a row per sample \(each gas's mean, ± and n\) and mean_rates_by_file\.csv a row per file, as mean_rates\.csv has without them\./);
     const T0 = z0['mean_rates.csv'];
-    assert.equal(rows(T0)[0].join('|'), 'Sample|Mean H2 Production Rate (mmol g^-1 h^-1)|Mean O2 Production Rate (mmol g^-1 h^-1)|Interval duration (h)|p (atm)|T (°C)');
+    assert.equal(rows(T0)[0].join('|'), 'Sample|Mean H2 Production Rate (umol g^-1 h^-1)|Mean O2 Production Rate (umol g^-1 h^-1)|Interval duration (h)|p (atm)|T (°C)');
     // beta and gamma replicates of alpha.
     await pick(page, 1, 'alpha.csv'); await pick(page, 2, 'alpha.csv');
     const h2 = ['alpha.csv', 'beta.csv', 'gamma.csv'].map(k=> r[k].h2), o2 = ['alpha.csv', 'gamma.csv'].map(k=> r[k].o2);
@@ -204,8 +204,8 @@ test('the bars, one per sample: the mean of its files\' rates ± their standard 
     let z = await zip(page);
     assert.equal(z['mean_rates_by_file.csv'], T0, 'mean_rates_by_file.csv: mean_rates.csv as it was');
     let m = rows(z['mean_rates.csv']);
-    assert.deepEqual(m[0], ['Sample', 'Mean H2 Production Rate (mmol g^-1 h^-1)', 'H2 SD (mmol g^-1 h^-1)', 'H2 n',
-      'Mean O2 Production Rate (mmol g^-1 h^-1)', 'O2 SD (mmol g^-1 h^-1)', 'O2 n', 'Interval duration (h)', 'p (atm)', 'T (°C)']);
+    assert.deepEqual(m[0], ['Sample', 'Mean H2 Production Rate (umol g^-1 h^-1)', 'H2 SD (umol g^-1 h^-1)', 'H2 n',
+      'Mean O2 Production Rate (umol g^-1 h^-1)', 'O2 SD (umol g^-1 h^-1)', 'O2 n', 'Interval duration (h)', 'p (atm)', 'T (°C)']);
     const dur = rows(T0)[1][3];
     assert.deepEqual(m.slice(1), [
       ['alpha', mean(h2).toFixed(6), sd(h2).toFixed(6), '3', mean(o2).toFixed(6), sd(o2).toFixed(6), '2', dur, '1', '25'],
