@@ -20,6 +20,8 @@
      plots and the bar chart (their superscripts), the parameter table's column, the CSV
      headers (gc_raw.csv, gc_results.csv, mean_rates.csv with replicates and its SD,
      gc_info.csv's A (cm^2)).
+   - The bar chart's value labels, the mean and its ± (with replicates), to 2 decimals with
+     mass and with area (v543: to v542, 4): the numbers by hand, rounded.
    - Switching back and forth keeps both the masses and the areas, each with its all/one;
      the choice a step of the history (undo, redo) and a change unsaved ("*").
    - A project saved before v540 (no choice in its state) opens with mass and the same
@@ -68,6 +70,8 @@ const massTitles = async page =>{
     assert.deepEqual(y.sup, cum ? ['-1'] : ['-1', '-1'], y.id + ': superscripts');
   }
 };
+// The bar chart's value labels, sample by sample, each shown gas in turn (H₂, O₂).
+const barLabels = page => page.$eval('#tab-gc svg[id$="SvgBar"]', s=> s._plot._stored.filter(e=> e.type === 'barlabel').map(e=> e.text));
 const restore = (page, st)=> page.evaluate(async st=>{
   const u = await import('./utils.js'), db = await import('./db.js');
   u.restoreModuleState('gc', db.decode(st));
@@ -123,6 +127,8 @@ test('area: the rates per cm² by hand; every label and CSV header follows the c
     assert.ok(Math.abs(meanOf(m, 'film-a', 'H2') - perG(0.05, 20)) <= 1e-6, `mass: ${meanOf(m, 'film-a', 'H2')} for ${perG(0.05, 20)}`);
     assert.ok(Math.abs(meanOf(m, 'film-a', 'H2')/1e3 - v540(0.05, 20)) <= 1e-9, 'mass: 1000 times v540\'s number');
     await massTitles(page);
+    // The bars' labels to 2 decimals (v543): 122.62, 49.05, 196.20, 73.57.
+    assert.deepEqual(await barLabels(page), [[0.05, 0.02], [0.08, 0.03]].flat().map(p=> perG(p, 20).toFixed(2)), 'mass: the bar labels');
     assert.equal((await tabLabels(page))[0].endsWith('*'), true, 'the masses typed: unsaved');
     await saveAs(page, 'norm test');
     const h0 = (await history(page, 'gc')).index;
@@ -158,6 +164,8 @@ test('area: the rates per cm² by hand; every label and CSV header follows the c
     }
     assert.ok(!raw.concat(cut).some(h=> /mmol|g\^-1/.test(h)), 'no mass unit left');
     assert.deepEqual([info[0][1], info[1][1], info[2][1]], ['A (cm^2)', '2.5', '2.5']);
+    // The bars' labels to 2 decimals (v543): 0.98, 0.39, 1.57, 0.59.
+    assert.deepEqual(await barLabels(page), [0.05, 0.02, 0.08, 0.03].map(p=> (umolH(p)/2.5).toFixed(2)), 'area: the bar labels');
     // The axis titles, with their superscripts.
     const ys = await yTitles(page);
     assert.deepEqual(ys.map(y=> y.id).sort(), ['Svg1', 'SvgBar', 'SvgCum', 'SvgRate']);
@@ -177,6 +185,11 @@ test('area: the rates per cm² by hand; every label and CSV header follows the c
     await page.selectOption('#gcFileTableWrap select.file-sample[data-i="1"]', 'film-a.csv'); await settle(page);
     m = csv((await zip(page))['mean_rates.csv']);
     assert.ok(m[0].includes('H2 SD (umol cm^-2 h^-1)'), m[0].join(' | '));
+    // Its labels, the mean ± the SD, both to 2 decimals: 0.98±0.00 (the same rate, 0.02 %mol
+    // per cm² each), 0.38±0.02.
+    const mean = a => (a[0] + a[1])/2, sd = a => Math.abs(a[0] - a[1])/Math.SQRT2;
+    const h2 = [umolH(0.05)/2.5, umolH(0.08)/4], o2 = [umolH(0.02)/2.5, umolH(0.03)/4];
+    assert.deepEqual(await barLabels(page), [h2, o2].map(a=> `${mean(a).toFixed(2)}±${sd(a).toFixed(2)}`), 'area with replicates: the bar labels');
 
     // Back to mass: the masses as they were, the labels and the numbers mass's again.
     await norm(page, 'mass');

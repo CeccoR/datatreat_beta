@@ -13,8 +13,9 @@
      head's label (the first included file's, the head left out), its height the mean of
      its included files' mean rates, each with its own parameters (a T of its own), its
      error bar the files' standard deviation (n − 1), worked out here by hand, none for one
-     file (v512: t(0.995, n − 1)·s/√n); a file left out, out of the mean and of n; the
-     figure composer keeps the error bars;
+     file (v512: t(0.995, n − 1)·s/√n); its label the mean and its ± to 2 decimals (v543:
+     4 to v542); a file left out, out of the mean and of n; the figure composer keeps the
+     error bars;
    - mean_rates.csv: as before with no replicates (the same bytes as the files' own before
      any link, a sample of one file left alone too); with them a row per sample, each gas's
      mean, ± and n, the duration, p and T one value or all of them joined by '/', and
@@ -198,8 +199,8 @@ test('the bars, one per sample: the mean of its files\' rates ± their standard 
     assert.deepEqual(b.map(x=> x.name), ['alpha', 'delta']);
     near(b[0].bars[H2][0], mean(h2), 'H₂ mean'); near(errOf(b[0], H2), sd(h2), 'H₂ ± (n = 3)', 1e-7);
     near(b[0].bars[O2][0], mean(o2), 'O₂ mean'); near(errOf(b[0], O2), sd(o2), 'O₂ ± (n = 2)', 1e-7);
-    assert.deepEqual(b[0].texts, [`${mean(h2).toFixed(4)}±${sd(h2).toFixed(4)}`, `${mean(o2).toFixed(4)}±${sd(o2).toFixed(4)}`], 'the value labels');
-    assert.deepEqual([b[1].bars[H2][0], b[1].bars[O2][0], b[1].errs, b[1].texts], [r['delta.csv'].h2, r['delta.csv'].o2, [], [r['delta.csv'].h2.toFixed(4), r['delta.csv'].o2.toFixed(4)]], 'delta alone: its own rates, no error bar');
+    assert.deepEqual(b[0].texts, [`${mean(h2).toFixed(2)}±${sd(h2).toFixed(2)}`, `${mean(o2).toFixed(2)}±${sd(o2).toFixed(2)}`], 'the value labels, to 2 decimals (v543)');
+    assert.deepEqual([b[1].bars[H2][0], b[1].bars[O2][0], b[1].errs, b[1].texts], [r['delta.csv'].h2, r['delta.csv'].o2, [], [r['delta.csv'].h2.toFixed(2), r['delta.csv'].o2.toFixed(2)]], 'delta alone: its own rates, no error bar');
     // The CSVs: a row per sample, and the rows per file as mean_rates.csv was.
     let z = await zip(page);
     assert.equal(z['mean_rates_by_file.csv'], T0, 'mean_rates_by_file.csv: mean_rates.csv as it was');

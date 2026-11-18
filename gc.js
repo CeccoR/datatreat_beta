@@ -1273,11 +1273,12 @@ function createGc({ key, root, layer, shown }){
        its own beside the others in each sample's slot, the way the XRPD size chart pairs
        raw and corrected: coloured by gas (the samples are told apart by their place on the
        axis, the gases would not be) and named by it, as the legend under the chart is; its
-       error bar the ± of the sample's replicates. Nothing to show draws nothing: the
-       section's visibility is updateRegression's. */
+       error bar the ± of the sample's replicates; its label the value and its ± to 2
+       decimals, by mass or by area (v543: to v542, 4; the CSVs keep theirs). Nothing to
+       show draws nothing: the section's visibility is updateRegression's. */
     function drawBarChart(){
       const svg = $('SvgBar'), sm = sampleRates();
-      valueBars(svg, { cats: sm, digits: 4, yLabel: NORM[norm].rateSvg, legend: $('BarLegend'),
+      valueBars(svg, { cats: sm, digits: 2, yLabel: NORM[norm].rateSvg, legend: $('BarLegend'),
         series: shownGases('r').map(g=> ({ name: gasTxt(g), color: g.bar, vals: sm.map(s=> s.rate[g.key]), errs: sm.map(s=> s.err[g.key]) })),
         chips: svg.closest('.plot-wrap').querySelector('.gc-gas-sel') });
     }
