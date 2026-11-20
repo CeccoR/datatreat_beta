@@ -98,10 +98,10 @@ index 995c6ab..0317c2c 100644
       so an undo does not rebuild the whole list; any other is built afresh. A kept record
 diff --git a/gc-integ.js b/gc-integ.js
 new file mode 100644
-index 0000000..990f43c
+index 0000000..76a1300
 --- /dev/null
 +++ b/gc-integ.js
-@@ -0,0 +1,990 @@
+@@ -0,0 +1,1021 @@
 +import { esc, csvLine, fmtNum, alertHtml, setupDropzone, X_SVG, bytesKey, fixed, exactKey, objId, guardNumericInput, flashFieldInvalid, kept } from './utils.js';
 +import { Plot, svgEl } from './plot.js';
 +import { plotWrap, chipRow, toggleChip, viewOf, setView } from './modcharts.js';
@@ -128,7 +128,7 @@ index 0000000..990f43c
 +   - the job: what no result is held for, integrated in the background (gc-tcd-pool.js), one
 +     file after another, with its progress and Stop on every Integration card.
 +   ctx: { kit, all (every record, in list order), cards() (the deck's records), inst(id),
-+   drawable(), shown(), layer, isTcd(rec), changed() (results came in: the cards below
++   drawable(), shown(), folded(rec), layer, isTcd(rec), changed() (results came in: the cards below
 +   follow) }.
 +========================================================= */
 +const GAS = {
@@ -228,7 +228,7 @@ index 0000000..990f43c
 +      `${im(k)}: area per %mol; ${im(c)}: %mol. A line through zero, whatever the software's own calibration was.`)
 +    + '</ol></div>';
 +})();
-+export const INTEG_INFO = `The <b>Integration</b> card integrates again the raw chromatograms of the thermal-conductivity detector (TCD), the files of a column per injection that the GC software writes beside its table, and hands the results to the <b>Production Rate</b> cards below it. Each injection's <b>H₂ and O₂</b> are fitted together in one <b>window</b> of retention time (268–326 s by default): a smooth baseline (a straight line, with the <b>step</b> the detector makes after O₂), a peak shape for H₂, for O₂ and for the system peak at 310 s (<b>S310</b>, fitted so that its tail does not end up in O₂'s area; the step and S310 are drawn but go no further). The fit is made in <b>two passes</b>: the first, with a robust loss, finds <b>spikes</b> and <b>glitch zones</b> (marked on the plot in red), which the second, an ordinary least-squares fit, leaves out, so that a spike is never read as gas; a fit that looks wrong is started again from a generic start, and the better of the two kept. The <b>method</b> is the card's, in the numbers under the chromatogram, which are its source of truth: the window's edges (the green lines on the chromatogram drag them as an aid, snapping to the data's 0.2 s, and write into the numbers) and each gas's trapezoid base intervals (numbers only: they are 10–100 times more sensitive than the window's edges, and O₂'s right one sits on the step). Moving an edge by 1–2 s changes the areas by a few hundredths of a per cent; by 5 s it reaches the peaks the model has no shape for, the system peak at 262–267.5 s and N₂ from about 330.5 s (grey on the chromatogram), and the fit degrades: the card says so. The area of each peak is its fitted shape's, ± its standard deviation; χ²<sub>r</sub> says how well the model follows the data (about 1: within the noise). Beside it, a <b>trapezoid</b> area is worked out the classic way (a straight base between two stretches either side of the peak); for H₂ the two should agree within a few per cent, and the card marks (a ring on the overview, ⚠ in the list) an injection where they differ by more than 3 % (and by more than 0.0015 %mol), where χ²<sub>r</sub> is above 4 after the fit's restart (some fits are fragile: the robust pass stops at its 100th evaluation), where a glitch was left out or where the fit did not converge. O₂'s trapezoids, whose right base sits on the step, read well under its fit at every injection: shown, not marked. The <b>run overview</b> shows, for the file chosen, every injection's fit (dot), trapezoids (square) and the software table's value (cross), against the injection time (the injection's number when there is no table); a click on a point shows its chromatogram. Integration runs by itself in the background when raw chromatograms are loaded, or a little after the method changes; <b>Stop</b> stops it, <b>Re-integrate</b> runs what is left. A changed window integrates every file again; a file added, only itself. <b>Pairs</b>: a table and its raw chromatograms (the same name with _TCD) share a row of the file list; the table's rows with a date are its injections, which must be as many as the chromatograms (else the card says so, and Analysis keeps the table). <b>Concentrations</b>: <b>Calibration…</b> opens the standards' window: drop their raw chromatograms, type each standard's H₂ and O₂ (blank: not a standard of that gas), choose the unit and, per gas, a free intercept (the default: O₂'s response has a real intercept, about −500 ppm, and a line forced through zero biases its low levels by −8 to −26 % while R² barely moves; each level's deviation from the line is shown, since R² cannot tell) or a zero one; the line area = slope × c + intercept is fitted to them and a sample's concentration is (area − intercept) / slope. Standards always win. Without them, the card <b>takes the calibration from the GC software's table</b>: for each pair, k is the median of our area over the table's value across the injections well above the noise (a table value of at least 0.02 %mol for H₂, 0.012 %mol for O₂, ten injections at least), and the concentration is area / k (an info alert says so). <b>Its risks</b>: it borrows the software's scale, and assumes that the software's areas are proportional to ours, which a different baseline or peak split breaks; the transferred line goes through zero even if the software's own calibration had an intercept; it needs enough injections above the threshold (else there is none, and Analysis keeps the table); and if the software's calibration is wrong, so is this one: it reproduces the table's scale, it does not check it. A Production Rate card takes its values from the nearest Integration card above it; one with none above keeps the tables. ${CONC_HTML}${cardInfo(false, false)}`;
++export const INTEG_INFO = `The <b>Integration</b> card integrates again the raw chromatograms of the thermal-conductivity detector (TCD), the files of a column per injection that the GC software writes beside its table, and hands the results to the <b>Production Rate</b> cards below it. Each injection's <b>H₂ and O₂</b> are fitted together in one <b>window</b> of retention time (268–326 s by default): a smooth baseline (a straight line, with the <b>step</b> the detector makes after O₂), a peak shape for H₂, for O₂ and for the system peak at 310 s (<b>S310</b>, fitted so that its tail does not end up in O₂'s area; the step and S310 are drawn but go no further). The fit is made in <b>two passes</b>: the first, with a robust loss, finds <b>spikes</b> and <b>glitch zones</b> (marked on the plot in red), which the second, an ordinary least-squares fit, leaves out, so that a spike is never read as gas; a fit that looks wrong is started again from a generic start, and the better of the two kept. The <b>method</b> is the card's, in the numbers under the chromatogram, which are its source of truth: the window's edges (the green lines on the chromatogram drag them as an aid, snapping to the data's 0.2 s, and write into the numbers) and each gas's trapezoid base intervals (numbers only: they are 10–100 times more sensitive than the window's edges, and O₂'s right one sits on the step). Moving an edge by 1–2 s changes the areas by a few hundredths of a per cent; by 5 s it reaches the peaks the model has no shape for, the system peak at 262–267.5 s and N₂ from about 330.5 s (grey on the chromatogram), and the fit degrades: the card says so. The area of each peak is its fitted shape's, ± its standard deviation; χ²<sub>r</sub> says how well the model follows the data (about 1: within the noise). Beside it, a <b>trapezoid</b> area is worked out the classic way (a straight base between two stretches either side of the peak); for H₂ the two should agree within a few per cent, and the card marks (a ring on the overview, ⚠ in the list) an injection where they differ by more than 3 % (and by more than 0.0015 %mol), where χ²<sub>r</sub> is above 4 after the fit's restart (some fits are fragile: the robust pass stops at its 100th evaluation), where a glitch was left out or where the fit did not converge. O₂'s trapezoids, whose right base sits on the step, read well under its fit at every injection: shown, not marked. The <b>run overview</b> shows, for the file chosen, every injection's fit (dot), trapezoids (square) and the software table's value (cross), against the injection time (the injection's number when there is no table); a click on a point shows its chromatogram. Integration runs by itself in the background when raw chromatograms are loaded, or a little after the method changes; <b>Stop</b> stops it, <b>Re-integrate</b> runs what is left. A changed window integrates every file again; a file added, only itself. <b>Pairs</b>: a table and its raw chromatograms (the same name with _TCD) share a row of the file list; the table's rows with a date are its injections, which must be as many as the chromatograms (else the card says so, and Analysis keeps the table). <b>Concentrations</b>: <b>Calibration…</b> opens the standards' window: drop their raw chromatograms, type each standard's H₂ and O₂ (blank: not a standard of that gas), choose the unit and, per gas, a free intercept (the default: O₂'s response has a real intercept, about −500 ppm, and a line forced through zero biases its low levels by −8 to −26 % while R² barely moves; each level's deviation from the line is shown, since R² cannot tell) or a zero one; the line area = slope × c + intercept is fitted to them and a sample's concentration is (area − intercept) / slope. Standards always win. Without them, the card <b>takes the calibration from the GC software's table</b>: for each pair, k is the median of our area over the table's value across the injections well above the noise (a table value of at least 0.02 %mol for H₂, 0.012 %mol for O₂, ten injections at least), and the concentration is area / k (an info alert says so). <b>The risks of a calibration taken from the GC software</b>, which standards avoid:<ul class="gci-risks"><li>it <b>borrows the software's scale</b>, and assumes that the software's areas are proportional to ours, which a different baseline or peak split breaks (for O₂, on H₂'s tail and before the step, they may well differ);</li><li>the transferred line <b>goes through zero</b>, even if the software's own calibration had an intercept (O₂'s response has one, about −500 ppm: the low levels then come out biased);</li><li>it needs <b>enough injections above the threshold</b> (ten at 0.02 %mol of H₂, 0.012 %mol of O₂): with fewer there is none, and Analysis keeps the table;</li><li>if the <b>software's calibration is wrong, so is this one</b>: it reproduces the table's scale, it does not check it.</li></ul>A Production Rate card takes its values from the nearest Integration card above it; one with none above keeps the tables. ${CONC_HTML}${cardInfo(false, false)}`;
 +const CAL_INFO = `Each column of a raw calibration file is a standard's chromatogram, integrated with this card's method. Type in each row the standard's H₂ and O₂ concentrations in the unit chosen (blank: not a standard of that gas; the file's own names, cal_… included, are never read), and untick a row to leave it out. Per gas, the line area = slope × c + intercept is fitted by least squares to the standards (free intercept), or through zero; R², and each level's deviation from the line, say how well it holds. The calibration is this card's, saved with the project and its files, and applies to every pair of the card; a gas with two standards or more (one, through zero) is calibrated, the other taken from the GC software's table.`;
 +
 +export function createInteg(ctx){
@@ -250,7 +250,8 @@ index 0000000..990f43c
 +
 +  /* ---- The results ---- */
 +  const store = new Map();
-+  let job = null, halted = false, soon = 0, failed = '';
++  // (`dead`: its instance let go, a tab asleep or closed: a job's end writes nothing)
++  let job = null, halted = false, soon = 0, failed = '', dead = false;
 +  const keyOf = (rec, m)=> fileKey(rec) + '|' + methodKey(m);
 +  // (the job's own, as they come, over the store's)
 +  const resultsAt = key => job && job.key === key ? job.work : store.get(key) || null;
@@ -334,7 +335,9 @@ index 0000000..990f43c
 +      method: g.method, signal: ac.signal,
 +      onProgress: (_done, _n, i, r)=>{
 +        if (job !== j) return;
-+        work[g.miss[i]] = r && !r.error ? compact(r) : null;
++        // (a chromatogram the engine could not fit is a result too, its error said: else it
++        // would be wanted again at once, and fail again)
++        work[g.miss[i]] = r && !r.error ? compact(r) : { error: String(r && r.error || 'the integration failed'), gases: {}, windows: [] };
 +        j.done++; j.doneHere++;
 +        // (counted for the tests, as utils.js kept counts what is worked out: a project reopened fits none)
 +        kept.made['gc-tcd'] = (kept.made['gc-tcd'] || 0) + 1;
@@ -342,7 +345,7 @@ index 0000000..990f43c
 +        if (performance.now() - last > 500){ last = performance.now(); paint(true); }
 +      },
 +    }).then(()=>{
-+      if (job !== j) return;
++      if (job !== j || dead) return;
 +      job = null;
 +      write(g.key, work.slice());
 +      ctx.changed();
@@ -351,6 +354,7 @@ index 0000000..990f43c
 +      else paint(true);
 +    }, e=>{
 +      if (job === j) job = null;
++      if (dead) return;
 +      if (work.some(Boolean)) write(g.key, work.slice());
 +      if (!e || e.name !== 'AbortError'){ failed = String(e && e.message || e); halted = true; }
 +      ctx.changed();
@@ -360,10 +364,11 @@ index 0000000..990f43c
 +  }
 +  function stop(){ halted = true; clearTimeout(soon); soon = 0; if (job){ job.ac.abort(); } paint(); }
 +  // Every card's status (and, with `all`, its plots: results came in).
-+  let painting = 0;
++  let painting = 0, paintAll = false;
 +  function paint(all){
-+    if (painting) return;
-+    painting = requestAnimationFrame(()=>{ painting = 0; integCards().forEach(c=> c.paintStatus(all)); });
++    paintAll = paintAll || !!all;
++    if (painting || dead) return;
++    painting = requestAnimationFrame(()=>{ const a = paintAll; painting = 0; paintAll = false; if (!dead) integCards().forEach(c=> c.paintStatus(a)); });
 +  }
 +  const status = ()=> ({ job, halted, soon: !!soon, failed });
 +
@@ -547,12 +552,15 @@ index 0000000..990f43c
 +      const J = (k, gases = Object.keys(GAS))=>{
 +        const r = res && res[k];
 +        if (!r) return [];
++        if (typeof r.error === 'string') return [`not integrated: ${r.error}`];
 +        const out = [], ws = Array.isArray(r.windows) ? r.windows : [];
 +        gases.forEach(g=>{ if (trapBad(k, g)){ const x = r.gases[g]; out.push(`${gasOf(g).txt}: fit and trapezoids ${(100*(x.area - x.trap)/x.area).toFixed(1)} % apart`); } });
 +        const w = ws.find(x=> fin(x.chi2r) && x.chi2r > chiMax);
 +        if (w) out.push(`χ²ᵣ ${w.chi2r.toFixed(2)}, above ${CHI2_HIGH}${w.restarted ? ' (after a restart)' : ''}`);
 +        if (ws.some(x=> Array.isArray(x.excluded) && x.excluded.length)) out.push('a glitch zone left out of the fit');
 +        if (ws.some(x=> x.ok === false && !x.beyondData)) out.push('the fit did not converge');
++        // (ENGINE.md §4: a standard's column that ends at 309 s, before its window does: no fit)
++        if (ws.some(x=> x.beyondData === true)) out.push('the chromatogram ends before its window does: not fitted');
 +        return out;
 +      };
 +      J.trapBad = trapBad; J.chiMax = chiMax;
@@ -564,7 +572,7 @@ index 0000000..990f43c
 +      renderSel();
 +      paintStatus();
 +      paintAlerts();
-+      if (!ctx.drawable()) return;
++      if (!ctx.drawable() || ctx.folded(a)) return;
 +      const e = cur();
 +      prevView = keep && chrom ? viewOf(chrom) : null;
 +      drawChrom(e); drawOverview(e); paintValues(e); paintMethod();
@@ -751,6 +759,7 @@ index 0000000..990f43c
 +      if (!e || e.d.error){ box.innerHTML = ''; return; }
 +      const R = resOf(e.tcd), r = R.res && R.res[selK];
 +      if (!r){ box.innerHTML = `<p class="txt-meta">Not integrated yet.</p>`; return; }
++      if (typeof r.error === 'string'){ box.innerHTML = `<p class="gci-flag">⚠ Not integrated: ${esc(r.error)}</p>`; return; }
 +      const conv = convAll(e, R.res), J = judge(e, R.res);
 +      const rows = Object.keys(GAS).filter(g=> r.gases && r.gases[g]).map(g=>{
 +        const x = r.gases[g], c = conv[g], diff = fin(x.area) && fin(x.trap) && x.area ? 100*(x.area - x.trap)/x.area : NaN;
@@ -889,6 +898,21 @@ index 0000000..990f43c
 +      });
 +      const tr = es.filter(aligned).map(e=>{ const R = resOf(e.tcd); if (!R.res || R.res.some(x=> !x)) return null; const c = convAll(e, R.res), gs = Object.keys(GAS).filter(g=> c[g] && c[g].how === 'transfer'); return gs.length ? `${esc(e.label)}: ${gs.map(g=> `${gasOf(g).label} k = ${sig(c[g].k, 5)} (median of ${c[g].n} injections)`).join(', ')}` : null; }).filter(Boolean);
 +      if (tr.length) lines.info.push(...tr);
++      /* A gas calibrated by standards whose injections fall outside the standards' range:
++         extrapolated, said (below the lowest standard the intercept weighs most: the real O₂
++         runs, about 0.03 %mol, lie far under the 0.2 %mol standard). */
++      Object.keys(GAS).forEach(g=>{
++        const L = calFit(g);
++        if (!L) return;
++        const cs = L.pts.map(q=> toPct(q.conc, cal.unit)), lo = Math.min(...cs), hi = Math.max(...cs);
++        es.forEach(e=>{
++          const R = resOf(e.tcd);
++          if (e.d.error || !R.res || R.stale) return;
++          const v = R.res.map(x=> x && x.gases && x.gases[g] && fin(x.gases[g].area) ? toPct((x.gases[g].area - L.intercept)/L.slope, cal.unit) : NaN).filter(fin);
++          const out = v.filter(c=> c < lo || c > hi).length;
++          if (out) lines.warn.push(`${esc(e.label)}: ${out} of ${v.length} injections' ${gasOf(g).label} outside the standards' range (${sig(lo, 3)}–${sig(hi, 3)} %mol): extrapolated${v.some(c=> c < lo) ? `, below the lowest standard, where the intercept (${sig(L.intercept, 4)}) weighs most` : ''}.`);
++        });
++      });
 +      const errs = es.filter(e=> e.d.error).map(e=> `${esc(e.tcd.name)}: ${esc(e.d.error)}`);
 +      $('Alerts').innerHTML = (errs.length ? alertHtml('bad', 'Raw chromatograms that could not be read:', errs) : '')
 +        + (lines.warn.length ? alertHtml('warn', 'Raw chromatograms to check:', lines.warn) : '')
@@ -917,8 +941,8 @@ index 0000000..990f43c
 +          <div class="xrd-std-alerts gci-cal-alerts"></div>
 +          <div class="gci-cal-files"></div>
 +          <div class="gci-cal-unit"><label class="txt-label">Concentration unit <select class="gci-cal-unit-in" aria-label="Concentration unit">${UNITS.map(u=> `<option value="${u}">${u}</option>`).join('')}</select></label><span class="gci-cal-status txt-meta"></span></div>
-+          <div class="peak-scroll"><table class="gci-cal-levels"><thead><tr><th>#</th><th></th><th>File, column</th><th>H<sub>2</sub> area</th><th>O<sub>2</sub> area</th><th>H<sub>2</sub> <span class="gci-u"></span></th><th>O<sub>2</sub> <span class="gci-u"></span></th><th title="Use this standard">Use</th></tr></thead><tbody></tbody></table></div>
 +          <div class="row gci-cal-fits"></div>
++          <div class="peak-scroll gci-cal-table"><table class="gci-cal-levels"><thead><tr><th>#</th><th></th><th>File, column</th><th>H<sub>2</sub> area</th><th>O<sub>2</sub> area</th><th>H<sub>2</sub> <span class="gci-u"></span></th><th>O<sub>2</sub> <span class="gci-u"></span></th><th title="Use this standard">Use</th></tr></thead><tbody></tbody></table></div>
 +        </div>
 +      </div>`;
 +      ctx.layer.appendChild(m);
@@ -930,7 +954,8 @@ index 0000000..990f43c
 +      function close(){ if (!isOpen) return; isOpen = false; m.style.display = 'none'; document.removeEventListener('keydown', onKey); if (from && from.isConnected) from.focus({ preventScroll: true }); from = null; }
 +      m.addEventListener('click', e=>{ if (e.target === m || e.target.closest('.xrd-std-x')) close(); });
 +      // A change: the card's, a step; the cards below follow.
-+      const changed = ()=>{ valuesKept.clear(); draw(true); paint(); kit.commit(); ctx.changed(); };
++      // (`levels`: a level typed or ticked, its field kept as it is: the fits drawn again, not the table)
++      const changed = levels =>{ valuesKept.clear(); draw(true); if (levels) paintFits(); else paint(); kit.commit(); ctx.changed(); };
 +      setupDropzone(q('.gci-cal-dz'), q('.gci-cal-in'), async list=>{
 +        const bad = [], add = [];
 +        for (const f of list){
@@ -960,13 +985,13 @@ index 0000000..990f43c
 +        const c = calCopy(cal), f = c.files[+inp.dataset.fi], j = +inp.dataset.j;
 +        if (!f) return;
 +        while (f.levels.length <= j) f.levels.push(blankLevel());
-+        if (inp.type === 'checkbox') f.levels[j].on = inp.checked;
++        if (inp.type === 'checkbox'){ f.levels[j].on = inp.checked; inp.closest('tr').classList.toggle('is-excluded', !inp.checked); }
 +        else {
 +          const s = inp.value.trim().replace(',', '.'), v = s === '' ? null : Number(s);
 +          if (v !== null && !(fin(v) && v >= 0)){ flashFieldInvalid(inp); inp.value = f.levels[j][inp.dataset.g] == null ? '' : String(f.levels[j][inp.dataset.g]); return; }
 +          f.levels[j][inp.dataset.g] = v;
 +        }
-+        cal = c; changed();
++        cal = c; changed(true);
 +      });
 +      q('.gci-cal-levels').addEventListener('keydown', e=>{ if (e.key === 'Enter' && e.target.matches('input[type="text"]')) e.target.blur(); });
 +      q('.gci-cal-fits').addEventListener('click', e=>{
@@ -985,8 +1010,10 @@ index 0000000..990f43c
 +        const pts = xs.map((x, i)=> `${((x - lo)/(hi - lo)*W).toFixed(1)},${(H - 1 - (ys[i] - y0)/((y1 - y0) || 1)*(H - 2)).toFixed(1)}`).join(' ');
 +        return `<svg class="gci-thumb" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="1"/></svg>`;
 +      }
++      // (drawn anew while the standards are integrated: the field typed in keeps the focus)
 +      function paint(){
 +        if (!isOpen) return;
++        const act = document.activeElement, was = act && m.contains(act) && act.matches('input[data-fi]') ? { k: `[data-fi="${act.dataset.fi}"][data-j="${act.dataset.j}"][data-g="${act.dataset.g}"]`, v: act.value, s: act.type === 'text' ? act.selectionStart : null } : null;
 +        q('.gci-cal-files').innerHTML = cal.files.map((f, i)=> `<div class="xrd-std-row"><span class="txt-mini">Standards</span><span class="xrd-std-name">${esc(f.name)}</span><button type="button" class="peak-del is-danger idle-dim" data-cal-del="${i}" title="Remove this file and its levels">${X_SVG(13)}</button></div>`).join('');
 +        q('.gci-cal-unit-in').value = cal.unit;
 +        m.querySelectorAll('.gci-u').forEach(s=>{ s.textContent = `(${cal.unit})`; });
@@ -999,6 +1026,10 @@ index 0000000..990f43c
 +          + `<td><input type="text" inputmode="decimal" data-fi="${x.fi}" data-j="${x.j}" data-g="o2" value="${val(x.lv.o2)}" aria-label="O2 concentration of standard ${i + 1}" placeholder="—"></td>`
 +          + `<td><input type="checkbox" data-fi="${x.fi}" data-j="${x.j}" data-g="on"${x.lv.on ? ' checked' : ''} aria-label="Use standard ${i + 1}"></td></tr>`).join('')
 +          || `<tr><td colspan="8" class="txt-meta">Drop the standards' raw chromatograms above.</td></tr>`;
++        if (was){ const f = m.querySelector('input' + was.k); if (f){ if (f.type === 'text'){ f.value = was.v; } f.focus({ preventScroll: true }); if (was.s != null) try { f.setSelectionRange(was.s, was.s); } catch(e){ /* not a text field */ } } }
++        paintFits();
++      }
++      function paintFits(){
 +        const fits = q('.gci-cal-fits');
 +        fits.innerHTML = Object.keys(GAS).map(g=> `<div class="col gci-cal-gas" data-g="${g}">
 +            <div class="gci-cal-gas-head"><span class="txt-mini">${gasOf(g).label}</span>
@@ -1019,7 +1050,7 @@ index 0000000..990f43c
 +        if (L) P.line([0, xmax*1.08], [L.intercept, L.slope*xmax*1.08 + L.intercept], C_MODEL, 1.3, undefined, { label: 'fit', key: 'fit' });
 +        P.points(xs, ys, gasOf(g).color, 3.5, { fill: true, label: 'standards', key: 'standards' });
 +        P.attachTools(svg.closest('.plot-wrap'));
-+        if (!L){ stats.innerHTML = `<p class="txt-meta">${pts.length} standard${pts.length === 1 ? '' : 's'}: two of different concentrations at least are needed (one, through zero).</p>`; return; }
++        if (!L){ const one = new Set(xs).size === 1; stats.innerHTML = `<p class="txt-meta">${pts.length} standard${pts.length === 1 ? '' : 's'}${one ? ' at one concentration' : ''}: a free intercept needs two concentrations at least${cal.zero[g] ? '' : '; a zero intercept fits one'}.</p>`; return; }
 +        const levels = new Map();
 +        (L.residuals || []).forEach(r=>{ const k = String(r.conc); if (!levels.has(k)) levels.set(k, []); levels.get(k).push(r); });
 +        stats.innerHTML = `<p class="gci-cal-line">slope <b>${sig(L.slope, 6)}</b> area/${esc(cal.unit)}, intercept <b>${sig(L.intercept, 5)}</b>${cal.zero[g] ? ' (fixed)' : ''}, R² = <b>${fin(L.r2) ? L.r2.toFixed(5) : '—'}</b>, n = ${L.n}</p>`
@@ -1090,14 +1121,14 @@ index 0000000..990f43c
 +
 +  // (a file the drop read: its chromatograms kept by its bytes, not read again)
 +  const prime = (bytes, d)=>{ if (bytes instanceof Uint8Array && d && !d.error) read.set(bytes, d); };
-+  return { card, saved, load, ensure, stop, later, status, pending, dataOf, prime, destroy(){ stop(); clearTimeout(soon); }, store };
++  return { card, saved, load, ensure, stop, later, status, pending, dataOf, prime, destroy(){ dead = true; stop(); clearTimeout(soon); cancelAnimationFrame(painting); }, store };
 +}
 diff --git a/gc-pair.js b/gc-pair.js
 new file mode 100644
-index 0000000..9dc590d
+index 0000000..d4456cd
 --- /dev/null
 +++ b/gc-pair.js
-@@ -0,0 +1,91 @@
+@@ -0,0 +1,95 @@
 +/* =========================================================
 +   GC: A TABLE AND ITS RAW CHROMATOGRAMS, PAIRED (v544)
 +   The pure part of the pairing: what a file is by its content, which names pair by
@@ -1107,16 +1138,20 @@ index 0000000..9dc590d
 +========================================================= */
 +
 +/* A file of raw chromatograms (TCD), told by its content, never by its name: no header, its
-+   first line all numbers (the time, then a value per injection), `;` between them, a
-+   decimal comma or point, a line that may end with `;`. A GC table's first line names its
++   first lines all numbers (the time, then a value per injection), `;` between them with a
++   decimal comma or point (the instrument's), or a tab or `,` with a point, as the engine's
++   readTcd reads them; a line may end with its separator. A GC table's first line names its
 +   columns. */
 +export function looksTcd(text){
-+  const s = String(text);
++  const s = String(text).replace(/^\ufeff/, '');
 +  const lines = s.slice(0, 20000).split(/\r?\n/).filter(l=> l.trim()).slice(0, 3);
 +  if (lines.length < 2) return false;
++  const probe = lines.join('\n'), sep = probe.includes(';') ? ';' : probe.includes('\t') ? '\t' : ',';
++  const cell = sep === ',' ? /^\s*[-+]?(\d+(\.\d*)?|\.\d+)([eE][-+]?\d+)?\s*$/ : /^\s*[-+]?(\d+([.,]\d*)?|[.,]\d+)([eE][-+]?\d+)?\s*$/;
 +  return lines.every(l=>{
-+    const f = l.replace(/;\s*$/, '').split(';');
-+    return f.length >= 2 && f.every((c, k)=> (k > 0 && !c.trim()) || /^\s*[-+]?(\d+([.,]\d*)?|[.,]\d+)([eE][-+]?\d+)?\s*$/.test(c));
++    const f = l.split(sep);
++    if (f.length > 1 && !f[f.length - 1].trim()) f.pop();
++    return f.length >= 2 && f.every((c, k)=> (k > 0 && !c.trim()) || cell.test(c));
 +  });
 +}
 +
@@ -1190,7 +1225,7 @@ index 0000000..9dc590d
 +  return out.filter(r=> r.length);
 +}
 diff --git a/gc.js b/gc.js
-index 34ebde5..f57bdaf 100644
+index 34ebde5..a90598b 100644
 --- a/gc.js
 +++ b/gc.js
 @@ -4,6 +4,9 @@ import { cardInfo, fileSafe, nameDownloads } from './cards.js';
@@ -1258,7 +1293,14 @@ index 34ebde5..f57bdaf 100644
  
  // A GC tab's instance (utils.js makeInstance: ctx { key, root, layer, shown }).
  function createGc({ key, root, layer, shown }){
-@@ -452,9 +478,16 @@ function createGc({ key, root, layer, shown }){
+@@ -448,13 +474,25 @@ function createGc({ key, root, layer, shown }){
+      first or left out, the empty cells skipped and the files read as the alternative
+      export among them; each card's settings in the history. A gas's values, which
+      nothing changes once read, are fixed (db.js: the same array in a tab's states and its
+-     parked state). */
++     parked state). From v544 a record may also be raw chromatograms ({ name, label, color,
++     rawBytes, tcd: { n } }) or a pair, the first file's record with the second as its `mate`
++     (PAIRS, below): only a table heading its row is a sample (`files`). */
    const kit = moduleKit('gc', {
      root, key, layer,
      // (the plots' gas chips, H₂ / O₂: the view alone, a step but no change unsaved; utils.js VIEW_KEYS)
@@ -1273,12 +1315,15 @@ index 34ebde5..f57bdaf 100644
 +    // Only a table heading its row is a sample (raw chromatograms alone, or paired with raw
 +    // chromatograms, have no injection times: Analysis leaves them out, v544).
 +    sample: isTable,
++    // (a record as a state holds it, before the restore takes it: a place among the per-sample
++    // arrays unless it is raw chromatograms, so that one left out takes its entries with it)
++    rawSample: f => !isTcd(f),
 +    // A pair is one row, its two files in FILE, each with a grip of its own (v544).
 +    traces: traceRows,
      // Every card's per-sample arrays. An excluded file holds its own values; one with none
      // (never so far, or in a card added since) gets the upload defaults.
      slots: ()=> cards().flatMap(a=> live.get(a.id).slots()),
-@@ -468,29 +501,15 @@ function createGc({ key, root, layer, shown }){
+@@ -468,29 +506,15 @@ function createGc({ key, root, layer, shown }){
      // mean-rate bars alone, the only plot per sample.
      redraw: what => what === 'note' ? each(c=> c.bars()) : (what === 'label' && sampleNames(), each((c, a)=>{ if (what === 'label') c.renderTable(); if (!deck.isFolded(a)) c.compute(true); else c.computeQuiet(); })),
      cleared: ()=> each(c=> c.clear()),
@@ -1313,7 +1358,7 @@ index 34ebde5..f57bdaf 100644
        src=> ({ init: { ...src, ...Object.fromEntries(PER_SAMPLE.filter(k=> k in src).map(k=> [k, without(src[k], gone)])) } }), a=>{ live.get(a.id).restore(a.init); delete a.init; });
        // (what its cards showed, given as its tab woke or the page was reloaded: showNext)
        if (cardsNext){ const v = cardsNext; cardsNext = null; each((c, a)=>{ if (isObj(v[a.id])) c.showNext(v[a.id]); }); } },
-@@ -502,12 +521,53 @@ function createGc({ key, root, layer, shown }){
+@@ -502,12 +526,53 @@ function createGc({ key, root, layer, shown }){
        if (!stale && at === drawnAt) return;
        stale = false; drawnAt = at;
        fitCsvIcons(root);
@@ -1368,7 +1413,7 @@ index 34ebde5..f57bdaf 100644
  
    /* ---- REPLICATES ----
       Each file is a sample of its own, or a replicate of another file's: its record's
-@@ -538,7 +598,8 @@ function createGc({ key, root, layer, shown }){
+@@ -538,7 +603,8 @@ function createGc({ key, root, layer, shown }){
        if (typeof s !== 'string' || by.has(s) || twice.has(s)) return;
        if (heir.has(s)) f.sample = heir.get(s); else { heir.set(s, f.name); delete f.sample; }
      });
@@ -1378,7 +1423,7 @@ index 34ebde5..f57bdaf 100644
    }
    // A file's head: the file it is linked to, or itself.
    const headOf = (f, by)=> (!isHead(f) && by.get(f.sample)) || f;
-@@ -546,11 +607,14 @@ function createGc({ key, root, layer, shown }){
+@@ -546,11 +612,14 @@ function createGc({ key, root, layer, shown }){
       order, on its head's; each option the file's name as its value (the link) and its label
       as its text (to v534 its name), the name in its title; dimmed with the row when the
       file is left out, as its label is. A label renamed is shown at once (sampleNames). */
@@ -1395,7 +1440,7 @@ index 34ebde5..f57bdaf 100644
    }
    // The Sample column's options after a label renamed: each its file's label again.
    function sampleNames(){
-@@ -567,7 +631,7 @@ function createGc({ key, root, layer, shown }){
+@@ -567,7 +636,7 @@ function createGc({ key, root, layer, shown }){
    let walk = null;
    function setSample(i, name, again){
      const f = allFiles[i], h = byName().by.get(name);
@@ -1404,7 +1449,7 @@ index 34ebde5..f57bdaf 100644
      if (!again || !walk || walk.f !== f) walk = { f, m: allFiles.filter(g=> g.sample === f.name) };
      walk.m.forEach(g=>{ g.sample = h.name; });
      if (h === f) delete f.sample; else f.sample = h.name;
-@@ -599,7 +663,7 @@ function createGc({ key, root, layer, shown }){
+@@ -599,7 +668,7 @@ function createGc({ key, root, layer, shown }){
    const blankSeen = new WeakSet();
    function blankAlertsHtml(){
      const lines = [];
@@ -1413,7 +1458,7 @@ index 34ebde5..f57bdaf 100644
        const n = blankCounts(f);
        if (!n.some(Boolean) || blankSeen.has(f.gas)) return;
        lines.push(esc(f.name) + ': ' + GASES.map((g, j)=> n[j] ? `${n[j]} empty ${g.label} cell${n[j] > 1 ? 's' : ''}` : '').filter(Boolean).join(', '));
-@@ -614,7 +678,7 @@ function createGc({ key, root, layer, shown }){
+@@ -614,7 +683,7 @@ function createGc({ key, root, layer, shown }){
    function dateAlertsHtml(){
      const lines = [];
      let order = false;
@@ -1422,7 +1467,7 @@ index 34ebde5..f57bdaf 100644
        // (a project's .json may hold anything: only true and a whole count go into markup)
        // A file whose dates name their month (monthNames) has no order: none is named.
        const dm = f.dayMonth === true, named = f.monthNames === true && !dm, n = num(f.badDates, 0, v=> Number.isInteger(v) && v > 0), say = [];
-@@ -630,22 +694,106 @@ function createGc({ key, root, layer, shown }){
+@@ -630,22 +699,106 @@ function createGc({ key, root, layer, shown }){
       are (blankSeen), on a mark of its own. */
    const altSeen = new WeakSet();
    function altAlertsHtml(){
@@ -1533,7 +1578,7 @@ index 34ebde5..f57bdaf 100644
    }
  
    /* =========================================================
-@@ -968,17 +1116,46 @@ function createGc({ key, root, layer, shown }){
+@@ -968,17 +1121,46 @@ function createGc({ key, root, layer, shown }){
  
      // The data and the mean rates, from the card's parameters; `draw` false for a card
      // folded (nothing in it is drawn), whose Results section is still kept up to date.
@@ -1585,7 +1630,7 @@ index 34ebde5..f57bdaf 100644
        const hours = d => (d - lightOn)/3600000;
        // The injections in time order; `t`, the sample's times (the light-on instant
        // among them), spans the plot's x-range.
-@@ -987,17 +1164,18 @@ function createGc({ key, root, layer, shown }){
+@@ -987,17 +1169,18 @@ function createGc({ key, root, layer, shown }){
        // Total molar flow: mL/min -> L/h -> mol/h at the molar volume of the flow's T and p.
        const F = qOf(h)/1000*60/molarVolume(tOf(h), pOf(h));
        const gas = {};
@@ -1607,7 +1652,7 @@ index 34ebde5..f57bdaf 100644
          pts.sort((a,b)=>a.d-b.d);
          const tHours = pts.map(p=> hours(p.d));
          const pct = pts.map(p=> p.v);
-@@ -1005,7 +1183,7 @@ function createGc({ key, root, layer, shown }){
+@@ -1005,7 +1188,7 @@ function createGc({ key, root, layer, shown }){
          const flowM = flow.map(v=> v/perOf(h)*NORM[norm].per);   // per g: µmol/(g h); per cm²: µmol/(cm² h)
          // From the first injection on; FmInt, from the interval's start (updateRegression).
          const cum = cumtrapz(tHours, flowM);
@@ -1616,7 +1661,7 @@ index 34ebde5..f57bdaf 100644
        }
        return {t, gas};
      }
-@@ -1324,6 +1502,10 @@ function createGc({ key, root, layer, shown }){
+@@ -1324,6 +1507,10 @@ function createGc({ key, root, layer, shown }){
                   decimals would lose (0.141 ppm is 0.0000141 %mol). */
                cols.push(d.ppm ? {h:`${g.csv} (ppm) [${d.label}]`, v:col(j, q.pct.map(v=> v*1e4))}
                  : {h:`${g.csv} (%mol) [${d.label}]`,      v:col(j, q.pct)});
@@ -1627,7 +1672,7 @@ index 34ebde5..f57bdaf 100644
                cols.push({h:`${g.csv} (umol h^-1) [${d.label}]`, v:col(j, q.flow)});
              }
              cols.push({h:`${g.csv} ${U.rateCsv} [${d.label}]`, v:col(j, q.Fm)});
-@@ -1332,6 +1514,21 @@ function createGc({ key, root, layer, shown }){
+@@ -1332,6 +1519,21 @@ function createGc({ key, root, layer, shown }){
          });
          return wideCsv(cols);
        };
@@ -1649,7 +1694,7 @@ index 34ebde5..f57bdaf 100644
        entries.push({name:`${n} - gc_raw.csv`,     text:buildSeriesCsv(dataTables, true)});
        entries.push({name:`${n} - gc_results.csv`, text:buildSeriesCsv(cutTables(), false)});
        // mean_rates.csv — bar-plot-like summary (one row per file). One duration column
-@@ -1473,17 +1670,24 @@ function createGc({ key, root, layer, shown }){
+@@ -1473,17 +1675,24 @@ function createGc({ key, root, layer, shown }){
    const resList = $('gcResList');
    const live = new Map();       // id → the card's analysis (gcCard)
    let cardsNext = null;         // what the cards of a tab woken or reloaded showed (showNext), by id
@@ -1676,7 +1721,7 @@ index 34ebde5..f57bdaf 100644
      card.querySelector('.table-csv-btn').dataset.csvNames = `${n} - gc_info.csv`;
      nameDownloads(card.querySelector('.plot-wrap'), `${n} - GC_rate.svg`, `${n} - gc_raw.csv`);
      c.res.querySelector('.res-an-title').textContent = a.name;
-@@ -1492,15 +1696,44 @@ function createGc({ key, root, layer, shown }){
+@@ -1492,15 +1701,44 @@ function createGc({ key, root, layer, shown }){
      nameDownloads(w[1], `${n} - GC_results_cumulative.svg`, `${n} - gc_results.csv`);
      nameDownloads(w[2], `${n} - GC_results.svg`, `${n} - mean_rates.csv`);
    }
@@ -1685,7 +1730,7 @@ index 34ebde5..f57bdaf 100644
 +     calibration changed: the Production Rate cards below follow (ratesFollow). */
 +  const integ = createInteg({
 +    kit, all: allFiles, cards: ()=> cards(), inst: id => live.get(id), layer, isTcd,
-+    drawable, shown, changed: ()=> ratesFollow(true),
++    drawable, shown, changed: ()=> ratesFollow(true), folded: a => deck.isFolded(a),
 +  });
 +  /* A Production Rate card's source of values (v544): the nearest Integration card above it,
 +     or none (the tables, as to v543). What it reads of it (`srcSig`): which card, its method
@@ -1728,7 +1773,7 @@ index 34ebde5..f57bdaf 100644
    });
    const cards = ()=> deck.records;
    // A card's settings in the history (kit.snapshot): its per-sample m/Q/light-on,
-@@ -1517,7 +1750,7 @@ function createGc({ key, root, layer, shown }){
+@@ -1517,7 +1755,7 @@ function createGc({ key, root, layer, shown }){
    return {
      // Let go (its tab closed or put to sleep; a state read out for its CSVs): the deck's
      // menu and its listeners. Its section and layer are the shell's to take out.
@@ -1760,10 +1805,10 @@ index d5ae3af..f4287b6 100644
  
    <!-- Save project as… dialog -->
 diff --git a/modkit.js b/modkit.js
-index f0a2f10..0b92db9 100644
+index f0a2f10..13b32c4 100644
 --- a/modkit.js
 +++ b/modkit.js
-@@ -57,6 +57,10 @@ import { decodeText } from './textdata.js';
+@@ -57,6 +57,12 @@ import { decodeText } from './textdata.js';
                         its per-sample arrays drop (without)
       redrawTab()       the tab shown or resized
       csv()             the CSV export's files, [{ name, text }]
@@ -1771,10 +1816,12 @@ index f0a2f10..0b92db9 100644
 +                       (GC's files of raw chromatograms with no table are not, v544): one
 +                       that is not is never among `files` and has no entry in the per-sample
 +                       arrays; none given, every record is
++     rawSample(f)      the same of a record as a state holds it, before the restore takes it
++                       (one left out takes its place, and its entries, with it); none: sample
       root, key, layer  its instance's (utils.js registerModule): its section, where its
                         elements are found (root-scoped, whether or not it is in the page),
                         the key its registries go by, and its layer (the deck's menu goes
-@@ -68,7 +72,8 @@ export function moduleKit(mod, o){
+@@ -68,7 +74,8 @@ export function moduleKit(mod, o){
    const all = [], files = [], $ = id => root.querySelector('#' + id);
    const parts = Object.fromEntries(['invalid', 'upload', ...(o.parts || [])].map(k=> [k, '']));
    const slots = ()=> o.slots ? o.slots() : [];
@@ -1784,7 +1831,7 @@ index f0a2f10..0b92db9 100644
  
    /* ---- Alerts: each dismiss button (data-action "<mod>-dismiss-<part>") empties its part,
       or does what o.dismiss says. ---- */
-@@ -92,10 +97,10 @@ export function moduleKit(mod, o){
+@@ -92,10 +99,10 @@ export function moduleKit(mod, o){
       goes with them. ---- */
    const changed = op =>{ if (o.listed) o.listed(op); o.refresh(); };
    const cb = {
@@ -1799,7 +1846,7 @@ index f0a2f10..0b92db9 100644
      onLabelChange(i, v){ all[i].label = v; o.redraw('label'); kit.commit(); },
      tip: o.tip,
      onColorChange(i, v){ all[i].color = v; o.redraw('color'); kit.commit(); },
-@@ -105,7 +110,7 @@ export function moduleKit(mod, o){
+@@ -105,7 +112,7 @@ export function moduleKit(mod, o){
    // The files changed: the included ones taken again, the list and the alerts drawn. Until
    // then `files` holds the ones included before the change.
    kit.showFiles = ()=>{
@@ -1808,13 +1855,14 @@ index f0a2f10..0b92db9 100644
      setTabLoaded(key, all.length);
      const list = o.traces ? o.traces(cb) : { rows: all, cb };
      renderUnifiedFileList($(mod + 'FileTableWrap'), list.rows, list.cb, o.note, o.noteHead);
-@@ -132,24 +137,28 @@ export function moduleKit(mod, o){
+@@ -132,24 +139,28 @@ export function moduleKit(mod, o){
    }
    // A file read: last in the list and among the included, with its entry in every
    // per-sample array.
 -  kit.add = f =>{ all.push(f); files.push(f); slots().forEach(s=> s.arr.push(s.make(undefined, f))); };
+-  /* Text files dropped on the module: each decoded (textdata.js) and read by `read(text)`,
 +  kit.add = f =>{ all.push(f); if (!isSample(f)) return; files.push(f); slots().forEach(s=> s.arr.push(s.make(undefined, f))); };
-   /* Text files dropped on the module: each decoded (textdata.js) and read by `read(text)`,
++  /* Text files dropped on the module: each decoded (textdata.js) and read by `read(text, bytes)` (the bytes too: GC keeps what it read of them),
       which gives what the file holds, or null when it cannot, or { error } saying why (a
       reader that throws leaves out that file, not the rest of the drop). A name already
       loaded is not loaded again. Each record is { name, label, ...what it holds, color,
@@ -1843,19 +1891,19 @@ index f0a2f10..0b92db9 100644
      kit.said(bad, dup);
      done(had);
    });
-@@ -173,9 +182,9 @@ export function moduleKit(mod, o){
+@@ -173,9 +184,9 @@ export function moduleKit(mod, o){
    const hist = registerHistory(key, ()=> ({ files: all.map(f=> ({ ...f })), ...o.snapshot() }), s0=>{
      const s = isObj(s0) ? s0 : {}, raw = Array.isArray(s.files) ? s.files : [], kept = raw.map(keptFile), gone = new Set();
      // (an entry that is no file counts as included: it holds no included:false)
 -    raw.reduce((j, f, i)=>{ if (isObj(f) && f.included === false) return j; if (!kept[i]) gone.add(j); return j + 1; }, 0);
-+    raw.reduce((j, f, i)=>{ if (isObj(f) && (f.included === false || !isSample(f))) return j; if (!kept[i]) gone.add(j); return j + 1; }, 0);
++    raw.reduce((j, f, i)=>{ if (isObj(f) && (f.included === false || !(o.rawSample || isSample)(f))) return j; if (!kept[i]) gone.add(j); return j + 1; }, 0);
      all.splice(0, all.length, ...kept.filter(Boolean));
 -    files.splice(0, files.length, ...includedOf(all));
 +    files.splice(0, files.length, ...includedOf(all, isSample));
      o.restore(s, gone);
      o.refresh();
      clearAlerts();
-@@ -184,6 +193,8 @@ export function moduleKit(mod, o){
+@@ -184,6 +195,8 @@ export function moduleKit(mod, o){
      kit.drawAlerts();
    }, { view: o.view });
    kit.commit = ()=> hist.commit();
@@ -1905,10 +1953,10 @@ index 2a20e06..9e319a1 100644
      this.gData.appendChild(g);
      entry._el = g;
 diff --git a/style.css b/style.css
-index 971cc1f..7cc19ab 100644
+index 971cc1f..242453b 100644
 --- a/style.css
 +++ b/style.css
-@@ -3447,3 +3447,76 @@ table.iodo-std input { width: 100%; min-width: 0; margin: 0; }
+@@ -3447,3 +3447,85 @@ table.iodo-std input { width: 100%; min-width: 0; margin: 0; }
  .iodo-cal-msg:not(:empty) { margin-top: 10px; color: var(--bad); font-size: 13px; }
  .iodo-cal-foot { flex: none; margin: 0; padding: 12px 18px 16px; }
  @media (max-width: 600px){ .iodo-cal-box { width: 100vw; max-height: 100vh; border-radius: 0; } .iodo-cal-head { padding: 10px 10px 10px 12px; } .iodo-cal-scroll { padding: 12px 12px 4px; } }
@@ -1985,6 +2033,15 @@ index 971cc1f..7cc19ab 100644
 +.legend i.mk-box.gci-mk-nb { background: var(--muted); opacity: 0.4; }
 +.legend i.gci-mk-bars { width: 16px; height: 9px; border-radius: 0; background: linear-gradient(#3aa0ff 0 4px, transparent 4px 5px, #ff7a59 5px 9px); }
 +.gci-win input { width: 58px; }
++/* (the calibration's plots a strip each, over the levels' table, which is as wide as it needs) */
++.gci-cal-gas svg.plot { aspect-ratio: 2.4; }
++.gci-cal-table { margin-top: 14px; }
++table.gci-cal-levels { width: auto; min-width: 60%; }
++.gci-cal-fits { margin-top: 4px; }
++.gci-risks { margin: 6px 0 8px; padding-left: 20px; }
++.gci-risks li { margin: 2px 0; }
++/* (the alerts of the Integration card and of a rate card's source name files whose names do not break: they wrap anywhere) */
++.gc-src .alert, .gci-alerts .alert, .gci-notice .alert, .gci-flag { overflow-wrap: anywhere; }
 diff --git a/sw.js b/sw.js
 index 6786a9a..4ccc245 100644
 --- a/sw.js
@@ -2023,10 +2080,10 @@ index 9181aa1..a311738 100644
  | `rvsplit.test.mjs` | A Rietveld card gone (closed by its ×, or turned into a Scherrer card) with its Settings left open: no listener of `xrd-rv.js` stays on the document or the window (those it registers come off together as it is destroyed), and its panel, settings window, section of the Results, plot and 3D cell are freed. |
 diff --git a/tests/gctcd-ui.test.mjs b/tests/gctcd-ui.test.mjs
 new file mode 100644
-index 0000000..cc40dc9
+index 0000000..2228ecf
 --- /dev/null
 +++ b/tests/gctcd-ui.test.mjs
-@@ -0,0 +1,496 @@
+@@ -0,0 +1,497 @@
 +/* GC's raw chromatograms (v544, a prototype): the TCD files beside their tables, paired in
 +   the trace list, integrated again by the Integration card, and the Production Rate cards
 +   below it taking the re-integrated values. Every file here is made up for the test: the
@@ -2077,11 +2134,12 @@ index 0000000..cc40dc9
 +  const z = normal(seed), P = [G.peakShape(T, shape(h2, 287.0)), G.peakShape(T, shape(o2, 302.0)), G.peakShape(T, shape(300, 310.1))];
 +  return T.map((t, i)=> -5000 + 0.8*(t - 297) + G.step(t, -12, 305.6, 0.8) + P[0][i] + P[1][i] + P[2][i] + z());
 +}
-+// A TCD file as the instrument writes it: `;`, a decimal comma, no header, every line ending with `;`.
-+function tcd(name, cols){
++// A TCD file as the instrument writes it: `;`, a decimal comma, no header, every line ending
++// with `;` (`tab`: tab-separated with a decimal point, as the engine reads too).
++function tcd(name, cols, tab = false){
 +  const ys = cols.map(([h2, o2], k)=> chromatogram(h2, o2, 101 + 7*k + name.length));
-+  const n = v => String(+v.toFixed(5)).replace('.', ',');
-+  const text = T.map((t, i)=> [n(t), ...ys.map(y=> n(y[i]))].join(';') + ';').join('\r\n') + '\r\n';
++  const n = v => tab ? String(+v.toFixed(5)) : String(+v.toFixed(5)).replace('.', ',');
++  const text = T.map((t, i)=> tab ? [n(t), ...ys.map(y=> n(y[i]))].join('\t') : [n(t), ...ys.map(y=> n(y[i]))].join(';') + ';').join('\r\n') + '\r\n';
 +  return { name, mimeType: 'text/csv', buffer: Buffer.from(text) };
 +}
 +// A GC table (the default layout): an injection every 20 min from 13 Nov 2026, 10:00.
@@ -2198,7 +2256,7 @@ index 0000000..cc40dc9
 +    const files = [table('runA.csv', tableRows()), tcd('runA_TCD.csv', areas()),
 +      table('runB (1).csv', tableRows()), tcd('runB_tcd.csv', areas()),
 +      altTable('runC.txt', tableRows()), tcd('runC_TCD (1).csv', areas()),
-+      tcd('mystery.csv', areas()), table('lonely.csv', tableRows())];
++      tcd('mystery.csv', areas(), true), table('lonely.csv', tableRows())];
 +    await load(page, files, 5);
 +    const rows = await rowsOf(page);
 +    assert.deepEqual(rows.map(r=> r.files), [['runA.csv', 'runA_TCD.csv'], ['runB (1).csv', 'runB_tcd.csv'], ['runC.txt', 'runC_TCD (1).csv'], ['mystery.csv'], ['lonely.csv']]);

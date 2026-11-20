@@ -27,7 +27,10 @@ engine's row).
 ### `gc-pair.js` (new): the pairing, pure
 
 - `looksTcd(text)`: a file is raw chromatograms when its first lines are numbers only (`;`
-  between them, a decimal comma or point, a trailing `;` allowed): told by content, never by name.
+  between them with a decimal comma or point, or a tab or `,` with a point, as the engine's
+  `readTcd` reads; a trailing separator allowed): told by content, never by name. A GC table's
+  first line names its columns. A file that looks so but that `readTcd` refuses (the older run
+  whose time restarts at 0) is refused with the engine's reason, in the red alert.
   A GC table's first line names its columns.
 - `stemOf(name)`: the name's extension off, a browser's duplicate mark ` (1)` off (before and
   after `_TCD`), a final `_TCD` noted and off, lower case.
@@ -120,12 +123,19 @@ engine's row).
   - `integration.csv` (the overview's CSV button and the project's CSVs): every chromatogram's
     areas, sd, trapezoids, apex, χ²ᵣ, %mol, source and flags.
 - **Calibration window** (XRPD standard's window styling): drop the standards' TCD files (each
-  column a standard, integrated with the card's method), a level table (index, thumbnail,
-  file/column, H₂ and O₂ areas, H₂ and O₂ concentrations typed, Use box), unit %mol/ppm, per gas
-  a plot of area vs concentration with the line, free/zero intercept chips (free by default),
-  slope, intercept, R², n and a deviation table per level. Edits are live, each a step. A file's
+  column a standard, integrated with the card's method), unit %mol/ppm, per gas a plot of area
+  vs concentration with the line, free/zero intercept chips (free by default, as ENGINE.md §7
+  asks: O₂ has a real intercept of about −500 ppm), slope, intercept, R², n and a deviation
+  table per level (always shown); under them the level table (index, thumbnail, file/column, H₂
+  and O₂ areas, H₂ and O₂ concentrations typed, Use box). Edits are live, each a step. A file's
   names (`cal_…`) are never read. Saved with the project, bytes in the bytestore.
-- **Info text** (`INTEG_INFO`) with a MathML box "From the area to the concentration".
+- **Alerts in the card**: counts that differ, TCD+TCD, no table, unreadable files, the transfer
+  info alert ("Calibration taken from the GC software's table", with k and n per pair), and a
+  warning when calibrated injections fall outside the standards' range (extrapolated).
+- **Info text** (`INTEG_INFO`): the model, the two passes and the restart, the method's numbers
+  and the neighbouring peaks, the trapezoid check and the flags, the run overview, the pairs, the
+  calibration options, and the transfer's risks as a list; then a MathML box "From the area to
+  the concentration".
 
 ### Shared files
 
@@ -179,17 +189,43 @@ engine's row).
     the overview is by injection number.
 11. **Pairs of the wrong kind** are allowed and marked in FILE (warning colour, title) besides the
     alert; a TCD+TCD row lists both files in the Integration selector.
-12. **Version**: v544 in the footer and the service worker.
+12. **Extrapolation is said**: a gas calibrated by standards whose injections fall outside the
+    standards' range gets a warning in Integration (on the real data the runs' O₂, about 0.03
+    %mol, lies far below the lowest O₂ standard, 0.2 %mol: with the free intercept, −455 area,
+    the re-integrated O₂ comes out about 2.5 × the table's; the user should look at this).
+13. **A chromatogram the engine cannot fit** is stored as a result with its error (shown in
+    the values and the overview's flags), so that it is not fitted again in a loop.
+14. **The calibration window** keeps the field typed in (a level typed redraws the fits, not
+    the table; the table redrawn while the standards integrate puts the focus back), shows the
+    two gas plots above the levels' table, and says when a free intercept cannot be fitted (one
+    level: the user's CALS has H₂ at 0.5 % only, so H₂ needs the zero intercept).
+15. **A folded Integration card** draws nothing (its status and selectors stay up to date).
+16. **Version**: v544 in the footer and the service worker.
 
 ## Tests
 
-- New: `tests/gctcd-ui.test.mjs`, 10 tests, synthetic chromatograms from the engine's own model
-  (known areas, seeded noise, 250–340 s), all pass.
-- The engine's `tests/gctcd-engine.test.mjs`: pass.
-- Existing GC tests and those that touch GC (`gcalt`, `gcdate`, `gcnorm`, `gcp`, `gcrep`,
-  `filelist`, `plots` (golden hashes unchanged), `viewdirty`, …): see the report in the
-  session's final message for the full list run and results.
-- `npm run lint`: clean.
+- New: `tests/gctcd-ui.test.mjs`, 10 tests, synthetic chromatograms drawn from the engine's own
+  model (known areas, seeded noise, 250–340 s): all pass. The rates are checked against a hand
+  calculation from the known areas (within 1 % for H₂, 2 % for O₂: the fit's noise), and
+  exactly against the app's own areas through (area − b)/s.
+- The whole suite (`npm test`, 282 tests) was run once on the near-final code: 280 passed. The
+  two failures: `modules.test.mjs` #22 (a project file left out by the restore, GC: a bug of
+  this prototype, fixed since with modkit's `rawSample`; passes), and `bytestore.test.mjs`
+  "saved: records small…", which fails the same way on the untouched base (2aae130, the app
+  served from it with `DT_ROOT`) in this container: a download wait that times out, not this
+  work.
+- On the final code: `npm run lint` clean; then 22 files, 126 tests, all pass: `gcalt`,
+  `gcdate`, `gcnorm`, `gcp`, `gcrep`, `gctcd-engine`, `gctcd-ui`, `modules`, `filelist`,
+  `plots`, `viewdirty`, `escape`, `roundtrip`, `csv`, `narrow`, `smoke`, `b2gcepr`, `b2kept`,
+  `b2view`, `fig`, `iodo`, `xrdcards` (and, after the last small edits, `gctcd-ui` and `gcalt`
+  again: pass).
+- By hand, with the real files (never in the repository): nine runs and CALS. Three pairs (152
+  chromatograms) integrate in about 16 s in headless Chromium; H₂'s software scale comes out
+  k ≈ 67,544–67,671 per pair (the Python's 67,600); CALS' O₂ line is slope 9,748.8,
+  intercept −455.5, R² 0.99981, as ENGINE.md §7 has it; the older run's TCD is refused with
+  the engine's reason, its table loading alone; at 375 px nothing scrolls sideways; no page
+  error and no CSP violation.
+- `plots.test.mjs`: golden hashes unchanged (tables alone draw exactly as v543).
 
 ## Known gaps
 
@@ -207,3 +243,10 @@ engine's row).
   briefly.
 - The older run whose TCD time restarts mid-file is refused as a file (red alert under the drop
   zone, with the engine's reason); its table loads alone and behaves as today.
+- The per-file grip is pointer-only (mouse, pen, touch): no keyboard way to pair or swap.
+- Results arriving mark the project unsaved ("*"), even right after a save made while the run
+  was going on.
+- A method change (or a trapezoid interval) integrates every file of the card again: the engine
+  integrates a chromatogram as a whole, so a trapezoid edit refits too.
+- When a pair's table has no column for a gas, the transfer is impossible for it (standards
+  only).
