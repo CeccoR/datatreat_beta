@@ -175,6 +175,14 @@ was proposed; nothing here is in the code yet.
 
 ## General
 
+- **Warnings and errors, reviewed by kind.** A map of every message the app shows (276,
+  made from the code at v540) proposes for each one: keep, make it error / warn / info
+  (the info kind is new in v539), merge it with another that says the same, or drop it.
+  It also lists where the modules say the same thing differently.
+  `ALERTS-REVIEW.md` keeps the 79 proposed changes and the inconsistencies, in Italian.
+  Waiting on the user's choices; the full map is to be made again from the code when this
+  is taken up, its line numbers having moved.
+
 - **Long functions.** A handful of functions run to hundreds of lines: `createRietveld`
   (xrd-rv.js, ~1300), `createPeakAnalysis` (xrd-peaks.js, ~1100), `autoRefine`
   (xrd-rietveld.js, ~800), `shapeView` (xrd-shape3d.js, ~750), `drawFigure` (figure.js,
