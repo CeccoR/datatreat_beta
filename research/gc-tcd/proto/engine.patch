@@ -106,10 +106,10 @@ index 0000000..d306b1e
 +}
 diff --git a/gc-tcd.js b/gc-tcd.js
 new file mode 100644
-index 0000000..ba10afd
+index 0000000..02350d1
 --- /dev/null
 +++ b/gc-tcd.js
-@@ -0,0 +1,1078 @@
+@@ -0,0 +1,1080 @@
 +/* =========================================================
 +   GC-TCD PEAK INTEGRATION ENGINE (prototype, not wired into the app)
 +   A port, as it is, of the Python v2.1 integration of the TCD chromatograms
@@ -131,7 +131,9 @@ index 0000000..ba10afd
 +   The method: windows, peaks, steps, trapezoids, fit settings
 +   (the numbers of reintegra_tcd.py v2.1, CFG and fit_picchi/_fit defaults)
 +--------------------------------------------------------- */
-+export const DEFAULT_METHOD = Object.freeze({
++const deepFreeze = o =>{ if (o && typeof o === 'object' && !Object.isFrozen(o)){ Object.values(o).forEach(deepFreeze); Object.freeze(o); } return o; };
++// Frozen throughout: a variant is made from a copy, structuredClone(DEFAULT_METHOD).
++export const DEFAULT_METHOD = deepFreeze({
 +  windows: [{ key: 'H2O2', from: 268, to: 326, baseDegree: 1,
 +    peaks: [{ name: 'H2', t: 287.3, gas: 'h2' }, { name: 'O2', t: 302.3, gas: 'o2' }, { name: 'S310', t: 310.2, gas: null }],
 +    steps: [{ from: 303, to: 309, prior: { h: -13, hSd: 3, t0: 305.6, t0Sd: 0.6 } }] }],
@@ -158,7 +160,7 @@ index 0000000..ba10afd
 +/* The peak shape's internal parameters after A and mu, their weak priors, limits and
 +   start (forma_universale.py: INT, PRIOR, LIMITI, INIZIO). ls = ln sigma, dm = dmu/sigma,
 +   lr1 = ln(tau1/sigma), lr2 = ln((tau2 − tau1)/sigma). */
-+export const SHAPE = Object.freeze({
++export const SHAPE = deepFreeze({
 +  names: ['A', 'mu', 'sigma', 'dmu', 'fc', 'tau1', 'tau2', 'w2'],
 +  internal: ['ls', 'dm', 'fc', 'lr1', 'lr2', 'w2'],
 +  log: ['ls', 'lr1', 'lr2'],
@@ -1227,10 +1229,10 @@ index c4be311..9181aa1 100644
  | `rvsplit.test.mjs` | A Rietveld card gone (closed by its ×, or turned into a Scherrer card) with its Settings left open: no listener of `xrd-rv.js` stays on the document or the window (those it registers come off together as it is destroyed), and its panel, settings window, section of the Results, plot and 3D cell are freed. |
 diff --git a/tests/gctcd-engine.test.mjs b/tests/gctcd-engine.test.mjs
 new file mode 100644
-index 0000000..66702f4
+index 0000000..bdf8fd8
 --- /dev/null
 +++ b/tests/gctcd-engine.test.mjs
-@@ -0,0 +1,244 @@
+@@ -0,0 +1,246 @@
 +/* The GC-TCD peak integration engine (gc-tcd.js, a prototype not wired into the app), in
 +   Node: no browser. erfc and erfcx against scipy.special's values; the solver, a port of
 +   scipy's least_squares(method='trf'), on two toy problems with scipy's own answers (bounds,
@@ -1319,9 +1321,11 @@ index 0000000..66702f4
 +  const lin = G.leastSquaresTrf(g, gj, [1, 1, 0], [0, 0, -5], [5, 5, 0], { ...opts, loss: 'linear' });
 +  [0.7678624507900623, 1.6965399655513116, -0.5937051257536733].forEach((v, i)=> near(lin.x[i], v, 1e-7, 'linear x' + i));
 +  rel(lin.cost, 13.455108895416467, 1e-9, 'linear cost');
++  assert.deepEqual([lin.nfev, lin.status], [26, 2], 'scipy: nfev 26, status 2');
 +  const rob = G.leastSquaresTrf(g, gj, [1, 1, 0], [0, 0, -5], [5, 5, 0], { ...opts, loss: 'soft_l1' });
 +  [0.502239448859636, 1.987780629511948, -0.9558431385557129].forEach((v, i)=> near(rob.x[i], v, 1e-7, 'soft_l1 x' + i));
 +  rel(rob.cost, 0.869453393478017, 1e-8, 'soft_l1 cost');
++  assert.deepEqual([rob.nfev, rob.status], [11, 2], 'scipy: nfev 11, status 2');
 +  assert.throws(()=> G.leastSquaresTrf(f, j, [2, 1], [-Infinity, 1.5], [Infinity, Infinity]), /outside of provided bounds/);
 +});
 +
