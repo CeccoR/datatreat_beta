@@ -4,6 +4,9 @@ import { cardInfo, fileSafe, nameDownloads } from './cards.js';
 import { moduleKit, wideCsv, isObj, isArr, num, numStr, oneOf, dateOf, arrOf, without, cardList } from './modkit.js';
 import { CSV_ICON, plotWrap, viewOf, setView, viewKey, chipRow, toggleChip, valueBars } from './modcharts.js';
 import { textLines, readTable, parseNum, width } from './textdata.js';
+import { readTcd } from './gc-tcd.js';
+import { looksTcd, autoPair, dropPart } from './gc-pair.js';
+import { createInteg, INTEG_INFO } from './gc-integ.js';
 
 /* =========================================================
    GC MODULE
@@ -231,6 +234,26 @@ function readGc(text){
   return { injDates, gas, emptyRows, ...(dm && { dayMonth: true }), ...(badDates && { badDates }), ...(named && { monthNames: true }), ...(alt && { altExport: true }) };
 }
 
+/* ---- Raw chromatograms (TCD, v544) ----
+   A file is a table or raw chromatograms by what it holds (looksTcd: no header, a line of
+   numbers), never by its name. Raw chromatograms are kept as their bytes and the number of
+   chromatograms (`tcd: { n }`), read again from the bytes when they are shown or integrated
+   (gc-integ.js); `read` is readTcd's result as the drop read it, handed over so that it is
+   not read twice. A row of the file list is one record: a table, raw chromatograms, or a
+   pair, the first file's record with the second as its `mate` (a table first beside raw
+   chromatograms). Only a table heading its row is a sample of the analysis (`isTable`). */
+const isTcd = f => isObj(f) && isObj(f.tcd);
+const isTable = f => isObj(f) && isArr(f.injDates) && isObj(f.gas);
+const hasTcd = r => isTcd(r) || (isObj(r) && isTcd(r.mate));
+// (`seen`: readTcd's results by their bytes, for the Integration cards; gc-integ.js prime)
+function readGcAny(text, bytes, seen){
+  if (!looksTcd(text)) return readGc(text);
+  const d = readTcd(text);
+  if (!d || d.error || !d.cols || !d.cols.length) return { error: `raw chromatograms that cannot be read${d && d.error ? `: ${d.error}` : ''}` };
+  if (seen && bytes) seen(bytes, d);
+  return { tcd: { n: d.cols.length } };
+}
+
 // The first injection, to the minute: the field shows and sets minutes only, so a
 // default carrying the seconds would change the moment the field was merely tabbed
 // through — results shifting, and an undo step, with nothing touched.
@@ -324,6 +347,7 @@ const P = a => 'gc' + a.id;
 // A plot of a card's, with the gas chips of its section (`sec`: 'a' Analysis, 'r' Results) over it.
 const gasPlot = (id, sec, o)=> plotWrap(id, { mod: 'gc', extra: `\n              <span class="gc-gas-sel" data-gas-sec="${sec}"></span>`, ...o });
 const cardBody = a => `
+      <div class="gc-src" id="${P(a)}Src"></div>
       <div class="peak-box" style="margin-top:0;margin-bottom:14px">
         <div class="peak-box-head">
           <span class="txt-mini">Parameters</span>
@@ -351,7 +375,9 @@ const resHtml = a => `
       <p class="txt-caption" style="margin-top:14px">Mean Production Rate</p>${gasPlot(P(a) + 'SvgBar', 'r', { cls: 'plot-wide', csv: 'mean_rates.csv', name: 'GC_results.svg', legend: P(a) + 'BarLegend' })}
       <div id="${P(a)}BarLegend" class="legend" style="margin-top:8px"></div>`;
 // The analyses' kinds (cards.js), as the menu lists them.
-const KINDS = { rate: 'Production Rate' };
+// (v544: Integration, the raw chromatograms integrated again, gc-integ.js; offered while
+// some are loaded, and never a kind a card is switched to: a different analysis)
+const KINDS = { rate: 'Production Rate', integ: 'Integration' };
 // What T and p are (their columns' titles, and the card's instructions).
 const T_TITLE = 'the temperature the flow Q refers to — for a mass-flow controller (sccm, slpm), the reference temperature of its standard units (Alicat: 25 °C), not that of the gas in the lines or the reactor; for a flow measured as a volume, the gas temperature where it is measured';
 const P_TITLE = 'the absolute pressure the flow Q refers to — for a mass-flow controller, the reference pressure of its standard units (Alicat: 14.696 psia = 1 atm), not that of the gas in the lines or the reactor; for a flow measured as a volume, the absolute pressure of the gas where it is measured (ambient ≈ 1 atm)';
@@ -429,7 +455,7 @@ const RATES_HTML = (()=>{
   + `${display(r, eq, mfrac(mn(ex.F), mn('2.5')), eq, mn(ex.ra), unit('µmol', ['cm', '−2'], ['h', '−1']))}</div></li>`
   + '</ol></div>';
 })();
-const GC_INFO = `Set catalyst mass (m) or, for a film, its area (A), carrier gas flow rate (Q), its temperature (T) and pressure (p), the light-on time and the integration interval for each sample to compute mean H₂ and O₂ production rates; <b>Normalize by</b>, on the injection delay's row, chooses for the whole card what the rates are divided by: the photocatalyst's <b>mass</b> m in mg (rates in µmol g⁻¹ h⁻¹, production in µmol g⁻¹; the default, and how a project saved before v540 opens; to v540 in mmol g⁻¹ h⁻¹ and mmol g⁻¹, so a project saved before shows the same results, their numbers 1000 times what they were) or its <b>area</b> A in cm² (µmol cm⁻² h⁻¹ and µmol cm⁻², the usual units for films); with area the m column becomes A, with its own all / one, the masses and the areas both kept, so that switching back loses neither; the plots, the bar chart, the CSVs and their headers follow the choice. the <b>H₂ / O₂</b> chips on each plot choose the gases drawn, for Analysis and for Results; the CSVs have every gas, whichever is drawn. Two layouts are read. The <b>default</b>: a header naming the Injection Date and each gas's %mol column (H₂, O₂). The <b>alternative</b>, the instrument's tab-separated .txt export: a header naming Inject Time and its Area and Amount columns, over a line naming each column's gas (Hydrogen, Nitrogen, Oxygen); H₂ and O₂ are read from the Amount columns, in ppm, and worked out as %mol (ppm / 10⁴), gc_raw.csv writing them in ppm (its column headed so), the Area columns and N₂ left out, and an info alert under the drop zone names each file read so. An empty H₂ or O₂ cell, or one reading n.a., leaves that injection out of that gas only, and the alert under the drop zone says how many were skipped; a blank line, a line of separators alone and a row with no date (n.a.) are passed over. An injection date is the day, the month and the year between slashes, the month a number or an English name (Nov, November), the year of 4 digits or 2 (26 is 2026), then the time, h:mm or h:mm:ss, with AM/PM or in 24 hours (14:13). Numeric dates are read month/day, as the instrument writes them, or day/month in a file where some do not exist so and every one does that way, its times going on as the rows do; a month named is read where it stands (13/Nov/26 is 13 November). A row whose date does not exist (2/30, 13/13, 31/Nov, 13:00 PM) is left out, and the alert says either. Use the <b>all / one</b> toggles to share a value across samples or set it per sample. <b>T</b> is ${T_TITLE}. <b>p</b> is ${P_TITLE}; its unit (atm, bar, kPa, mbar, Torr = mmHg, psi) is chosen in its column's header, which converts the values shown, not the pressure. A <b>mass-flow controller</b> (an Alicat MC, say) gives a mass flow as the volume it would take at its reference conditions (sccm, slpm), so the molar flow is n/t = p<sub>ref</sub>·Q/(R·T<sub>ref</sub>) with the controller's reference T and p: the real temperature and pressure of the gas, in the lines or in the reactor, do not enter. Set T and p to its standard conditions: Alicat's default is 25 °C and 14.696 psia (1 atm) for its standard units, 0 °C and 1 atm for its normal ones (NCCM, NLPM), and the device's STP/NTP menu can change them. Its reading is right for the gas it is set to: another gas or a mixture needs that gas chosen on the device, or its correction factor. ${RATES_HTML}A new analysis starts at 25 °C and 1 atm; a project saved before T existed keeps the 0 °C its rates were worked out at, and one saved before p, the 1 atm. The <b>injection delay</b> moves every injection on from its logged date to the moment the sample is actually injected; <b>Auto</b> uses 60.6 s. In per-sample interval mode the vertical lines are coloured by sample — hover or select a table row to highlight its interval on the plot (and vice-versa). <b>Replicates</b>: the <b>Sample</b> column of the file list says which sample each file is — its own (as it starts), or another file's, named by that file's label (a label renamed shows at once and changes no link); a file that heads a group, set to another, takes its group along, and a head removed leaves its group to its next file. The time plots stay one per file; the mean-rate bar chart has one bar per sample, named after its head's label (the first included file's, the head left out), its height the mean of its included files' mean rates, each worked out with its own parameters, and its error bar the files' standard deviation (n − 1 under it; none for a single file); a file left out is out of the mean and of n. With replicates (a sample of more than one included file), mean_rates.csv has a row per sample (each gas's mean, ± and n) and mean_rates_by_file.csv a row per file, as mean_rates.csv has without them. ${cardInfo(false, true)}`;
+const GC_INFO = `Set catalyst mass (m) or, for a film, its area (A), carrier gas flow rate (Q), its temperature (T) and pressure (p), the light-on time and the integration interval for each sample to compute mean H₂ and O₂ production rates; <b>Normalize by</b>, on the injection delay's row, chooses for the whole card what the rates are divided by: the photocatalyst's <b>mass</b> m in mg (rates in µmol g⁻¹ h⁻¹, production in µmol g⁻¹; the default, and how a project saved before v540 opens; to v540 in mmol g⁻¹ h⁻¹ and mmol g⁻¹, so a project saved before shows the same results, their numbers 1000 times what they were) or its <b>area</b> A in cm² (µmol cm⁻² h⁻¹ and µmol cm⁻², the usual units for films); with area the m column becomes A, with its own all / one, the masses and the areas both kept, so that switching back loses neither; the plots, the bar chart, the CSVs and their headers follow the choice. the <b>H₂ / O₂</b> chips on each plot choose the gases drawn, for Analysis and for Results; the CSVs have every gas, whichever is drawn. Two layouts are read. The <b>default</b>: a header naming the Injection Date and each gas's %mol column (H₂, O₂). The <b>alternative</b>, the instrument's tab-separated .txt export: a header naming Inject Time and its Area and Amount columns, over a line naming each column's gas (Hydrogen, Nitrogen, Oxygen); H₂ and O₂ are read from the Amount columns, in ppm, and worked out as %mol (ppm / 10⁴), gc_raw.csv writing them in ppm (its column headed so), the Area columns and N₂ left out, and an info alert under the drop zone names each file read so. An empty H₂ or O₂ cell, or one reading n.a., leaves that injection out of that gas only, and the alert under the drop zone says how many were skipped; a blank line, a line of separators alone and a row with no date (n.a.) are passed over. An injection date is the day, the month and the year between slashes, the month a number or an English name (Nov, November), the year of 4 digits or 2 (26 is 2026), then the time, h:mm or h:mm:ss, with AM/PM or in 24 hours (14:13). Numeric dates are read month/day, as the instrument writes them, or day/month in a file where some do not exist so and every one does that way, its times going on as the rows do; a month named is read where it stands (13/Nov/26 is 13 November). A row whose date does not exist (2/30, 13/13, 31/Nov, 13:00 PM) is left out, and the alert says either. Use the <b>all / one</b> toggles to share a value across samples or set it per sample. <b>T</b> is ${T_TITLE}. <b>p</b> is ${P_TITLE}; its unit (atm, bar, kPa, mbar, Torr = mmHg, psi) is chosen in its column's header, which converts the values shown, not the pressure. A <b>mass-flow controller</b> (an Alicat MC, say) gives a mass flow as the volume it would take at its reference conditions (sccm, slpm), so the molar flow is n/t = p<sub>ref</sub>·Q/(R·T<sub>ref</sub>) with the controller's reference T and p: the real temperature and pressure of the gas, in the lines or in the reactor, do not enter. Set T and p to its standard conditions: Alicat's default is 25 °C and 14.696 psia (1 atm) for its standard units, 0 °C and 1 atm for its normal ones (NCCM, NLPM), and the device's STP/NTP menu can change them. Its reading is right for the gas it is set to: another gas or a mixture needs that gas chosen on the device, or its correction factor. ${RATES_HTML}A new analysis starts at 25 °C and 1 atm; a project saved before T existed keeps the 0 °C its rates were worked out at, and one saved before p, the 1 atm. The <b>injection delay</b> moves every injection on from its logged date to the moment the sample is actually injected; <b>Auto</b> uses 60.6 s. In per-sample interval mode the vertical lines are coloured by sample — hover or select a table row to highlight its interval on the plot (and vice-versa). <b>Replicates</b>: the <b>Sample</b> column of the file list says which sample each file is — its own (as it starts), or another file's, named by that file's label (a label renamed shows at once and changes no link); a file that heads a group, set to another, takes its group along, and a head removed leaves its group to its next file. The time plots stay one per file; the mean-rate bar chart has one bar per sample, named after its head's label (the first included file's, the head left out), its height the mean of its included files' mean rates, each worked out with its own parameters, and its error bar the files' standard deviation (n − 1 under it; none for a single file); a file left out is out of the mean and of n. With replicates (a sample of more than one included file), mean_rates.csv has a row per sample (each gas's mean, ± and n) and mean_rates_by_file.csv a row per file, as mean_rates.csv has without them. <b>Raw chromatograms</b> (v544): a table paired with its raw chromatograms (they share a row of the file list) takes its H₂ and O₂ from the nearest <b>Integration</b> card above this one, re-integrated, the table still giving the injection times, when the table has as many injections (its rows with a date and a value) as there are chromatograms and the gas has a calibration (the standards, or the GC software's scale taken over); everything after is as above. Where it cannot, the table's own values are used, and an alert at the top of this card says why (the counts differ, no calibration and too few injections to take the software's scale, the integration not done yet). A card with no Integration card above it uses the tables, as before. gc_raw.csv then says, at each injection, which value was used (the <i>source</i> column), with the table's, the re-integrated one and the fitted area beside it. ${cardInfo(false, true)}`;
 
 // A GC tab's instance (utils.js makeInstance: ctx { key, root, layer, shown }).
 function createGc({ key, root, layer, shown }){
@@ -448,13 +474,25 @@ function createGc({ key, root, layer, shown }){
      first or left out, the empty cells skipped and the files read as the alternative
      export among them; each card's settings in the history. A gas's values, which
      nothing changes once read, are fixed (db.js: the same array in a tab's states and its
-     parked state). */
+     parked state). From v544 a record may also be raw chromatograms ({ name, label, color,
+     rawBytes, tcd: { n } }) or a pair, the first file's record with the second as its `mate`
+     (PAIRS, below): only a table heading its row is a sample (`files`). */
   const kit = moduleKit('gc', {
     root, key, layer,
     // (the plots' gas chips, H₂ / O₂: the view alone, a step but no change unsaved; utils.js VIEW_KEYS)
-    view: ['gasSel'],
-    alerts: p =>{ $('gcAlerts').innerHTML = p.invalid + dateAlertsHtml() + blankAlertsHtml() + altAlertsHtml() + p.upload; },
-    dismiss: { blank: ()=> allFiles.forEach(f=> blankSeen.add(f.gas)), dates: ()=> allFiles.forEach(f=> dateSeen.add(f.gas)), alt: ()=> allFiles.forEach(f=> altSeen.add(f.gas)) },
+    // (and the Integration cards' run overview: its gases and its y, v544)
+    view: ['gasSel', 'ovGas', 'ovY'],
+    alerts: p =>{ $('gcAlerts').innerHTML = p.invalid + pairAlertsHtml() + dateAlertsHtml() + blankAlertsHtml() + altAlertsHtml() + p.upload; },
+    dismiss: { blank: ()=> tables().forEach(f=> blankSeen.add(f.gas)), dates: ()=> tables().forEach(f=> dateSeen.add(f.gas)), alt: ()=> tables().forEach(f=> altSeen.add(f.gas)),
+      pairs: ()=> allFiles.forEach(f=> pairMarks(f).forEach(b=> pairSeen.add(b))) },
+    // Only a table heading its row is a sample (raw chromatograms alone, or paired with raw
+    // chromatograms, have no injection times: Analysis leaves them out, v544).
+    sample: isTable,
+    // (a record as a state holds it, before the restore takes it: a place among the per-sample
+    // arrays unless it is raw chromatograms, so that one left out takes its entries with it)
+    rawSample: f => !isTcd(f),
+    // A pair is one row, its two files in FILE, each with a grip of its own (v544).
+    traces: traceRows,
     // Every card's per-sample arrays. An excluded file holds its own values; one with none
     // (never so far, or in a card added since) gets the upload defaults.
     slots: ()=> cards().flatMap(a=> live.get(a.id).slots()),
@@ -468,29 +506,15 @@ function createGc({ key, root, layer, shown }){
     // mean-rate bars alone, the only plot per sample.
     redraw: what => what === 'note' ? each(c=> c.bars()) : (what === 'label' && sampleNames(), each((c, a)=>{ if (what === 'label') c.renderTable(); if (!deck.isFolded(a)) c.compute(true); else c.computeQuiet(); })),
     cleared: ()=> each(c=> c.clear()),
-    snapshot: ()=> ({ cards: cards().map(a=> ({ ...deck.saved(a), ...live.get(a.id).snapshot() })) }),
-    /* A file as a restore takes it (modkit RESTORED): its injections, each with a date that
-       is one, and the columns of the gases it has beside them, a cell that is no number an
-       empty one; none of either, it is left out. A record that is all that already is kept
-       as it is: the empty-cell and the dates' alerts dismissed stay so (blankSeen and
-       dateSeen mark its gases). */
-    file: f =>{
-      if (!isArr(f.injDates) || !isObj(f.gas)) return null;
-      const n = f.injDates.length, ks = Object.keys(f.gas), emptyRows = num(f.emptyRows, 0, v=> v >= 0);
-      if (n && ks.length && f.injDates.every(d=> dateOf(d) === d) && ks.every(k=> GASES.some(g=> g.key === k) && Array.isArray(f.gas[k]) && f.gas[k].length === n)){
-        ks.forEach(k=> fixed(f.gas[k]));
-        return emptyRows === f.emptyRows ? f : { ...f, emptyRows };
-      }
-      const at = [], injDates = [], gas = {};
-      Array.from(f.injDates).forEach((d, i)=>{ const v = dateOf(d); if (v){ at.push(i); injDates.push(v); } });
-      for (const g of GASES){ const a = f.gas[g.key]; if (isArr(a)) gas[g.key] = fixed(at.map(i=> Number.isFinite(a[i]) ? a[i] : NaN)); }
-      return injDates.length && Object.keys(gas).length ? { ...f, injDates, gas, emptyRows } : null;
-    },
+    // (and the integrations' results its cards use, where there are any: gc-integ.js)
+    snapshot: ()=>{ const sv = integ.saved(); return { cards: cards().map(a=> ({ ...deck.saved(a), ...live.get(a.id).snapshot() })), ...(sv ? { integ: sv } : {}) }; },
+    // A file as a restore takes it (tableIn), raw chromatograms and pairs too (pairIn, v544).
+    file: f => isTcd(f) || 'mate' in f ? pairIn(f) : tableIn(f),
     // A project from before the cards had one analysis, its settings at the top level. A
     // card built afresh takes its settings when its analysis is made (init), its
     // per-sample arrays without the entries of the files the restore left out. The files'
     // samples as they should be (relink): a project from before them, each file its own.
-    restore: (s, gone)=>{ relink(); deck.load(cardList(s.cards, KINDS) || [{ ...s, id: 1, type: 'rate' }],
+    restore: (s, gone)=>{ relink(); integ.load(s.integ); deck.load(cardList(s.cards, KINDS) || [{ ...s, id: 1, type: 'rate' }],
       src=> ({ init: { ...src, ...Object.fromEntries(PER_SAMPLE.filter(k=> k in src).map(k=> [k, without(src[k], gone)])) } }), a=>{ live.get(a.id).restore(a.init); delete a.init; });
       // (what its cards showed, given as its tab woke or the page was reloaded: showNext)
       if (cardsNext){ const v = cardsNext; cardsNext = null; each((c, a)=>{ if (isObj(v[a.id])) c.showNext(v[a.id]); }); } },
@@ -502,12 +526,53 @@ function createGc({ key, root, layer, shown }){
       if (!stale && at === drawnAt) return;
       stale = false; drawnAt = at;
       fitCsvIcons(root);
-      if (files.length){ deck.fitNames(); each((c, a)=>{ if (!deck.isFolded(a)) c.compute(true); else c.computeQuiet(); }); }
+      if (shownAny()){ deck.fitNames(); each((c, a)=>{ if (!deck.isFolded(a)) c.compute(true); else c.computeQuiet(); }); }
     },
     csv: ()=> cards().flatMap(a=> live.get(a.id).exportEntries(fileSafe(a.name))),
   });
   const { all: allFiles, files } = kit;
   const each = fn => cards().forEach(a=> fn(live.get(a.id), a));
+  const tables = ()=> allFiles.filter(isTable);
+  // Something to show in the cards: a sample, or raw chromatograms (an Integration card's).
+  const shownAny = ()=> files.length > 0 || allFiles.some(f=> f.included !== false && hasTcd(f));
+
+  /* A table's record as a restore takes it (modkit RESTORED): its injections, each with a
+     date that is one, and the columns of the gases it has beside them, a cell that is no
+     number an empty one; none of either, it is left out. A record that is all that already
+     is kept as it is: the empty-cell and the dates' alerts dismissed stay so (blankSeen and
+     dateSeen mark its gases). */
+  function tableIn(f){
+      if (!isArr(f.injDates) || !isObj(f.gas)) return null;
+      const n = f.injDates.length, ks = Object.keys(f.gas), emptyRows = num(f.emptyRows, 0, v=> v >= 0);
+      if (n && ks.length && f.injDates.every(d=> dateOf(d) === d) && ks.every(k=> GASES.some(g=> g.key === k) && Array.isArray(f.gas[k]) && f.gas[k].length === n)){
+        ks.forEach(k=> fixed(f.gas[k]));
+        return emptyRows === f.emptyRows ? f : { ...f, emptyRows };
+      }
+      const at = [], injDates = [], gas = {};
+      Array.from(f.injDates).forEach((d, i)=>{ const v = dateOf(d); if (v){ at.push(i); injDates.push(v); } });
+      for (const g of GASES){ const a = f.gas[g.key]; if (isArr(a)) gas[g.key] = fixed(at.map(i=> Number.isFinite(a[i]) ? a[i] : NaN)); }
+      return injDates.length && Object.keys(gas).length ? { ...f, injDates, gas, emptyRows } : null;
+  }
+  /* Raw chromatograms (v544) as a restore takes them: their bytes (none: not stored in this
+     browser, the Integration card says so) and how many chromatograms; a pair, its two files
+     each taken so (a mate with nothing to show dropped, the first file alone then), the table
+     first beside raw chromatograms. A mate's own mate, none. */
+  function oneIn(f){
+    if (!isObj(f)) return null;
+    const name = typeof f.name === 'string' && f.name ? f.name : 'file', label = typeof f.label === 'string' ? f.label : name.replace(/\.[^.]+$/, '');
+    const { mate: _m, ...g } = { ...f, name, label };
+    if (isTcd(g)) return { ...g, tcd: { n: num(g.tcd.n, 0, v=> Number.isInteger(v) && v >= 0) }, rawBytes: g.rawBytes instanceof Uint8Array ? g.rawBytes : null };
+    return tableIn(g);
+  }
+  // (a file as a pair's second: its box is the row's, not its own)
+  const loose = r =>{ const { included: _i, mate: _m, ...x } = r; return x; };
+  function pairIn(f){
+    const a = oneIn(f), b = isObj(f.mate) ? oneIn(f.mate) : null;
+    const out = f.included === false ? { included: false, held: isObj(f.held) ? f.held : {} } : {};
+    if (!a || !b) return a || (b ? { ...loose(b), ...out } : null);
+    if (isTcd(a) && isTable(b)) return { ...loose(b), ...out, mate: loose(a) };
+    return { ...a, mate: loose(b) };
+  }
 
   /* ---- REPLICATES ----
      Each file is a sample of its own, or a replicate of another file's: its record's
@@ -538,7 +603,8 @@ function createGc({ key, root, layer, shown }){
       if (typeof s !== 'string' || by.has(s) || twice.has(s)) return;
       if (heir.has(s)) f.sample = heir.get(s); else { heir.set(s, f.name); delete f.sample; }
     });
-    allFiles.forEach(f=>{ if (isHead(f)) return; const h = typeof f.sample === 'string' && by.get(f.sample); if (!h || h === f || !isHead(h)) delete f.sample; });
+    // (raw chromatograms with no table are no sample: no head, linked to none)
+    allFiles.forEach(f=>{ if (isHead(f)) return; const h = typeof f.sample === 'string' && by.get(f.sample); if (!h || h === f || !isHead(h) || !isTable(h) || !isTable(f)) delete f.sample; });
   }
   // A file's head: the file it is linked to, or itself.
   const headOf = (f, by)=> (!isHead(f) && by.get(f.sample)) || f;
@@ -546,11 +612,14 @@ function createGc({ key, root, layer, shown }){
      order, on its head's; each option the file's name as its value (the link) and its label
      as its text (to v534 its name), the name in its title; dimmed with the row when the
      file is left out, as its label is. A label renamed is shown at once (sampleNames). */
-  const sampleOpt = (g, h)=> `<option value="${esc(g.name)}" title="${esc(g.name)}"${g === h ? ' selected' : ''}>${esc(g.label)}</option>`;
+  // (by name: a pair's row is a copy of its record, traceRows)
+  const sampleOpt = (g, h)=> `<option value="${esc(g.name)}" title="${esc(g.name)}"${g.name === h.name ? ' selected' : ''}>${esc(g.label)}</option>`;
   function sampleCell(f, i){
+    // Raw chromatograms with no table are no sample: no choice (v544).
+    if (!isTable(f)) return '';
     const h = headOf(f, byName().by);
     return `<select class="file-sample" data-i="${i}" aria-label="Sample" title="The sample this trace is: its own, or the one another trace heads (its replicates), by its label">${
-      allFiles.filter(g=> g === f || isHead(g)).map(g=> sampleOpt(g, h)).join('')}</select>`;
+      allFiles.filter(g=> g.name === f.name || (isHead(g) && isTable(g))).map(g=> sampleOpt(g, h)).join('')}</select>`;
   }
   // The Sample column's options after a label renamed: each its file's label again.
   function sampleNames(){
@@ -567,7 +636,7 @@ function createGc({ key, root, layer, shown }){
   let walk = null;
   function setSample(i, name, again){
     const f = allFiles[i], h = byName().by.get(name);
-    if (!f || !h || !(h === f || isHead(h))) return;
+    if (!f || !h || !isTable(f) || !isTable(h) || !(h === f || isHead(h))) return;
     if (!again || !walk || walk.f !== f) walk = { f, m: allFiles.filter(g=> g.sample === f.name) };
     walk.m.forEach(g=>{ g.sample = h.name; });
     if (h === f) delete f.sample; else f.sample = h.name;
@@ -599,7 +668,7 @@ function createGc({ key, root, layer, shown }){
   const blankSeen = new WeakSet();
   function blankAlertsHtml(){
     const lines = [];
-    allFiles.forEach(f=>{
+    tables().forEach(f=>{
       const n = blankCounts(f);
       if (!n.some(Boolean) || blankSeen.has(f.gas)) return;
       lines.push(esc(f.name) + ': ' + GASES.map((g, j)=> n[j] ? `${n[j]} empty ${g.label} cell${n[j] > 1 ? 's' : ''}` : '').filter(Boolean).join(', '));
@@ -614,7 +683,7 @@ function createGc({ key, root, layer, shown }){
   function dateAlertsHtml(){
     const lines = [];
     let order = false;
-    allFiles.forEach(f=>{
+    tables().forEach(f=>{
       // (a project's .json may hold anything: only true and a whole count go into markup)
       // A file whose dates name their month (monthNames) has no order: none is named.
       const dm = f.dayMonth === true, named = f.monthNames === true && !dm, n = num(f.badDates, 0, v=> Number.isInteger(v) && v > 0), say = [];
@@ -630,22 +699,106 @@ function createGc({ key, root, layer, shown }){
      are (blankSeen), on a mark of its own. */
   const altSeen = new WeakSet();
   function altAlertsHtml(){
-    const lines = allFiles.filter(f=> f.altExport === true && !altSeen.has(f.gas)).map(f=> esc(f.name));
+    const lines = tables().filter(f=> f.altExport === true && !altSeen.has(f.gas)).map(f=> esc(f.name));
     return lines.length ? alertHtml('info', 'Read as the alternative export (Inject Time, Amount in ppm), not the default format:', lines, 'gc-dismiss-alt') : '';
   }
 
-  kit.dropText(readGc, ()=> afterFilesChange());
+  /* ---- PAIRS (v544) ----
+     A table and its raw chromatograms share a row of the file list: the table's record, the
+     raw chromatograms its `mate`. Files dropped pair by their names (gc-pair.js autoPair: the
+     same name but for a final _TCD, any case, a browser's " (1)" aside), with each other or
+     with a file alone in the list; a file dragged by its own grip onto another pairs or swaps
+     (dropPart). Which kind each file is never changes the pairing: two tables or two files
+     of raw chromatograms may be paired, which is said (pairAlertsHtml): of two tables the
+     first is the sample, the second ignored; two files of raw chromatograms have no times,
+     no sample. Pairing is a change: a step of the history, saved. */
+  const rowFiles = r => r.mate ? [(({ mate: _m, ...x })=> x)(r), r.mate] : [r];
+  /* The rows given anew (arrays of files): the list's records made of them, the table first
+     beside raw chromatograms, and the per-sample arrays following the samples by name: a
+     sample still one keeps its entries, one that is a pair's second now holds them (`held`,
+     as a file left out does) for when it heads a row again, one new takes what it holds or
+     the defaults. */
+  function regroup(rows){
+    const S = cards().flatMap(a=> live.get(a.id).slots()), before = new Map();
+    files.forEach((f, k)=> before.set(f.name, S.map(s=> s.arr[k])));
+    const recs = rows.filter(r=> r.length).map(r=>{
+      let [a, b] = r;
+      if (b && isTcd(a) && isTable(b)) [a, b] = [b, a];
+      const p = { ...a }; delete p.mate;
+      if (!b) return p;
+      const q = loose(b);
+      if (before.has(q.name)) q.held = Object.fromEntries(S.map((s, j)=> [s.key, before.get(q.name)[j]]));
+      return { ...p, mate: q };
+    });
+    allFiles.splice(0, allFiles.length, ...recs);
+    const now = allFiles.filter(f=> f.included !== false && isTable(f));
+    S.forEach((s, j)=>{ s.arr.splice(0, s.arr.length, ...now.map(f=> before.has(f.name) ? before.get(f.name)[j] : s.make(isObj(f.held) ? f.held[s.key] : undefined, f))); });
+    now.forEach(f=>{ delete f.held; });
+    files.splice(0, files.length, ...now);
+  }
+  // The trace list's rows: a pair's its record with both files' bytes for its download, its
+  // files in FILE (none while no raw chromatograms and no pair are loaded: as to v543).
+  function traceRows(cb){
+    const rows = allFiles.map(r=> r.mate ? { ...r, rawFiles: [{ name: r.name, bytes: r.rawBytes }, { name: r.mate.name, bytes: r.mate.rawBytes }] } : r);
+    const paired = allFiles.some(r=> r.mate || isTcd(r));
+    return { rows, cb: { ...cb, parts: paired ? partsOf : null, onPartDrop } };
+  }
+  function partsOf(r){
+    const fs = rowFiles(r), two = fs.length > 1, tt = two && isTable(fs[0]) && isTable(fs[1]), cc = two && isTcd(fs[0]) && isTcd(fs[1]);
+    return fs.map((f, k)=> ({ name: f.name, warn: tt && k ? 'a second table: ignored (the first is the sample)' : cc ? 'raw chromatograms paired with raw chromatograms: no injection times' : '' }));
+  }
+  function onPartDrop(from, to){
+    const rows = allFiles.map(rowFiles), out = dropPart(rows, from, to);
+    if (out === rows) return;
+    regroup(out);
+    each(c=> c.unselect());
+    relink();
+    afterFilesChange();
+  }
+  /* The files that cannot be what their pairs need, said under the drop zone: two tables (the
+     first used), two files of raw chromatograms, and raw chromatograms with no table, which
+     Analysis leaves out. Dismissed as the others are, on a mark of its own: a file's bytes. */
+  const pairSeen = new WeakSet();
+  const pairMarks = f => rowFiles(f).map(x=> x.rawBytes).filter(b=> b instanceof Uint8Array);
+  function pairAlertsHtml(){
+    const lines = [];
+    allFiles.forEach(r=>{
+      if (pairMarks(r).some(b=> pairSeen.has(b))) return;
+      const [a, b] = rowFiles(r);
+      if (b && isTable(a) && isTable(b)) lines.push(`${esc(r.label)}: two tables paired (${esc(a.name)}, ${esc(b.name)}): the first is used, as it is alone; ${esc(b.name)} is ignored.`);
+      else if (b && isTcd(a) && isTcd(b)) lines.push(`${esc(r.label)}: two files of raw chromatograms paired (${esc(a.name)}, ${esc(b.name)}): shown in Integration, left out of Analysis (no injection times).`);
+      else if (!b && isTcd(a)) lines.push(`${esc(a.name)}: raw chromatograms with no table: shown in Integration, left out of Analysis (no injection times).`);
+    });
+    return lines.length ? buildAlertsHtml([], lines, 'Pairs to check (a table and its raw chromatograms share a row; drag a file by its own grip to pair it):', '', 'gc-dismiss-pairs') : '';
+  }
+  // Files dropped: tables and raw chromatograms read, paired by their names, placed. The first
+  // raw chromatograms of a project bring an Integration card, above the first Production Rate
+  // card; the integration starts (a Stop before it does not hold it).
+  const prime = (b, d)=> integ.prime(b, d);
+  kit.dropText((text, bytes)=> readGcAny(text, bytes, prime), ()=>{ afterFilesChange(); integ.ensure(true); }, {
+    names: ()=> allFiles.filter(r=> r.mate).map(r=> r.mate.name),
+    collect: recs=>{
+      if (!recs.length) return;
+      regroup(autoPair(allFiles.map(rowFiles), recs));
+      relink();
+      if (allFiles.some(hasTcd) && !cards().some(a=> a.type === 'integ')){
+        const at = cards().findIndex(a=> a.type === 'rate');
+        deck.add('integ', { at: at < 0 ? 0 : at, quiet: true });
+      }
+    },
+  });
 
   // (The alerts are drawn with the list, kit.showFiles: the empty-cell alert follows the files.)
   // (all drawn, on show: its draw key, the width it was drawn at)
   function afterFilesChange(){
     kit.showFiles();
-    $('gcAnalyses').style.display = files.length ? 'block' : 'none';
+    $('gcAnalyses').style.display = shownAny() ? 'block' : 'none';
     each(c=> c.renderTable());
-    if (files.length) each((c, a)=>{ if (!deck.isFolded(a)) c.compute(); else c.computeQuiet(); });
+    if (shownAny()) each((c, a)=>{ if (!deck.isFolded(a)) c.compute(); else c.computeQuiet(); });
     syncResults();
     if (shown()){ stale = false; drawnAt = String(root.clientWidth); }
     kit.commit();
+    integ.ensure();
   }
 
   /* =========================================================
@@ -968,17 +1121,46 @@ function createGc({ key, root, layer, shown }){
 
     // The data and the mean rates, from the card's parameters; `draw` false for a card
     // folded (nothing in it is drawn), whose Results section is still kept up to date.
+    /* A sample's values (v544): its table's, or, paired with its raw chromatograms and an
+       Integration card above this one, that card's (gc-integ.js valuesFor: each gas
+       re-integrated where it can be, the table's where it cannot, and why), the table's
+       dates giving the times either way. `src` null: the table, nothing to say. */
+    const srcFor = f =>{ const c = integAbove(a); return c ? c.valuesFor(f) : null; };
     function computeTables(){
       dataTables = files.map((f,h)=>{
-        const ks = Object.keys(f.gas), lightOn = lightOnDates[h];
-        const key = exactKey([f.injDates.map(d=> +d), ks.map(k=> [k, objId(f.gas[k])]), +lightOn, injDelay(), qOf(h), tOf(h), pOf(h), norm === 'area' ? ['A', aOf(h)] : mOf(h)]);
-        const made = tablesKept(ks.length ? f.gas[ks[0]] : null, key, ()=> tablesOf(f, h, lightOn)), gas = {};
+        const src = srcFor(f), G = src && src.gas ? src.gas : f.gas;
+        const ks = Object.keys(G), lightOn = lightOnDates[h];
+        const key = exactKey([f.injDates.map(d=> +d), ks.map(k=> [k, objId(G[k])]), +lightOn, injDelay(), qOf(h), tOf(h), pOf(h), norm === 'area' ? ['A', aOf(h)] : mOf(h)]);
+        const made = tablesKept(ks.length ? G[ks[0]] : null, key, ()=> tablesOf(f, h, lightOn, G)), gas = {};
         for (const k in made.gas) gas[k] = { ...made.gas[k], FmInt: made.gas[k].cum };
         // (ppm: read from the alternative export, its concentrations written in its unit, gc_raw.csv)
-        return {t: made.t, gas, name:f.name, label:f.label, color:f.color, ppm: f.altExport === true};
+        return {t: made.t, gas, name:f.name, label:f.label, color:f.color, ppm: f.altExport === true, ...(src ? { src, tab: f.gas } : {})};
       });
+      paintSrc();
     }
-    function tablesOf(f, h, lightOn){
+    /* Where its values came from, said at the card's top (v544): the samples re-integrated,
+       and how each gas is made a concentration (the standards, or the GC software's scale,
+       an info alert); the samples paired with raw chromatograms that keep their table, and
+       why (a warning). Nothing while no sample is paired or no Integration card is above. */
+    function paintSrc(){
+      const box = $('Src');
+      if (!box) return;
+      const above = integAbove(a), name = above ? (cards().find(x=> live.get(x.id) === above) || {}).name : '';
+      const used = [], kept = [], txt = { h2: 'H₂', o2: 'O₂' };
+      const k5 = v => Number.isFinite(v) ? String(+v.toPrecision(5)) : '?';
+      const how = (s, g)=> s.how[g] === 'cal' ? 'calibrated by the standards' : `calibration taken from the GC software's table (k = ${k5(s.k[g] && s.k[g].k)})`;
+      dataTables.forEach(d=>{
+        const s = d.src;
+        if (!s) return;
+        if (!s.gas){ kept.push(`${esc(d.label)}: ${esc(s.why)}`); return; }
+        const re = Object.keys(s.how).filter(g=> s.how[g] !== 'table'), tb = Object.keys(s.how).filter(g=> s.how[g] === 'table');
+        if (re.length) used.push(`${esc(d.label)}: ${re.map(g=> `${txt[g] || esc(g)} ${esc(how(s, g))}`).join('; ')}`);
+        tb.forEach(g=> kept.push(`${esc(d.label)}, ${txt[g] || esc(g)}: ${esc(s.why[g] || 'the table')}`));
+      });
+      box.innerHTML = (used.length ? alertHtml('info', `H₂ and O₂ re-integrated from the raw chromatograms (${esc(name)}), the times from the tables:`, used) : '')
+        + (kept.length ? alertHtml('warn', `The GC software's table used instead of the re-integration (${esc(name)}):`, kept) : '');
+    }
+    function tablesOf(f, h, lightOn, G = f.gas){
       const hours = d => (d - lightOn)/3600000;
       // The injections in time order; `t`, the sample's times (the light-on instant
       // among them), spans the plot's x-range.
@@ -987,17 +1169,18 @@ function createGc({ key, root, layer, shown }){
       // Total molar flow: mL/min -> L/h -> mol/h at the molar volume of the flow's T and p.
       const F = qOf(h)/1000*60/molarVolume(tOf(h), pOf(h));
       const gas = {};
-      for (const k in f.gas){
+      for (const k in G){
         /* Each gas on its own times: the injections it has a value for, with the
            light-on instant inserted as an extra point carrying its last reading before
            it (zero if the run starts after it). An empty cell is left out of this gas
            alone, so its rate, production and mean come from the injections it has; to
            v474 it was read as 0 %, which pulled them all down. */
-        const pts = rows.filter(r=> !noValue(f.gas[k][r.i])).map(r=> ({ d: r.d, v: f.gas[k][r.i] }));
+        // (`inj`: each point's injection, the light-on instant's -1: gc_raw.csv's sources)
+        const pts = rows.filter(r=> !noValue(G[k][r.i])).map(r=> ({ d: r.d, v: G[k][r.i], i: r.i }));
         if (!pts.length) continue;
         let idxBefore = -1;
         for (let i=0;i<pts.length;i++) if (pts[i].d < lightOn) idxBefore = i;
-        pts.push({ d: lightOn, v: idxBefore<0 ? 0 : pts[idxBefore].v });
+        pts.push({ d: lightOn, v: idxBefore<0 ? 0 : pts[idxBefore].v, i: -1 });
         pts.sort((a,b)=>a.d-b.d);
         const tHours = pts.map(p=> hours(p.d));
         const pct = pts.map(p=> p.v);
@@ -1005,7 +1188,7 @@ function createGc({ key, root, layer, shown }){
         const flowM = flow.map(v=> v/perOf(h)*NORM[norm].per);   // per g: µmol/(g h); per cm²: µmol/(cm² h)
         // From the first injection on; FmInt, from the interval's start (updateRegression).
         const cum = cumtrapz(tHours, flowM);
-        gas[k] = { t: tHours, pct, flow, Fm: flowM, cum };
+        gas[k] = { t: tHours, pct, flow, Fm: flowM, cum, inj: pts.map(p=> p.i) };
       }
       return {t, gas};
     }
@@ -1324,6 +1507,10 @@ function createGc({ key, root, layer, shown }){
                  decimals would lose (0.141 ppm is 0.0000141 %mol). */
               cols.push(d.ppm ? {h:`${g.csv} (ppm) [${d.label}]`, v:col(j, q.pct.map(v=> v*1e4))}
                 : {h:`${g.csv} (%mol) [${d.label}]`,      v:col(j, q.pct)});
+              /* A sample paired with its raw chromatograms under an Integration card (v544):
+                 which value the concentration column holds (`source`), the table's and the
+                 re-integrated one beside it, and the fitted area, at each injection. */
+              if (d.src) cols.push(...sourceCols(d, g, q, j, rows));
               cols.push({h:`${g.csv} (umol h^-1) [${d.label}]`, v:col(j, q.flow)});
             }
             cols.push({h:`${g.csv} ${U.rateCsv} [${d.label}]`, v:col(j, q.Fm)});
@@ -1332,6 +1519,21 @@ function createGc({ key, root, layer, shown }){
         });
         return wideCsv(cols);
       };
+      // (a sample's values re-integrated or kept from its table, and why: v544)
+      function sourceCols(d, g, q, j, rows){
+        const s = d.src, k = g.key, u = d.ppm ? 'ppm' : '%mol', m = d.ppm ? 1e4 : 1, ok = Number.isFinite;
+        const inj = r => r.at[j] < 0 ? -1 : q.inj[r.at[j]];
+        const re = !!(s.gas && s.how[k] && s.how[k] !== 'table');
+        const what = !s.gas ? `table (${s.why})` : s.how[k] === 'cal' ? 'reintegrated, calibrated by the standards'
+          : s.how[k] === 'transfer' ? 'reintegrated, calibration taken from the GC table' : `table (${s.why[k] || 'no re-integration'})`;
+        const at = (arr, f, dec)=> rows.map(r=>{ const i = inj(r), v = i >= 0 && arr ? arr[i] : NaN; return ok(v) ? fmtNum(v*f, dec) : ''; });
+        return [
+          { h: `${g.csv} source [${d.label}]`, v: rows.map(r=> inj(r) < 0 ? '' : what) },
+          { h: `${g.csv} table (${u}) [${d.label}]`, v: at(d.tab[k], m, 5) },
+          { h: `${g.csv} reintegrated (${u}) [${d.label}]`, v: at(re ? s.gas[k] : null, m, 5) },
+          { h: `${g.csv} area [${d.label}]`, v: at(s.areas ? s.areas[k] : null, 1, 3) },
+        ];
+      }
       entries.push({name:`${n} - gc_raw.csv`,     text:buildSeriesCsv(dataTables, true)});
       entries.push({name:`${n} - gc_results.csv`, text:buildSeriesCsv(cutTables(), false)});
       // mean_rates.csv — bar-plot-like summary (one row per file). One duration column
@@ -1473,17 +1675,24 @@ function createGc({ key, root, layer, shown }){
   const resList = $('gcResList');
   const live = new Map();       // id → the card's analysis (gcCard)
   let cardsNext = null;         // what the cards of a tab woken or reloaded showed (showNext), by id
-  const placeRes = ()=> cards().forEach(a=>{ const c = live.get(a.id); if (c) resList.appendChild(c.res); });
+  const placeRes = ()=> cards().forEach(a=>{ const c = live.get(a.id); if (c && c.res) resList.appendChild(c.res); });
   // The Results card is there while some card has a result to show.
   function syncResults(){
     const on = cards().filter(a=> live.has(a.id) && live.get(a.id).hasResults());
     $('gcResultsBar').style.display = files.length && on.length ? 'block' : 'none';
-    cards().forEach(a=>{ const c = live.get(a.id); if (c) c.res.classList.toggle('is-first', a === on[0]); });
+    cards().forEach(a=>{ const c = live.get(a.id); if (c && c.res) c.res.classList.toggle('is-first', a === on[0]); });
   }
   function named(a){
     const card = deck.cardOf(a), c = live.get(a.id);
     if (!card || !c) return;
     const n = fileSafe(a.name);
+    if (a.type === 'integ'){
+      const w = card.querySelectorAll('.plot-wrap');
+      nameDownloads(w[0], `${n} - GC_chromatogram.svg`);
+      nameDownloads(w[1], `${n} - GC_residual.svg`);
+      nameDownloads(w[2], `${n} - GC_run_overview.svg`, `${n} - integration.csv`);
+      return;
+    }
     card.querySelector('.table-csv-btn').dataset.csvNames = `${n} - gc_info.csv`;
     nameDownloads(card.querySelector('.plot-wrap'), `${n} - GC_rate.svg`, `${n} - gc_raw.csv`);
     c.res.querySelector('.res-an-title').textContent = a.name;
@@ -1492,15 +1701,44 @@ function createGc({ key, root, layer, shown }){
     nameDownloads(w[1], `${n} - GC_results_cumulative.svg`, `${n} - gc_results.csv`);
     nameDownloads(w[2], `${n} - GC_results.svg`, `${n} - mean_rates.csv`);
   }
+  /* The Integration cards' common part: the raw chromatograms read, the results kept and
+     written into the history, the job (gc-integ.js). Results that came in, a method or a
+     calibration changed: the Production Rate cards below follow (ratesFollow). */
+  const integ = createInteg({
+    kit, all: allFiles, cards: ()=> cards(), inst: id => live.get(id), layer, isTcd,
+    drawable, shown, changed: ()=> ratesFollow(true), folded: a => deck.isFolded(a),
+  });
+  /* A Production Rate card's source of values (v544): the nearest Integration card above it,
+     or none (the tables, as to v543). What it reads of it (`srcSig`): which card, its method
+     and calibration, its results; a card whose source changed (a card moved, added, closed,
+     results come in) is worked out again, and only those (`force`: every card with one). */
+  function integAbove(a){
+    const list = cards();
+    for (let i = list.indexOf(a) - 1; i >= 0; i--) if (list[i].type === 'integ') return live.get(list[i].id) || null;
+    return null;
+  }
+  const srcSig = a =>{ const c = integAbove(a); return c ? cards().find(x=> live.get(x.id) === c).id + ':' + c.sig() : ''; };
+  function ratesFollow(force){
+    each((c, a)=>{
+      if (a.type !== 'rate') return;
+      const s = srcSig(a);
+      if (!(force ? s : s !== c.srcWas)) return;
+      c.srcWas = s;
+      if (!files.length) return;
+      if (!deck.isFolded(a)) c.compute(true); else c.computeQuiet();
+    });
+  }
   const deck = kit.deck({
-    kinds: KINDS, info: ()=> GC_INFO, body: cardBody,
-    build: (a, card)=>{ const c = gcCard(a, card); live.set(a.id, c); if (a.init){ c.restore(a.init); delete a.init; } },
-    drop: a=>{ const c = live.get(a.id); if (c){ c.res.remove(); live.delete(a.id); } syncResults(); },
-    autoName: ()=> 'Production Rate', named,
-    changed: ()=>{ placeRes(); syncResults(); },
+    kinds: KINDS, info: t => t === 'integ' ? INTEG_INFO : GC_INFO, body: a => a.type === 'integ' ? '<div class="gci-body"></div>' : cardBody(a),
+    // ("+" offers Integration while raw chromatograms are loaded; a card keeps its kind)
+    offer: ()=> allFiles.some(hasTcd) || cards().some(a=> a.type === 'integ') ? ['rate', 'integ'] : ['rate'], fixedKinds: true,
+    build: (a, card)=>{ const c = a.type === 'integ' ? integ.card(a, card) : gcCard(a, card); live.set(a.id, c); if (a.init){ c.restore(a.init); delete a.init; } },
+    drop: a=>{ const c = live.get(a.id); if (c){ if (c.res) c.res.remove(); if (c.destroy) c.destroy(); live.delete(a.id); } syncResults(); },
+    autoName: a => KINDS[a.type] || KINDS.rate, named,
+    changed: ()=>{ placeRes(); syncResults(); ratesFollow(); integ.ensure(); },
     loaded: placeRes,
-    added: a=>{ const c = live.get(a.id); c.renderTable(); if (files.length) c.compute(); },
-    wake: a=>{ if (files.length) live.get(a.id).compute(true); },
+    added: a=>{ const c = live.get(a.id); c.renderTable(); if (a.type === 'integ'){ c.compute(); integ.ensure(); } else if (files.length) c.compute(); },
+    wake: a=>{ if (a.type === 'integ' || files.length) live.get(a.id).compute(true); },
   });
   const cards = ()=> deck.records;
   // A card's settings in the history (kit.snapshot): its per-sample m/Q/light-on,
@@ -1517,7 +1755,7 @@ function createGc({ key, root, layer, shown }){
   return {
     // Let go (its tab closed or put to sleep; a state read out for its CSVs): the deck's
     // menu and its listeners. Its section and layer are the shell's to take out.
-    destroy(){ kit.destroy(); },
+    destroy(){ integ.destroy(); kit.destroy(); },
     /* What it shows beside its state (tabs.js, utils.js shownOf): each card's own, by
        its id (the sample picked), given back as its tab wakes or the page is reloaded, to
        the restore. */

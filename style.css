@@ -3447,3 +3447,85 @@ table.iodo-std input { width: 100%; min-width: 0; margin: 0; }
 .iodo-cal-msg:not(:empty) { margin-top: 10px; color: var(--bad); font-size: 13px; }
 .iodo-cal-foot { flex: none; margin: 0; padding: 12px 18px 16px; }
 @media (max-width: 600px){ .iodo-cal-box { width: 100vw; max-height: 100vh; border-radius: 0; } .iodo-cal-head { padding: 10px 10px 10px 12px; } .iodo-cal-scroll { padding: 12px 12px 4px; } }
+
+/* ===== GC: a table and its raw chromatograms (v544) =====
+   A pair's row: its two files in FILE, one a line, each with its own small grip (six dots),
+   which drags that file onto another (the row's ≡ still moves the row). Dragging, the whole
+   file it would land on lights (an accent outline), never a gap; off every file, a file with
+   a partner lights itself, dashed: dropped there, it stands alone. A file its pair cannot
+   use (a second table, raw chromatograms beside raw chromatograms) is marked in the warning's
+   colour, its title saying why. */
+td.fname-parts { padding-top: 3px; padding-bottom: 3px; }
+.fparts { flex-direction: column; align-items: stretch; gap: 1px; }
+.fpart { display: flex; align-items: center; gap: 4px; min-width: 0; padding: 1px 4px 1px 0; border-radius: 5px; line-height: 1.35; }
+.fpart-grip { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 12px; height: 16px; color: var(--muted); cursor: grab; touch-action: none; opacity: 0.55; }
+.fpart-grip:hover, .fpart.fdragging .fpart-grip { opacity: 1; color: var(--text); }
+.fdrag-on, .fdrag-on * { cursor: grabbing !important; }
+.fpart.fdragging { opacity: 0.5; }
+.fpart.drop-on { box-shadow: inset 0 0 0 2px var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--text); }
+.fpart.drop-alone { outline: 1.5px dashed var(--accent); outline-offset: -1.5px; opacity: 0.9; }
+.fpart.is-warn .fname-text { color: var(--warn, #d9a21b); text-decoration: underline dotted; text-underline-offset: 2px; }
+
+/* ===== GC: the Integration card (gc-integ.js, v544) ===== */
+.gci-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.gci-status { flex: 1 1 260px; min-width: 0; display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text); }
+.gci-acts { display: flex; gap: 8px; flex-wrap: wrap; }
+.gci-prog { flex: none; width: 140px; height: 6px; border-radius: 3px; background: var(--panel2); border: 1px solid var(--line); overflow: hidden; }
+.gci-prog-bar { display: block; height: 100%; background: var(--accent); transition: width 0.2s; }
+.gci-alerts:not(:empty) { margin-bottom: 10px; }
+.gci-sel { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-bottom: 8px; }
+.gci-nav { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1 1 280px; }
+.gci-nav select { flex: 1 1 auto; min-width: 0; width: auto; padding: 4px 6px; border-radius: 7px; font: inherit; font-size: 13px; color: var(--text); background: var(--panel2); border: 1px solid var(--line); }
+.gci-notice:not(:empty) { margin-bottom: 8px; }
+.gci-row { align-items: flex-start; }
+.gci-col { min-width: 320px; }
+.gci-legend { margin-top: 6px; }
+.gci-legend i.gci-mk { width: 9px; height: 9px; border-radius: 0; background: none; border: 1.5px solid currentColor; color: var(--muted); }
+.gci-legend i.gci-mk-dot { border-radius: 50%; background: currentColor; }
+.gci-legend i.gci-mk-ring { border-radius: 50%; color: #ff3b3b; width: 11px; height: 11px; }
+.gci-legend i.gci-mk-x { border: none; background: linear-gradient(45deg, transparent 43%, currentColor 43% 57%, transparent 57%), linear-gradient(-45deg, transparent 43%, currentColor 43% 57%, transparent 57%); }
+svg.plot.gci-resid { margin-top: 6px; }
+.plot-chips.gci-ov-sel { gap: 10px; }
+.gci-ov-sel > span { display: flex; gap: 4px; }
+.gci-method:not(:empty) { margin-top: 10px; padding: 8px 10px; background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; font-size: 12px; }
+.gci-win-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.gci-win { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; padding: 2px 0; color: var(--muted); }
+.gci-win-name { color: var(--text); font-weight: 600; min-width: 48px; }
+.gci-win input { width: 64px; padding: 2px 5px; margin-left: 3px; }
+.gci-win-peaks { font-size: 11px; }
+.gci-values-box { margin-top: 12px; }
+table.gci-values th, table.gci-values td { white-space: nowrap; padding: 4px 7px; }
+.gci-bad { color: var(--bad); font-weight: 600; }
+.gci-flag { margin: 8px 0 0; font-size: 12px; color: var(--warn, #d9a21b); }
+.gci-values-box .txt-meta { margin: 6px 0 0; }
+/* The calibration's window: XRPD's standard's (.xrd-std-box), its levels' table and a plot a gas. */
+.gci-cal-unit { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin: 12px 0 8px; }
+.gci-cal-unit select { width: auto; margin-left: 6px; padding: 2px 6px; border-radius: 6px; font: inherit; color: var(--text); background: var(--panel2); border: 1px solid var(--line); }
+table.gci-cal-levels th, table.gci-cal-levels td { white-space: nowrap; padding: 3px 7px; }
+table.gci-cal-levels td input[type="text"] { width: 76px; }
+table.gci-cal-levels tr.is-excluded td { opacity: 0.45; }
+table.gci-cal-levels td.gci-cal-src { max-width: 220px; overflow: hidden; text-overflow: ellipsis; color: var(--muted); font-size: 12px; }
+.gci-thumb { display: block; color: var(--muted); }
+.gci-cal-fits { margin-top: 14px; }
+.gci-cal-gas { min-width: 300px; }
+.gci-cal-gas-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.gci-cal-zero { display: flex; gap: 4px; }
+.gci-cal-line { margin: 8px 0 6px; font-size: 13px; }
+.gci-cal-line b { color: var(--accent); }
+table.gci-cal-dev th, table.gci-cal-dev td { padding: 3px 7px; font-size: 12px; }
+/* The chromatogram's overlay: the peaks its model leaves out (the system peak at 264 s, N₂),
+   grey zones named at their top; the legend's keys for them and for the trapezoids' bases. */
+.gci-nb { fill: var(--muted); opacity: 0.13; }
+.gci-nb-lb { fill: var(--muted); }
+.legend i.mk-box.gci-mk-nb { background: var(--muted); opacity: 0.4; }
+.legend i.gci-mk-bars { width: 16px; height: 9px; border-radius: 0; background: linear-gradient(#3aa0ff 0 4px, transparent 4px 5px, #ff7a59 5px 9px); }
+.gci-win input { width: 58px; }
+/* (the calibration's plots a strip each, over the levels' table, which is as wide as it needs) */
+.gci-cal-gas svg.plot { aspect-ratio: 2.4; }
+.gci-cal-table { margin-top: 14px; }
+table.gci-cal-levels { width: auto; min-width: 60%; }
+.gci-cal-fits { margin-top: 4px; }
+.gci-risks { margin: 6px 0 8px; padding-left: 20px; }
+.gci-risks li { margin: 2px 0; }
+/* (the alerts of the Integration card and of a rate card's source name files whose names do not break: they wrap anywhere) */
+.gc-src .alert, .gci-alerts .alert, .gci-notice .alert, .gci-flag { overflow-wrap: anywhere; }

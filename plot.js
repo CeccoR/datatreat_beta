@@ -391,21 +391,30 @@ class Plot{
     this._pickSoon();
     return this._renderLine(entry);
   }
-  // Open-circle scatter (unconnected). Only points within the x-view are drawn.
-  points(xs, ys, color, r){
-    const entry = {type:'points', xs, ys, color, r:r||2};
+  /* Open-circle scatter (unconnected). Only points within the x-view are drawn. `o` (GC's
+     overview of a run, v544): `shape` 'circle' (the default), 'square', 'diamond' or
+     'cross', `fill` (a filled mark), `width` (its stroke), `label` and `key` as line()'s
+     meta. */
+  points(xs, ys, color, r, o){
+    const entry = {type:'points', xs, ys, color, r:r||2, shape: o && o.shape, fill: !!(o && o.fill), sw: o && o.width, label: o && o.label, key: o && o.key};
     this._stored.push(entry);
     this._pickSoon();
     return this._renderPoints(entry);
   }
   _renderPoints(entry, proj){
     const {px,py} = proj || this._projector();
-    const g = svgEl('g',{}); const rr = entry.r;
+    const g = svgEl('g',{}); const rr = entry.r, sw = entry.sw || 1;
+    const paint = { fill: entry.fill ? entry.color : 'none', stroke: entry.color, 'stroke-width': sw };
     for (let i=0;i<entry.xs.length;i++){
       const xv=entry.xs[i], yv=entry.ys[i];
       if (!isFinite(xv)||!isFinite(yv)) continue;
       if (xv<this.xmin||xv>this.xmax) continue; // cull off-view for speed
-      g.appendChild(svgEl('circle',{cx:px(xv).toFixed(2), cy:py(yv).toFixed(2), r:rr, fill:'none', stroke:entry.color, 'stroke-width':1}));
+      const cxs = px(xv).toFixed(2), cys = py(yv).toFixed(2), cx = +cxs, cy = +cys;
+      if (!entry.shape || entry.shape === 'circle'){ g.appendChild(svgEl('circle',{cx:cxs, cy:cys, r:rr, ...paint})); continue; }
+      if (entry.shape === 'square') g.appendChild(svgEl('rect',{x:cx-rr, y:cy-rr, width:2*rr, height:2*rr, ...paint}));
+      else if (entry.shape === 'diamond') g.appendChild(svgEl('path',{d:`M${cx},${cy-rr*1.3}L${cx+rr*1.3},${cy}L${cx},${cy+rr*1.3}L${cx-rr*1.3},${cy}Z`, ...paint}));
+      else if (entry.shape === 'cross') g.appendChild(svgEl('path',{d:`M${cx-rr},${cy-rr}L${cx+rr},${cy+rr}M${cx-rr},${cy+rr}L${cx+rr},${cy-rr}`, fill:'none', stroke:entry.color, 'stroke-width':sw}));
+      else g.appendChild(svgEl('circle',{cx, cy, r:rr, ...paint}));
     }
     this.gData.appendChild(g);
     entry._el = g;

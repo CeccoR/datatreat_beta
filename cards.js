@@ -73,7 +73,7 @@ function kindMenu(kinds, layer){
   }, { capture: true, signal });
   window.addEventListener('scroll', ()=>{ if (!el.hidden) place(); }, { capture: true, signal });
   window.addEventListener('resize', ()=>{ if (!el.hidden) place(); }, { signal });
-  return { open, close, destroy(){ close(); ac.abort(); el.remove(); } };
+  return { el, open, close, destroy(){ close(); ac.abort(); el.remove(); } };
 }
 
 /* Folding animates the body's height. The card is marked folded from the start, so its
@@ -140,6 +140,12 @@ const stepping = ()=> !!histKey && histKey.eventPhase !== Event.NONE;
 /* o: {
      list, addBar, addBtn       the cards' container, the "+" bar in it (cards go above it), its button
      kinds                      { type: label }, in menu order; names are settled in this order
+     offer()                    the kinds "+" offers now (GC's Integration, only while raw
+                                chromatograms are loaded, v544): with one, "+" adds it with no
+                                menu, as a deck of one kind does; none given, every kind
+     fixedKinds                 the title names the kind and does not change it (GC: a
+                                production rate and an integration are not one analysis seen
+                                two ways)
      title                      the head's word before the kind ('Analysis:' by default; the
                                 Figure module's plots none, the kind alone: 'XY plot')
      info(type)                 the instructions under the title
@@ -172,8 +178,9 @@ const stepping = ()=> !!histKey && histKey.eventPhase !== Event.NONE;
 export function createDeck(o){
   let recs = [];
   const live = new Map();       // id → card element
-  const kinds = o.kinds, types = Object.keys(kinds), several = types.length > 1;
+  const kinds = o.kinds, types = Object.keys(kinds), several = types.length > 1, switchable = several && !o.fixedKinds;
   const menu = several ? kindMenu(kinds, o.layer) : null;
+  const offered = ()=>{ const k = o.offer ? o.offer().filter(t=> types.includes(t)) : types; return k.length ? k : types.slice(0, 1); };
   const title = o.title ?? 'Analysis:';
 
   const nextId = ()=> recs.reduce((m, a)=> Math.max(m, a.id), 0) + 1;
@@ -192,7 +199,7 @@ export function createDeck(o){
   // The title is the kind, chosen in place (with one kind, plain text); the name sits under
   // it and stays in view when the card is folded, the instructions open under the name.
   function cardHtml(a){
-    const kind = several
+    const kind = switchable
       ? `<button type="button" class="an-type" data-kind="${esc(a.type)}" aria-haspopup="menu" aria-expanded="false" title="Change the kind of analysis">${esc(kinds[a.type])}</button>`
       : `<span class="an-type is-fixed">${esc(kinds[a.type])}</span>`;
     return `
@@ -567,12 +574,17 @@ export function createDeck(o){
     const f = loading && o.loaded ? o.loaded : o.changed;
     if (f) f();
   }
-  function add(type){
+  /* `at`: its place among the cards (none: the last); `quiet`: no step of its own and no
+     scroll, a card the module adds as part of a change of its own (GC's Integration, its
+     raw chromatograms dropped: one step with the files). */
+  function add(type, { at, quiet } = {}){
     const a = newRec(type);
-    recs.push(a);
+    if (at != null && at >= 0 && at < recs.length) recs.splice(at, 0, a); else recs.push(a);
     mount(a);
+    placeCards();
     afterChange();
     if (o.added) o.added(a);
+    if (quiet) return a;
     o.commit();
     live.get(a.id).scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     return a;
@@ -609,7 +621,12 @@ export function createDeck(o){
     if (o.switched) o.switched(a, from);
     o.commit();
   }
-  if (o.addBtn) o.addBtn.addEventListener('click', ()=> several ? menu.open(o.addBtn, add, { centre: true }) : add(types[0]));
+  if (o.addBtn) o.addBtn.addEventListener('click', ()=>{
+    const ks = offered();
+    if (ks.length < 2){ add(ks[0]); return; }
+    menu.el.querySelectorAll('[data-kind]').forEach(b=>{ b.hidden = !ks.includes(b.dataset.kind); });
+    menu.open(o.addBtn, t=> add(t), { centre: true });
+  });
 
   /* A card whose id and kind are both still there is kept, and its panel restored (keep),
      so an undo does not rebuild the whole list; any other is built afresh. A kept record

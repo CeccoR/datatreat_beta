@@ -792,17 +792,23 @@ function setupDropzone(dropzone, inputEl, onFiles){
    back what it had; a slot it holds nothing for (one added since) starts afresh.
    slots: [{ key, arr, make(held, file) }] — make gives the entry to put back, from the
    one held or, given undefined, a new one.
+   `isSample` (GC's raw chromatograms, v544): whether a record is a sample of the analysis
+   at all, included or not; one that is not (a file of raw chromatograms with no table)
+   has no entry in the per-sample arrays, whatever its box. By default every record is.
 ========================================================= */
 const isIncluded = f => f.included !== false;
+const anySample = ()=> true;
 // The name of the file a trace comes from (the trace list's FILE).
 const fileOf = f => typeof f.src === 'string' && f.src ? f.src : f.name;
-const includedOf = all => all.filter(isIncluded);
+const includedOf = (all, isSample = anySample)=> all.filter(f=> isIncluded(f) && isSample(f));
 // Where all[j] stands, or would stand, among the included files.
-function includedIndex(all, j){ let n = 0; for (let k = 0; k < j; k++) if (isIncluded(all[k])) n++; return n; }
-function setIncluded(all, j, on, slots){
+function includedIndex(all, j, isSample = anySample){ let n = 0; for (let k = 0; k < j; k++) if (isIncluded(all[k]) && isSample(all[k])) n++; return n; }
+function setIncluded(all, j, on, slots, isSample = anySample){
   const f = all[j];
   if (!f || isIncluded(f) === on) return;
-  const i = includedIndex(all, j);
+  // (no sample: its box alone, no entry to give or take)
+  if (!isSample(f)){ if (on){ delete f.held; delete f.included; } else f.included = false; return; }
+  const i = includedIndex(all, j, isSample);
   if (on){
     const held = f.held || {};
     // A slot shorter than the files ahead of this one is padded, not appended to,
@@ -815,16 +821,16 @@ function setIncluded(all, j, on, slots){
     f.held = held; f.included = false;
   }
 }
-function removeFileAt(all, j, slots){
-  if (isIncluded(all[j])){ const i = includedIndex(all, j); slots.forEach(s=>{ if (i < s.arr.length) s.arr.splice(i, 1); }); }
+function removeFileAt(all, j, slots, isSample = anySample){
+  if (isIncluded(all[j]) && isSample(all[j])){ const i = includedIndex(all, j, isSample); slots.forEach(s=>{ if (i < s.arr.length) s.arr.splice(i, 1); }); }
   all.splice(j, 1);
 }
 // Reorder the list; an included file moves its entries to its new place among the included.
-function moveFileTo(all, from, to, slots){
-  const f = all[from], on = isIncluded(f), a = includedIndex(all, from);
+function moveFileTo(all, from, to, slots, isSample = anySample){
+  const f = all[from], on = isIncluded(f) && isSample(f), a = includedIndex(all, from, isSample);
   all.splice(from, 1); all.splice(to, 0, f);
   if (!on) return;
-  const b = includedIndex(all, to);
+  const b = includedIndex(all, to, isSample);
   if (a !== b) slots.forEach(s=>{ if (a < s.arr.length){ const [x] = s.arr.splice(a, 1); s.arr.splice(b, 0, x); } });
 }
 
@@ -852,10 +858,21 @@ function moveFileTo(all, from, to, slots){
          column is left empty
    noteHead: optional, the note column's header, plain text (GC: SAMPLE); none, it has
          none (DRS, the others)
+   callbacks.parts: optional (trace, i) => [{ name, warn }] or null: the files a row is made
+         of, where it may be more than one (GC's pairs of a table and its raw
+         chromatograms, v544), each in FILE on a line of its own with a small grip of its
+         own (`warn`, plain text: the file is of a kind its pair cannot use, said in its
+         title and marked). null: the row's file, as ever. A file dragged by its grip lights
+         the whole file it would land on (none: the dragged file itself, dashed, where it
+         has a partner to leave), and callbacks.onPartDrop({ i, p }, { i, p } | null) takes
+         the drop: the file p of row i onto file p of row i (null: off every file, to stand
+         alone).
 ========================================================= */
 // A perfect 1:1 cross with rounded stroke caps (replaces the plain ✕ glyph).
 // Inked box 15×15, centred on (12,12) — same size as the download glyph below.
 const X_SVG = (size=14)=> `<svg class="x-icon" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="4.5" y1="4.5" x2="19.5" y2="19.5"/><line x1="4.5" y1="19.5" x2="19.5" y2="4.5"/></svg>`;
+// A file's own grip inside a row (callbacks.parts): six dots, smaller than the row's ≡.
+const FGRIP = `<svg viewBox="0 0 10 14" width="8" height="12" fill="currentColor" aria-hidden="true"><circle cx="3" cy="3" r="1.15"/><circle cx="7" cy="3" r="1.15"/><circle cx="3" cy="7" r="1.15"/><circle cx="7" cy="7" r="1.15"/><circle cx="3" cy="11" r="1.15"/><circle cx="7" cy="11" r="1.15"/></svg>`;
 // Download glyph, inked box 15×15 centred on (12,12) so it matches the X exactly.
 const DL_SVG = (size=15)=> `<svg class="dl-icon" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="4.5" x2="12" y2="15"/><polyline points="7 10.5 12 15 17 10.5"/><line x1="4.5" y1="19.5" x2="19.5" y2="19.5"/></svg>`;
 
@@ -891,7 +908,10 @@ function renderUnifiedFileList(container, files, callbacks, note, noteHead){
     html += `<td class="incl-cell"><input type="checkbox" class="file-incl" data-i="${i}"${on ? ' checked' : ''} title="Include in the analysis"></td>`;
     const tip = callbacks.tip ? callbacks.tip(f, i) : '';
     html += `<td class="trace-cell"${tip ? ` title="${esc(tip)}"` : ''}><span class="trace-inner">${swatch}<input type="text" class="label-input file-label" data-i="${i}" value="${esc(f.label)}" aria-label="Trace name"></span></td>`;
-    html += `<td class="fname" title="${esc(file)}"><span class="fname-inner"><span class="fname-text">${esc(file)}</span></span></td>`;
+    const parts = callbacks.parts ? callbacks.parts(f, i) : null;
+    if (parts) html += `<td class="fname fname-parts" title="${esc(parts.map(p=> p.name).join(' + '))}"><span class="fname-inner fparts">${parts.map((p, k)=>
+      `<span class="fpart${p.warn ? ' is-warn' : ''}" data-i="${i}" data-p="${k}"${p.warn ? ` title="${esc(p.name + ': ' + p.warn)}"` : ` title="${esc(p.name)}"`}><span class="fpart-grip" title="Drag onto another file to pair it with that one (onto a file already paired: the two swap)" aria-hidden="true">${FGRIP}</span><span class="fname-text">${esc(p.name)}</span></span>`).join('')}</span></td>`;
+    else html += `<td class="fname" title="${esc(file)}"><span class="fname-inner"><span class="fname-text">${esc(file)}</span></span></td>`;
     html += `<td class="note-cell">${note ? note(f, i) : ''}</td>`;
     html += `<td class="row-acts" style="text-align:right;white-space:nowrap"><button class="dl-file del-bare dl-bare idle-dim" data-i="${i}" title="Download its file">${dlIcon}</button><button class="del del-bare row-del is-danger idle-dim" data-i="${i}" title="Remove">${xIcon}</button></td>`;
     html += `</tr>`;
@@ -1033,6 +1053,56 @@ function renderUnifiedFileList(container, files, callbacks, note, noteHead){
     };
     handle.addEventListener('pointerup', finish);
     handle.addEventListener('pointercancel', ()=>{ mark(null); rows.forEach(r=> r.classList.remove('dragging')); drag = null; });
+  });
+
+  /* A file dragged by its own grip (callbacks.parts, GC's pairs): what lights is a whole
+     file, the one it would land on, never a gap. A row of one file is that file from edge
+     to edge; a row of two, each its half, split between their middles. The dragged file
+     itself is no target: off every other file, a file with a partner lights itself, dashed,
+     and a drop there leaves it alone in a row of its own. */
+  if (!callbacks.parts) return;
+  const partEls = [...wrap.querySelectorAll('.fpart')];
+  const partOf = el => ({ i: +el.dataset.i, p: +el.dataset.p });
+  let fdrag = null;   // { el, from, paired }
+  const partAt = (x, y)=>{
+    for (const r of rows){
+      const b = r.getBoundingClientRect();
+      if (y < b.top || y > b.bottom || x < b.left || x > b.right) continue;
+      const ps = [...r.querySelectorAll('.fpart')];
+      if (!ps.length) return null;
+      let el = ps[0];
+      if (ps.length > 1){ const m = ps.map(p=>{ const q = p.getBoundingClientRect(); return (q.top + q.bottom)/2; }); el = y < (m[0] + m[1])/2 ? ps[0] : ps[1]; }
+      return el === fdrag.el ? null : el;
+    }
+    return null;
+  };
+  const fmark = (x, y)=>{
+    const t = x == null ? null : partAt(x, y);
+    partEls.forEach(el=> el.classList.toggle('drop-on', el === t));
+    if (fdrag) fdrag.el.classList.toggle('drop-alone', x != null && !t && fdrag.paired);
+    return t;
+  };
+  const fend = ()=>{ partEls.forEach(el=> el.classList.remove('drop-on', 'drop-alone', 'fdragging')); wrap.classList.remove('fdrag-on'); fdrag = null; };
+  partEls.forEach(el=>{
+    const g = el.querySelector('.fpart-grip');
+    g.addEventListener('pointerdown', e=>{
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      e.preventDefault(); e.stopPropagation();
+      fdrag = { el, from: partOf(el), paired: el.parentElement.querySelectorAll('.fpart').length > 1, x: e.clientX, y: e.clientY, moved: false };
+      el.classList.add('fdragging'); wrap.classList.add('fdrag-on');
+      try { g.setPointerCapture(e.pointerId); } catch(_){}
+    });
+    // (a press and release in place, no move, is no drop: nothing happens)
+    g.addEventListener('pointermove', e=>{ if (!fdrag) return; if (Math.hypot(e.clientX - fdrag.x, e.clientY - fdrag.y) > 4) fdrag.moved = true; if (fdrag.moved) fmark(e.clientX, e.clientY); });
+    g.addEventListener('pointerup', e=>{
+      if (!fdrag) return;
+      const moved = fdrag.moved || Math.hypot(e.clientX - fdrag.x, e.clientY - fdrag.y) > 4;
+      const t = moved ? fmark(e.clientX, e.clientY) : null, from = fdrag.from, paired = fdrag.paired && moved;
+      fend();
+      if (t){ if (callbacks.onPartDrop) callbacks.onPartDrop(from, partOf(t)); }
+      else if (paired && callbacks.onPartDrop) callbacks.onPartDrop(from, null);
+    });
+    g.addEventListener('pointercancel', fend);
   });
 }
 
@@ -1681,6 +1751,21 @@ class UndoStack {
     this._hear();
   }
   _hear(){ heard(this); }
+  /* What a job worked out that is a pure function of what the states hold (GC's
+     integrations, v544: a chromatogram's fit under a method), written into every state
+     kept and every redo branch set aside, as no step of its own: `patch(state)` gives the
+     state with it, or the state itself where it has nothing to add (a copy, never the state
+     changed). An undo or a redo then finds it there, and a tab put to sleep keeps it. The
+     listeners hear it as a change (the autosave, the unsaved marker). */
+  patch(patch){
+    let moved = false;
+    const take = s =>{ const t = patch(s); if (t !== s) moved = true; return t; };
+    this.states = this.states.map(take);
+    this._marks.forEach(m=>{ m.redo = m.redo.map(take); });
+    if (!moved) return;
+    this._key = null; this._ck = null; this.viewOnly = false;
+    this._hear();
+  }
   // (no undo below the state the latest job holding the history started from)
   performUndo(){ if (this.index <= Math.max(0, ...this._marks.map(m=> m.i))) return false; this._apply(this.index - 1); return true; }
   performRedo(){ if (this.index >= this.states.length - 1) return false; this._apply(this.index + 1); return true; }
@@ -1791,7 +1876,7 @@ document.addEventListener('keydown', e=>{
 // ← / → navigate samples in the active module (mirror the on-screen ‹ › buttons).
 // Selectors: the Tauc cards are built at run time, each with its own pair, and the
 // first one on show is the one pressed (every card steps the same sample).
-const SAMPLE_NAV = { tauc:['#tab-tauc .an-prev','#tab-tauc .an-next'], xrd:['#tab-xrd .an-prev','#tab-xrd .an-next'], sem:['#semPrev','#semNext'], iodo:['#iodoPrev','#iodoNext'] };
+const SAMPLE_NAV = { tauc:['#tab-tauc .an-prev','#tab-tauc .an-next'], xrd:['#tab-xrd .an-prev','#tab-xrd .an-next'], sem:['#semPrev','#semNext'], iodo:['#iodoPrev','#iodoNext'], gc:['#tab-gc .gci-kprev','#tab-gc .gci-knext'] };
 document.addEventListener('keydown', e=>{
   if (e.key!=='ArrowLeft' && e.key!=='ArrowRight') return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -2681,7 +2766,7 @@ normalizeNavIcons();
 window.addEventListener('load', normalizeNavIcons);
 
 export {
-  COLORS, colorOf, esc, stateKey, moduleStateKey, viewOnlyChange, registerBusy, moduleBusy, stopModule, colorPickerUI, CP_PALETTES, palettePickerUI, settings, fmtNum, fmtData, csvLine, downloadBlob, downloadBytes,
+  COLORS, colorOf, esc, stateKey, bytesKey, moduleStateKey, viewOnlyChange, registerBusy, moduleBusy, stopModule, colorPickerUI, CP_PALETTES, palettePickerUI, settings, fmtNum, fmtData, csvLine, downloadBlob, downloadBytes,
   X_SVG, DL_SVG, setupDropzone, renderUnifiedFileList, dropGap, includedOf, setIncluded, removeFileAt, moveFileTo, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, boxStats,
   maxArr, minArr, NORM_OPTIONS, normOf, fitLinear, tinv, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, alertHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState,
   getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, guardNumericInput,

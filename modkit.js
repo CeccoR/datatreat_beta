@@ -57,6 +57,12 @@ import { decodeText } from './textdata.js';
                        its per-sample arrays drop (without)
      redrawTab()       the tab shown or resized
      csv()             the CSV export's files, [{ name, text }]
+     sample(f)         whether a record is a sample of the analysis at all, included or not
+                       (GC's files of raw chromatograms with no table are not, v544): one
+                       that is not is never among `files` and has no entry in the per-sample
+                       arrays; none given, every record is
+     rawSample(f)      the same of a record as a state holds it, before the restore takes it
+                       (one left out takes its place, and its entries, with it); none: sample
      root, key, layer  its instance's (utils.js registerModule): its section, where its
                        elements are found (root-scoped, whether or not it is in the page),
                        the key its registries go by, and its layer (the deck's menu goes
@@ -68,7 +74,8 @@ export function moduleKit(mod, o){
   const all = [], files = [], $ = id => root.querySelector('#' + id);
   const parts = Object.fromEntries(['invalid', 'upload', ...(o.parts || [])].map(k=> [k, '']));
   const slots = ()=> o.slots ? o.slots() : [];
-  const kit = { all, files, alerts: parts };
+  const isSample = o.sample || (()=> true);
+  const kit = { all, files, alerts: parts, isSample };
 
   /* ---- Alerts: each dismiss button (data-action "<mod>-dismiss-<part>") empties its part,
      or does what o.dismiss says. ---- */
@@ -92,10 +99,10 @@ export function moduleKit(mod, o){
      goes with them. ---- */
   const changed = op =>{ if (o.listed) o.listed(op); o.refresh(); };
   const cb = {
-    onRemove(i){ removeFileAt(all, i, slots()); if (!all.length) parts.invalid = ''; changed('remove'); },
-    onReorder(from, to){ moveFileTo(all, from, to, slots()); changed('reorder'); },
-    onInclude(i, on){ setIncluded(all, i, on, slots()); changed('include'); },
-    onIncludeAll(on){ all.forEach((_, j)=> setIncluded(all, j, on, slots())); changed('include'); },
+    onRemove(i){ removeFileAt(all, i, slots(), isSample); if (!all.length) parts.invalid = ''; changed('remove'); },
+    onReorder(from, to){ moveFileTo(all, from, to, slots(), isSample); changed('reorder'); },
+    onInclude(i, on){ setIncluded(all, i, on, slots(), isSample); changed('include'); },
+    onIncludeAll(on){ all.forEach((_, j)=> setIncluded(all, j, on, slots(), isSample)); changed('include'); },
     onLabelChange(i, v){ all[i].label = v; o.redraw('label'); kit.commit(); },
     tip: o.tip,
     onColorChange(i, v){ all[i].color = v; o.redraw('color'); kit.commit(); },
@@ -105,7 +112,7 @@ export function moduleKit(mod, o){
   // The files changed: the included ones taken again, the list and the alerts drawn. Until
   // then `files` holds the ones included before the change.
   kit.showFiles = ()=>{
-    files.splice(0, files.length, ...includedOf(all));
+    files.splice(0, files.length, ...includedOf(all, isSample));
     setTabLoaded(key, all.length);
     const list = o.traces ? o.traces(cb) : { rows: all, cb };
     renderUnifiedFileList($(mod + 'FileTableWrap'), list.rows, list.cb, o.note, o.noteHead);
@@ -132,24 +139,28 @@ export function moduleKit(mod, o){
   }
   // A file read: last in the list and among the included, with its entry in every
   // per-sample array.
-  kit.add = f =>{ all.push(f); files.push(f); slots().forEach(s=> s.arr.push(s.make(undefined, f))); };
-  /* Text files dropped on the module: each decoded (textdata.js) and read by `read(text)`,
+  kit.add = f =>{ all.push(f); if (!isSample(f)) return; files.push(f); slots().forEach(s=> s.arr.push(s.make(undefined, f))); };
+  /* Text files dropped on the module: each decoded (textdata.js) and read by `read(text, bytes)` (the bytes too: GC keeps what it read of them),
      which gives what the file holds, or null when it cannot, or { error } saying why (a
      reader that throws leaves out that file, not the rest of the drop). A name already
      loaded is not loaded again. Each record is { name, label, ...what it holds, color,
      rawBytes } (the file as it came, for its download); then `done(had)`, `had` the files
-     there were. */
-  kit.dropText = (read, done)=> setupDropzone($(mod + 'Dropzone'), $(mod + 'Files'), async list=>{
-    const had = all.length, names = new Set(all.map(f=> f.name)), bad = [], dup = [];
+     there were. `more`: { names() the names loaded beside the records' own (GC's files
+     paired inside a row), collect(records) to place the records read instead of adding
+     each (GC pairs them) }. */
+  kit.dropText = (read, done, more = {})=> setupDropzone($(mod + 'Dropzone'), $(mod + 'Files'), async list=>{
+    const had = all.length, names = new Set([...all.map(f=> f.name), ...(more.names ? more.names() : [])]), bad = [], dup = [], got = [];
     for (const f of list){
       if (names.has(f.name)){ dup.push(f.name); continue; }
       names.add(f.name);
       const rawBytes = new Uint8Array(await f.arrayBuffer());
       let data = null;
-      try { data = read(decodeText(rawBytes)); } catch(e){ data = null; }
+      try { data = read(decodeText(rawBytes), rawBytes); } catch(e){ data = null; }
       if (!data || data.error){ bad.push(data ? `${f.name} (${data.error})` : f.name); continue; }
-      kit.add({ name: f.name, label: f.name.replace(/\.[^.]+$/, ''), ...data, color: nextColor(all), rawBytes });
+      const rec = { name: f.name, label: f.name.replace(/\.[^.]+$/, ''), ...data, color: nextColor([...all, ...got]), rawBytes };
+      if (more.collect) got.push(rec); else kit.add(rec);
     }
+    if (more.collect) more.collect(got);
     kit.said(bad, dup);
     done(had);
   });
@@ -173,9 +184,9 @@ export function moduleKit(mod, o){
   const hist = registerHistory(key, ()=> ({ files: all.map(f=> ({ ...f })), ...o.snapshot() }), s0=>{
     const s = isObj(s0) ? s0 : {}, raw = Array.isArray(s.files) ? s.files : [], kept = raw.map(keptFile), gone = new Set();
     // (an entry that is no file counts as included: it holds no included:false)
-    raw.reduce((j, f, i)=>{ if (isObj(f) && f.included === false) return j; if (!kept[i]) gone.add(j); return j + 1; }, 0);
+    raw.reduce((j, f, i)=>{ if (isObj(f) && (f.included === false || !(o.rawSample || isSample)(f))) return j; if (!kept[i]) gone.add(j); return j + 1; }, 0);
     all.splice(0, all.length, ...kept.filter(Boolean));
-    files.splice(0, files.length, ...includedOf(all));
+    files.splice(0, files.length, ...includedOf(all, isSample));
     o.restore(s, gone);
     o.refresh();
     clearAlerts();
@@ -184,6 +195,8 @@ export function moduleKit(mod, o){
     kit.drawAlerts();
   }, { view: o.view });
   kit.commit = ()=> hist.commit();
+  // What a job worked out, written into every state of the history (utils.js UndoStack.patch).
+  kit.patch = fn => hist.patch(fn);
   // The cards, in the module's list above its "+" bar; each change a step of the history.
   let deck = null;
   kit.deck = d => (deck = createDeck({ list: $(mod + 'Analyses'), addBar: $(mod + 'AddBar'), addBtn: $(mod + 'AddAn'), commit: kit.commit, layer: o.layer, ...d }));
