@@ -165,6 +165,14 @@ was proposed; nothing here is in the code yet.
   strain clipped to 0) that refine() from the same start recovers, to be checked again
   on v427's stages.
 
+## GC
+
+- **Other gases from the raw chromatograms.** The Integration card fits H₂ and O₂ only (one
+  window, 268–326 s, with the system peak at 310 s and the baseline step); N₂ and the
+  others need windows of their own, as the Python's N₂ window (321–346 s, with the system
+  peak at 340 s). With more windows, the chromatogram's initial view and its zoom reset
+  (today the H₂/O₂ zone) may change.
+
 ## EPR
 
 - **Baseline.** Drawn through the first and last raw points only, so a noisy end
