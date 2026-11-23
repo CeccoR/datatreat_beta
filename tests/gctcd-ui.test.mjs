@@ -24,8 +24,8 @@
      arrows, Windows aligned (its title on the selector's line, its box's top on the plot's
      frame's), the chromatogram over its residuals (their x linked, each its own y), the
      overview one gas at a time (one colour for every gas's fits, the table's crosses half
-     the size; a point hovered and clicked drawn lighter and a tenth larger, nothing round
-     it, the one on show too), no trapezoid anywhere.
+     the size; a point hovered and clicked drawn lighter and half again as large, nothing
+     round it, the one on show too), no trapezoid anywhere.
    - The suspicious rule (10 %): one injection out of proportion with the table marked (red
      in the selector and its list, on the overview, said in Peaks and the CSV), one within
      10 % not, a scale off alike at every injection none.
@@ -497,9 +497,9 @@ test('the Integration card: its two selectors, the chromatogram over its residua
     await card.locator('.gci-ovy-chip[data-y="area"]').click(); await settle(page);
     const sc = await over.evaluate(s=>{ const st = s._plot._stored; return { fit: st.find(e=> e.key === 'h2 fit').ys, tab: st.find(e=> e.key === 'h2 table').ys }; });
     sc.fit.forEach((v, k)=> assert.ok(Math.abs(sc.tab[k] - v) < 0.02*v, `injection ${k + 1}: table × k ${sc.tab[k]}, fit ${v}`));
-    /* Hovered (v546): its point alone drawn again, in a lighter shade of its colour and a
-       tenth larger (no halo, no ring, no white centre), its label as before; the one on
-       show too. */
+    /* Hovered (v546): its point alone drawn again, in a lighter shade of its colour and
+       half again as large (v548; a tenth larger to v547), with no halo, no ring, no white
+       centre, its label as before; the one on show too. */
     const hl = ()=> over.evaluate(s=>{ const g = s.querySelector('.gci-hl'); return g ? { sel: g.dataset.sel, hov: g.dataset.hov, pts: [...g.querySelectorAll('.gci-hl-pt')].map(c=> c.getAttribute('fill')),
       r: [...g.querySelectorAll('.gci-hl-pt')].map(c=> +c.getAttribute('r') + (c.getAttribute('stroke') && c.getAttribute('stroke') !== 'none' ? (+c.getAttribute('stroke-width') || 1)/2 : 0)), stroke: [...g.querySelectorAll('.gci-hl-pt')].map(c=> c.getAttribute('stroke')), more: g.querySelectorAll('circle:not(.gci-hl-pt), .gci-hl-halo').length,
       label: g.querySelector('.plot-pick-label') ? g.querySelector('.plot-pick-label').textContent : '' } : null; });
@@ -508,15 +508,15 @@ test('the Integration card: its two selectors, the chromatogram over its residua
     const fitR = await over.evaluate(s=>{ const c = s._plot._stored.find(x=> x.key === 'h2 fit')._el.querySelector('circle'), st = c.getAttribute('stroke');
       return +c.getAttribute('r') + (st && st !== 'none' ? (+c.getAttribute('stroke-width') || 1)/2 : 0); });
     const h0 = await hl(), lit = /^rgb\((\d+),(\d+),(\d+)\)$/.exec(h0.pts[0] || '');
-    assert.ok(Math.abs(h0.r[0]/fitR - 1.1) <= 0.01, `the point on show a tenth larger than the dot as seen: ${h0.r[0]} against ${fitR}`);
-    assert.deepEqual({ ...h0, pts: h0.pts.length, r: h0.r.length }, { sel: '0', hov: '', pts: 1, r: 1, stroke: ['none'], more: 0, label: '' }, 'the chromatogram on show: lighter, a tenth larger, nothing round it');
+    assert.ok(Math.abs(h0.r[0]/fitR - 1.5) <= 0.01, `the point on show half again as large as the dot as seen: ${h0.r[0]} against ${fitR}`);
+    assert.deepEqual({ ...h0, pts: h0.pts.length, r: h0.r.length }, { sel: '0', hov: '', pts: 1, r: 1, stroke: ['none'], more: 0, label: '' }, 'the chromatogram on show: lighter, half again as large, nothing round it');
     assert.ok(lit && [0x3a, 0xa0, 0xff].every((c, i)=> +lit[i + 1] >= c) && +lit[1] > 0x3a + 40 && +lit[1] < 0xd0 && +lit[2] < 0xf0, `a lighter shade of the fits' blue, not white: ${h0.pts[0]}`);
     const pt = k => over.evaluate((s, k)=>{ const P = s._plot, b = s.getBoundingClientRect(), e = P._stored.find(x=> x.key === 'h2 fit'); return { x: b.left + P.px(e.xs[k]), y: b.top + P.py(e.ys[k]) }; }, k);
     let q = await pt(3);
     await page.mouse.move(q.x + 2, q.y - 2); await settle(page);
     let h = await hl();
     assert.equal(h.hov, '3'); assert.equal(h.pts.length, 2);
-    assert.ok(Math.abs(h.r[1]/fitR - 1.1) <= 0.01, `hovered: a tenth larger than the dot as seen: ${h.r[1]} against ${fitR}`);
+    assert.ok(Math.abs(h.r[1]/fitR - 1.5) <= 0.01, `hovered: half again as large as the dot as seen: ${h.r[1]} against ${fitR}`);
     assert.deepEqual([h.r[1], h.stroke[1], h.more, h.pts[1]], [h0.r[0], 'none', 0, h0.pts[0]], 'hovered: as the one on show');
     assert.match(h.label, /^Injection 4 · 13\/11 11:00fit: [\d.]+GC table: 0\.08 %molχ²ᵣ: [\d.]+$/);
     q = await pt(7);
