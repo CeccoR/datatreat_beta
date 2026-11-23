@@ -501,18 +501,23 @@ test('the Integration card: its two selectors, the chromatogram over its residua
        tenth larger (no halo, no ring, no white centre), its label as before; the one on
        show too. */
     const hl = ()=> over.evaluate(s=>{ const g = s.querySelector('.gci-hl'); return g ? { sel: g.dataset.sel, hov: g.dataset.hov, pts: [...g.querySelectorAll('.gci-hl-pt')].map(c=> c.getAttribute('fill')),
-      r: [...g.querySelectorAll('.gci-hl-pt')].map(c=> +c.getAttribute('r')), stroke: [...g.querySelectorAll('.gci-hl-pt')].map(c=> c.getAttribute('stroke')), more: g.querySelectorAll('circle:not(.gci-hl-pt), .gci-hl-halo').length,
+      r: [...g.querySelectorAll('.gci-hl-pt')].map(c=> +c.getAttribute('r') + (c.getAttribute('stroke') && c.getAttribute('stroke') !== 'none' ? (+c.getAttribute('stroke-width') || 1)/2 : 0)), stroke: [...g.querySelectorAll('.gci-hl-pt')].map(c=> c.getAttribute('stroke')), more: g.querySelectorAll('circle:not(.gci-hl-pt), .gci-hl-halo').length,
       label: g.querySelector('.plot-pick-label') ? g.querySelector('.plot-pick-label').textContent : '' } : null; });
-    const fitR = await over.evaluate(s=> s._plot._stored.find(x=> x.key === 'h2 fit').r);
+    /* Sizes as seen (v547): a radius plus half its stroke, read from the drawn circles (to
+       v546 the r attributes alone were compared, and the dot's ring outgrew the point). */
+    const fitR = await over.evaluate(s=>{ const c = s._plot._stored.find(x=> x.key === 'h2 fit')._el.querySelector('circle'), st = c.getAttribute('stroke');
+      return +c.getAttribute('r') + (st && st !== 'none' ? (+c.getAttribute('stroke-width') || 1)/2 : 0); });
     const h0 = await hl(), lit = /^rgb\((\d+),(\d+),(\d+)\)$/.exec(h0.pts[0] || '');
-    assert.deepEqual({ ...h0, pts: h0.pts.length }, { sel: '0', hov: '', pts: 1, r: [+(fitR*1.1).toFixed(3)], stroke: ['none'], more: 0, label: '' }, 'the chromatogram on show: lighter, a tenth larger, nothing round it');
+    assert.ok(Math.abs(h0.r[0]/fitR - 1.1) <= 0.01, `the point on show a tenth larger than the dot as seen: ${h0.r[0]} against ${fitR}`);
+    assert.deepEqual({ ...h0, pts: h0.pts.length, r: h0.r.length }, { sel: '0', hov: '', pts: 1, r: 1, stroke: ['none'], more: 0, label: '' }, 'the chromatogram on show: lighter, a tenth larger, nothing round it');
     assert.ok(lit && [0x3a, 0xa0, 0xff].every((c, i)=> +lit[i + 1] >= c) && +lit[1] > 0x3a + 40 && +lit[1] < 0xd0 && +lit[2] < 0xf0, `a lighter shade of the fits' blue, not white: ${h0.pts[0]}`);
     const pt = k => over.evaluate((s, k)=>{ const P = s._plot, b = s.getBoundingClientRect(), e = P._stored.find(x=> x.key === 'h2 fit'); return { x: b.left + P.px(e.xs[k]), y: b.top + P.py(e.ys[k]) }; }, k);
     let q = await pt(3);
     await page.mouse.move(q.x + 2, q.y - 2); await settle(page);
     let h = await hl();
     assert.equal(h.hov, '3'); assert.equal(h.pts.length, 2);
-    assert.deepEqual([h.r[1], h.stroke[1], h.more, h.pts[1]], [+(fitR*1.1).toFixed(3), 'none', 0, h0.pts[0]], 'hovered: as the one on show');
+    assert.ok(Math.abs(h.r[1]/fitR - 1.1) <= 0.01, `hovered: a tenth larger than the dot as seen: ${h.r[1]} against ${fitR}`);
+    assert.deepEqual([h.r[1], h.stroke[1], h.more, h.pts[1]], [h0.r[0], 'none', 0, h0.pts[0]], 'hovered: as the one on show');
     assert.match(h.label, /^Injection 4 · 13\/11 11:00fit: [\d.]+GC table: 0\.08 %molχ²ᵣ: [\d.]+$/);
     q = await pt(7);
     await page.mouse.click(q.x, q.y); await settle(page);

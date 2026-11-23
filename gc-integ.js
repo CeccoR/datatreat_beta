@@ -41,7 +41,8 @@ const C_RAW = '#8a95a3', C_MODEL = '#e0457b', C_BASE = '#d4a72c', C_EDGE = '#4cc
 /* The run overview's marks (v546): every gas's fits in one colour (H₂'s blue), the
    suspicious red; a fit's dot of radius OV_R, the GC table's grey cross half the size it
    was (OV_CROSS, its arms' half-span: under a dot, hidden by it); a point hovered or on
-   show drawn again OV_HL_R times as large, OV_HL_TINT of the way to white. */
+   show drawn again OV_HL_R times as large as the dot is seen (v547: its radius plus half
+   the 1 px stroke plot.js rings it with), OV_HL_TINT of the way to white. */
 const C_FIT = GAS.h2.color, OV_R = 3.2, OV_CROSS = 1.75, OV_HL_R = 1.1, OV_HL_TINT = 0.4;
 const MARGIN = 4;            // s shown either side of the windows (and of their neighbours)
 /* The peaks beside the H₂/O₂ window that its model has no peak for (ENGINE.md §6): the system
@@ -837,8 +838,10 @@ export function createInteg(ctx){
     const tint = (hex, f)=>{ const n = parseInt(hex.slice(1), 16), ch = s => Math.round(((n >> s) & 255) + (255 - ((n >> s) & 255))*f); return `rgb(${ch(16)},${ch(8)},${ch(0)})`; };
     /* The points brightened: the chromatogram on show's, and the one under the pointer with
        its label (in the overlay: drawn again at each zoom, never exported). v546: the point
-       alone, drawn again in a lighter shade of its colour and a tenth larger (to v545 a halo
-       round it and a ring, its centre near white). */
+       alone, drawn again in a lighter shade of its colour and a tenth larger than the dot as
+       seen, with no stroke: (OV_R + 0.5)·OV_HL_R, the 0.5 half the dot's 1 px ring (to v546
+       OV_R·OV_HL_R, smaller than the ringed dot under it; to v545 a halo round it and a
+       ring, its centre near white). */
     function paintHl(){
       if (!over) return;
       const old = over.gOverlay.querySelector('.gci-hl');
@@ -847,7 +850,7 @@ export function createInteg(ctx){
       over.gOverlay.appendChild(g);
       const mark = q =>{
         const x = over.px(q.x), y = over.py(q.y);
-        g.appendChild(svgEl('circle', { cx: x, cy: y, r: +(OV_R*OV_HL_R).toFixed(3), fill: tint(q.color, OV_HL_TINT), stroke: 'none', class: 'gci-hl-pt' }));
+        g.appendChild(svgEl('circle', { cx: x, cy: y, r: +((OV_R + 0.5)*OV_HL_R).toFixed(3), fill: tint(q.color, OV_HL_TINT), stroke: 'none', class: 'gci-hl-pt' }));
         return [x, y];
       };
       const sel = ovPts.find(q=> q.k === selK);
