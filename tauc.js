@@ -5,6 +5,7 @@ import { cardInfo, fileSafe, nameDownloads } from './cards.js';
 import { moduleKit, wideCsv, isObj, num, ownKey, without, cardList, finitePairs } from './modkit.js';
 import { plotWrap, swatchLegend, viewOf, setView, chipRow, toggleChip, valueBars } from './modcharts.js';
 import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from './textdata.js';
+import { snavHtml, snav } from './snav.js';
 
 /* =========================================================
    TAUC MODULE
@@ -339,13 +340,11 @@ function subBaselineSlopeErr(regs, Yraw, rb, ta, hv, FR, Mb){
 const CARD_INFO = cardInfo(true, true);
 const TAUC_INFO = `Drag the vertical lines to set the Tauc linear regression region (red) and the baseline (magenta), or press <b>✦ Suggest intervals</b> to place them automatically from the absorption edge (second-derivative method), for every sample: one common set in <b>all</b> mode, each sample its own in <b>one</b> mode. Within each interval the best fit is chosen by sliding a window (its size is the regression-window value) and minimising <b>NRMSE/R²</b>, where <b>NRMSE = RMSE / (y<sub>max</sub>−y<sub>min</sub>)</b> of the window. Normalising by the y-range keeps the fit on the steep linear part instead of a flat low-value stretch that only has a small absolute RMSE, so it is markedly more stable. E<sub>g</sub> is extracted from both the x-axis intersection and the baseline intersection of the regression line. The <b>Tauc exponent</b> is 2 for direct allowed transitions, 0.5 for indirect allowed, 2/3 for direct forbidden and 1/3 for indirect forbidden ones; changing it places the lines again, as Suggest does (every sample in <b>all</b> mode, the one on show in <b>one</b> mode). Energies are hν = hc/λ (hc = 1239.842 eV·nm). The curve is smoothed with a centred moving average to choose each window, and the line is then fitted to the unsmoothed data inside it: fitted to smoothed values, whose residuals are no longer independent, its errors would come out too small. Where F(R) &lt; 0, [F(R)·hν]<sup>a</sup> has no value for a = 0.5, 2/3 or 1/3: those points are left out, as though not measured, of the smoothing, the derivatives, the suggestion and the fits. <b>Errors</b>: each E<sub>g</sub> uncertainty is the regression's own, its slope and intercept variances and their covariance propagated through the formula, multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom for each fit). E<sub>g</sub> from the baseline combines both fits and treats them as independent. ${CARD_INFO}`;
 const URBACH_INFO = `Below the band gap the absorption tail is exponential, F(R) ∝ exp(hν / E<sub>U</sub>), so <b>ln[F(R)]</b> against hν is a straight line of slope 1 / E<sub>U</sub>. The <b>Tauc reference</b> is the Tauc analysis this one is read against: its linear region is the red band on the plot, and <b>✦ Suggest intervals</b> places the Urbach region, for every sample, below it, where the tail is: from 1 eV under the middle of the Tauc linear region up to where that region starts; the regression window then finds the straightest stretch of the tail inside it by itself. The region follows the reference: when a sample's Tauc linear region moves (its lines, parameters, Suggest), the sample's Urbach region is placed on it again once the change is made (a Tauc line released, a value confirmed), and a new reference places them all. By default the reference is the nearest Tauc card above this one; one chosen by hand stays wherever the cards are moved. With <b>None</b> there is no band and nothing to follow, and the suggestion puts the lines at 25% and 75% of each sample's energy span. Drag the orange lines to set the region by hand: they stay until the reference's region moves again. The lines are always each sample's own: <b>all / one</b> here sets the parameters only. Within the region the best window of the regression-window size is chosen by minimising <b>NRMSE/R²</b> and fitted on the unsmoothed data, as for Tauc. <b>E<sub>U</sub> = 1 / slope</b>; its error is the slope's standard error carried through (σ<sub>m</sub> / m²), multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom). Points with F(R) ≤ 0 have no logarithm and are left out. <b>Subtracted</b>: the same, with the reference's Tauc baseline taken out of F(R) first. That baseline is a line in the Tauc plot, Y<sub>b</sub> = m·hν + b in [F(R)·hν]<sup>a</sup>, so in F(R) it is <b>F<sub>b</sub> = Y<sub>b</sub><sup>1/a</sup> / hν</b> where Y<sub>b</sub> > 0 (nothing where it is not); ln[F(R) − F<sub>b</sub>] is smoothed and fitted between the same lines, by the same rules, for a second slope and E<sub>U</sub> (subtracted). Its error adds, in quadrature, the fit's own (as for E<sub>U</sub>) and the Tauc baseline's carried through the subtraction: with the window held, the slope's derivatives with respect to the baseline's slope and intercept, J (exact, through F<sub>b</sub>), give its variance J Σ J<sup>T</sup>, Σ the baseline fit's covariance, whose square root, times that fit's own t factor (99%, two-sided, the reference card's baseline regression window − 2 degrees of freedom), is divided by slope² as above; the card's tooltip gives the two parts. The two fits are taken as independent, although the baseline and the Urbach region may share points. On the card's plot its curve is purple and its fit teal (solid in its window, dashed beyond), drawn as the plain ones are; with no reference there is nothing to subtract, and where the baseline lies above F(R) in the region there is no fit, which the card says. In the Results the Urbach plot is two, side by side, each with its own axes: the plain curves and fits on the left, the subtracted ones on the right (empty, and saying why, when there is nothing to subtract); under each, its E<sub>U</sub> chart, the plain E<sub>U</sub> under the plain plot and the subtracted one under the subtracted plot. ${CARD_INFO}`;
+// (the sample selector: snav.js, v545)
 const navRow = p => `
         <div class="plot-nav-row">
           <div class="plot-nav-left">
-            <button class="btn nav-arrow an-prev" id="${p}Prev" aria-label="Previous sample" title="Previous sample (&#8592;)">‹</button>
-            <span id="${p}Idx" class="pill nav-count" style="margin:0">1/1</span>
-            <button class="btn nav-arrow an-next" id="${p}Next" aria-label="Next sample" title="Next sample (&#8594;)">›</button>
-            <span class="txt-caption" id="${p}CurrentLabel">—</span>
+            ${snavHtml({ prev: p + 'Prev', idx: p + 'Idx', next: p + 'Next', name: p + 'CurrentLabel', prevCls: 'an-prev', nextCls: 'an-next' })}
           </div>
         </div>`;
 // At the foot of the parameter column, after what it holds.
@@ -962,8 +961,7 @@ function createTauc({ key, root, layer, shown }){
       vlines = P.vlinesFor(currIndex);   // point at the current sample's interval lines
       const p = P.params(currIndex);
       const c = curves(currIndex, p), hv = c.hv;
-      $('CurrentLabel').textContent = files[currIndex].label;
-      $('Idx').textContent = (currIndex+1)+'/'+files.length;
+      nav.update();
 
       // Capture current zoom so it can be kept across redraws (the full range
       // set below stays as the "home" reset target)
@@ -1105,6 +1103,8 @@ function createTauc({ key, root, layer, shown }){
 
     $('Prev').onclick = ()=>{ if (files.length) showSample((currIndex-1+files.length)%files.length); };
     $('Next').onclick = ()=>{ if (files.length) showSample((currIndex+1)%files.length); };
+    // (its list: any sample, straight)
+    const nav = snav($('Prev').closest('.snav'), { count: ()=> files.length, index: ()=> currIndex, label: i=> files[i].label, go: i=> showSample(i) });
 
     // Re-propose interval-line positions on demand, for every sample.
     $('Suggest').onclick = ()=>{

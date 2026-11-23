@@ -12,6 +12,7 @@ import { fmtData, csvLine, X_SVG, DL_SVG as DL_ICON, downloadBytes, flashFieldIn
 import { fileSafe } from './cards.js';
 import { Plot } from './plot.js';
 import { PLOT_DL_ICON, CSV_ICON } from './modcharts.js';
+import { snavHtml, snav } from './snav.js';
 import { decodeText } from './textdata.js';
 import { fitSettings } from './xrd-rietveld.js';
 import { shapeView } from './xrd-shape3d.js';
@@ -171,6 +172,7 @@ export function createRietveld(host, root, o){
   let pick = 0;
   const allPhases = ()=> std ? [lab6, ...phases] : phases;
   const curIdx = ()=> std ? 0 : Math.min(host.idx(), Math.max(0, host.files().length - 1));
+  let nav = null;     // its pattern selector (snav.js; none on the standard's)
 
   // The phases refined on a pattern: the standard's chosen one; a sample's those ticked for it.
   const stdPhase = ()=> allPhases().find(q=> q.id === pick) || lab6;
@@ -374,7 +376,7 @@ export function createRietveld(host, root, o){
     renderPhases();
     if (!fs.length){
       // (the standard's plot has no caption: its window names the file)
-      if (!std){ setText('Label', '—'); setText('Idx', '0/0'); }
+      if (nav) nav.update();
       renderRes();
       if (plot){ plot = null; }
       $('Svg').replaceChildren(); $('Legend').innerHTML = ''; $('Instr').textContent = ''; plotKey = instrTxt = '';
@@ -382,7 +384,7 @@ export function createRietveld(host, root, o){
       return;
     }
     const k = curIdx(), f = fs[k], r = results[f.name];
-    if (!std){ setText('Label', f.label); setText('Idx', (k+1) + '/' + fs.length); }
+    if (nav) nav.update();
     // (the Results show every pattern, the card folded or not)
     renderRes();
     if (host.hidden()) return;
@@ -1210,6 +1212,8 @@ export function createRietveld(host, root, o){
     $('Prev').onclick = ()=> host.step(-1);
     $('Next').onclick = ()=> host.step(1);
     $('Std').onclick = ()=> host.openStd();
+    // (its list: any pattern, straight; snav.js)
+    nav = snav($('Prev').closest('.snav'), { count: ()=> host.files().length, index: ()=> curIdx(), label: i=> host.files()[i].label, go: i=> host.step(i - curIdx()) });
   }
 
   return {
@@ -1373,10 +1377,7 @@ function rvHtml(p, std){
         <div class="pside">
           <div class="plot-nav-row pside-nav">
             <div class="plot-nav-left">${std ? '' : `
-              <button class="btn nav-arrow an-prev" id="${p}Prev" aria-label="Previous sample" title="Previous sample (&#8592;)">&#8249;</button>
-              <span id="${p}Idx" class="pill nav-count" style="margin:0">1/1</span>
-              <button class="btn nav-arrow an-next" id="${p}Next" aria-label="Next sample" title="Next sample (&#8594;)">&#8250;</button>
-              <span class="txt-caption" id="${p}Label">—</span>`}
+              ${snavHtml({ prev: p + 'Prev', idx: p + 'Idx', next: p + 'Next', name: p + 'Label', prevCls: 'an-prev', nextCls: 'an-next' })}`}
             </div>
           </div>
           <div class="pside-plot">

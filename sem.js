@@ -1,5 +1,6 @@
 import { csvLine, fmtNum, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, buildAlertsHtml, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, registerBusy, busyChanged, registerModule, onSectionChange, flashFieldInvalid, kept, getModuleHistory } from './utils.js';
 import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy, cropStats, resample, cardKey, cardLevels } from './sem-read.js';
+import { snavHtml, snav } from './snav.js';
 
 /* =========================================================
    SEM MODULE
@@ -442,6 +443,8 @@ function intensityOf(v){
 // A SEM tab's instance (utils.js makeInstance: ctx { key, root, layer, shown }).
 function createSem({ key, root, layer, shown }){
   const $ = id => root.querySelector('#' + id);
+  // The image selector (snav.js), its markup first: the module finds its arrows by their ids.
+  $('semNav').innerHTML = snavHtml({ prev: 'semPrev', idx: 'semIdx', next: 'semNext', name: 'semCurName', what: 'image' });
   // (its listeners on the window, let go with it)
   const ac = new AbortController();
   let dead = false;
@@ -864,11 +867,7 @@ function createSem({ key, root, layer, shown }){
     loadEditorImage(); drawEditor();
     renderThumbs(); renderIntensity(); renderGroups(); renderFields();
   }
-  function renderNav(){
-    const f = files[cur];
-    $('semIdx').textContent = files.length ? `${cur + 1}/${files.length}` : '0/0';
-    $('semCurName').textContent = f ? f.label : '—';
-  }
+  function renderNav(){ nav.update(); }
   function renderInfo(){
     const f = files[cur], r = f && info(f);
     const box = $('semInfo');
@@ -962,6 +961,8 @@ function createSem({ key, root, layer, shown }){
   }
   $('semPrev').addEventListener('click', ()=> go(cur - 1));
   $('semNext').addEventListener('click', ()=> go(cur + 1));
+  // (its list: any image, straight)
+  const nav = snav($('semNav').querySelector('.snav'), { count: ()=> files.length, index: ()=> cur, label: i=> files[i].label, go });
 
   /* ---- The crop editor ----
      The image drawn into a canvas with the view (scale s in CSS px a pixel, and the

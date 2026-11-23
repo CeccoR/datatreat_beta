@@ -4,8 +4,9 @@
    x_scale, soft_l1); a synthetic chromatogram drawn from the model itself (H2, O2, the
    system peak at 310 s and the baseline step after O2, Gaussian noise of a seeded generator
    and one electrical spike) integrated back to its areas within their sd, the step and the
-   system peak too, the spike found; a window past the data's end NaN; the trapezoids on a
-   known peak; the curves of a window redrawn from its stored parameters; the raw-text
+   system peak too, the spike found; a window past the data's end NaN; no trapezoid any more
+   (v545: neither in the method nor in a result); the curves of a window redrawn from its
+   stored parameters; the raw-text
    reader (decimal comma, a trailing ';', a short column, CRLF; '.' decimals and ','
    separators); the calibration line with and without intercept; the software's factor
    carried over (median of area/%mol); and the workers' pool (gc-tcd-pool.js) on
@@ -118,8 +119,9 @@ test('a synthetic chromatogram: H2, O2, the system peak and the step recovered, 
   // the compact result: gases, and nothing long
   assert.deepEqual(Object.keys(r.gases).sort(), ['h2', 'o2']);
   assert.equal(r.gases.h2.area, h2.area); assert.equal(r.gases.o2.sd, o2.sd); assert.equal(r.gases.h2.chi2r, w.chi2r);
-  assert.ok(Number.isFinite(r.gases.h2.trap) && Number.isFinite(r.gases.o2.trap));
-  rel(r.gases.h2.trap, 2000, 0.05, 'H2 by trapezoids'); rel(r.gases.o2.trap, 800, 0.2, 'O2 by trapezoids');
+  // (v545: the trapezoids gone, from the result and from the method)
+  assert.deepEqual(Object.keys(r.gases.h2).sort(), ['area', 'chi2r', 'sd', 'tApex', 'window']);
+  assert.ok(!('trapezoid' in G.DEFAULT_METHOD) && !('roundsTrapezoid' in G.DEFAULT_METHOD.fit.spikes) && !('trapezoid' in G));
   const json = JSON.stringify(r);
   assert.ok(json.length < 4000, `compact: ${json.length} characters`);
   assert.deepEqual(JSON.parse(json).windows[0].p, w.p);
@@ -132,7 +134,7 @@ test('a synthetic chromatogram: H2, O2, the system peak and the step recovered, 
   c.t.forEach((ti, i)=> near(c.model[i], c.base[i] + c.peaks.H2[i] + c.peaks.O2[i] + c.peaks.S310[i], 1e-9, 'model = base + peaks'));
 });
 
-test('no H2, a weak O2: H2 near zero within its sd; a window past the data’s end gives NaN, the trapezoids still computed', ()=>{
+test('no H2, a weak O2: H2 near zero within its sd; a window past the data’s end gives NaN', ()=>{
   const { t, y } = synth({ h2: 0, o2: 60, s310: 250, spikeAt: null, seed: 11 });
   const r = G.integrateChromatogram(t, y);
   assert.ok(Math.abs(r.gases.h2.area) < 5*r.gases.h2.sd + 1, `H2 ${r.gases.h2.area} ± ${r.gases.h2.sd}`);
@@ -141,22 +143,9 @@ test('no H2, a weak O2: H2 near zero within its sd; a window past the data’s e
   const s = G.integrateChromatogram(t.slice(0, cut), y.slice(0, cut));
   assert.ok(Number.isNaN(s.gases.h2.area) && Number.isNaN(s.gases.o2.sd) && Number.isNaN(s.gases.h2.tApex));
   assert.equal(s.windows[0].p, null); assert.equal(s.windows[0].beyondData, true);
-  assert.ok(Number.isFinite(s.gases.h2.trap));
   // blanks (NaN) at the end of a column are left out, as the Python does
   const yb = y.slice(); for (let i = cut; i < yb.length; i++) yb[i] = NaN;
   assert.ok(Number.isNaN(G.integrateChromatogram(t, yb).gases.o2.area));
-});
-
-test('trapezoids: a straight base between the mean of an interval and the minimum of a valley; spikes and glitches taken out', ()=>{
-  const t = Array.from({ length: 501 }, (_, i)=> 250 + i*2/10);
-  const gpk = ti=> 100/(0.5*Math.sqrt(2*Math.PI))*Math.exp(-0.5*((ti - 290)/0.5)**2);
-  const y = t.map(ti=> 10 + 0.1*ti + gpk(ti));
-  const a = G.trapezoid(t, y, [281, 283.6], [295, 300.5], 'right');
-  near(a.area, 100, 1e-6, 'area'); near(a.t1, 282.3, 1e-12, 'left: the mean of its times'); near(a.t2, 295.4, 1e-12, 'right: the valley');
-  const ys = y.slice(); ys[t.indexOf(286)] += 50;
-  near(G.trapezoid(t, ys, [281, 283.6], [295, 300.5], 'right').area, 100, 1e-6, 'a spike replaced by its neighbours');
-  const yg = y.slice(); for (const tt of [284.6, 284.8, 285]) yg[t.indexOf(tt)] += 30;
-  near(G.trapezoid(t, yg, [281, 283.6], [295, 300.5], 'right', [[284, 285.6]]).area, 100, 1e-6, 'a glitch interpolated over');
 });
 
 test('spikes: one point far from its neighbours is found, a peak’s apex is not', ()=>{

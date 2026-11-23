@@ -4,6 +4,7 @@ import { cardInfo, fileSafe, nameDownloads } from './cards.js';
 import { moduleKit, wideCsv, isObj, ownKey, cardList } from './modkit.js';
 import { plotWrap, viewOf, setView, valueBars } from './modcharts.js';
 import { decodeText, textLines, readColumns, parseNum, isNum, nameUnit } from './textdata.js';
+import { snavHtml, snav } from './snav.js';
 
 /* =========================================================
    CUSTOM MODULE (v527; named Figure to v530: its key, 'fig', and its projects' kept)
@@ -224,6 +225,8 @@ const figIn = v => isObj(v) && isObj(v.scalars) && Array.isArray(v.series) ? v :
 // A Custom tab's instance (utils.js makeInstance: ctx { key, root, layer, shown }).
 function createFig({ key, root, layer, shown }){
   const $ = id => root.querySelector('#' + id);
+  // The file selector of the Data card (snav.js), its markup first: found by its ids after.
+  $('figFileNav').innerHTML = snavHtml({ prev: 'figFilePrev', idx: 'figFileIdx', next: 'figFileNext', name: 'figFileName', what: 'file', keys: false });
   // Hidden, nothing is drawn: `stale` marks it to be drawn whole as it is shown, `drawnAt`
   // the width it was last drawn whole at (its draw key).
   let stale = false, drawnAt = '';
@@ -441,9 +444,7 @@ function createFig({ key, root, layer, shown }){
     if (!f) return;
     shownName = f.name;
     const fi = allFiles.indexOf(f), t = tableOf(f);
-    $('figFileIdx').textContent = `${fi + 1}/${allFiles.length}`;
-    $('figFileName').textContent = f.label;
-    $('figFileName').title = f.name;
+    fileNav.update();
     $('figSame').checked = same;
     const roleSel = (r, c)=> `<select data-col="${c}" aria-label="Role of column ${c + 1}">${Object.entries(ROLES).map(([k, l])=> `<option value="${k}"${k === r ? ' selected' : ''}>${l}</option>`).join('')}</select>`;
     const ss = seriesOfFile(f, fi);
@@ -478,6 +479,9 @@ function createFig({ key, root, layer, shown }){
   const stepFile = d =>{ const n = allFiles.length, f = shownFile(); if (n && f){ shownName = allFiles[(allFiles.indexOf(f) + d + n) % n].name; renderData(); } };
   $('figFilePrev').addEventListener('click', ()=> stepFile(-1));
   $('figFileNext').addEventListener('click', ()=> stepFile(1));
+  // (its list: any file, straight)
+  const fileNav = snav($('figFileNav').querySelector('.snav'), { count: ()=> allFiles.length, index: ()=> Math.max(0, allFiles.indexOf(shownFile())),
+    label: i=> allFiles[i].label, title: i=> allFiles[i].name, go: i=> stepFile(i - Math.max(0, allFiles.indexOf(shownFile()))) });
   $('figSame').addEventListener('change', e=>{ same = e.target.checked; rolesChanged(); });
   $('figHead').addEventListener('change', e=>{
     const sel = e.target.closest('select[data-col]'), f = shownFile();

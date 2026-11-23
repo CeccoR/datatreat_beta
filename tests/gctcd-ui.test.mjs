@@ -1,6 +1,7 @@
-/* GC's raw chromatograms (v544, a prototype): the TCD files beside their tables, paired in
-   the trace list, integrated again by the Integration card, and the Production Rate cards
-   below it taking the re-integrated values. Every file here is made up for the test: the
+/* GC's raw chromatograms (v544; v545: the card's layout, its selectors, the chromatogram over
+   its residuals, the run overview, no trapezoids, the suspicious rule): the TCD files beside
+   their tables, paired in the trace list, integrated again by the Integration card, and the
+   Production Rate cards below it taking the re-integrated values. Every file here is made up for the test: the
    chromatograms drawn from the engine's own peak model (gc-tcd.js) with known areas, a
    seeded noise, on 250–340 s (the H₂/O₂ window, 268–326 s, inside).
    - Tables alone: as v543 (no file grip, no Integration card, "+" adds a Production Rate card
@@ -15,19 +16,26 @@
      chromatograms paired (shown in Integration, no sample, said); raw chromatograms alone.
    - A count that differs: said in Integration, the table's values in Analysis, gc_raw.csv's
      source column saying why.
-   - The Integration card: its two selectors and arrows, its plots, the overview clicked.
+   - The Integration card: its two selectors (the file's, the chromatogram's mirrored) and
+     arrows, the chromatogram over its residuals (their x linked, each its own y), the
+     overview one gas at a time (a point hovered and clicked brightened, the one on show
+     too), no trapezoid anywhere.
+   - The suspicious rule: one injection out of proportion with the table marked (red in the
+     selector and its list, on the overview, said in Peaks and the CSV), a scale off alike at
+     every injection none.
    - The calibration window: levels typed, free and zero intercept, %mol and ppm, its line.
    - No standards: the GC software's scale taken over (k = median of area/table value), said
      in an info alert in Integration and in the rate card.
    - The rates from the re-integrated values against a hand calculation from the known areas.
    - The project saved and reloaded: pairs, method, calibration and results, nothing fitted
      again; a method changed (a step) and undone, nothing fitted again; results coming in no
-     step. */
+     step. A project as v544 saved it (its method's trapezoids, its results' keys and their
+     trapezoid areas) opens with nothing fitted again. */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { start, openModule, settle, moduleState, history, undo, download, readZip, parseCsv, tabLabels, saveAs, ready, ROOT } from './helpers.mjs';
+import { start, openModule, settle, moduleState, history, undo, download, readZip, parseCsv, tabLabels, saveAs, ready, ROOT, exportProject, projectFile, importProject, openProject } from './helpers.mjs';
 
 const G = await import(pathToFileURL(path.join(ROOT, 'gc-tcd.js')).href);
 
@@ -89,14 +97,25 @@ async function load(page, files, rows){
   await page.waitForFunction(n=> document.querySelectorAll('#gcFileTableWrap tr.file-row').length === n && !document.querySelector('.dz-loading'), rows, { timeout: 20000 });
   await settle(page);
 }
-// Every Integration card idle with nothing left to integrate (its calibration's too).
+// Every Integration card idle with nothing left to integrate (its calibration's too): its
+// status line says nothing (v545: no "N chromatograms integrated"), or that there is none.
 async function integrated(page){
   await page.waitForFunction(()=>{
     const st = [...document.querySelectorAll('#tab-gc .gci-status')];
-    return st.length && st.every(s=> !s.querySelector('.gci-prog') && /integrated|No raw/.test(s.textContent));
+    return st.length && st.every(s=> s.dataset.state === 'done' || s.dataset.state === 'none');
   }, null, { timeout: 60000 });
   await settle(page);
 }
+// A selector's list (snav.js): opened by its name, its items read, closed by Escape.
+async function listOf(page, sel){
+  await page.locator(`${sel} .snav-pick`).click();
+  await page.waitForSelector('.snav-menu');
+  const items = await page.$$eval('.snav-menu [data-i]', bs=> bs.map(b=> ({ text: b.querySelector('.snav-item').textContent, bad: b.classList.contains('is-bad'), cur: b.classList.contains('is-current') })));
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(()=> !document.querySelector('.snav-menu'));
+  return items;
+}
+const idxOf = (card, which)=> card.locator(`[id$="${which}Idx"]`).textContent();
 const fitted = page => page.evaluate(async ()=> (await import('./utils.js')).kept.made['gc-tcd'] || 0);
 const alerts = (page, sel = '#gcAlerts')=> page.$$eval(`${sel} .alert`, els=> els.map(e=> e.innerText.replace(/\s+/g, ' ').trim()));
 const starred = async page => (await tabLabels(page))[0].endsWith('*');
@@ -258,9 +277,8 @@ test('two tables paired: the first used, the second ignored; two files of raw ch
     // Analysis: one sample, the first table's values.
     const rate = page.locator('#tab-gc .an-card').nth(1);
     assert.equal(await rate.locator('.gc-row').count(), 1);
-    // Integration: both raw chromatograms' files, said.
-    const card = page.locator('#tab-gc .an-card').nth(0);
-    assert.deepEqual(await card.locator('.gci-file option').allTextContents(), ['P_TCD (no table)', 'P_TCD · Q_TCD.csv (no table)']);
+    // Integration: both raw chromatograms' files (its file selector's list), said.
+    assert.deepEqual((await listOf(page, '#tab-gc .gci-fsel')).map(x=> x.text), ['P_TCD (no table)', 'P_TCD · Q_TCD.csv (no table)']);
     assert.ok((await alerts(page, '#tab-gc .gci-alerts')).join(' ').includes('two files of raw chromatograms paired'));
     await integrated(page);
     const z = await zip(page);
@@ -279,8 +297,10 @@ test('counts that differ: said in Integration, integrated all the same; Analysis
     const card = page.locator('#tab-gc .an-card').nth(0);
     const ia = (await alerts(page, '#tab-gc .gci-alerts')).join(' ');
     assert.ok(ia.includes(`short: ${N} rows in the table, ${N - 1} chromatograms: not aligned`), ia);
-    assert.equal(await card.locator('.gci-inj option').count(), N - 1, 'every chromatogram integrated and shown');
-    assert.equal(await card.locator('.gci-status').textContent(), `${N - 1} chromatograms integrated.`);
+    assert.equal(await idxOf(card, 'Inj'), `1/${N - 1}`, 'every chromatogram integrated and shown');
+    // (all integrated: the status line says nothing and folds away, v545)
+    assert.equal(await card.locator('.gci-status').textContent(), '');
+    assert.equal(await card.locator('.gci-bar').isVisible(), false);
     const ra = (await alerts(page, '#tab-gc .gc-src')).join(' ');
     assert.ok(ra.includes(`short: ${N} rows in the table, ${N - 1} chromatograms`), ra);
     const raw = (await zip(page))['gc_raw.csv'];
@@ -310,57 +330,209 @@ test('raw chromatograms alone: an Integration card, no sample, said; its overvie
   } finally { await close(); }
 });
 
-test('the Integration card: its selectors and arrows, its plots, an overview point clicked shows its chromatogram', async ()=>{
+test('the Integration card: its two selectors, the chromatogram over its residuals (their x linked), the overview one gas at a time, hovered and clicked; no trapezoid', async ()=>{
   const { page, errors, csp, close } = await env.page();
   try {
     await openModule(page, 'gc');
     await load(page, [table('one.csv', tableRows()), tcd('one_TCD.csv', areas()), table('two.csv', tableRows()), tcd('two_TCD.csv', areas())], 2);
     await integrated(page);
-    const card = page.locator('#tab-gc .an-card').nth(0), inj = card.locator('.gci-inj');
-    assert.deepEqual(await card.locator('.gci-file option').allTextContents(), ['one', 'two']);
-    assert.equal(await inj.locator('option').count(), N);
-    assert.match(await inj.locator('option').first().textContent(), /^#1 of 12 · 13\/11 10:00/);
-    // The chromatogram: the raw data, the model, the baseline, H₂, O₂ and S310, the windows' lines.
-    const chrom = card.locator('svg.plot[id$="Chrom"]');
+    const card = page.locator('#tab-gc .an-card').nth(0);
+    // The selectors over the plot: the file's at its left (‹ n/N › name), the chromatogram's at
+    // its right, mirrored (name ‹ k/K ›), both arrows outermost.
+    assert.deepEqual((await listOf(page, '#tab-gc .gci-fsel')).map(x=> x.text), ['one', 'two']);
+    const inj = await listOf(page, '#tab-gc .gci-ksel');
+    assert.equal(inj.length, N);
+    assert.equal(inj[0].text, '#1 · 13/11 10:00'); assert.ok(inj[0].cur);
+    assert.equal(await card.locator('.gci-ksel .snav-name').getAttribute('title'), 'Injection 1 · 13/11 10:00 of 12', 'its tooltip whole');
+    assert.deepEqual(inj.filter(x=> x.bad), [], 'nothing suspicious: the table proportional to the areas');
+    const geo = await card.evaluate(c=>{
+      const r = s => c.querySelector(s).getBoundingClientRect();
+      return { fFirst: r('.gci-fsel .snav-steps').right <= r('.gci-fsel .snav-pick').left, kLast: r('.gci-ksel .snav-pick').right <= r('.gci-ksel .snav-steps').left,
+        fLeft: r('.gci-fsel').left - r('svg.gci-chrom').left, kRight: r('svg.gci-chrom').right - r('.gci-ksel').right, oneLine: Math.abs(r('.gci-fsel').top - r('.gci-ksel').top) };
+    });
+    assert.ok(geo.fFirst && geo.kLast, 'the file\'s arrows first, the chromatogram\'s last');
+    const cols = await card.evaluate(c=> ['.gci-fsel', '.gci-ksel'].map(sel=> getComputedStyle(c.querySelector(sel)).gridTemplateColumns.split(' ').map(parseFloat)));
+    cols.forEach(([x, y])=> assert.ok(x > 50 && Math.abs(x - y) < 0.05, `two equal halves: ${cols}`));
+    assert.ok(Math.abs(geo.fLeft) < 1.5 && Math.abs(geo.kRight) < 1.5 && geo.oneLine < 1, `over the plot, at its left and at its right: ${JSON.stringify(geo)}`);
+    // The chromatogram: the raw data, the model, the baseline, H₂, O₂ and S310, the window's lines;
+    // its residuals under it. One plot: the two touch, together as tall as a standard plot.
+    const chrom = card.locator('svg.plot[id$="Chrom"]'), resid = card.locator('svg.plot[id$="Resid"]');
     assert.ok(await chrom.locator('.plot-gdata path').count() >= 6, 'its curves');
     assert.equal(await chrom.locator('.plot-goverlay circle').count(), 2, 'the window\'s two edges, draggable');
-    assert.ok(await card.locator('svg.plot[id$="Resid"] .plot-gdata path').count() >= 2, 'the residual');
-    // The values of the chromatogram on show: H₂ and O₂, area within the fit's error of the truth.
+    assert.ok(await resid.locator('.plot-gdata path').count() >= 2, 'the residual');
+    const box = await card.evaluate(c=>{ const a = c.querySelector('svg.gci-chrom').getBoundingClientRect(), b = c.querySelector('svg.gci-resid').getBoundingClientRect(), o = c.querySelector('svg.gci-over').getBoundingClientRect(); return { w: a.width, h: a.height + b.height, gap: b.top - a.bottom, ratio: a.height/b.height, wb: b.width, ow: o.width, oh: o.height }; });
+    assert.ok(Math.abs(box.h - box.w/1.618) < 1 && Math.abs(box.gap) < 0.5 && Math.abs(box.ratio - 3) < 0.02 && box.wb === box.w, `a standard plot's size, 3 : 1: ${JSON.stringify(box)}`);
+    assert.ok(box.ow === box.w && Math.abs(box.oh - box.h/2) < 1, 'the overview as wide, half as tall');
+    assert.equal(await card.locator('.gci-tools .plot-tool-btn[title="Zoom area"]').count(), 1, 'one toolbar for both');
+    assert.equal(await card.locator('.gci-pair .plot-tool-btn').count(), 0);
+    // Only the residuals' axis carries the time's numbers and title; the two y axes aligned.
+    const ax = await card.evaluate(c=>{ const P = c.querySelector('svg.gci-chrom')._plot, Q = c.querySelector('svg.gci-resid')._plot;
+      const labels = s => [...c.querySelector(s).querySelectorAll('.plot-gaxes .plot-label')].map(t=> t.textContent);
+      return { cl: labels('svg.gci-chrom'), rl: labels('svg.gci-resid'), ct: P.noXTickLabels, rt: Q.noXTickLabels, ml: [P.margin.l, Q.margin.l], mb: P.margin.b, mt: Q.margin.t,
+        raw: P._stored.find(e=> e.key === 'raw').xs, view: [P.xmin, P.xmax], res: Q._stored.find(e=> e.key === 'residual').xs }; });
+    assert.deepEqual(ax.cl, ['TCD signal']); assert.deepEqual(ax.rl, ['Retention time (s)', 'Residual']);
+    assert.ok(ax.ct && !ax.rt && ax.ml[0] === ax.ml[1] && ax.mb === 0 && ax.mt === 0);
+    // The whole chromatogram held, the view on the H₂/O₂ zone; the residuals in the fit window only.
+    assert.ok(ax.raw[0] === T[0] && ax.raw[ax.raw.length - 1] === T[T.length - 1] && ax.view[0] > T[0], `the whole chromatogram, the zone shown: ${ax.view}`);
+    assert.ok(ax.res[0] >= 268 && ax.res[ax.res.length - 1] <= 326, 'residuals inside the fit window');
+    // Zoomed in one panel (the one under the pointer): the other's x follows, its y does not.
+    const views = ()=> card.evaluate(c=> ['svg.gci-chrom', 'svg.gci-resid'].map(s=>{ const P = c.querySelector(s)._plot; return [P.xmin, P.xmax, P.ymin, P.ymax]; }));
+    const at = (sel, x, y)=> card.evaluate((c, [sel, x, y])=>{ const s = c.querySelector(sel), r = s.getBoundingClientRect(), P = s._plot; return { x: r.left + P.px(x), y: r.top + P.py(y) }; }, [sel, x, y]);
+    const v0 = await views();
+    await card.locator('.gci-tools .plot-tool-btn[title="Zoom area"]').click();
+    assert.equal(await resid.evaluate(s=> s._plot._mode), 'zoom', 'the tool armed in both');
+    const [cy0, cy1] = [v0[0][2] + 0.3*(v0[0][3] - v0[0][2]), v0[0][2] + 0.8*(v0[0][3] - v0[0][2])];
+    await chrom.scrollIntoViewIfNeeded();
+    let a = await at('svg.gci-chrom', 284, cy1), b = await at('svg.gci-chrom', 306, cy0);
+    await page.mouse.move(a.x, a.y); await page.mouse.down(); await page.mouse.move(b.x, b.y, { steps: 6 }); await page.mouse.up(); await settle(page);
+    const v1 = await views();
+    assert.ok(Math.abs(v1[0][0] - 284) < 0.3 && Math.abs(v1[0][1] - 306) < 0.3, `the chromatogram zoomed: ${v1[0]}`);
+    assert.deepEqual(v1[1].slice(0, 2), v1[0].slice(0, 2), 'the residuals\' x with it');
+    assert.deepEqual(v1[1].slice(2), v0[1].slice(2), 'their y not');
+    const ry = [v1[1][2]*0.5, v1[1][3]*0.5];
+    await resid.scrollIntoViewIfNeeded();
+    a = await at('svg.gci-resid', 290, ry[1]); b = await at('svg.gci-resid', 300, ry[0]);
+    await page.mouse.move(a.x, a.y); await page.mouse.down(); await page.mouse.move(b.x, b.y, { steps: 6 }); await page.mouse.up(); await settle(page);
+    const v2 = await views();
+    assert.ok(Math.abs(v2[1][0] - 290) < 0.3 && Math.abs(v2[1][1] - 300) < 0.3, `the residuals zoomed: ${v2[1]} (${JSON.stringify([a, b])})`);
+    assert.deepEqual(v2[0].slice(0, 2), v2[1].slice(0, 2), 'the chromatogram\'s x with the residuals\'');
+    assert.deepEqual(v2[0].slice(2), v1[0].slice(2), 'its y not');
+    // A reset (double click with the tool on): the zone again, in both.
+    await chrom.scrollIntoViewIfNeeded();
+    a = await at('svg.gci-chrom', 295, (v2[0][2] + v2[0][3])/2);
+    await page.mouse.dblclick(a.x, a.y); await settle(page);
+    const v3 = await views();
+    assert.deepEqual(v3[0], v0[0]); assert.deepEqual(v3[1].slice(0, 2), v0[0].slice(0, 2));
+    await card.locator('.gci-tools .plot-tool-btn[title="Zoom area"]').click();
+    // One toolbar for both: the image (current view) of the two, stacked; the CSV of both, the
+    // whole chromatogram; the composer takes them as two panels, either of which can go.
+    const png = await download(page, ()=> card.locator('.gci-tools .plot-tool-btn[title="Download current view"]').click());
+    assert.ok(png.buf.readUInt32BE(20)/2 > box.h, `the image as tall as the two: ${png.buf.readUInt32BE(20)/2} px for ${box.h}`);
+    const cz = await download(page, ()=> card.locator('.gci-tools .plot-csv-btn').click());
+    const crows = parseCsv(cz.buf.toString('utf8').replace(/^\uFEFF/, ''), ';');
+    assert.ok(cz.name.endsWith('chromatogram.csv') && ['Time (s)', 'TCD signal', 'model H2O2', 'residual H2O2'].every(h=> crows[0].includes(h)), crows[0].join(' | '));
+    assert.equal(crows.length - 1, T.length, 'the whole chromatogram');
+    await card.locator('.gci-tools .plot-tool-btn[title="Figure composer (advanced export)"]').click();
+    await page.waitForSelector('.fig-backdrop .fig-svg path');
+    const groups = ()=> page.$$eval('.fig-backdrop .fig-group', gs=> gs.map(g=> [...g.querySelectorAll('.fig-slabel')].map(i=> i.value)));
+    let gr = await groups();
+    assert.equal(gr.length, 2, 'two panels');
+    assert.ok(gr[0].includes('raw') && gr[1].includes('residual') && !gr[0].includes('residual'), JSON.stringify(gr));
+    assert.deepEqual(await page.$$eval('.fig-backdrop .fig-panel input[data-pk="ylabel"]', xs=> xs.map(x=> x.value)), ['TCD signal', 'Residual'], 'each its own Y title');
+    await page.locator('.fig-backdrop [data-del-panel="1"]').click();
+    gr = await groups();
+    assert.ok(gr.length === 1 && !gr[0].includes('residual') && gr[0].includes('raw'), 'the residuals left out with their panel');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(()=> !document.querySelector('.fig-backdrop'));
+    // The values of the chromatogram on show (Peaks): H₂ and O₂, area within the fit's error of the truth.
     const vals = await card.locator('table.gci-values tbody tr').evaluateAll(trs=> trs.map(tr=> [...tr.cells].map(c=> c.textContent)));
     assert.deepEqual(vals.map(v=> v[0]), ['H2', 'O2']);
     assert.ok(Math.abs(num(vals[0][1]) - areas()[0][0]) < 0.01*areas()[0][0], `H₂ area ${vals[0][1]}`);
-    // The arrows: the next chromatogram, the next file.
+    // No trapezoid anywhere: neither in the Windows, nor in Peaks, nor in the CSV, nor on the plot.
+    assert.deepEqual(await card.locator('.gci-method input').evaluateAll(xs=> xs.map(x=> x.dataset.k)), ['w0:from', 'w0:to']);
+    assert.deepEqual(await card.locator('table.gci-values th').allTextContents(), ['Gas', 'Area ± sd', 'Apex (s)', 'χ²r', 'Conc.', 'GC table']);
+    assert.equal(await card.locator('.gci-win-box .txt-mini').textContent(), 'Windows');
+    assert.equal(await card.locator('.gci-values-box .txt-mini').textContent(), 'Peaks');
+    const integ = (await zip(page))['integration.csv'];
+    assert.ok(!integ[0].some(h=> /trap/i.test(h)), integ[0].join(' | '));
+    assert.ok(!/trap/i.test(await card.locator('.gci-legend').first().textContent()));
+    // Calibration… at the foot of the side column, as wide as it.
+    const cb = await card.evaluate(c=>{ const s = c.querySelector('.gci-side').getBoundingClientRect(), b = c.querySelector('.gci-side > .gci-cal').getBoundingClientRect(); return [b.width - s.width, b.height]; });
+    assert.ok(Math.abs(cb[0]) < 1 && cb[1] > 30 && cb[1] < 36, `the button ${cb}`);
+    // The arrows: the next chromatogram (the keys too), the next file; the list straight to one.
     await card.locator('.gci-knext').click(); await settle(page);
-    assert.equal(await inj.inputValue(), '1');
+    assert.equal(await idxOf(card, 'Inj'), '2/12');
     await page.keyboard.press('ArrowRight'); await settle(page);
-    assert.equal(await inj.inputValue(), '2', '→ steps the chromatograms');
+    assert.equal(await idxOf(card, 'Inj'), '3/12', '→ steps the chromatograms');
     await card.locator('.gci-fnext').click(); await settle(page);
-    assert.equal(await card.locator('.gci-file').inputValue(), 'two_TCD.csv');
-    assert.equal(await inj.inputValue(), '0');
-    // The overview: a point a chromatogram, its fit, trapezoids and the table's value; one clicked shown.
+    assert.equal(await idxOf(card, 'File'), '2/2');
+    assert.equal(await card.locator('[id$="File"]').textContent(), 'two');
+    assert.equal(await idxOf(card, 'Inj'), '1/12');
+    await card.locator('.gci-ksel .snav-pick').click(); await page.keyboard.press('End'); await page.keyboard.press('Enter'); await settle(page);
+    assert.equal(await idxOf(card, 'Inj'), '12/12', 'the list: the last one');
+    await card.locator('.gci-knext').click(); await settle(page);
+    assert.equal(await idxOf(card, 'Inj'), '1/12');
+    // The overview: one gas at a time; each injection's fit and the table's value.
     const over = card.locator('svg.plot[id$="Over"]');
+    const chips = ()=> card.locator('.gci-ov-chip').evaluateAll(cs=> cs.map(c=> c.classList.contains('is-on')));
+    assert.deepEqual(await chips(), [true, false]);
     assert.ok(await over.locator('.plot-gdata circle').count() >= N, 'the fits');
-    assert.ok(await over.locator('.plot-gdata rect').count() >= N, 'the trapezoids');
     assert.ok(await over.locator('.plot-gdata path').count() >= N, 'the table\'s values');
-    const pt = await over.evaluate(svg=>{ const P = svg._plot, b = svg.getBoundingClientRect(), x = (7*20*60 + 0)/3600; const t0 = P.xmin; void t0;
-      return { x: b.left + P.px(x), y: b.top + P.py(0.05 + 0.07) }; });
-    await page.mouse.click(pt.x, pt.y); await settle(page);
-    assert.equal(await inj.inputValue(), '7', 'the injection clicked');
-    // The method's numbers: an edge in a neighbour said, a trapezoid base inverted refused.
+    assert.equal(await over.locator('.plot-gdata rect').count(), 0, 'no trapezoids');
+    await card.locator('.gci-ov-chip[data-g="o2"]').click(); await settle(page);
+    assert.deepEqual(await chips(), [false, true], 'O₂ alone');
+    assert.match(await over.evaluate(s=> s._plot.ylabel), /^O₂/);
+    await card.locator('.gci-ov-chip[data-g="h2"]').click(); await settle(page);
+    // As area, the table's value times the run's k: on the fits' scale.
+    await card.locator('.gci-ovy-chip[data-y="area"]').click(); await settle(page);
+    const sc = await over.evaluate(s=>{ const st = s._plot._stored; return { fit: st.find(e=> e.key === 'h2 fit').ys, tab: st.find(e=> e.key === 'h2 table').ys }; });
+    sc.fit.forEach((v, k)=> assert.ok(Math.abs(sc.tab[k] - v) < 0.02*v, `injection ${k + 1}: table × k ${sc.tab[k]}, fit ${v}`));
+    // Hovered: its point brightened (a lighter tint, a halo), its label; the one on show too.
+    const hl = ()=> over.evaluate(s=>{ const g = s.querySelector('.gci-hl'); return g ? { sel: g.dataset.sel, hov: g.dataset.hov, pts: [...g.querySelectorAll('.gci-hl-pt')].map(c=> c.getAttribute('fill')), label: g.querySelector('.plot-pick-label') ? g.querySelector('.plot-pick-label').textContent : '' } : null; });
+    const h0 = await hl(), lit = /^rgb\((\d+),(\d+),(\d+)\)$/.exec(h0.pts[0] || '');
+    assert.deepEqual({ ...h0, pts: h0.pts.length }, { sel: '0', hov: '', pts: 1, label: '' }, 'the chromatogram on show brightened');
+    assert.ok(lit && [0x3a, 0xa0, 0xff].every((c, i)=> +lit[i + 1] >= c) && +lit[1] > 0x3a + 60, `a lighter tint of H₂'s blue: ${h0.pts[0]}`);
+    const pt = k => over.evaluate((s, k)=>{ const P = s._plot, b = s.getBoundingClientRect(), e = P._stored.find(x=> x.key === 'h2 fit'); return { x: b.left + P.px(e.xs[k]), y: b.top + P.py(e.ys[k]) }; }, k);
+    let q = await pt(3);
+    await page.mouse.move(q.x + 2, q.y - 2); await settle(page);
+    let h = await hl();
+    assert.equal(h.hov, '3'); assert.equal(h.pts.length, 2);
+    assert.match(h.label, /^Injection 4 · 13\/11 11:00fit: [\d.]+GC table: 0\.08 %molχ²ᵣ: [\d.]+$/);
+    q = await pt(7);
+    await page.mouse.click(q.x, q.y); await settle(page);
+    assert.equal(await idxOf(card, 'Inj'), '8/12', 'the injection clicked shown');
+    await page.mouse.move(5, 5); await settle(page);
+    h = await hl();
+    assert.equal(h.sel, '7'); assert.equal(h.hov, ''); assert.equal(h.pts.length, 1, 'its brightening kept');
+    // Chosen by the arrows: its point brightened. The old dashed line is gone.
+    await card.locator('.gci-knext').click(); await settle(page);
+    assert.equal((await hl()).sel, '8');
+    assert.equal(await over.locator('.gc-int-hl').count(), 0);
+    // The Windows' numbers: an edge in a neighbour said; a step, undone.
     const s0 = await steps(page), field = k => card.locator(`.gci-method input[data-k="${k}"]`);
     await field('w0:from').fill('263'); await field('w0:from').press('Enter'); await settle(page);
     assert.match(await card.locator('.gci-method .gci-flag').textContent(), /reaches S264 \(262–267.5 s\), which its model has no peak for/);
     assert.equal(await steps(page), s0 + 1);
     await undo(page);
     assert.equal(await card.locator('.gci-method .gci-flag').count(), 0);
-    await field('th2:left:0').fill('290'); await field('th2:left:0').press('Enter'); await settle(page);
-    assert.equal(await field('th2:left:0').inputValue(), '281', 'a start after its end refused');
     assert.equal(await steps(page), s0);
-    await field('to2:right:1').fill('305.8'); await field('to2:right:1').press('Enter'); await settle(page);
-    assert.equal((await moduleState(page, 'gc')).cards[0].method.trapezoid.o2.right[1], 305.8);
-    await undo(page);
-    // The overview's chips and what it shows: no change unsaved (a project saved first).
-    assert.equal(await starred(page), true);
+    assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
+  } finally { await close(); }
+});
+
+test('suspicious: an injection out of proportion with the GC table marked, in red, a scale off alike at every injection none', async ()=>{
+  const { page, errors, csp, close } = await env.page();
+  try {
+    await openModule(page, 'gc');
+    // Both tables 10 % high (the software's own scale off), "odd" with its 6th H₂ 10 % higher still.
+    const odd = tableRows(1.1).map(([hh, o], k)=> [k === 5 ? +(hh*1.1).toFixed(6) : hh, o]);
+    await load(page, [table('even.csv', tableRows(1.1)), tcd('even_TCD.csv', areas()), table('odd.csv', odd), tcd('odd_TCD.csv', areas())], 2);
+    await integrated(page);
+    const card = page.locator('#tab-gc .an-card').nth(0), over = card.locator('svg.plot[id$="Over"]');
+    const reds = gas => over.evaluate((s, g)=>{ const e = s._plot._stored.find(x=> x.key === g + ' suspicious'); return e ? e.ys.map((v, k)=> Number.isFinite(v) ? k : -1).filter(k=> k >= 0) : []; }, gas);
+    // A scale off alike: nothing.
+    assert.deepEqual((await listOf(page, '#tab-gc .gci-ksel')).filter(x=> x.bad), []);
+    assert.deepEqual(await reds('h2'), []);
+    // One injection off: it alone, for H₂ alone; its name red in the selector and in the list.
+    await card.locator('.gci-fsel .snav-pick').click(); await page.locator('.snav-menu [data-i="1"]').click(); await settle(page);
+    assert.equal(await card.locator('[id$="File"]').textContent(), 'odd');
+    assert.deepEqual((await listOf(page, '#tab-gc .gci-ksel')).map((x, k)=> x.bad ? k : -1).filter(k=> k >= 0), [5]);
+    assert.deepEqual(await reds('h2'), [5], 'its fit red on the overview');
+    assert.equal(await over.evaluate(s=> s._plot._stored.find(x=> x.key === 'h2 table').color), '#9aa3ad', 'the table\'s values grey');
+    assert.equal(await card.locator('.gci-ksel .snav-name.is-bad').count(), 0);
+    for (let i = 0; i < 5; i++) await card.locator('.gci-knext').click();
+    await settle(page);
+    assert.equal(await idxOf(card, 'Inj'), '6/12');
+    assert.equal(await card.locator('.gci-ksel .snav-name.is-bad').count(), 1, 'its name red');
+    assert.equal(await card.locator('.gci-ksel .snav-name').evaluate(e=> getComputedStyle(e).color), await page.evaluate(()=> { const d = document.createElement('i'); d.style.color = 'var(--bad)'; document.body.appendChild(d); const c = getComputedStyle(d).color; d.remove(); return c; }));
+    const flag = await card.locator('.gci-values-box .gci-flag').textContent();
+    assert.match(flag, /H₂: -9\.\d % off the GC table's proportion \(k = /, flag);
+    assert.equal(await card.locator('table.gci-values tbody tr').first().locator('td').nth(1).evaluate(td=> td.classList.contains('gci-bad')), true);
+    await card.locator('.gci-ov-chip[data-g="o2"]').click(); await settle(page);
+    assert.deepEqual(await reds('o2'), [], 'O₂ in proportion');
+    const integ = (await zip(page))['integration.csv'], rows = integ.slice(1).filter(r=> r[0] === 'odd_TCD.csv');
+    assert.deepEqual(rows.map(r=> r[integ[0].indexOf('H2 suspicious')]), Array.from({ length: N }, (_, k)=> k === 5 ? 'yes' : 'no'));
+    assert.ok(rows.every(r=> r[integ[0].indexOf('O2 suspicious')] === 'no'));
     assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
   } finally { await close(); }
 });
@@ -418,8 +590,8 @@ test('calibration: standards typed by hand, free and zero intercept, %mol and pp
     await m.locator('.xrd-std-x').click(); await settle(page);
     z = await zip(page);
     assert.ok(Math.abs(num(z['mean_rates.csv'][1][1]) - num(mean[1])) < 1e-6*num(mean[1]) + 1e-9, 'the same rates');
-    // The values table: the concentration in the calibration's unit.
-    assert.match(await card.locator('table.gci-values tbody tr').first().locator('td').nth(6).textContent(), / ppm$/);
+    // Peaks: the concentration in the calibration's unit, said under the table.
+    assert.match(await card.locator('.gci-values-box .txt-meta').first().textContent(), /^concentration in ppm; GC table in %mol/);
     assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
   } finally { await close(); }
 });
@@ -492,6 +664,45 @@ test('the project: saved and reloaded with its pairs, method, calibration and re
     assert.deepEqual(after.cards[0].cal.files[0].levels.map(l=> l.h2), [0.05, 0.1, 0.2, null, null, null]);
     assert.deepEqual((await zip(page))['mean_rates.csv'][1], rates, 'the same rates');
     assert.equal(await page.locator('#tab-gc .an-card').nth(0).locator('table.gci-values tbody tr').count(), 2, 'its curves and values drawn from the results');
+    assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
+  } finally { await close(); }
+});
+
+/* A project as v544 saved it: its card's method held the trapezoids (`trapezoid`, and its fit's
+   spikes.roundsTrapezoid: 3), the results' keys hold the method's JSON (so theirs differ from
+   v545's), and each result's gases a trapezoid area (`trap`). Made from v545's export, as v544
+   wrote them (the keys checked against v544's own engine once, by hand: the same strings). */
+const V544_TRAP = { h2: { left: [281, 283.6], right: [295, 300.5], valley: 'right' }, o2: { left: [295, 300.5], right: [304.8, 305.6] } };
+const v544Method = m => ({ windows: m.windows, trapezoid: V544_TRAP, ...Object.fromEntries(Object.entries(m).filter(([k])=> k !== 'windows')),
+  fit: { ...m.fit, spikes: { ...m.fit.spikes, roundsTrapezoid: 3 } } });
+function v544Key(k){
+  const i = k.indexOf('|'), a = JSON.parse(k.slice(i + 1));
+  a[a.length - 1] = JSON.stringify(v544Method(JSON.parse(a[a.length - 1])));
+  return k.slice(0, i + 1) + JSON.stringify(a);
+}
+test('a project saved by v544 (trapezoids in its method, its results\' keys and their areas) opens with nothing fitted again', async ()=>{
+  const { page, errors, csp, close } = await env.page();
+  try {
+    await openModule(page, 'gc');
+    await load(page, [table('old.csv', tableRows(1.1)), tcd('old_TCD.csv', areas())], 1);
+    await integrated(page);
+    const rates = (await zip(page))['mean_rates.csv'][1];
+    const { obj } = await exportProject(page), st = obj.state;
+    assert.ok(st.integ && Object.keys(st.integ).length === 1);
+    const [k] = Object.keys(st.integ), card0 = st.cards.find(c=> c.type === 'integ');
+    const old = { ...st, cards: st.cards.map(c=> c === card0 ? { ...c, method: v544Method(c.method) } : c),
+      integ: { [v544Key(k)]: st.integ[k].map(r=> r && { ...r, gases: Object.fromEntries(Object.entries(r.gases).map(([g, x])=> [g, { ...x, trap: x.area*0.97 }])) }) } };
+    assert.notEqual(v544Key(k), k, 'v544\'s key is not v545\'s');
+    const n0 = await fitted(page);
+    await importProject(page, projectFile(env, 'v544.datatreat', { ...obj, title: 'Old v544', appVersion: 'v544', state: old }, { sign: true }));
+    await openProject(page, 'gc', 'Old v544');
+    await integrated(page);
+    assert.equal(await fitted(page), n0, 'nothing fitted again');
+    const now = await moduleState(page, 'gc');
+    assert.deepEqual(Object.keys(now.integ), [k], 'its results under v545\'s key');
+    assert.ok(!JSON.stringify(now).includes('trap'), 'no trapezoid left in the state');
+    assert.equal(await page.locator('#tab-gc .an-card').nth(0).locator('table.gci-values tbody tr').count(), 2, 'its values drawn from the results');
+    assert.deepEqual((await zip(page))['mean_rates.csv'][1], rates, 'the same rates');
     assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
   } finally { await close(); }
 });

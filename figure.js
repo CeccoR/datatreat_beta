@@ -291,14 +291,24 @@ const rangeGroup = (i, key)=> F.panels.map((_, k)=> k).filter(k=> rangeRoot(k, k
 function buildModel(plot, opts){
   const strip = svgLabelToRich;
   const { series, cats } = seriesFromPlot(plot, opts && opts.legendEl);
+  /* Linked panels (v545, plot.js linkX: GC's chromatogram over its residuals): each further
+     plot a panel of its own under the first, its series in it, each panel its own Y title
+     and range, the X shared. Their series are marked `sep`: a panel removed takes its
+     separate plot's series with it (one left out), where others fall back to the first. */
+  const also = (opts && Array.isArray(opts.also)) ? opts.also.filter(q=> q && q._stored) : [];
+  if (also.length){
+    series.forEach(s=>{ s.sep = true; });
+    also.forEach((q, k)=> seriesFromPlot(q, null).series.forEach(s=>{ series.push({ ...s, id: `p${k + 1}${s.id}`, panel: k + 1, sep: true }); }));
+  }
+  const ylabelOf = q => strip(q.ylabel) || strip(q.ylabelSvg) || '';
   return {
     wmm: 160, hmm: 110, dpi: 300,
     // The drawing area itself, in mm. On auto it is whatever the margins leave; set
     // it by hand and the page keeps its size while the slack moves to the right and
     // bottom margins, which are the ones no label is pinned to.
     plotAuto: true, plotW: 0, plotH: 0,
-    rows: 1, cols: 1,
-    shareX: true, shareY: true,
+    rows: 1 + also.length, cols: 1,
+    shareX: true, shareY: !also.length,
     legendMode: 'per-panel',            // 'none' | 'per-panel' | 'global'
     legendCorner: 'tr',                 // per-panel: which corner it sits in
     legendPlace: 'bottom',              // global: above or below the panels
@@ -361,7 +371,7 @@ function buildModel(plot, opts){
     texPalette: TEX_PALETTES[0].tex.slice(),
     texScope: 'panel',
     texByDiv: false,
-    panels: [ newPanel(0, 0) ],
+    panels: also.length ? [plot, ...also].map((q, k)=> ({ ...newPanel(k, 0), ylabel: ylabelOf(q) })) : [ newPanel(0, 0) ],
     series,
     cats,                               // category labels of a bar chart, if any
     /* A category name changed here, kept by the category's own x so every bar series
@@ -693,7 +703,7 @@ function drawFigure(svg, ink, paper, extra){
     const anySide = (side, what) => F.panels.some(p => (p.axes || (p.axes = newAxes()))[side][what]);
     const room = (side, vert) =>
       (anySide(side, 'labels') ? (vert ? maxYNum + 8 : xDrop) : 0) +
-      (anySide(side, 'title') && (vert ? F.ylabel : F.xlabel) ? fAxis * 1.5 : 0);
+      (anySide(side, 'title') && (vert ? (F.ylabel || F.panels.some(p=> p.ylabel)) : F.xlabel) ? fAxis * 1.5 : 0);
     // Whatever the sides ask for, never less than the overhang of the outermost X
     // label — that is what used to spill outside the figure.
     const sideX = (anySide('bottom', 'labels') || anySide('top', 'labels')) ? halfX + 2 : 0;
@@ -1083,7 +1093,8 @@ function drawFigure(svg, ink, paper, extra){
 
       // Axis title, pushed clear of the numbers when they are present. In shared
       // mode the four figure-level titles below replace these.
-      const label = g0.vert ? F.ylabel : F.xlabel;
+      // (a panel's own Y title, linked panels': buildModel)
+      const label = g0.vert ? (p.ylabel != null ? p.ylabel : F.ylabel) : F.xlabel;
       if (a.title && label && (g0.vert ? F.titleModeY : F.titleModeX) !== 'shared'){
         const clear = a.labels ? (g0.vert ? maxYNum + 8 : xDrop) : 6;
         if (g0.vert){
@@ -2524,7 +2535,8 @@ function controlsHtml(){
           <label>col${numField(`data-pk="c" data-p="${i}"`, p.c+1, 1, F.cols)}</label>
           <label>&#8597;${numField(`data-pk="rs" data-p="${i}"`, p.rs, 1, F.rows)}</label>
           <label>&#8596;${numField(`data-pk="cs" data-p="${i}"`, p.cs, 1, F.cols)}</label>
-          <input type="text" class="fig-ptitle" data-pk="title" data-p="${i}" value="${esc(p.title)}" placeholder="panel title">
+          <input type="text" class="fig-ptitle" data-pk="title" data-p="${i}" value="${esc(p.title)}" placeholder="panel title">${p.ylabel != null ? `
+          <input type="text" class="fig-ptitle" data-pk="ylabel" data-p="${i}" value="${esc(p.ylabel)}" placeholder="Y title" title="This panel's Y title">` : ''}
           <button class="btn is-danger btn-sm" data-del-panel="${i}" title="Remove panel">&#10005;</button>
         </div>`).join('')}
     </div>
@@ -3322,7 +3334,7 @@ function wireControls(){
     } else if (t.dataset.pk){
       const i = +t.dataset.p, p = F.panels[i]; if (!p) return null;
       const k = t.dataset.pk;
-      if (k === 'title'){ p.title = t.value; }
+      if (k === 'title' || k === 'ylabel'){ p[k] = t.value; }
       else {
         // Try the new position/span; if it would land on another panel, keep the
         // old value and put it back in the field.
@@ -3576,6 +3588,8 @@ function wireControls(){
       const i = +delB.dataset.delPanel;
       if (F.panels.length <= 1) return;
       F.panels.splice(i, 1);
+      // (a separate plot's series go with their panel: linked panels, buildModel)
+      F.series = F.series.filter(s=> !(s.sep && s.panel === i));
       F.series.forEach(s=>{ if (s.panel === i) s.panel = 0; else if (s.panel > i) s.panel--; });
       redealPalettes();
       pushUndo(); refresh(true);

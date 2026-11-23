@@ -11,6 +11,7 @@ import { esc, fmtNum, csvLine, linspace, interpLinear, meanArr, stdArr, boxStats
 import { svgEl, Plot, axisReadout } from './plot.js';
 import { boxSmooth, boxWeights, meanStep, widthText, ptsText } from './smooth.js';
 import { PLOT_DL_ICON, CSV_ICON } from './modcharts.js';
+import { snavHtml, snav } from './snav.js';
 
 /* A view (a plot, a table, a chart, a legend) is drawn again only when what it is drawn
    from changed: each keeps the key of its inputs as last drawn, the objects among them by
@@ -416,10 +417,7 @@ export function createPeakAnalysis(host, root, o){
           <div class="col mw520" style="flex:2">
             <div class="plot-nav-row">
               <div class="plot-nav-left">
-                <button class="btn nav-arrow an-prev" id="${p}Prev" aria-label="Previous sample" title="Previous sample (&#8592;)">&#8249;</button>
-                <span id="${p}Idx" class="pill nav-count" style="margin:0">1/1</span>
-                <button class="btn nav-arrow an-next" id="${p}Next" aria-label="Next sample" title="Next sample (&#8594;)">&#8250;</button>
-                <span class="txt-caption" id="${p}CurrentLabel">—</span>
+                ${snavHtml({ prev: p + 'Prev', idx: p + 'Idx', next: p + 'Next', name: p + 'CurrentLabel', prevCls: 'an-prev', nextCls: 'an-next' })}
               </div>
             </div>
             <div class="plot-wrap">
@@ -511,6 +509,7 @@ export function createPeakAnalysis(host, root, o){
   let manualPeaks = []; // per file: array of manually added 2θ positions
   let removedPeaks = []; // per file: array of removed peaks' detected 2θ positions
   const curIdx = ()=> std ? 0 : host.idx();
+  let nav = null;     // its sample selector (snav.js; none on the standard's)
   // Per-field mode: 'shared' | 'per'. Defaults: peak-search fields per-sample, rest shared.
   // (N is the smoothing's chip, blWin the baseline's: its width and its box.)
   const MODE_DEF = std ? { N:'shared', blWin:'shared', pkHeight:'shared', pkProm:'shared', pkDist:'shared', K:'shared', lambda:'shared' }
@@ -859,11 +858,10 @@ export function createPeakAnalysis(host, root, o){
   // The sample on show (the standard's file), its plot and its label.
   function updateView(preserveView){
     const fs = files();
-    const label = $$('CurrentLabel');     // (none on the standard's: its window names it)
-    if (!fs.length || !processed.length){ if (label) label.textContent = '—'; return; }
+    // (the selector: none on the standard's, its window names it)
+    if (nav) nav.update();
+    if (!fs.length || !processed.length) return;
     const k = Math.min(curIdx(), fs.length - 1);
-    if (label && label.textContent !== fs[k].label) label.textContent = fs[k].label;
-    if (!std && $$('Idx').textContent !== (k+1)+'/'+fs.length) $$('Idx').textContent = (k+1)+'/'+fs.length;
     if (host.hidden()) return;
     drawAnalysisInto(k, preserveView);
   }
@@ -1391,6 +1389,8 @@ export function createPeakAnalysis(host, root, o){
     $$('Prev').onclick = ()=> host.step(-1);
     $$('Next').onclick = ()=> host.step(1);
     $$('Std').onclick = ()=> host.openStd();
+    // (its list: any sample, straight; snav.js)
+    nav = snav($$('Prev').closest('.snav'), { count: ()=> files().length, index: ()=> curIdx(), label: i=> files()[i].label, go: i=> host.step(i - curIdx()) });
   }
 
   // Reset peaks: drop manual + removed peaks and re-run the search for the file on show

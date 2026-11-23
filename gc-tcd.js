@@ -6,9 +6,9 @@
    spike finder, the two-pass fit (robust soft-L1 pass to find narrow glitches, then
    ordinary least squares without them, restarted from the generic start when the result
    looks suspicious), scipy's least_squares(method='trf') with bounds, x_scale and the block
-   Jacobian, and the classical trapezoid integration. Output only for H2 and O2: the system
-   peak at 310 s and the baseline step after O2 are fitted because the fit needs them, and
-   returned for display; they are not gases.
+   Jacobian (v545: the classical trapezoids, a check beside the fit, removed). Output only
+   for H2 and O2: the system peak at 310 s and the baseline step after O2 are fitted because
+   the fit needs them, and returned for display; they are not gases.
    Pure ES module: no DOM, no import; runs in Node, in the page and in a worker.
 ========================================================= */
 
@@ -16,7 +16,7 @@ const SQ2 = Math.SQRT2;                 // np.sqrt(2.0)
 const EPS = 2.220446049250313e-16;      // np.finfo(float).eps
 
 /* ---------------------------------------------------------
-   The method: windows, peaks, steps, trapezoids, fit settings
+   The method: windows, peaks, steps, fit settings
    (the numbers of reintegra_tcd.py v2.1, CFG and fit_picchi/_fit defaults)
 --------------------------------------------------------- */
 const deepFreeze = o =>{ if (o && typeof o === 'object' && !Object.isFrozen(o)){ Object.values(o).forEach(deepFreeze); Object.freeze(o); } return o; };
@@ -25,8 +25,6 @@ export const DEFAULT_METHOD = deepFreeze({
   windows: [{ key: 'H2O2', from: 268, to: 326, baseDegree: 1,
     peaks: [{ name: 'H2', t: 287.3, gas: 'h2' }, { name: 'O2', t: 302.3, gas: 'o2' }, { name: 'S310', t: 310.2, gas: null }],
     steps: [{ from: 303, to: 309, prior: { h: -13, hSd: 3, t0: 305.6, t0Sd: 0.6 } }] }],
-  trapezoid: { h2: { left: [281, 283.6], right: [295, 300.5], valley: 'right' },
-    o2: { left: [295, 300.5], right: [304.8, 305.6] } },
   // area -> %mol from the GC software's table (esegui): median of area/%mol over the
   // injections whose table value is at least minValue, when there are minCount of them
   transfer: { h2: { minValue: 0.02, minCount: 10 }, o2: { minValue: 0.012, minCount: 10 } },
@@ -39,7 +37,7 @@ export const DEFAULT_METHOD = deepFreeze({
     robustLoss: 'soft_l1', robustFScale: 3.0, maxNfev: 2000, maxNfevRobust: 100,
     glitch: { noiseTimes: 25, localFraction: 0.25, groupGap: 3, maxWidth: 1.4, near: 1.0, nearFraction: 0.5, pad: 0.6 },
     restart: { chi2r: 4.0, stepSds: 3 },
-    spikes: { threshold: 10, fraction: 0.25, roundsFit: 6, roundsTrapezoid: 3 },
+    spikes: { threshold: 10, fraction: 0.25, roundsFit: 6 },
     step: { width: 0.8, widthMin: 0.15, widthMax: 3.0, widthLogSd: 0.5 },
     apexGrid: 0.02,           // t_apice: argmax of the unit-area shape on this grid (s)
   },
@@ -873,54 +871,6 @@ function apexTime(par, t0, t1, grid){
 }
 
 /* ---------------------------------------------------------
-   The classical trapezoids (trapezi_classici): a straight base line between two points
-   (the mean over a small interval, or the minimum of a valley, 5-point smoothed) and the
-   trapezoid sum of the signal above it between them. Spikes in the stretch replaced by
-   their neighbours' mean; the fit's glitches linearly interpolated over.
---------------------------------------------------------- */
-export function trapezoid(t, yIn, left, right, valley = null, excluded = [], { threshold = 10, fraction = 0.25, rounds = 3 } = {}){
-  const n = t.length, y = Float64Array.from(yIn);
-  const i0 = [];
-  for (let i = 0; i < n; i++) if (t[i] >= left[0] - 2 && t[i] <= right[1] + 2) i0.push(i);
-  const sp = findSpikes(Float64Array.from(i0, i=> y[i]), null, { threshold, fraction, rounds });
-  for (let k = 0; k < i0.length; k++) if (sp[k]){ const i = i0[k]; y[i] = 0.5*(y[i - 1] + y[i + 1]); }
-  for (const [a, b] of excluded){
-    let ia = -1, ib = -1;
-    for (let i = 0; i < n; i++) if (t[i] >= a && t[i] <= b){ if (ia < 0) ia = i; ib = i; }
-    if (ia < 0) continue;
-    ia = Math.max(ia - 1, 0); ib = Math.min(ib + 1, n - 1);
-    const xa = t[ia], xb = t[ib], ya = y[ia], yb = y[ib];
-    for (let i = ia; i <= ib; i++){
-      if (t[i] === xb) y[i] = yb;
-      else { const slope = (yb - ya)/(xb - xa); y[i] = slope*(t[i] - xa) + ya; }
-    }
-  }
-  const point = (iv, isValley)=>{
-    const ii = [];
-    for (let i = 0; i < n; i++) if (t[i] >= iv[0] && t[i] <= iv[1]) ii.push(i);
-    if (isValley){
-      if (ii.length < 5) throw new Error('valley interval too short');
-      let best = -1, bv = Infinity;
-      for (let k = 2; k < ii.length - 2; k++){
-        const v = 0.2*y[ii[k - 2]] + 0.2*y[ii[k - 1]] + 0.2*y[ii[k]] + 0.2*y[ii[k + 1]] + 0.2*y[ii[k + 2]];
-        if (best < 0 || v < bv){ best = k; bv = v; }
-      }
-      return [t[ii[best]], bv];
-    }
-    const tt = Float64Array.from(ii, i=> t[i]), yy = Float64Array.from(ii, i=> y[i]);
-    return [npMean(tt), npMean(yy)];
-  };
-  const [t1, y1] = point(left, valley === 'left');
-  const [t2, y2] = point(right, valley === 'right');
-  const im = [];
-  for (let i = 0; i < n; i++) if (t[i] >= t1 && t[i] <= t2) im.push(i);
-  const yb = Float64Array.from(im, i=> y[i] - (y1 + (y2 - y1)*(t[i] - t1)/(t2 - t1)));
-  const terms = new Float64Array(Math.max(0, im.length - 1));
-  for (let k = 0; k < terms.length; k++) terms[k] = (yb[k + 1] + yb[k])/2*(t[im[k + 1]] - t[im[k]]);
-  return { area: npSum(terms), t1, t2 };
-}
-
-/* ---------------------------------------------------------
    Reading the raw chromatograms (<run>_TCD.csv): ';'-separated, decimal comma, no header,
    time (s) then one column per injection, each line ending with ';', a column possibly
    ending early with blanks. Also ','- or tab-separated with '.' decimals.
@@ -964,7 +914,7 @@ export function readTcd(text){
 }
 
 /* ---------------------------------------------------------
-   One chromatogram: every window fitted, the gases' areas, the trapezoids.
+   One chromatogram: every window fitted, the gases' areas.
    Compact and JSON-serialisable (no long arrays). A window past the data's end gives NaN.
    (JSON writes NaN as null: read null back as NaN.)
 --------------------------------------------------------- */
@@ -973,7 +923,7 @@ export function integrateChromatogram(tIn, yIn, method = DEFAULT_METHOD){
   for (let i = 0; i < tIn.length; i++) if (Number.isFinite(tIn[i]) && Number.isFinite(yIn[i])){ tt.push(tIn[i]); yy.push(yIn[i]); }
   const t = Float64Array.from(tt), y = Float64Array.from(yy);
   const fit = fitDefaults(method.fit);
-  const windows = [], gases = {}, exclOf = {};
+  const windows = [], gases = {};
   for (const win of method.windows){
     const nan = { key: win.key, p: null, noise: NaN, chi2r: NaN, rms: NaN, cost: NaN, nfev: 0, nfevTotal: 0, ok: false, spikes: [], excluded: [], restarted: false, restartWon: false, tc: NaN,
       peaks: win.peaks.map(pk=> ({ name: pk.name, gas: pk.gas, area: NaN, sd: NaN, tApex: NaN, params: null })),
@@ -986,20 +936,10 @@ export function integrateChromatogram(tIn, yIn, method = DEFAULT_METHOD){
     const peaks = win.peaks.map((pk, k)=> ({ name: pk.name, gas: pk.gas, area: r.areas[k], sd: r.sd[k], tApex: apexTime(r.params[k], t0, t1, fit.apexGrid), params: r.params[k] }));
     windows.push({ key: win.key, p: r.p, noise: r.noise, chi2r: r.chi2r, rms: r.rms, cost: r.cost, nfev: r.nfev, nfevTotal: r.nfevTotal, ok: r.ok,
       spikes: r.spikes, excluded: r.excluded, restarted: r.restarted, restartWon: r.restartWon, tc: r.tc, peaks, steps: r.steps });
-    for (const pk of win.peaks) if (pk.gas) exclOf[pk.gas] = r.excluded;
   }
   windows.forEach((w, wi)=> w.peaks.forEach(pk=>{
-    if (pk.gas) gases[pk.gas] = { area: pk.area, sd: pk.sd, tApex: pk.tApex, chi2r: w.chi2r, window: method.windows[wi].key, trap: NaN };
+    if (pk.gas) gases[pk.gas] = { area: pk.area, sd: pk.sd, tApex: pk.tApex, chi2r: w.chi2r, window: method.windows[wi].key };
   }));
-  for (const [gas, tr] of Object.entries(method.trapezoid || {})){
-    let a = NaN;
-    try {
-      a = trapezoid(t, y, tr.left, tr.right, tr.valley || null, exclOf[gas] || [],
-        { threshold: fit.spikes.threshold, fraction: fit.spikes.fraction, rounds: fit.spikes.roundsTrapezoid }).area;
-    } catch(e){ a = NaN; }
-    if (!gases[gas]) gases[gas] = { area: NaN, sd: NaN, tApex: NaN, chi2r: NaN, window: null, trap: a };
-    else gases[gas].trap = a;
-  }
   return { gases, windows };
 }
 

@@ -1,0 +1,144 @@
+import { esc } from './utils.js';
+
+/* =========================================================
+   THE SAMPLE SELECTOR (v545)
+   One selector for every module that steps through its samples, files, images, traces or
+   chromatograms: DRS's Tauc and Urbach cards, XRPD's Peaks/Scherrer and Rietveld cards, SEM's
+   image, Iodometry's trace, Custom's file in its Data card, GC's Integration card (its file
+   and its chromatogram). Two halves of exactly one width (a grid of two equal columns):
+   - `‹ n/N ›`, one group, the count centred between the arrows, the arrows at the group's ends;
+   - the name, cut with "…" where the half is narrower, and a small down-arrow after it. The
+     name (the full one in its tooltip) opens a list of every item, to go straight to one:
+     the look and the conduct of the app's other menus (the kinds' menu, cards.js: `.an-menu`,
+     its anchor lit while it is open, closed by Escape, by a click anywhere else or by a
+     choice), with the keyboard too (↑ ↓, Home, End, Enter, Escape, Tab).
+   Mirrored (`mirror`), the name comes first and the arrows last: GC's chromatogram selector,
+   at the right of its plot, so that both selectors' arrows are outermost.
+   The arrows keep their ids and classes (utils.js SAMPLE_NAV: ← → press the first one on
+   show); the count and the name too (the tests read them).
+   snavHtml(o) is the markup; snav(el, o) its conduct, given back as { update(), close() }:
+   update() writes the count, the name, its tooltip and its colour (`bad`: red) from o's
+   callbacks, and repaints the list if it is open.
+========================================================= */
+
+/* o: { prev, idx, next, name (ids, each optional), prevCls, nextCls (classes beside
+   nav-arrow), what (the item, as the arrows' titles say it: 'sample'), keys (the arrows'
+   titles name ← →: true), mirror, cls } */
+export function snavHtml({ prev, idx, next, name, prevCls = '', nextCls = '', what = 'sample', keys = true, mirror = false, cls = '' } = {}){
+  const id = v => v ? ` id="${esc(v)}"` : '';
+  const steps = `<span class="snav-steps">`
+    + `<button type="button" class="btn nav-arrow${prevCls ? ' ' + prevCls : ''}"${id(prev)} aria-label="Previous ${esc(what)}" title="Previous ${esc(what)}${keys ? ' (&#8592;)' : ''}">&#8249;</button>`
+    + `<span${id(idx)} class="pill nav-count">1/1</span>`
+    + `<button type="button" class="btn nav-arrow${nextCls ? ' ' + nextCls : ''}"${id(next)} aria-label="Next ${esc(what)}" title="Next ${esc(what)}${keys ? ' (&#8594;)' : ''}">&#8250;</button></span>`;
+  const pick = `<button type="button" class="snav-pick" aria-haspopup="listbox" aria-expanded="false" aria-label="Choose a ${esc(what)} from the list">`
+    + `<span class="snav-name"${id(name)}>&mdash;</span><span class="snav-caret" aria-hidden="true"></span></button>`;
+  return `<div class="snav${mirror ? ' snav-mirror' : ''}${cls ? ' ' + cls : ''}">${mirror ? pick + steps : steps + pick}</div>`;
+}
+
+/* The selector's conduct. o: { count() (how many items), index() (the one on show),
+   label(i) (its name), title(i) (its tooltip: its name by default), bad(i) (its name red),
+   go(i) (show item i) }. The arrows stay the module's own (it wires them as it did). */
+export function snav(el, o){
+  const pick = el.querySelector('.snav-pick'), nameEl = el.querySelector('.snav-name'), idxEl = el.querySelector('.nav-count');
+  const mirror = el.classList.contains('snav-mirror');
+  const count = ()=> Math.max(0, o.count() | 0);
+  const cur = ()=>{ const n = count(), i = o.index() | 0; return n ? Math.min(Math.max(0, i), n - 1) : -1; };
+  const titleOf = i => o.title ? o.title(i) : o.label(i);
+  let menu = null, ac = null;
+
+  function update(){
+    const n = count(), i = cur();
+    const t = n ? `${i + 1}/${n}` : '0/0', l = n ? String(o.label(i)) : '—';
+    if (idxEl && idxEl.textContent !== t) idxEl.textContent = t;
+    if (nameEl.textContent !== l) nameEl.textContent = l;
+    const tip = n ? String(titleOf(i)) : '';
+    if (nameEl.title !== tip) nameEl.title = tip;
+    nameEl.classList.toggle('is-bad', !!(n && o.bad && o.bad(i)));
+    pick.disabled = !n;
+    if (menu){ if (!n) close(); else paint(); }
+  }
+
+  // The list: every item, the one on show marked, the suspicious red, each its full name.
+  function paint(){
+    const n = count(), i0 = cur(), had = menu.querySelector('[data-i]:focus');
+    const focusAt = had ? +had.dataset.i : i0;
+    menu.innerHTML = Array.from({ length: n }, (_, i)=>{
+      const full = String(titleOf(i)), bad = !!(o.bad && o.bad(i));
+      return `<button type="button" role="option" data-i="${i}" aria-selected="${i === i0}" class="${i === i0 ? 'is-current' : ''}${bad ? ' is-bad' : ''}"${full !== String(o.label(i)) ? ` title="${esc(full)}"` : ''}>`
+        + `<span class="snav-k">${i + 1}</span><span class="snav-item">${esc(o.label(i))}</span></button>`;
+    }).join('');
+    const f = menu.querySelector(`[data-i="${Math.min(focusAt, n - 1)}"]`);
+    if (had && f) f.focus({ preventScroll: true });
+  }
+  // Under its anchor (above it where the page has no room below), its edge on the
+  // anchor's: the left one, the right one for a mirrored selector.
+  function place(){
+    if (!menu) return;
+    if (!pick.isConnected || !pick.getClientRects().length){ close(); return; }
+    const r = pick.getBoundingClientRect(), w = menu.offsetWidth, h = menu.offsetHeight;
+    let top = r.bottom + 6;
+    if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 6);
+    const left = mirror ? r.right - w : r.left;
+    menu.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, left)) + 'px';
+    menu.style.top = Math.max(8, top) + 'px';
+  }
+  function open(){
+    if (menu || !count()) return;
+    menu = document.createElement('div');
+    menu.className = 'an-menu snav-menu';
+    menu.setAttribute('role', 'listbox');
+    menu.setAttribute('aria-label', pick.getAttribute('aria-label') || 'Items');
+    paint();
+    document.body.appendChild(menu);
+    pick.classList.add('cp-anchored');
+    pick.setAttribute('aria-expanded', 'true');
+    place();
+    const c = menu.querySelector('.is-current') || menu.querySelector('[data-i]');
+    if (c){ c.focus({ preventScroll: true }); c.scrollIntoView({ block: 'nearest' }); }
+    ac = new AbortController();
+    const signal = ac.signal;
+    menu.addEventListener('click', e=>{
+      const b = e.target.closest('[data-i]');
+      if (!b) return;
+      const i = +b.dataset.i, byKey = e.detail === 0;
+      close(byKey);
+      if (i !== cur()) o.go(i);
+      update();
+    }, { signal });
+    menu.addEventListener('keydown', onKey, { signal });
+    document.addEventListener('pointerdown', e=>{ if (menu && !menu.contains(e.target) && !pick.contains(e.target)) close(); }, { capture: true, signal });
+    document.addEventListener('keydown', e=>{ if (e.key === 'Escape' && menu){ e.stopPropagation(); e.preventDefault(); close(true); } }, { capture: true, signal });
+    window.addEventListener('scroll', e=>{ if (menu && !menu.contains(e.target)) place(); }, { capture: true, signal });
+    window.addEventListener('resize', place, { signal });
+  }
+  // ↑ ↓ Home End move along the list, Enter or Space choose (the button's own click), Tab
+  // closes; ← → do nothing here (they would step the samples under the list).
+  function onKey(e){
+    const items = [...menu.querySelectorAll('[data-i]')], at = items.indexOf(document.activeElement);
+    let to = -1;
+    if (e.key === 'ArrowDown') to = at < 0 ? 0 : Math.min(items.length - 1, at + 1);
+    else if (e.key === 'ArrowUp') to = at < 0 ? items.length - 1 : Math.max(0, at - 1);
+    else if (e.key === 'Home') to = 0;
+    else if (e.key === 'End') to = items.length - 1;
+    else if (e.key === 'PageDown') to = Math.min(items.length - 1, Math.max(0, at) + 10);
+    else if (e.key === 'PageUp') to = Math.max(0, at - 10);
+    else if (e.key === 'Tab'){ e.preventDefault(); close(true); return; }
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight'){ e.preventDefault(); e.stopPropagation(); return; }
+    else return;
+    e.preventDefault(); e.stopPropagation();
+    if (items[to]){ items[to].focus({ preventScroll: true }); items[to].scrollIntoView({ block: 'nearest' }); }
+  }
+  // (`back`: the focus given back to the name, as after a choice by the keyboard)
+  function close(back){
+    if (!menu) return;
+    if (ac){ ac.abort(); ac = null; }
+    menu.remove(); menu = null;
+    pick.classList.remove('cp-anchored');
+    pick.setAttribute('aria-expanded', 'false');
+    if (back && pick.isConnected) pick.focus({ preventScroll: true });
+  }
+  pick.addEventListener('click', ()=>{ if (menu) close(); else open(); });
+  pick.addEventListener('keydown', e=>{ if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !menu){ e.preventDefault(); open(); } });
+  update();
+  return { update, close, open, isOpen: ()=> !!menu, el };
+}

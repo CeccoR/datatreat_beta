@@ -213,6 +213,8 @@ function backgroundOf(el){
 // samples (utils.js); not from a field, nor under a window open over the plot.
 window.addEventListener('keydown', e=>{
   if (!_locked.size) return;
+  // (the keys of a selector's list are its own: snav.js)
+  if (e.target && e.target.closest && e.target.closest('.snav-menu')) return;
   if (e.key === 'Escape'){
     const list = [..._locked]; _locked.clear();
     for (const svg of list){ svg._pick = null; if (svg._plot) svg._plot._repaintPick(); }
@@ -298,6 +300,8 @@ class Plot{
     const wrap = this.svg.closest('.plot-wrap');
     if (wrap){ wrap.style.userSelect = wrap.style.webkitUserSelect = active ? 'none' : ''; wrap.classList.toggle('tool-armed', active); }
     if (this._onModeChange) this._onModeChange(mode);
+    // (linked panels, linkX: one toolbar arms the tool in each)
+    if (this._linked && !this._linking) for (const q of this._linked) if (q !== this){ q._linking = true; try { q.setMode(mode); } finally { q._linking = false; } }
   }
   px(x){ const {w}=this.size(); const m=this.margin; return m.l + (x-this.xmin)/(this.xmax-this.xmin)*(w-m.l-m.r); }
   py(y){ const {h}=this.size(); const m=this.margin; return h-m.b - (y-this.ymin)/(this.ymax-this.ymin)*(h-m.t-m.b); }
@@ -370,7 +374,9 @@ class Plot{
     const xl = svgEl('text',{x:w/2,y:h-4,'font-size':11,fill:'#c4ccd6','text-anchor':'middle','class':'plot-label'}); xl.textContent=this.xlabel;
     const yl = svgEl('text',{x:12,y:h/2,'font-size':11,fill:'#c4ccd6','text-anchor':'middle',transform:`rotate(-90 12 ${h/2})`,'class':'plot-label'});
     if(this.ylabelSvg){ yl.innerHTML=this.ylabelSvg; lowerSubs(yl, 11); } else yl.textContent=this.ylabel;
-    this.gAxes.appendChild(xl); this.gAxes.appendChild(yl);
+    // (a panel over another, whose x title is the one under it's: noXTitle, v545)
+    if (!this._opts.noXTitle) this.gAxes.appendChild(xl);
+    this.gAxes.appendChild(yl);
     // Measured in place; a plot out of sight measures 0 and is redrawn when shown.
     if (yl.getComputedTextLength() > h - 10) wrapYLabel(yl, this.ylabelSvg || this.ylabel, !!this.ylabelSvg, 11);
   }
@@ -647,19 +653,32 @@ class Plot{
     this._pickSoon();
   }
   _refresh(){ this.drawAxes(); this._redrawFromStored(); if (this._onView) this._onView(); }
-  attachTools(wrapEl){
+  /* The view moved by the pointer (a pan, a zoom, a reset): drawn again, and the panels
+     linked to it (linkX) given its x range at once, each keeping its own y. */
+  _viewMoved(){
+    this._refresh();
+    const L = this._linked;
+    if (L) for (const q of L) if (q !== this && q.svg._plot === q && (q.xmin !== this.xmin || q.xmax !== this.xmax)){ q.xmin = this.xmin; q.xmax = this.xmax; q._refresh(); }
+  }
+  /* `o` (v545, linked panels: linkX): { host } the element that holds the toolbar and the
+     page's download button, in place of the plot's box (a line of its own above the panels);
+     { group } the panels the toolbar serves, this one first: the images and the composer
+     take them all, the tools arm them all. */
+  attachTools(wrapEl, o){
+    const box = (o && o.host) || wrapEl, group = o && o.group && o.group.length > 1 ? o.group : null;
+    const also = group ? group.filter(p=> p !== this).map(p=> p.svg) : null;
     // The previous tool row is dropped at the END of this function, not here: it
     // holds the page's download button (and the CSV button built from it), which
     // are adopted rather than recreated, so removing it first would lose them.
-    const old = wrapEl.querySelector('.plot-tool-btns');
+    const old = box.querySelector('.plot-tool-btns');
     // Group the download button + tool buttons into a single column
-    let col = wrapEl.querySelector('.plot-btn-col');
+    let col = box.querySelector('.plot-btn-col');
     if (!col){
       col = document.createElement('div');
       col.className = 'plot-btn-col';
-      const dlBtn = wrapEl.querySelector('.plot-dl-btn');
-      if (dlBtn) wrapEl.insertBefore(col, dlBtn);
-      else wrapEl.appendChild(col);
+      const dlBtn = box.querySelector('.plot-dl-btn');
+      if (dlBtn) box.insertBefore(col, dlBtn);
+      else box.appendChild(col);
     }
     const div = document.createElement('div');
     div.className = 'plot-tool-btns';
@@ -679,7 +698,7 @@ class Plot{
     snapBtn.onclick = ()=>{
       const dlBtn = col.querySelector('.plot-dl-btn');
       const baseName = dlBtn && dlBtn.dataset.dlName ? dlBtn.dataset.dlName.replace(/\.[^.]+$/, '') : 'plot';
-      downloadSvgClean(this.svg, baseName+'_current.svg', viewLeg(), true);
+      downloadSvgClean(this.svg, baseName+'_current.svg', viewLeg(), true, false, also);
     };
     // Copy current view to the clipboard as a PNG (only where the API is available).
     let copyBtn = null;
@@ -691,7 +710,7 @@ class Plot{
       copyBtn.onclick = async ()=>{
         copyBtn.classList.add('is-on');
         try {
-          const blob = await downloadSvgClean(this.svg, 'plot.png', viewLeg(), true, true);
+          const blob = await downloadSvgClean(this.svg, 'plot.png', viewLeg(), true, true, also);
           await navigator.clipboard.write([new ClipboardItem({'image/png': blob})]);
         } catch(e){ /* clipboard denied / unsupported — silently ignore */ }
         finally { setTimeout(()=>copyBtn.classList.remove('is-on'), 200); }
@@ -723,13 +742,13 @@ class Plot{
     figBtn.onclick = async ()=>{
       if (_figOpening) return;
       _figOpening = true;
-      const dlBtn = wrapEl.querySelector('.plot-dl-btn');
+      const dlBtn = box.querySelector('.plot-dl-btn');
       const legId = dlBtn && dlBtn.dataset.dlLegend;
       const name = (dlBtn && dlBtn.dataset.dlName || 'figure').replace(/\.[^.]+$/, '');
       try {
         const mod = await import('./figure.js');
         if (!document.querySelector('.fig-backdrop'))
-          mod.openFigureEditor(this, { legendEl: legId ? near(dlBtn, legId) : null, name, ...(this.figure ? { figure: this.figure } : {}) });
+          mod.openFigureEditor(this, { legendEl: legId ? near(dlBtn, legId) : null, name, ...(this.figure ? { figure: this.figure } : {}), ...(group ? { also: group.filter(p=> p !== this) } : {}) });
       } catch(err){ console.error('figure composer failed to load', err); }
       finally { _figOpening = false; }
     };
@@ -737,8 +756,8 @@ class Plot{
     // Order, top to bottom: composer, CSV, download image, snapshot, copy, pan, zoom.
     // The download button belongs to the page, so it is adopted rather than created;
     // the CSV button is built from the descriptors it carries.
-    const dlBtn2 = wrapEl.querySelector('.plot-dl-btn');
-    let csvBtn = wrapEl.querySelector('.plot-csv-btn');
+    const dlBtn2 = box.querySelector('.plot-dl-btn');
+    let csvBtn = box.querySelector('.plot-csv-btn');
     if (!csvBtn && dlBtn2 && dlBtn2.dataset.csvMod && dlBtn2.dataset.csvNames)
       csvBtn = makeCsvButton(dlBtn2.dataset.csvMod, dlBtn2.dataset.csvNames);
     if (dlBtn2 && !dlBtn2.title) dlBtn2.title = 'Download image';   // like the others
@@ -881,6 +900,30 @@ class Plot{
     r.setAttribute('x', lx); r.setAttribute('y', ly); r.setAttribute('width', bw); r.setAttribute('height', bh);
     tx.setAttribute('x', lx + 5); tx.setAttribute('y', ly + bh/2);
   }
+  /* A label of a few lines by (x, y) px, in a picked trace's label's style (_pickLabel): in
+     `color` where that reads on the background, else in the background's with a border; kept
+     in the plot. Drawn into `g` (a module's own layer: GC's run overview, a point hovered). */
+  tagAt(g, x, y, lines, color){
+    const {w,h}=this.size(); const m=this.margin;
+    const bg = backgroundOf(this.svg), col = rgbOf(color), own = col && contrastOf(col, bg) >= 3;
+    const ink = inkOn(own ? col : bg);
+    const box = svgEl('g', {'class':'plot-pick-label', 'pointer-events':'none'});
+    const r = svgEl('rect', own ? {x:0, y:0, width:0, height:0, fill:color}
+                                : {x:0, y:0, width:0, height:0, fill:`rgb(${bg.join(',')})`, stroke:ink, 'stroke-width':1});
+    const tx = svgEl('text', {x:0, y:0, 'font-size':11, fill:ink});
+    lines.forEach((l, i)=>{ const s = svgEl('tspan', {x:0, dy: i ? 14 : 0}); s.textContent = l; tx.appendChild(s); });
+    box.append(r, tx); g.appendChild(box);
+    const tw = Math.max(...[...tx.childNodes].map((s, i)=> s.getComputedTextLength() || lines[i].length*6));
+    const bw = tw + 10, bh = 14*lines.length + 4;
+    let lx = x + 12, ly = y - 12 - bh;
+    if (lx + bw > w - m.r) lx = x - 12 - bw;
+    if (lx < m.l) lx = m.l;
+    if (ly < m.t) ly = Math.min(y + 12, h - m.b - bh);
+    r.setAttribute('x', lx); r.setAttribute('y', ly); r.setAttribute('width', bw); r.setAttribute('height', bh);
+    tx.setAttribute('y', ly + 13);
+    tx.querySelectorAll('tspan').forEach(s=> s.setAttribute('x', lx + 5));
+    return box;
+  }
   /* The pointer at (cx, cy), px (null: off the plot): the trace locked or hovered drawn out,
      and the crosshair on its data point (nearestIndex). `keep`: the locked point stays the
      one it was (an arrow key, a redraw), whatever the pointer. */
@@ -969,7 +1012,7 @@ class Plot{
         const dy=(e.clientY-pan.y)/(h-m.t-m.b)*(pan.ymax-pan.ymin);
         P.xmin=pan.xmin-dx; P.xmax=pan.xmax-dx;
         P.ymin=pan.ymin+dy; P.ymax=pan.ymax+dy;
-        P._refresh();
+        P._viewMoved();
         P._clearCrosshair();
       } else if (P._mode === 'zoom' && zoomStart && zoomRect){
         const svgRect = svg.getBoundingClientRect();
@@ -1018,7 +1061,7 @@ class Plot{
           const y1=P.invY(Math.min(cy,zoomStart.cy)), y2=P.invY(Math.max(cy,zoomStart.cy));
           P.xmin=Math.min(x1,x2); P.xmax=Math.max(x1,x2);
           P.ymin=Math.min(y1,y2); P.ymax=Math.max(y1,y2);
-          P._refresh();
+          P._viewMoved();
         }
       }
       endDrag();
@@ -1033,7 +1076,7 @@ class Plot{
       const P = svg._plot; if (!P || !P._mode || e.target.closest('.plot-goverlay')) return;
       P.xmin=P._origXmin; P.xmax=P._origXmax;
       P.ymin=P._origYmin; P.ymax=P._origYmax;
-      P._refresh();
+      P._viewMoved();
     });
   }
 }
@@ -1066,9 +1109,29 @@ window.addEventListener('resize', ()=>{
 });
 
 // With asBlob=true, resolves to a PNG Blob of the (current-view) plot instead of
-// triggering a download — used by the "copy image" button.
-function downloadSvgClean(svgNode, filename, legendEl, currentView, asBlob){
+// triggering a download — used by the "copy image" button. `also` (v545): the svgs of the
+// panels linked to it (linkX), stacked under it in one image, its legend under them all.
+function downloadSvgClean(svgNode, filename, legendEl, currentView, asBlob, also){
   const ns = 'http://www.w3.org/2000/svg';
+  const parts = [svgNode, ...(also || [])].map(s=> cleanCopy(s, currentView));
+  let workSvg, w, h;
+  if (parts.length === 1) ({ workSvg, w, h } = parts[0]);
+  else {
+    w = Math.max(...parts.map(q=> q.w)); h = 0;
+    workSvg = document.createElementNS(ns, 'svg');
+    workSvg.setAttribute('xmlns', ns);
+    workSvg.setAttribute('font-family', 'Arial, sans-serif');
+    for (const q of parts){
+      q.workSvg.setAttribute('x', 0); q.workSvg.setAttribute('y', h);
+      q.workSvg.setAttribute('width', q.w); q.workSvg.setAttribute('height', q.h);
+      workSvg.appendChild(q.workSvg); h += q.h;
+    }
+  }
+  return exportSvg(workSvg, w, h, filename, legendEl, asBlob);
+}
+// A plot's svg as it is exported: cleaned of what the page alone shows, in the export's ink,
+// its ticks drawn on every side; at its full range unless `currentView`. → { workSvg, w, h }
+function cleanCopy(svgNode, currentView){
   const plotObj = svgNode._plot || null;
   const bbox = svgNode.getBoundingClientRect();
   const w = bbox.width || 900; const h = bbox.height || 480;
@@ -1127,7 +1190,8 @@ function downloadSvgClean(svgNode, filename, legendEl, currentView, asBlob){
     const toSvgY = yv => h-m.b - (yv-ry1)/(ry2-ry1)*(h-m.t-m.b);
     const addLine = (x1,y1,x2,y2,sw) => gAxes.appendChild(svgEl('line',{x1,y1,x2,y2,stroke:TS,'stroke-width':sw}));
 
-    if (!plotObj.noXTickLabels){
+    // (a panel over another, its x labels on the one under it, keeps its ticks: xTickMarks)
+    if (!plotObj.noXTickLabels || plotObj._opts.xTickMarks){
       const xTicks = plotObj._opts.xTickStep
         ? fixedTicks(rx1, rx2, plotObj._opts.xTickStep)
         : niceTicks(rx1, rx2, 5);
@@ -1179,6 +1243,12 @@ function downloadSvgClean(svgNode, filename, legendEl, currentView, asBlob){
     }
   }
 
+  return { workSvg, w, h };
+}
+// The export of `workSvg` (w × h): the legend under it, a white page, then the file (its format
+// the settings') or, asBlob, a PNG Blob.
+function exportSvg(workSvg, w, h, filename, legendEl, asBlob){
+  const ns = 'http://www.w3.org/2000/svg';
   // Parse legend
   const legItems = [];
   if (legendEl) legendEl.querySelectorAll('span').forEach(span=>{
@@ -1275,10 +1345,21 @@ document.addEventListener('click', e=>{
   if (!btn) return;
   const el = near(btn, btn.dataset.dlSvg);
   const legEl = btn.dataset.dlLegend ? near(btn, btn.dataset.dlLegend) : null;
-  if (el) downloadSvgClean(el, btn.dataset.dlName || btn.dataset.dlSvg+'.svg', legEl);
+  // (linked panels: the others' svgs, data-dl-also, stacked under it)
+  const also = btn.dataset.dlAlso ? btn.dataset.dlAlso.split(',').map(id=> near(btn, id.trim())).filter(Boolean) : null;
+  if (el && also && also.length) downloadSvgClean(el, btn.dataset.dlName || btn.dataset.dlSvg+'.svg', legEl, false, false, also);
+  else if (el) downloadSvgClean(el, btn.dataset.dlName || btn.dataset.dlSvg+'.svg', legEl);
 });
+
+/* Panels stacked in one box that share their x (v545, GC's chromatogram over its residuals):
+   a pan, a zoom or a reset in one of them, the panel under the pointer, gives the others its
+   x range at once (Plot._viewMoved), each keeping its own y; a tool armed in one is armed in
+   all (setMode). One toolbar serves them (attachTools with { group }): its images stack the
+   panels, its composer takes each as a panel of its own. Called again whenever a panel is
+   made anew. */
+function linkX(plots){ plots.forEach(p=>{ p._linked = plots; }); }
 
 
 export {
-  niceTicks, fmtTick, axisReadout, svgEl, SUB_DROP, TILT_DY, Plot
+  niceTicks, fmtTick, axisReadout, svgEl, SUB_DROP, TILT_DY, Plot, linkX
 };

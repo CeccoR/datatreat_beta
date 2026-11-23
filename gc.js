@@ -1687,10 +1687,10 @@ function createGc({ key, root, layer, shown }){
     if (!card || !c) return;
     const n = fileSafe(a.name);
     if (a.type === 'integ'){
-      const w = card.querySelectorAll('.plot-wrap');
-      nameDownloads(w[0], `${n} - GC_chromatogram.svg`);
-      nameDownloads(w[1], `${n} - GC_residual.svg`);
-      nameDownloads(w[2], `${n} - GC_run_overview.svg`, `${n} - integration.csv`);
+      // (v545: the chromatogram over its residuals, one plot whose toolbar is on the line of
+      // its selectors; the run overview)
+      nameDownloads(card.querySelector('.gci-tools'), `${n} - GC_chromatogram.svg`, `${n} - chromatogram.csv`);
+      nameDownloads(card.querySelector('svg.gci-over').closest('.plot-wrap'), `${n} - GC_run_overview.svg`, `${n} - integration.csv`);
       return;
     }
     card.querySelector('.table-csv-btn').dataset.csvNames = `${n} - gc_info.csv`;

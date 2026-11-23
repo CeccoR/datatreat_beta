@@ -3,6 +3,7 @@ import { Plot, svgEl, axisReadout } from './plot.js';
 import { moduleKit, wideCsv, isObj, num } from './modkit.js';
 import { viewOf, setView, viewKey, swatchLegend } from './modcharts.js';
 import { decodeText, textLines, splitFields, parseNum, isNum, nameUnit, SEPS } from './textdata.js';
+import { snavHtml, snav } from './snav.js';
 
 /* =========================================================
    IODOMETRY MODULE (v533)
@@ -218,6 +219,8 @@ const DEF = { tRead: 240, minProm: 0.01 };
 // An Iodometry tab's instance (utils.js makeInstance: ctx { key, root, layer, shown }).
 function createIodo({ key, root, layer, shown }){
   const $ = id => root.querySelector('#' + id);
+  // The trace selector (snav.js), its markup first: the module finds its arrows by their ids.
+  $('iodoNav').innerHTML = snavHtml({ prev: 'iodoPrev', idx: 'iodoIdx', next: 'iodoNext', name: 'iodoCurrentLabel', what: 'trace' });
   let stale = false, drawnAt = '';
   const drawable = ()=> shown() || !(stale = true);
   // The module's own state: the reading time (s), the injection search's minimum prominence, the calibration.
@@ -301,6 +304,9 @@ function createIodo({ key, root, layer, shown }){
   }
   $('iodoPrev').addEventListener('click', ()=> step(-1));
   $('iodoNext').addEventListener('click', ()=> step(1));
+  // (its list: any trace, straight)
+  const nav = snav($('iodoNav').querySelector('.snav'), { count: ()=> files.length, index: ()=> Math.max(0, files.indexOf(curFile())),
+    label: i=> files[i].label, title: i=> tipOf(files[i]), go: i=> step(i - Math.max(0, files.indexOf(curFile()))) });
 
   /* ---- A trace's results: its alignment, its reading (the aligned absorbance at the reading
      time) and, calibrated, its concentration ---- */
@@ -340,10 +346,8 @@ function createIodo({ key, root, layer, shown }){
       : !L ? 'Calibration: <b>incomplete</b>, not used'
       : `Calibration: <b>A = ${esc(sig(L.m))} × c ${L.q < 0 ? '−' : '+'} ${esc(sig(Math.abs(L.q)))}</b>${Number.isFinite(L.r2) ? `, R² = <b>${esc(L.r2.toFixed(4))}</b>` : ''}${cal.unit.trim() ? `, c in <b>${esc(cal.unit.trim())}</b>` : ''}`;
     if (!f) return;
-    const i = files.indexOf(f), r = resultOf(f);
-    $('iodoIdx').textContent = `${i + 1}/${files.length}`;
-    $('iodoCurrentLabel').textContent = f.label;
-    $('iodoCurrentLabel').title = tipOf(f);
+    const r = resultOf(f);
+    nav.update();
     $('iodoInj').textContent = r.al ? `${fix(r.al.t0, 2)} s` : 'none: click the plot';
     $('iodoBg').textContent = r.al ? fix(r.al.min, 4) : 'n/a';
     $('iodoA').textContent = r.al ? (Number.isFinite(r.A) ? fix(r.A, 4) : `n/a (the trace ends ${fix(r.al.xs[r.al.xs.length - 1], 1)} s after the injection)`) : 'n/a';

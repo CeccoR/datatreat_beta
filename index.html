@@ -377,12 +377,8 @@
         <div class="instr-block"><b>Images.</b> Every image, with its crop; a click shows it in the editor. The chain on a thumbnail links its image: linked images share one crop, narrowed to fit wherever an image is smaller (unlinked, an image keeps the crop it had). <b>Link all</b> links the images chosen in the selector, around the crop of the one in the editor. The selector chooses which images the intensity settings apply to: <b>All</b>, every image alike; a group, that group's images alone, the others keeping theirs. Going from All to the groups, each group starts from All's settings; going back to All, All takes the settings of the group on show. <b>Crop.</b> Each image starts with its default crop, the whole image less its info bar: <b>Default</b> ticked, its fields are locked; drag the frame's handles or sides to resize it, inside it to move it (which unticks Default). A ratio, when locked, holds while resizing. The toolbar on the image fits it, pans it, or zooms into an area (with a tool on, the wheel zooms and a double click fits). <b>Intensity.</b> Each image's grey levels go through one curve, drawn over the histogram of its crop: first the normalisation (none; a stretch of each image between two percentiles of its own levels; or the reference image's mean and SD, or its whole histogram, given to every image), then contrast, brightness and gamma; <b>This image</b> adds its own correction on top. Each <b>Default</b> locks its settings at their defaults. Statistics come from each crop, its saturated pixels left out. The images themselves are never changed.</div>
         <div class="sem-work">
           <div class="plot-nav-row sem-work-nav">
-            <div class="plot-nav-left">
-              <button class="btn nav-arrow" id="semPrev" aria-label="Previous image" title="Previous image (&#8592;)">&#8249;</button>
-              <span id="semIdx" class="pill nav-count" style="margin:0">1/1</span>
-              <button class="btn nav-arrow" id="semNext" aria-label="Next image" title="Next image (&#8594;)">&#8250;</button>
-              <span class="txt-caption" id="semCurName">&mdash;</span>
-            </div>
+            <!-- (the image selector: snav.js, filled by sem.js) -->
+            <div class="plot-nav-left" id="semNav"></div>
           </div>
           <div class="sem-col-view">
             <div class="plot-wrap sem-wrap">
@@ -461,12 +457,8 @@
              the card, its box as tall as the Plot cards' charts, scrolling both ways) -->
         <div class="fig-data">
           <div class="plot-nav-row fig-data-nav">
-            <div class="plot-nav-left">
-              <button type="button" class="btn nav-arrow" id="figFilePrev" aria-label="Previous file" title="Previous file">&#8249;</button>
-              <span id="figFileIdx" class="pill nav-count" style="margin:0">1/1</span>
-              <button type="button" class="btn nav-arrow" id="figFileNext" aria-label="Next file" title="Next file">&#8250;</button>
-              <span class="txt-caption" id="figFileName">—</span>
-            </div>
+            <!-- (the file selector: snav.js, filled by fig.js) -->
+            <div class="plot-nav-left" id="figFileNav"></div>
             <label class="sem-check fig-same" title="The roles of the file shown given to every file, by the columns' places"><input type="checkbox" id="figSame"> Same roles for all files</label>
           </div>
           <div class="fig-head-wrap" id="figHead" tabindex="0" role="region" aria-label="The file's columns and rows"></div>
@@ -500,12 +492,8 @@
         <div class="row" style="align-items:flex-start">
           <div class="col mw520" style="flex:2">
             <div class="plot-nav-row">
-              <div class="plot-nav-left">
-                <button class="btn nav-arrow" id="iodoPrev" aria-label="Previous trace" title="Previous trace (&#8592;)">‹</button>
-                <span id="iodoIdx" class="pill nav-count" style="margin:0">1/1</span>
-                <button class="btn nav-arrow" id="iodoNext" aria-label="Next trace" title="Next trace (&#8594;)">›</button>
-                <span class="txt-caption" id="iodoCurrentLabel">—</span>
-              </div>
+              <!-- (the trace selector: snav.js, filled by iodo.js) -->
+              <div class="plot-nav-left" id="iodoNav"></div>
             </div>
             <div class="plot-wrap">
               <svg class="plot iodo-pick" id="iodoSvg"></svg>
@@ -558,7 +546,7 @@
       </div>
     </section>
 
-    <footer>DataTreat <span class="app-version">v544</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
+    <footer>DataTreat <span class="app-version">v545</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
   </main>
 
   <!-- Save project as… dialog -->
