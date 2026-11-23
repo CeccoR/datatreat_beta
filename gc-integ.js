@@ -10,7 +10,9 @@ import { snavHtml, snav } from './snav.js';
 
 /* =========================================================
    GC: THE INTEGRATION CARD (v544; v545: its layout, the chromatogram over its residuals,
-   the run overview one gas at a time, the selectors, no trapezoids, the suspicious rule)
+   the run overview one gas at a time, the selectors, no trapezoids, the suspicious rule;
+   v546: the toolbar back over the plot, the chromatogram's selector over the overview,
+   the boxes' titles above them, the transfer's k under Peaks, the overview's marks, 10 %)
    The raw chromatograms (TCD) of a GC card integrated again by the engine (gc-tcd.js):
    each injection's H₂ and O₂ peaks fitted with a model of the window they sit in, turned
    into concentrations by a calibration of standards or by the GC software's own scale, and
@@ -36,6 +38,11 @@ const GAS = {
 const gasOf = k => GAS[k] || { label: esc(k), txt: k, csv: k, color: '#4cc9a0' };
 const PEAK_COLORS = ['#9b7bff', '#4cc9a0', '#e3b341', '#d95fd0'];
 const C_RAW = '#8a95a3', C_MODEL = '#e0457b', C_BASE = '#d4a72c', C_EDGE = '#4cc9a0', C_BAD = '#ff3b3b', C_TABLE = '#9aa3ad';
+/* The run overview's marks (v546): every gas's fits in one colour (H₂'s blue), the
+   suspicious red; a fit's dot of radius OV_R, the GC table's grey cross half the size it
+   was (OV_CROSS, its arms' half-span: under a dot, hidden by it); a point hovered or on
+   show drawn again OV_HL_R times as large, OV_HL_TINT of the way to white. */
+const C_FIT = GAS.h2.color, OV_R = 3.2, OV_CROSS = 1.75, OV_HL_R = 1.1, OV_HL_TINT = 0.4;
 const MARGIN = 4;            // s shown either side of the windows (and of their neighbours)
 /* The peaks beside the H₂/O₂ window that its model has no peak for (ENGINE.md §6): the system
    peak at 262–267.5 s and N₂ from about 330.5 s. Drawn on the chromatogram; an edge of a
@@ -47,12 +54,14 @@ const NEIGHBOURS = [{ name: 'S264', from: 262, to: 267.5 }, { name: 'N2', from: 
    2. a fit that did not converge (or a chromatogram the engine could not fit);
    3. its area out of proportion with the GC software's table: over the run (the pair), at
       each injection with a table value r_i = A_i / T_i, k = median(r_i) (transferK's
-      quantity, with no threshold); suspicious where |A_i − k·T_i| > max(3 % of k·T_i,
+      quantity, with no threshold); suspicious where |A_i − k·T_i| > max(10 % of k·T_i,
       k × 15 ppm), the floor in the table's unit (0.0015 %mol, or 15 ppm for the .txt
       export). No comparison where the table has no value. Areas, not concentrations: with
       O₂'s free intercept every calibrated O₂ would differ from the table by one factor.
+      (v546: 10 %; at 3 %, to v545, nearly every O₂ of a real run was marked: the GC
+      software ignores H₂'s tail under O₂, which the fit models.)
    A glitch zone left out of the fit is no longer one (v544 marked it). */
-const PROP_TOL = 0.03, PROP_FLOOR = { '%mol': 0.0015, ppm: 15 };
+const PROP_TOL = 0.10, PROP_FLOOR = { '%mol': 0.0015, ppm: 15 };
 const CHI2_HIGH = 4;
 /* The method's fields (ENGINE.md §6): the windows' edges, numbers that are its source of
    truth, the lines on the chromatogram an aid that snaps to the data's 0.2 s and writes into
@@ -140,7 +149,7 @@ const CONC_HTML = (()=>{
       `${im(k)}: area per %mol; ${im(c)}: %mol. A line through zero, whatever the software's own calibration was.`)
     + '</ol></div>';
 })();
-export const INTEG_INFO = `The <b>Integration</b> card integrates again the raw chromatograms of the thermal-conductivity detector (TCD), the files of a column per injection that the GC software writes beside its table, and hands the results to the <b>Production Rate</b> cards below it. Each injection's <b>H₂ and O₂</b> are fitted together in one <b>window</b> of retention time (268–326 s by default): a smooth baseline (a straight line, with the <b>step</b> the detector makes after O₂), a peak shape for H₂, for O₂ and for the system peak at 310 s (<b>S310</b>, fitted so that its tail does not end up in O₂'s area; the step and S310 are drawn but go no further). The fit is made in <b>two passes</b>: the first, with a robust loss, finds <b>spikes</b> and <b>glitch zones</b> (marked on the plot in red), which the second, an ordinary least-squares fit, leaves out, so that a spike is never read as gas; a fit that looks wrong is started again from a generic start, and the better of the two kept. <b>The selectors</b>: the file (a pair, or raw chromatograms alone) at the top left of the plot, the chromatogram at its top right; the arrows step through them (← → the chromatograms), and the name, or the small arrow after it, opens the list of them all, to go straight to one. <b>The plot</b>: the chromatogram on top (raw, model, baseline with its step, H₂, O₂ and S310 each drawn on the baseline, the spikes and glitch zones left out in red, the neighbouring peaks the model has no shape for in grey) and its <b>residuals</b> under it (the data less the model, inside the fit window only; blank outside it). The two share the retention time: a zoom or a pan in either (the one under the pointer) moves both along it at once, each keeping its own vertical scale. The plot holds the whole chromatogram and opens on the H₂/O₂ window, where a double click with a tool on brings it back. Its one toolbar gives both: the images, the CSV (the chromatogram on show, its model and parts and its residuals), and the figure composer, where they are two panels, one of which can be removed. <b>Windows</b>: the method is the card's, in these numbers, which are its source of truth: the fit window's edges (the green lines on the chromatogram drag them as an aid, snapping to the data's 0.2 s, and write into the numbers), with the peaks' nominal places. Moving an edge by 1–2 s changes the areas by a few hundredths of a per cent; by 5 s it reaches the peaks the model has no shape for, the system peak at 262–267.5 s and N₂ from about 330.5 s (grey on the chromatogram), and the fit degrades: the card says so. <b>Peaks</b>: the chromatogram on show, per gas: the area of its fitted shape ± its standard deviation, its apex, χ²<sub>r</sub> (how well the model follows the data: about 1, within the noise), its concentration and the GC table's value; why it is suspicious, if it is, under the table. <b>Suspicious</b>: a chromatogram is, for a gas, where χ²<sub>r</sub> is above 4 after the fit's restart (some fits are fragile: the robust pass stops at its 100th evaluation), where the fit did not converge, or where its area is out of proportion with the GC software's table: over the run (the pair), k is the median of area / table value across its injections with a table value, and an injection is suspicious when its area is further from k × its table value than 3 % of that, and than k × 15 ppm (0.0015 %mol, in the table's unit). Areas are compared, not concentrations (with O₂'s free intercept every calibrated value would differ from the table by one factor): a scale that differs from the table's alike at every injection marks none, an injection off on its own does. A glitch zone left out of the fit does not make it suspicious. <b>The colours</b>: in the chromatogram selector and its list, a suspicious chromatogram's name is red (suspicious for either gas); on the run overview a fit is a dot in its gas's colour (H₂ blue, O₂ orange), red where its injection is suspicious for that gas; the GC table's values are grey crosses, never red; in Peaks a χ²<sub>r</sub> above 4 and an area out of proportion are red. The <b>run overview</b> shows, for the file chosen, one gas at a time (H₂ or O₂), as area or as concentration: every injection's fit, and the GC table's value beside it (as area, the table's value times the run's k, on the fits' scale), against the injection time (the injection's number when there is no table). A point under the pointer brightens and says its injection, its time, the fit, the table's value and χ²<sub>r</sub>; a click shows its chromatogram, whose point stays bright, as it does for one chosen by the arrows, the list or the keys. Integration runs by itself in the background when raw chromatograms are loaded, or a little after the method changes; <b>Stop</b> stops it, <b>Re-integrate</b> runs what is left. A changed window integrates every file again; a file added, only itself. <b>Pairs</b>: a table and its raw chromatograms (the same name with _TCD) share a row of the file list; the table's rows with a date are its injections, which must be as many as the chromatograms (else the card says so, and Analysis keeps the table). <b>Concentrations</b>: <b>Calibration…</b> opens the standards' window: drop their raw chromatograms, type each standard's H₂ and O₂ (blank: not a standard of that gas), choose the unit and, per gas, a free intercept (the default: O₂'s response has a real intercept, about −500 ppm, and a line forced through zero biases its low levels by −8 to −26 % while R² barely moves; each level's deviation from the line is shown, since R² cannot tell) or a zero one; the line area = slope × c + intercept is fitted to them and a sample's concentration is (area − intercept) / slope. Standards always win. Without them, the card <b>takes the calibration from the GC software's table</b>: for each pair, k is the median of our area over the table's value across the injections well above the noise (a table value of at least 0.02 %mol for H₂, 0.012 %mol for O₂, ten injections at least), and the concentration is area / k (an info alert says so). <b>The risks of a calibration taken from the GC software</b>, which standards avoid:<ul class="gci-risks"><li>it <b>borrows the software's scale</b>, and assumes that the software's areas are proportional to ours, which a different baseline or peak split breaks (for O₂, on H₂'s tail and before the step, they may well differ);</li><li>the transferred line <b>goes through zero</b>, even if the software's own calibration had an intercept (O₂'s response has one, about −500 ppm: the low levels then come out biased);</li><li>it needs <b>enough injections above the threshold</b> (ten at 0.02 %mol of H₂, 0.012 %mol of O₂): with fewer there is none, and Analysis keeps the table;</li><li>if the <b>software's calibration is wrong, so is this one</b>: it reproduces the table's scale, it does not check it.</li></ul>A Production Rate card takes its values from the nearest Integration card above it; one with none above keeps the tables. ${CONC_HTML}${cardInfo(false, false)}`;
+export const INTEG_INFO = `The <b>Integration</b> card integrates again the raw chromatograms of the thermal-conductivity detector (TCD), the files of a column per injection that the GC software writes beside its table, and hands the results to the <b>Production Rate</b> cards below it. Each injection's <b>H₂ and O₂</b> are fitted together in one <b>window</b> of retention time (268–326 s by default): a smooth baseline (a straight line, with the <b>step</b> the detector makes after O₂), a peak shape for H₂, for O₂ and for the system peak at 310 s (<b>S310</b>, fitted so that its tail does not end up in O₂'s area; the step and S310 are drawn but go no further). The fit is made in <b>two passes</b>: the first, with a robust loss, finds <b>spikes</b> and <b>glitch zones</b> (marked on the plot in red), which the second, an ordinary least-squares fit, leaves out, so that a spike is never read as gas; a fit that looks wrong is started again from a generic start, and the better of the two kept. <b>The selectors</b>: the file (a pair, or raw chromatograms alone) at the top left of the plot, the chromatogram at the top left of the run overview; the arrows step through them (← → the chromatograms), and the name, or the small arrow after it, opens the list of them all, to go straight to one. <b>The plot</b>: the chromatogram on top (raw, model, baseline with its step, H₂, O₂ and S310 each drawn on the baseline, the spikes and glitch zones left out in red, the neighbouring peaks the model has no shape for in grey) and its <b>residuals</b> under it (the data less the model, inside the fit window only; blank outside it). The two share the retention time: a zoom or a pan in either (the one under the pointer) moves both along it at once, each keeping its own vertical scale. The plot holds the whole chromatogram and opens on the H₂/O₂ window, where a double click with a tool on brings it back. Its one toolbar, at its top right, gives both: the images, the CSV (the chromatogram on show, its model and parts and its residuals), and the figure composer, where they are two panels, one of which can be removed. <b>Windows</b>: the method is the card's, in these numbers, which are its source of truth: the fit window's edges (the green lines on the chromatogram drag them as an aid, snapping to the data's 0.2 s, and write into the numbers), with the peaks' nominal places. Moving an edge by 1–2 s changes the areas by a few hundredths of a per cent; by 5 s it reaches the peaks the model has no shape for, the system peak at 262–267.5 s and N₂ from about 330.5 s (grey on the chromatogram), and the fit degrades: the card says so. <b>Peaks</b>: the chromatogram on show, per gas: the area of its fitted shape ± its standard deviation, its apex, χ²<sub>r</sub> (how well the model follows the data: about 1, within the noise), its concentration and the GC table's value; under the table, the units, where a concentration is taken from the GC software's table its k for the file on show, and why the chromatogram is suspicious, if it is. <b>Suspicious</b>: a chromatogram is, for a gas, where χ²<sub>r</sub> is above 4 after the fit's restart (some fits are fragile: the robust pass stops at its 100th evaluation), where the fit did not converge, or where its area is out of proportion with the GC software's table: over the run (the pair), k is the median of area / table value across its injections with a table value, and an injection is suspicious when its area is further from k × its table value than 10 % of that, and than k × 15 ppm (0.0015 %mol, in the table's unit). Areas are compared, not concentrations (with O₂'s free intercept every calibrated value would differ from the table by one factor): a scale that differs from the table's alike at every injection marks none, an injection off on its own does. A glitch zone left out of the fit does not make it suspicious. <b>The colours</b>: in the chromatogram selector and its list, a suspicious chromatogram's name is red (suspicious for either gas); on the run overview a fit is a blue dot, whatever the gas, red where its injection is suspicious for that gas; the GC table's values are small grey crosses, never red, hidden under the fit's dot where the two agree; in Peaks a χ²<sub>r</sub> above 4 and an area out of proportion are red. The <b>run overview</b> shows, for the file chosen, one gas at a time (H₂ or O₂), as area or as concentration: every injection's fit, and the GC table's value beside it (as area, the table's value times the run's k, on the fits' scale), against the injection time (the injection's number when there is no table). A point under the pointer is drawn in a lighter shade and a tenth larger, and says its injection, its time, the fit, the table's value and χ²<sub>r</sub>; a click shows its chromatogram, whose point stays so, as does one chosen by the arrows, the list or the keys. Integration runs by itself in the background when raw chromatograms are loaded, or a little after the method changes; <b>Stop</b> stops it, <b>Re-integrate</b> runs what is left. A changed window integrates every file again; a file added, only itself. <b>Pairs</b>: a table and its raw chromatograms (the same name with _TCD) share a row of the file list; the table's rows with a date are its injections, which must be as many as the chromatograms (else the card says so, and Analysis keeps the table). <b>Concentrations</b>: <b>Calibration…</b> opens the standards' window: drop their raw chromatograms, type each standard's H₂ and O₂ (blank: not a standard of that gas), choose the unit and, per gas, a free intercept (the default: O₂'s response has a real intercept, about −500 ppm, and a line forced through zero biases its low levels by −8 to −26 % while R² barely moves; each level's deviation from the line is shown, since R² cannot tell) or a zero one; the line area = slope × c + intercept is fitted to them and a sample's concentration is (area − intercept) / slope. Standards always win. Without them, the card <b>takes the calibration from the GC software's table</b>: for each pair, k is the median of our area over the table's value across the injections well above the noise (a table value of at least 0.02 %mol for H₂, 0.012 %mol for O₂, ten injections at least), and the concentration is area / k (an info alert says so, and Peaks gives the k of the file on show). <b>The risks of a calibration taken from the GC software</b>, which standards avoid:<ul class="gci-risks"><li>it <b>borrows the software's scale</b>, and assumes that the software's areas are proportional to ours, which a different baseline or peak split breaks (for O₂, on H₂'s tail and before the step, they may well differ);</li><li>the transferred line <b>goes through zero</b>, even if the software's own calibration had an intercept (O₂'s response has one, about −500 ppm: the low levels then come out biased);</li><li>it needs <b>enough injections above the threshold</b> (ten at 0.02 %mol of H₂, 0.012 %mol of O₂): with fewer there is none, and Analysis keeps the table;</li><li>if the <b>software's calibration is wrong, so is this one</b>: it reproduces the table's scale, it does not check it.</li></ul>A Production Rate card takes its values from the nearest Integration card above it; one with none above keeps the tables. ${CONC_HTML}${cardInfo(false, false)}`;
 const CAL_INFO = `Each column of a raw calibration file is a standard's chromatogram, integrated with this card's method. Type in each row the standard's H₂ and O₂ concentrations in the unit chosen (blank: not a standard of that gas; the file's own names, cal_… included, are never read), and untick a row to leave it out. Per gas, the line area = slope × c + intercept is fitted by least squares to the standards (free intercept), or through zero; R², and each level's deviation from the line, say how well it holds. The calibration is this card's, saved with the project and its files, and applies to every pair of the card; a gas with two standards or more (one, through zero) is calibrated, the other taken from the GC software's table.`;
 
 export function createInteg(ctx){
@@ -382,14 +391,16 @@ export function createInteg(ctx){
       return out;
     }
 
-    /* ---- Its markup (v545) ----
+    /* ---- Its markup (v545; v546) ----
        The status line (only while there is something to say: the progress and Stop as it
        integrates), the alerts; then, as a DRS card is laid out, the plot's column at the
-       left, as wide as a Tauc card's plot: the selectors over the plot (the file's at its
-       left, the chromatogram's at its right, mirrored, both arrows outermost) with the
-       plot's toolbar between them, the chromatogram over its residuals (together a Tauc
-       plot's size), their legend, and the run overview (as wide, half as tall); at the right
-       the Windows, the Peaks of the chromatogram on show and Calibration…. */
+       left, as wide as a Tauc card's plot: the file's selector over the plot at its left
+       and the plot's toolbar at its right, as a Tauc plot's (v546: to v545 the toolbar sat
+       between the two selectors), the chromatogram over its residuals (together a Tauc
+       plot's size), their legend; then the run overview (as wide, half as tall) under the
+       chromatogram's selector, its own toolbar at the right of that line. At the right, as
+       a Tauc card's parameters: Windows (its title on the selector's line, its box's top on
+       the plot's: CLAUDE.md), the Peaks of the chromatogram on show and Calibration…. */
     const body = el.querySelector('.gci-body');
     body.innerHTML = `
       <div class="gci-bar" id="${p}Bar">
@@ -404,30 +415,31 @@ export function createInteg(ctx){
       <div class="row gci-row">
         <div class="col mw520 gci-main">
           <div class="plot-nav-row gci-nav">
-            ${snavHtml({ idx: p + 'FileIdx', name: p + 'File', prevCls: 'gci-fprev', nextCls: 'gci-fnext', what: 'file', keys: false, cls: 'gci-fsel' })}
-            <div class="gci-right">
-              <div class="gci-tools"><button class="btn plot-dl-btn" data-dl-svg="${p}Chrom" data-dl-also="${p}Resid" data-csv-mod="gc" data-csv-names="chromatogram.csv" data-dl-name="GC_chromatogram.svg" data-dl-legend="${p}ChromLegend">${PLOT_DL_ICON}</button></div>
-              ${snavHtml({ idx: p + 'InjIdx', name: p + 'Inj', prevCls: 'gci-kprev', nextCls: 'gci-knext', what: 'chromatogram', mirror: true, cls: 'gci-ksel' })}
-            </div>
+            <div class="plot-nav-left">${snavHtml({ idx: p + 'FileIdx', name: p + 'File', prevCls: 'gci-fprev', nextCls: 'gci-fnext', what: 'file', keys: false, cls: 'gci-fsel' })}</div>
           </div>
           <div class="plot-wrap gci-pair">
             <svg class="plot gci-chrom" id="${p}Chrom"></svg>
             <svg class="plot gci-resid" id="${p}Resid"></svg>
+            <button class="btn plot-dl-btn" data-dl-svg="${p}Chrom" data-dl-also="${p}Resid" data-csv-mod="gc" data-csv-names="chromatogram.csv" data-dl-name="GC_chromatogram.svg" data-dl-legend="${p}ChromLegend">${PLOT_DL_ICON}</button>
           </div>
           <div id="${p}ChromLegend" class="legend gci-legend"></div>
-          <p class="txt-caption gci-ov-cap">Run overview</p>${plotWrap(p + 'Over', { mod: 'gc', name: 'GC_run_overview.svg', legend: p + 'OverLegend', csv: 'integration.csv', cls: 'gci-over',
+          <div class="plot-nav-row gci-ov-nav">
+            <div class="plot-nav-left">${snavHtml({ idx: p + 'InjIdx', name: p + 'Inj', prevCls: 'gci-kprev', nextCls: 'gci-knext', what: 'chromatogram', cls: 'gci-ksel' })}</div>
+          </div>${plotWrap(p + 'Over', { mod: 'gc', name: 'GC_run_overview.svg', legend: p + 'OverLegend', csv: 'integration.csv', cls: 'gci-over',
             extra: `\n              <span class="plot-chips gci-ov-sel"><span class="gci-ov-gas"></span><span class="gci-ov-y"></span></span>` })}
           <div id="${p}OverLegend" class="legend gci-legend"></div>
         </div>
         <div class="col mw280 gci-side">
-          <div class="peak-box gci-win-box"><div class="peak-box-head"><span class="txt-mini">Windows</span><button type="button" class="btn btn-sm gci-reset" title="The engine's default windows" hidden>Default</button></div><div class="gci-method" id="${p}Method"></div></div>
-          <div class="peak-box gci-values-box"><div class="peak-box-head"><span class="txt-mini">Peaks</span></div><div class="peak-scroll" id="${p}Values"></div></div>
+          <div class="txt-mini param-head aligned gci-head gci-win-head"><span>Windows</span><button type="button" class="btn btn-sm gci-reset" title="The engine's default windows" hidden>Default</button></div>
+          <div class="peak-box gci-win-box"><div class="gci-method" id="${p}Method"></div></div>
+          <div class="txt-mini param-head gci-head gci-values-head"><span>Peaks</span></div>
+          <div class="peak-box gci-values-box"><div class="peak-scroll" id="${p}Values"></div></div>
           <button type="button" class="btn plot-action-btn gci-cal" id="${p}Cal" title="The standards: their raw chromatograms and concentrations">Calibration…</button>
         </div>
       </div>`;
 
-    /* ---- The selectors (snav.js): the file, and its chromatogram; a suspicious one's name
-       red, in the list too ---- */
+    /* ---- The selectors (snav.js): the file (over the chromatogram), and its chromatogram
+       (over the run overview); a suspicious one's name red, in the list too ---- */
     const pad = v => String(v).padStart(2, '0');
     const clock = d =>{ const x = new Date(d); return fin(+x) ? `${pad(x.getDate())}/${pad(x.getMonth() + 1)} ${pad(x.getHours())}:${pad(x.getMinutes())}` : ''; };
     // (the selector's name short, its count beside it; the tooltip and the overview's label whole)
@@ -545,7 +557,7 @@ export function createInteg(ctx){
       chrom = new Plot(svg, { xlabel: 'Retention time (s)', ylabel: 'TCD signal', noXTickLabels: true, noXTitle: true, xTickMarks: true, margin: { l: 58, r: 20, t: 15, b: 0 } });
       resid = new Plot(rs, { xlabel: 'Retention time (s)', ylabel: 'Residual', xTickMarks: true, margin: { l: 58, r: 20, t: 0, b: 40 } });
       linkX([chrom, resid]);
-      const tools = { host: el.querySelector('.gci-tools'), group: [chrom, resid] };
+      const tools = { group: [chrom, resid] };
       leg.innerHTML = '';
       $('Notice').innerHTML = '';
       drawn = null;
@@ -729,15 +741,21 @@ export function createInteg(ctx){
         const off = J.off(selK, g) != null;
         return `<tr><td>${gasOf(g).label}</td><td class="${off ? 'gci-bad' : ''}"${off ? ' title="Out of proportion with the GC table"' : ''}>${sig(x.area, 5)} ± ${sig(x.sd, 2)}</td>`
           + `<td>${fin(x.tApex) ? x.tApex.toFixed(2) : '—'}</td><td class="${fin(x.chi2r) && x.chi2r > J.chiMax ? 'gci-bad' : ''}">${fin(x.chi2r) ? x.chi2r.toFixed(2) : '—'}</td>`
-          + `<td>${fin(shown) ? shown.toPrecision(4) + (units.length > 1 ? ' ' + esc(unitOf(g)) : '') : '—'}${c && c.how === 'transfer' ? '<span class="txt-meta" title="from the GC software\'s scale">ᵗ</span>' : ''}</td>`
+          + `<td>${fin(shown) ? shown.toPrecision(4) + (units.length > 1 ? ' ' + esc(unitOf(g)) : '') : '—'}</td>`
           + `<td>${fin(tShown) ? tShown.toPrecision(4) : '—'}</td></tr>`;
       });
       const fl = J(selK);
-      // (the units under the table, the narrow column keeping its headers short)
-      const said = [units.length === 1 ? `concentration in ${esc(units[0])}` : '', aligned(e) ? `GC table in ${tUnit}` : '',
-        gs.some(g=> conv[g] && conv[g].how === 'transfer') ? 'ᵗ calibration taken from the GC software\'s table' : ''].filter(Boolean);
+      /* Under the table (the narrow column keeping its headers short): the columns' units,
+         and, where a gas's concentration is taken from the GC software's table (no
+         standards), its k for the file on show (v546: to v545 a superscript ᵗ on the value,
+         and the k of every file in the card's info alert). */
+      const cU = units.length === 1 ? units[0] : null;
+      const said = cU && aligned(e) && cU === tUnit ? [`Conc. and GC table in ${esc(cU)}`] : [cU ? `Conc. in ${esc(cU)}` : '', aligned(e) ? `GC table in ${tUnit}` : ''].filter(Boolean);
+      const tr = gs.filter(g=> conv[g] && conv[g].how === 'transfer');
+      const from = tr.length ? `${tr.length > 1 ? 'Concentrations' : 'Concentration'} from the GC software's table: k = ${tr.map((g, i)=> `${sig(conv[g].k, 5)}${i ? '' : ' area per %mol'} (${gasOf(g).label}, median of ${conv[g].n} injections)`).join(', ')}.` : '';
       box.innerHTML = `<table class="gci-values"><thead><tr><th>Gas</th><th>Area ± sd</th><th>Apex (s)</th><th>χ²<sub>r</sub></th><th>Conc.</th><th>GC table</th></tr></thead><tbody>${rows.join('')}</tbody></table>`
-        + (said.length ? `<p class="txt-meta">${said.join('; ')}.</p>` : '')
+        + (said.length ? `<p class="txt-meta gci-units">${said.join('; ')}.</p>` : '')
+        + (from ? `<p class="txt-meta gci-from">${from}</p>` : '')
         + (fl.length ? `<p class="gci-flag">⚠ Suspicious: ${fl.map(esc).join('; ')}</p>` : '')
         + (Object.keys(GAS).some(g=> !conv[g] || !conv[g].f) ? `<p class="txt-meta">${Object.keys(GAS).filter(g=> !conv[g] || !conv[g].f).map(g=> `${gasOf(g).txt}: ${esc(conv[g] ? conv[g].why : 'no concentration')}`).join('; ')}.</p>` : '')
         + (R.stale ? '<p class="txt-meta">(the previous method\'s)</p>' : '');
@@ -752,10 +770,11 @@ export function createInteg(ctx){
       return out;
     }
 
-    /* ---- The run overview (v545): one gas at a time, every injection's fit (red where it
-       is suspicious for that gas) and the GC table's value (grey; as area, times the run's
-       k); a point hovered brightens and says what it is, the chromatogram on show's stays
-       bright; a click shows its chromatogram ---- */
+    /* ---- The run overview (v545; v546): one gas at a time, every injection's fit (blue
+       whatever the gas, red where it is suspicious for that gas) and the GC table's value
+       (a small grey cross; as area, times the run's k); a point hovered drawn lighter and a
+       tenth larger, and says what it is, the chromatogram on show's as well; a click shows
+       its chromatogram ---- */
     let hovK = -1, ovLook = null;
     function drawOverview(e){
       const svg = $('Over'), leg = $('OverLegend');
@@ -790,10 +809,12 @@ export function createInteg(ctx){
       const ylo = all.length ? Math.min(0, ...all) : 0, yhi = all.length ? Math.max(...all) : 1;
       over.setRange(xmin - dx, xmax + dx, ylo, yhi*1.08 || 1);
       over.drawAxes(); over.clearData();
-      if (table) over.points(xs, table, C_TABLE, 3.5, { shape: 'cross', width: 1.4, label: mode === 'conc' ? `${G.txt} GC table` : `${G.txt} GC table × k`, key: g + ' table' });
-      over.points(xs, fit.map((v, k)=> bad[k] ? NaN : v), G.color, 3.2, { fill: true, label: `${G.txt} fit`, key: g + ' fit' });
-      if (bad.some(Boolean)) over.points(xs, fit.map((v, k)=> bad[k] ? v : NaN), C_BAD, 3.2, { fill: true, label: `${G.txt} fit, suspicious`, key: g + ' suspicious' });
-      fit.forEach((v, k)=>{ if (fin(v)) ovPts.push({ k, x: xs[k], y: v, color: bad[k] ? C_BAD : G.color }); });
+      // (v546: the crosses half the size they were, under the fits' dots, which cover them
+      // where the two agree; the fits one colour whatever the gas, the suspicious red)
+      if (table) over.points(xs, table, C_TABLE, OV_CROSS, { shape: 'cross', width: 1.4, label: mode === 'conc' ? `${G.txt} GC table` : `${G.txt} GC table × k`, key: g + ' table' });
+      over.points(xs, fit.map((v, k)=> bad[k] ? NaN : v), C_FIT, OV_R, { fill: true, label: `${G.txt} fit`, key: g + ' fit' });
+      if (bad.some(Boolean)) over.points(xs, fit.map((v, k)=> bad[k] ? v : NaN), C_BAD, OV_R, { fill: true, label: `${G.txt} fit, suspicious`, key: g + ' suspicious' });
+      fit.forEach((v, k)=>{ if (fin(v)) ovPts.push({ k, x: xs[k], y: v, color: bad[k] ? C_BAD : C_FIT }); });
       // What a point hovered says: its injection and time, the fit, the table's value, χ²ᵣ.
       const tUnit = e.table && e.table.altExport === true ? 'ppm' : '%mol';
       const fmtV = v => !fin(v) ? '—' : mode === 'conc' ? `${sig(v, 4)} ${unit}` : sig(v, 5);
@@ -805,7 +826,7 @@ export function createInteg(ctx){
         if (bad[k]) lines.push('suspicious');
         return lines;
       };
-      leg.innerHTML = `<span><i class="gci-mk gci-mk-dot" style="color:${G.color}"></i>${G.txt} fit</span>`
+      leg.innerHTML = `<span><i class="gci-mk gci-mk-dot" style="color:${C_FIT}"></i>${G.txt} fit</span>`
         + (bad.some(Boolean) ? `<span><i class="gci-mk gci-mk-dot" style="color:${C_BAD}"></i>suspicious</span>` : '')
         + (table ? `<span><i class="gci-mk gci-mk-x"></i>GC table${mode === 'area' ? ' × k' : ''}</span>` : '');
       over._onView = paintHl;
@@ -814,8 +835,10 @@ export function createInteg(ctx){
     }
     // A lighter tint of a colour (#rrggbb): `f` of the way to white.
     const tint = (hex, f)=>{ const n = parseInt(hex.slice(1), 16), ch = s => Math.round(((n >> s) & 255) + (255 - ((n >> s) & 255))*f); return `rgb(${ch(16)},${ch(8)},${ch(0)})`; };
-    // The points brightened: the chromatogram on show's, and the one under the pointer with
-    // its label (in the overlay: drawn again at each zoom, never exported).
+    /* The points brightened: the chromatogram on show's, and the one under the pointer with
+       its label (in the overlay: drawn again at each zoom, never exported). v546: the point
+       alone, drawn again in a lighter shade of its colour and a tenth larger (to v545 a halo
+       round it and a ring, its centre near white). */
     function paintHl(){
       if (!over) return;
       const old = over.gOverlay.querySelector('.gci-hl');
@@ -824,8 +847,7 @@ export function createInteg(ctx){
       over.gOverlay.appendChild(g);
       const mark = q =>{
         const x = over.px(q.x), y = over.py(q.y);
-        g.appendChild(svgEl('circle', { cx: x, cy: y, r: 9, fill: q.color, 'fill-opacity': 0.3, class: 'gci-hl-halo' }));
-        g.appendChild(svgEl('circle', { cx: x, cy: y, r: 5, fill: tint(q.color, 0.55), stroke: q.color, 'stroke-width': 1.8, class: 'gci-hl-pt' }));
+        g.appendChild(svgEl('circle', { cx: x, cy: y, r: +(OV_R*OV_HL_R).toFixed(3), fill: tint(q.color, OV_HL_TINT), stroke: 'none', class: 'gci-hl-pt' }));
         return [x, y];
       };
       const sel = ovPts.find(q=> q.k === selK);
@@ -881,15 +903,16 @@ export function createInteg(ctx){
       if (all){ valuesKept.clear(); if (ctx.drawable()) draw(true); }
     }
     function paintAlerts(){
-      const es = entries(), lines = { warn: [], info: [] };
+      const es = entries(), lines = { warn: [] };
       es.forEach(e=>{
         if (e.d.error) return;
         if (e.table && e.rows !== e.n) lines.warn.push(`${esc(e.label)}: ${e.rows} row${e.rows === 1 ? '' : 's'} in the table, ${e.n} chromatogram${e.n === 1 ? '' : 's'}: not aligned. Integrated all the same; Analysis uses the table alone.`);
         if (!e.table && e.twin) lines.warn.push(`${esc(e.label)}: two files of raw chromatograms paired (${esc(e.tcd.name)}, ${esc(e.twin)}): shown here, left out of Analysis (no injection times).`);
         else if (!e.table) lines.warn.push(`${esc(e.label)}: raw chromatograms with no table: no injection times (Analysis leaves them out), a concentration only with standards.`);
       });
-      const tr = es.filter(aligned).map(e=>{ const R = resOf(e.tcd); if (!R.res || R.res.some(x=> !x)) return null; const c = convAll(e, R.res), gs = Object.keys(GAS).filter(g=> c[g] && c[g].how === 'transfer'); return gs.length ? `${esc(e.label)}: ${gs.map(g=> `${gasOf(g).label} k = ${sig(c[g].k, 5)} (median of ${c[g].n} injections)`).join(', ')}` : null; }).filter(Boolean);
-      if (tr.length) lines.info.push(...tr);
+      // (a calibration taken from the GC software's table, for some file: said once; each
+      // file's k under its Peaks, v546)
+      const transfer = es.filter(aligned).some(e=>{ const R = resOf(e.tcd); if (!R.res || R.res.some(x=> !x)) return false; const c = convAll(e, R.res); return Object.keys(GAS).some(g=> c[g] && c[g].how === 'transfer'); });
       /* A gas calibrated by standards whose injections fall outside the standards' range:
          extrapolated, said (below the lowest standard the intercept weighs most: the real O₂
          runs, about 0.03 %mol, lie far under the 0.2 %mol standard). */
@@ -908,7 +931,7 @@ export function createInteg(ctx){
       const errs = es.filter(e=> e.d.error).map(e=> `${esc(e.tcd.name)}: ${esc(e.d.error)}`);
       $('Alerts').innerHTML = (errs.length ? alertHtml('bad', 'Raw chromatograms that could not be read:', errs) : '')
         + (lines.warn.length ? alertHtml('warn', 'Raw chromatograms to check:', lines.warn) : '')
-        + (lines.info.length ? alertHtml('info', 'Calibration taken from the GC software\'s table (no standards for the gas): see the risks in this card\'s instructions.', lines.info) : '');
+        + (transfer ? alertHtml('info', 'Calibration taken from the GC software\'s table (no standards for the gas): see the risks in this card\'s instructions.', []) : '');
     }
 
     /* ---- The calibration's window ---- */

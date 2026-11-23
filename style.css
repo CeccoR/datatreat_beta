@@ -940,7 +940,12 @@ svg.plot.plot-strip { aspect-ratio: 6.472; }
   display: inline-flex;
   align-items: center;
   margin-right: 14px;
+  /* (a long name with nowhere to break, a sample's as the instrument writes it, wraps
+     anywhere rather than run the page sideways on a phone, v546) */
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
+.legend span > i { flex: none; }
 .legend i {
   width: 12px;
   height: 12px;
@@ -1638,28 +1643,30 @@ button.an-add:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .an-menu button:hover { background: var(--panel2); color: var(--accent); }
 .an-menu button.is-current { color: var(--accent); }
 .an-menu button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-/* ===== The sample selector (snav.js, v545): `‹ n/N ›` and the name with its down-arrow,
-   two halves of exactly one width (two equal columns), the whole as wide as the wider half
-   needs twice, never wider than its line nor than 520 px: a long name is cut with "…" (the
-   full one in its tooltip and in the list). The count's pill fills its half between the
-   arrows, the number centred in it. The name reads as a caption and lights as the kinds'
-   menu's anchor does (button.an-type); its list is that menu's. Mirrored, the name first,
-   right against the arrows. A suspicious item's name is red. Never narrower than the arrows
-   and the count need, twice: where its line is narrower, it runs past it rather than the
-   name over the arrows. ===== */
+/* ===== The sample selector (snav.js, v545; v546): `‹ n/N ›` and the name with its
+   down-arrow, in a line. The arrows and the count are one group of ONE fixed width in
+   every module, as wide as `‹ 000/000 ›` needs (the count's pill 7ch of its 10px font,
+   tabular digits, plus its padding and border), the count centred between the arrows.
+   The name follows it, as long as it is: the selector is as wide as the two need, never
+   wider than its line (`min-width: 0`), and the line keeps clear of the plot's toolbar
+   that shares it (.plot-nav-row's padding, below): a name is cut with "…" only where it
+   would reach the toolbar, or the line's edge where there is none (the full one in its
+   tooltip and in the list). The name reads as a caption and lights as the kinds' menu's
+   anchor does (button.an-type); its list is that menu's. A suspicious item's name is
+   red. ===== */
 .snav {
-  display: inline-grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 8px;
-  align-items: center; min-width: 244px; max-width: min(100%, 520px); vertical-align: middle;
+  display: inline-flex; align-items: center; column-gap: 8px;
+  min-width: 0; max-width: 100%; vertical-align: middle;
 }
-.snav-steps { display: flex; align-items: center; gap: 6px; min-width: 0; }
-/* (the count's pill fills its half between the arrows, its number centred) */
-.snav .pill.nav-count { margin: 0; flex: 1 1 auto; min-width: calc(7ch + 18px); }
+.snav-steps { flex: none; display: flex; align-items: center; gap: 6px; }
+.snav .btn.nav-arrow { flex: none; width: 22px; min-width: 22px; padding: 0; }
+/* (the count's pill as wide as "000/000" in it, its number centred) */
+.snav .pill.nav-count { flex: none; margin: 0; width: calc(7ch + 18px); min-width: 0; padding: 0 8px; white-space: nowrap; }
 .snav-pick {
-  display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; justify-self: start;
+  display: inline-flex; align-items: center; gap: 6px; flex: 0 1 auto; min-width: 0; max-width: 100%;
   background: transparent; border: none; border-radius: 6px; padding: 2px 2px 2px 0; margin: 0;
   font: inherit; font-size: 13px; font-weight: 500; color: var(--muted); cursor: pointer; text-align: left;
 }
-.snav-mirror .snav-pick { justify-self: end; padding: 2px 0 2px 2px; }
 .snav-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .snav-caret {
   flex: none; width: 5px; height: 5px; margin: 0 2px 3px 0;
@@ -1676,10 +1683,11 @@ button.an-add:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .snav-menu button.is-bad .snav-item { color: var(--bad); }
 .snav-menu button.is-current .snav-k { color: var(--accent); }
 /* Where the plot's toolbar shares the selector's line (pulled up over it, as a caption's),
-   the selector keeps clear of it. */
-:root:not(.narrow-layout) .plot-nav-row:has(+ .plot-wrap > .plot-btn-col, + * > .plot-wrap:first-child > .plot-btn-col) { padding-right: 214px; }
-/* (SEM's image toolbar is three buttons) */
-:root:not(.narrow-layout) .plot-nav-row.sem-work-nav { padding-right: 96px; }
+   the line keeps clear of it, and no more (v546): its --tb-n buttons, 26px each 4px apart,
+   and 8px before them. Plot.attachTools sets --tb-n on the line (7 until it has: the
+   buttons of a plot with a CSV); SEM's image toolbar is three buttons of its own. */
+:root:not(.narrow-layout) .plot-nav-row:has(+ .plot-wrap > .plot-btn-col, + * > .plot-wrap:first-child > .plot-btn-col) { padding-right: calc(var(--tb-n, 7) * 30px + 4px); }
+.plot-nav-row.sem-work-nav { --tb-n: 3; }
 .bar-alert .alert { margin-bottom: 0; }
 .plot-btn-col {
   display: flex;
@@ -1901,10 +1909,15 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
   gap: 8px;
   margin-bottom: 10px;
 }
-/* Desktop: drop the header down so its top lines up with the plot's top edge
-   (the plot sits below the sample-nav row: 35px nav + 6px gap). */
-.param-head.aligned { margin-top: 41px; }
-:root.narrow-layout .param-head.aligned { margin-top: 0; }
+/* Desktop (v546, CLAUDE.md's rule): the header on the line of the plot's selector and
+   toolbar (that line's 30px, its text centred in it), the block under it from the plot's
+   top edge on (the 6px under the line). To v545 the header's top was 5px under the plot's
+   top edge, its block 35px under it. */
+.param-head.aligned { margin-top: 0; min-height: 30px; margin-bottom: 6px; }
+:root.narrow-layout .param-head.aligned { min-height: 0; margin-bottom: 10px; }
+/* (a plot with no selector over it, its toolbar on a line of its own, EPR's: the header on
+   that line, 26px, the block from the plot's top on, the toolbar's 4px gap under it) */
+:root:not(.narrow-layout) .param-head.aligned-tb { min-height: 26px; margin-bottom: 4px; }
 /* A plot-style card's parameters (every module's: a plot on the left, its parameters on
    the right), a row each: its name on three fifths of the column, its field on the two
    fifths left (v531: the field's track 40 % and the name's the rest, gap included, so
@@ -2074,6 +2087,11 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 .rv-side > .rv-prog { margin-top: 0; }
 .rv-side > .rv-btns > .btn { height: 33px; }
 :root.narrow-layout .rv-side > .rv-boxes { flex: none; min-height: 300px; }
+/* A .pside's column whose first box has its title above it (Custom's Series, the XRPD
+   standard's Parameters): the title pulled up onto the line of the plot's toolbar (the
+   row above the plot, 30px and its 6px), the box from the plot's top edge on (CLAUDE.md,
+   v546; to v545 the title's top on the plot's). */
+:root:not(.narrow-layout) .pside > .pside-col > .param-head:first-child { margin-top: -36px; min-height: 30px; margin-bottom: 6px; }
 /* The standard's Scherrer side: the parameters at the top; the Caglioti fit, its alert
    and + Add peak at the foot, the button's bottom on the plot's. A fit taller than the
    room left scrolls in its place. */
@@ -3188,6 +3206,9 @@ button.btn.fig-align.cp-anchored { --btn-bd: var(--accent); --btn-fg: var(--acce
    (sem.js fitWork). */
 .sem-set-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 18px 0 8px; }
 .sem-set-head:first-child { margin-top: 0; }
+/* (three columns: the settings' first title on the image's selector line, their first
+   block from the image's top edge on, CLAUDE.md, v546; one column, under the rest) */
+@media (min-width: 761px){ .sem-work:not(.sem-stacked) > .sem-col-set > .sem-set-head:first-child { margin-top: -36px; min-height: 30px; margin-bottom: 6px; } }
 .sem-set-head .sem-check { margin: 0; }
 .sem-pg > .txt-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* One column: the image on top, the thumbnails in the middle, the settings under
@@ -3528,40 +3549,33 @@ td.fname-parts { padding-top: 3px; padding-bottom: 3px; }
 .gci-row { align-items: flex-start; }
 .gci-main { flex: 2; }
 .gci-side { align-self: flex-start; }
-.plot-nav-row.gci-nav { flex-wrap: wrap; row-gap: 6px; column-gap: 10px; }
-/* (the chromatogram's selector as wide as it needs, the file's what the line leaves, up to
-   its own need: a long file name is the one cut; the line wraps only below the three's least) */
-.gci-nav > .gci-fsel { flex: 1 1 244px; max-width: max-content; }
-.gci-nav > .gci-right { flex: 0 1 auto; margin-left: auto; display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 6px 10px; min-width: 0; }
-.gci-right > .gci-ksel { flex: none; }
-.gci-right > .gci-tools { flex: none; display: flex; align-items: center; }
-.gci-tools > .plot-btn-col { order: 0; align-self: center; }
-.gci-main:hover .gci-tools > .plot-btn-col { opacity: 1; }
+/* (the two panels touch: the toolbar keeps its gap above them) */
 .plot-wrap.gci-pair { gap: 0; }
+.plot-wrap.gci-pair > .plot-btn-col { margin-bottom: var(--tb-gap); }
 svg.plot.gci-chrom { aspect-ratio: 6.472 / 3; border-bottom: 0; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
 svg.plot.gci-resid { aspect-ratio: 6.472; border-top: 0; border-top-left-radius: 0; border-top-right-radius: 0; }
 svg.plot.gci-over { aspect-ratio: 3.236; }
 :root.narrow-layout svg.plot.gci-chrom { aspect-ratio: 1.618; }
 :root.narrow-layout svg.plot.gci-resid { aspect-ratio: 3.236; }
 :root.narrow-layout svg.plot.gci-over { aspect-ratio: 2.157; }
-.gci-ov-cap { margin-top: 14px; }
+.plot-nav-row.gci-ov-nav { margin-top: 14px; }
 .gci-legend { margin-top: 6px; }
 .gci-legend i.gci-mk { width: 9px; height: 9px; border-radius: 0; background: none; border: 1.5px solid currentColor; color: var(--muted); }
 .gci-legend i.gci-mk-dot { border-radius: 50%; background: currentColor; }
-.gci-legend i.gci-mk-x { border: none; color: #9aa3ad; background: linear-gradient(45deg, transparent 43%, currentColor 43% 57%, transparent 57%), linear-gradient(-45deg, transparent 43%, currentColor 43% 57%, transparent 57%); }
+/* (the GC table's cross, as small on the key as on the plot, v546) */
+.gci-legend i.gci-mk-x { width: 6px; height: 6px; border: none; color: #9aa3ad; background: linear-gradient(45deg, transparent 38%, currentColor 38% 62%, transparent 62%), linear-gradient(-45deg, transparent 38%, currentColor 38% 62%, transparent 62%); }
 .plot-chips.gci-ov-sel { gap: 10px; }
 .gci-ov-sel > span { display: flex; gap: 4px; }
-/* The overview's points brightened (the one on show, the one under the pointer): a halo in
-   the point's colour and the point in a lighter tint of it, ringed, in both themes. */
-.gci-hl-halo { pointer-events: none; }
-.gci-win-box .peak-box-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.gci-win-box .gci-reset[hidden] { display: none; }
+/* (v546: each box's title above it, Windows' on the selector's line: .param-head.aligned) */
+.gci-head { justify-content: space-between; }
+.gci-head .gci-reset[hidden] { display: none; }
+.gci-side > .peak-box { margin-top: 0; }
+.gci-side > .gci-values-head { margin: 14px 0 6px; }
 .gci-method { font-size: 12px; padding: 2px 2px 0; }
 .gci-win { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; padding: 2px 0; color: var(--muted); }
 .gci-win-name { color: var(--text); font-weight: 600; min-width: 48px; }
 .gci-win input { width: 64px; padding: 2px 5px; margin-left: 3px; }
 .gci-win-peaks { font-size: 11px; flex-basis: 100%; }
-.gci-values-box { margin-top: 12px; }
 table.gci-values th, table.gci-values td { white-space: nowrap; padding: 4px 6px; }
 .gci-bad { color: var(--bad); font-weight: 600; }
 .gci-flag { margin: 8px 0 0; font-size: 12px; color: var(--warn, #d9a21b); }

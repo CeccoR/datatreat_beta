@@ -123,17 +123,19 @@ function near(from, id){
   for (let a = from && from.parentElement; a; a = a.parentElement){ const e = a.querySelector(sel); if (e) return e; }
   return document.getElementById(id);
 }
-/* ---- A trace picked out (v536; v538) ----
+/* ---- A trace picked out (v536; v538; v546) ----
    Hovered, a curve or a scatter is drawn 1.5× as thick (nothing else changes: no other
    trace dimmed, no glow) and named in a small square label by it: in the trace's colour
    where that reads on the plot's background (a luminance contrast of 3 or more), else in
    the background's colour with a border and text that read on it (a white trace on a white
    plot). The crosshair, and its read-out, sit on one of the trace's own data points, never
-   between two (v538; to v537 the y was interpolated at the pointer's x): on a scatter, or
-   on a line with under one point per SPARSE_PX px across the view, the point nearest the
-   pointer on screen; on a denser line the point nearest the pointer's x. Clicked, the
-   trace stays so (locked): the crosshair takes the lock's colour and follows the pointer
-   along the trace, and ← and → move it one data point along the trace, stopping at its
+   between two (v538; to v537 the y was interpolated at the pointer's x): on the trace
+   picked (the one under the pointer), the point whose x is nearest the pointer's, its y
+   left out but between points as near (to half a pixel), on a line or a scatter alike
+   (v546; v538–v545: on a scatter, or on a line with under one point per 6 px across the
+   view, the point nearest the pointer on screen, x and y). Clicked, the trace stays so
+   (locked): the crosshair takes the lock's colour and follows the pointer's x along the
+   trace, and ← and → move it one data point along the trace, stopping at its
    ends (the keys are the lock's only while it holds; else they step the samples as
    before). A click off every trace, or Esc, lets it go. All of it in the crosshair's layer
    (.plot-cross), which nothing exports and nothing keeps: no project change, no step. Not
@@ -142,7 +144,6 @@ function near(from, id){
    so (svg._noPick: XRPD's Scherrer peaks), what lies on the overlay (draggable lines), and
    bar charts (bars are no trace: their crosshair as before). */
 const PICK_TOL = 6;                 // px from a line, beyond its half width, that hovers it
-const SPARSE_PX = 6;                // px per point across the view under which a line is sparse
 const HL_FACTOR = 1.5;              // a picked trace's line width, × its own
 const _locked = new Set();          // the svgs with a trace locked, for Esc and the arrows
 let _lastLocked = null;             // the one locked last: the arrows' when several are
@@ -158,18 +159,17 @@ function segDist(x, y, ax, ay, bx, by){
 }
 const finitePt = (e, i)=> isFinite(e.xs[i]) && isFinite(e.ys[i]);
 /* The index of trace e's data point the pointer at (cx, cy), px, stands for (see above):
-   the points in the view's x range only, unless it has none. -1: no finite point. */
+   the one whose x is nearest the pointer's, |dx| to the half pixel, then |dy| between
+   those as near; the points in the view's x range only, unless it has none. -1: no finite
+   point. */
 function nearestIndex(P, e, cx, cy){
-  const xs = e.xs, { w } = P.size(), m = P.margin, inView = i => xs[i] >= P.xmin && xs[i] <= P.xmax;
+  const xs = e.xs, inView = i => xs[i] >= P.xmin && xs[i] <= P.xmax;
   let n = 0;
   for (let i = 0; i < xs.length; i++) if (finitePt(e, i) && inView(i)) n++;
-  const sparse = e.type === 'points' || n*SPARSE_PX <= w - m.l - m.r;
   let best = -1, bk = Infinity, bd = Infinity;
   for (let i = 0; i < xs.length; i++){
     if (!finitePt(e, i) || (n && !inView(i))) continue;
-    const dx = Math.abs(P.px(xs[i]) - cx), dy = Math.abs(P.py(e.ys[i]) - cy);
-    // sparse: the distance on screen; dense: |dx| to the half pixel, then |dy|
-    const k = sparse ? Math.hypot(dx, dy) : Math.round(dx*2), d = sparse ? 0 : dy;
+    const k = Math.round(Math.abs(P.px(xs[i]) - cx)*2), d = Math.abs(P.py(e.ys[i]) - cy);
     if (k < bk || (k === bk && d < bd)){ bk = k; bd = d; best = i; }
   }
   return best;
@@ -771,6 +771,11 @@ class Plot{
     if (old) old.remove();
     col.innerHTML = '';
     col.appendChild(div);
+    // The line above the plot that the toolbar shares (style.css: a .plot-nav-row just before
+    // the plot's box, or before the block that box opens), told how many buttons it holds:
+    // the line keeps clear of them, and no more (a sample selector's name cut only there).
+    const prev = box.previousElementSibling || (box.parentElement && box.parentElement.firstElementChild === box ? box.parentElement.previousElementSibling : null);
+    if (box.classList.contains('plot-wrap') && prev && prev.classList.contains('plot-nav-row')) prev.style.setProperty('--tb-n', String(div.children.length));
     // Re-assert the current mode onto the freshly built buttons/cursor so a re-run
     // of attachTools (e.g. on data refresh) can't leave a stale/partial state.
     this.setMode(this._mode || null);

@@ -1687,9 +1687,8 @@ function createGc({ key, root, layer, shown }){
     if (!card || !c) return;
     const n = fileSafe(a.name);
     if (a.type === 'integ'){
-      // (v545: the chromatogram over its residuals, one plot whose toolbar is on the line of
-      // its selectors; the run overview)
-      nameDownloads(card.querySelector('.gci-tools'), `${n} - GC_chromatogram.svg`, `${n} - chromatogram.csv`);
+      // (v545: the chromatogram over its residuals, one plot, one toolbar; the run overview)
+      nameDownloads(card.querySelector('.gci-pair'), `${n} - GC_chromatogram.svg`, `${n} - chromatogram.csv`);
       nameDownloads(card.querySelector('svg.gci-over').closest('.plot-wrap'), `${n} - GC_run_overview.svg`, `${n} - integration.csv`);
       return;
     }

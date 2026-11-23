@@ -9,7 +9,12 @@
    a sparse line: the point nearest the pointer on screen), hovered, clicked or locked; ←
    and → move the lock one point along the trace, stopping at its ends, and step no
    sample while it holds; the label read on the plot's background in both themes (a white
-   trace on a white plot: the background's colour, a dark border and text). */
+   trace on a white plot: the background's colour, a dark border and text).
+   v546: on the trace picked, the point whose x is nearest the pointer's, its y left out
+   (between points as near, to half a pixel, the nearest in y), on a line or a scatter,
+   hovered, clicked or locked: a scatter's point at the pointer's x far above it taken over
+   one under the pointer a little further in x; a lock follows the pointer's x whatever its
+   y; ← and → still one point each. */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { start, openModule, loadFiles, settle, history, moduleState } from './helpers.mjs';
@@ -180,9 +185,10 @@ test('a plot\'s trace: hovered, drawn out and named; clicked, locked, the crossh
 });
 
 // A plot of its own in the app's page: a sparse line of 8 points and a scatter, white or
-// black, on the theme's panel colour.
-async function ownPlot(page, theme, color){
-  await page.evaluate(async ([theme, color])=>{
+// black, on the theme's panel colour (`more`: a second scatter, two points at nearly one x,
+// one high and one low).
+async function ownPlot(page, theme, color, more = false){
+  await page.evaluate(async ([theme, color, more])=>{
     document.documentElement.setAttribute('data-theme', theme);
     document.getElementById('ownPlot')?.remove();
     const { Plot } = await import('./plot.js');
@@ -195,7 +201,8 @@ async function ownPlot(page, theme, color){
     P.setRange(0, 7, 0, 10); P.drawAxes();
     P.line([0, 1, 2, 3, 4, 5, 6, 7], [1, 3, 2, 5, 4, 7, 6, 8], color, 2, undefined, { label: 'sparse', key: 'sparse' });
     P.points([0.5, 2.5, 4.5, 6.5], [9, 9, 9, 9], '#3a7bd5', 3);
-  }, [theme, color]);
+    if (more) P.points([3.5, 3.6], [1, 7.5], '#d53a7b', 3, { label: 'pair' });
+  }, [theme, color, more]);
 }
 // The pixel in the page of data (x, y) on it, and what its crosshair layer shows.
 const own = {
@@ -217,7 +224,7 @@ const own = {
   }),
 };
 
-test('a sparse line and a scatter: the crosshair on the data point nearest the pointer, hovered, clicked, locked; the arrows step it; the label readable in both themes', async ()=>{
+test('a sparse line and a scatter: the crosshair on the data point nearest the pointer\'s x (its y left out), hovered, clicked, locked; the arrows step it; the label readable in both themes', async ()=>{
   const { page, errors, close } = await env.page();
   try {
     for (const [theme, color] of [['light', '#ffffff'], ['dark', '#ffffff'], ['light', '#000000'], ['dark', '#000000']]){
@@ -246,11 +253,17 @@ test('a sparse line and a scatter: the crosshair on the data point nearest the p
       for (let k = 0; k < 10; k++) await page.keyboard.press('ArrowLeft');
       c = await own.cross(page);
       assert.deepEqual([c.i, +c.x.toFixed(9), +c.y.toFixed(9)], [0, 0, 1], what + ': stops at the first');
-      // The pointer moved along: the lock on the point nearest it, (6, 6).
+      // The pointer moved along: the lock on the point nearest its x, (6, 6).
       const b = await own.at(page, 5.8, 6.4);
       await page.mouse.move(b.x, b.y);
       c = await own.cross(page);
       assert.deepEqual([c.i, +c.x.toFixed(9), +c.y.toFixed(9)], [6, 6, 6], what + ': follows the pointer, point by point');
+      // Far under the line at x 5.4: the point at x 5, (5, 7), whatever the pointer's y
+      // (x and y on screen, v545's, took (4, 4)).
+      const b2 = await own.at(page, 5.4, 0.5);
+      await page.mouse.move(b2.x, b2.y);
+      c = await own.cross(page);
+      assert.deepEqual([c.i, +c.x.toFixed(9), +c.y.toFixed(9)], [5, 5, 7], what + ': the point nearest the pointer\'s x, its y left out');
       await page.keyboard.press('Escape');
     }
     // The scatter: hovered near one of its points, the crosshair on that point; the circles' stroke 1.5×.
@@ -259,6 +272,21 @@ test('a sparse line and a scatter: the crosshair on the data point nearest the p
     const c = await own.cross(page);
     assert.equal(c.name, 'Series 2');
     assert.deepEqual([+c.x.toFixed(9), +c.y.toFixed(9), c.hl], [2.5, 9, [1.5]]);
+    // A scatter with two points at nearly one x: the pointer on the low one (3.5, 1), a little
+    // right of it, nearer the high one's x (3.6): hovered, clicked and locked on (3.6, 7.5),
+    // the point whose x is nearest; → and ← one point each.
+    await ownPlot(page, 'dark', '#ffffff', true);
+    const e = await own.at(page, 3.56, 1.05);
+    await page.mouse.move(e.x, e.y);
+    let p = await own.cross(page);
+    assert.deepEqual([p.name, +p.x.toFixed(9), +p.y.toFixed(9)], ['pair', 3.6, 7.5], 'hovered: the point nearest the pointer\'s x');
+    await page.mouse.click(e.x, e.y);
+    p = await own.cross(page);
+    assert.deepEqual([p.locked, p.i, +p.x.toFixed(9), +p.y.toFixed(9)], [true, 1, 3.6, 7.5], 'clicked: locked on it');
+    await page.keyboard.press('ArrowLeft');
+    p = await own.cross(page);
+    assert.deepEqual([p.i, +p.x.toFixed(9), +p.y.toFixed(9)], [0, 3.5, 1], '←: the point before');
+    await page.keyboard.press('Escape');
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });

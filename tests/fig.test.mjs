@@ -212,9 +212,10 @@ test('Figure: three CSVs, the Data card, titles, roles, names, XY / bar / box ca
     assert.deepEqual(lines[1].ys, [8.25, 8.5, 8.75, 9, 9.25, 9.5, 9.75], 'B read with its decimal commas');
     assert.equal((await stored(page, 1, 'segments')).length, 2, 'each its error bars');
     assert.equal(await page.textContent('#fig1Svg .plot-label'), 'Time (s)', 'the unit in the axis title');
-    // (as DRS's cards: the svg under the toolbar's row, 36 px down, the column's head 41 px, by the plot's frame)
+    // (as DRS's cards, v546: the svg under the toolbar's row, 36 px down; the column's head on
+    // that row, its normalisation from the plot's top edge: CLAUDE.md)
     const at = await top(page, '#tab-fig .an-card .pside-nav');
-    assert.deepEqual([await top(page, '#fig1Svg') - at, await top(page, '#tab-fig .an-card .fig-side .param-head') - at], [36, 41], 'the list from the plot\'s top');
+    assert.deepEqual([await top(page, '#fig1Svg') - at, await top(page, '#tab-fig .an-card .fig-side .param-head') - at, await top(page, '#tab-fig .an-card .fig-side > .param-grid') - at], [36, 0, 36], 'the head on the toolbar\'s line, the list from the plot\'s top');
     // The Data card's table as tall as the chart, across the card.
     const sv = await box(page, '#fig1Svg'), tb = await box(page, '#figHead');
     assert.ok(Math.abs(sv.h - tb.h) < 1.5 && tb.w > sv.w + 100, `the table's box the chart's height, wider (${tb.w}×${tb.h}, ${sv.w}×${sv.h})`);

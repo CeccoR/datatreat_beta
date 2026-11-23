@@ -1,19 +1,20 @@
 import { esc } from './utils.js';
 
 /* =========================================================
-   THE SAMPLE SELECTOR (v545)
+   THE SAMPLE SELECTOR (v545; v546: its sizing, no mirror)
    One selector for every module that steps through its samples, files, images, traces or
    chromatograms: DRS's Tauc and Urbach cards, XRPD's Peaks/Scherrer and Rietveld cards, SEM's
-   image, Iodometry's trace, Custom's file in its Data card, GC's Integration card (its file
-   and its chromatogram). Two halves of exactly one width (a grid of two equal columns):
-   - `‹ n/N ›`, one group, the count centred between the arrows, the arrows at the group's ends;
-   - the name, cut with "…" where the half is narrower, and a small down-arrow after it. The
-     name (the full one in its tooltip) opens a list of every item, to go straight to one:
-     the look and the conduct of the app's other menus (the kinds' menu, cards.js: `.an-menu`,
-     its anchor lit while it is open, closed by Escape, by a click anywhere else or by a
-     choice), with the keyboard too (↑ ↓, Home, End, Enter, Escape, Tab).
-   Mirrored (`mirror`), the name comes first and the arrows last: GC's chromatogram selector,
-   at the right of its plot, so that both selectors' arrows are outermost.
+   image, Iodometry's trace, Custom's file in its Data card, GC's Integration card (its file,
+   over the chromatogram, and its chromatogram, over the run overview). In a line:
+   - `‹ n/N ›`, one group of ONE fixed width everywhere (v546), as wide as `‹ 000/000 ›`
+     needs in the app's font (tabular digits), the count centred between the arrows;
+   - the name and a small down-arrow after it, as long as the name: it takes the room its
+     line has up to the plot's toolbar beside it (style.css keeps the line clear of it; a
+     line with no toolbar, up to its edge), and is cut with "…" only where it would reach
+     it. The name (the full one in its tooltip) opens a list of every item, to go straight
+     to one: the look and the conduct of the app's other menus (the kinds' menu, cards.js:
+     `.an-menu`, its anchor lit while it is open, closed by Escape, by a click anywhere else
+     or by a choice), with the keyboard too (↑ ↓, Home, End, Enter, Escape, Tab).
    The arrows keep their ids and classes (utils.js SAMPLE_NAV: ← → press the first one on
    show); the count and the name too (the tests read them).
    snavHtml(o) is the markup; snav(el, o) its conduct, given back as { update(), close() }:
@@ -23,8 +24,8 @@ import { esc } from './utils.js';
 
 /* o: { prev, idx, next, name (ids, each optional), prevCls, nextCls (classes beside
    nav-arrow), what (the item, as the arrows' titles say it: 'sample'), keys (the arrows'
-   titles name ← →: true), mirror, cls } */
-export function snavHtml({ prev, idx, next, name, prevCls = '', nextCls = '', what = 'sample', keys = true, mirror = false, cls = '' } = {}){
+   titles name ← →: true), cls } */
+export function snavHtml({ prev, idx, next, name, prevCls = '', nextCls = '', what = 'sample', keys = true, cls = '' } = {}){
   const id = v => v ? ` id="${esc(v)}"` : '';
   const steps = `<span class="snav-steps">`
     + `<button type="button" class="btn nav-arrow${prevCls ? ' ' + prevCls : ''}"${id(prev)} aria-label="Previous ${esc(what)}" title="Previous ${esc(what)}${keys ? ' (&#8592;)' : ''}">&#8249;</button>`
@@ -32,7 +33,7 @@ export function snavHtml({ prev, idx, next, name, prevCls = '', nextCls = '', wh
     + `<button type="button" class="btn nav-arrow${nextCls ? ' ' + nextCls : ''}"${id(next)} aria-label="Next ${esc(what)}" title="Next ${esc(what)}${keys ? ' (&#8594;)' : ''}">&#8250;</button></span>`;
   const pick = `<button type="button" class="snav-pick" aria-haspopup="listbox" aria-expanded="false" aria-label="Choose a ${esc(what)} from the list">`
     + `<span class="snav-name"${id(name)}>&mdash;</span><span class="snav-caret" aria-hidden="true"></span></button>`;
-  return `<div class="snav${mirror ? ' snav-mirror' : ''}${cls ? ' ' + cls : ''}">${mirror ? pick + steps : steps + pick}</div>`;
+  return `<div class="snav${cls ? ' ' + cls : ''}">${steps + pick}</div>`;
 }
 
 /* The selector's conduct. o: { count() (how many items), index() (the one on show),
@@ -40,7 +41,6 @@ export function snavHtml({ prev, idx, next, name, prevCls = '', nextCls = '', wh
    go(i) (show item i) }. The arrows stay the module's own (it wires them as it did). */
 export function snav(el, o){
   const pick = el.querySelector('.snav-pick'), nameEl = el.querySelector('.snav-name'), idxEl = el.querySelector('.nav-count');
-  const mirror = el.classList.contains('snav-mirror');
   const count = ()=> Math.max(0, o.count() | 0);
   const cur = ()=>{ const n = count(), i = o.index() | 0; return n ? Math.min(Math.max(0, i), n - 1) : -1; };
   const titleOf = i => o.title ? o.title(i) : o.label(i);
@@ -70,16 +70,15 @@ export function snav(el, o){
     const f = menu.querySelector(`[data-i="${Math.min(focusAt, n - 1)}"]`);
     if (had && f) f.focus({ preventScroll: true });
   }
-  // Under its anchor (above it where the page has no room below), its edge on the
-  // anchor's: the left one, the right one for a mirrored selector.
+  // Under its anchor (above it where the page has no room below), its left edge on the
+  // anchor's.
   function place(){
     if (!menu) return;
     if (!pick.isConnected || !pick.getClientRects().length){ close(); return; }
     const r = pick.getBoundingClientRect(), w = menu.offsetWidth, h = menu.offsetHeight;
     let top = r.bottom + 6;
     if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 6);
-    const left = mirror ? r.right - w : r.left;
-    menu.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, left)) + 'px';
+    menu.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, r.left)) + 'px';
     menu.style.top = Math.max(8, top) + 'px';
   }
   function open(){
