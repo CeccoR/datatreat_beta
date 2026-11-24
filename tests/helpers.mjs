@@ -185,6 +185,29 @@ export async function answer(page, which){
   await settle(page);
 }
 
+/* ---- CLAUDE.md's alignment rule (v549) ----
+   A card with a plot on the left and boxes on the right: the first thing written in its
+   right column, its first title (`head`; null: none, its first box, `block`), has its top
+   on the plot frame's top edge (`frame`). A title's top is its letters' as they are seen:
+   its first text's baseline (a probe of no size set on it) less that text's ascent as a
+   canvas measures it in its font (its capitals'), whatever its box. `root` a selector, the
+   others under it. → { frame, top, text (the title's, as shown; null for a box) } in px. */
+export const firstTop = (page, root, { frame, head = null, block = null })=> page.evaluate(([root, frame, head, block])=>{
+  const base = document.querySelector(root), q = s => s ? base.querySelector(s) : null;
+  const f = q(frame).getBoundingClientRect().top, h = q(head);
+  if (!h) return { frame: f, top: q(block).getBoundingClientRect().top, text: null };
+  const t = document.createTreeWalker(h, NodeFilter.SHOW_TEXT, { acceptNode: n => n.textContent.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT }).nextNode();
+  const cs = getComputedStyle(t.parentElement), probe = document.createElement('span');
+  probe.style.cssText = 'display:inline-block;width:0;height:0;vertical-align:baseline';
+  t.after(probe);
+  const baseline = probe.getBoundingClientRect().top;
+  probe.remove();
+  const c = document.createElement('canvas').getContext('2d');
+  c.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+  const text = cs.textTransform === 'uppercase' ? t.textContent.trim().toUpperCase() : t.textContent.trim();
+  return { frame: f, top: baseline - c.measureText(text).actualBoundingBoxAscent, text };
+}, [root, frame, head, block]);
+
 /* ---- Downloads ---- */
 export async function download(page, act, timeout = 20000){
   const [d] = await Promise.all([page.waitForEvent('download', { timeout }), act()]);

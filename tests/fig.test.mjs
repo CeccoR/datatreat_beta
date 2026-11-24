@@ -9,7 +9,7 @@
    adding an XY, a bar and a box card, the series picked in the Add series window (by file, a
    file's box ticking all its series and a square when some are; Cancel nothing), each
    plot's normalisation (none, local, global) and each series' scale and offset, no crop and
-   no swatch, the list from the plot's top; the file list's colours hidden, their place kept;
+   no swatch, the column's title (its letters) from the plot's top edge (CLAUDE.md, v549); the file list's colours hidden, their place kept;
    the composer of a card opened and its figure kept with the card; the project saved and
    opened again; a tab asleep and woken as it was; a file removed taking its series out of
    the plots. A v528 project, its series normalised each and cropped, opening with the plot's
@@ -31,7 +31,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { start, openModule, loadFiles, settle, undo, moduleState, history, saveAs, openProject, exportProject, importProject, projectFile, download, tabLabels } from './helpers.mjs';
+import { start, openModule, loadFiles, settle, undo, moduleState, history, saveAs, openProject, exportProject, importProject, projectFile, download, tabLabels, firstTop } from './helpers.mjs';
 
 let env, dir;
 before(async ()=>{
@@ -212,10 +212,12 @@ test('Figure: three CSVs, the Data card, titles, roles, names, XY / bar / box ca
     assert.deepEqual(lines[1].ys, [8.25, 8.5, 8.75, 9, 9.25, 9.5, 9.75], 'B read with its decimal commas');
     assert.equal((await stored(page, 1, 'segments')).length, 2, 'each its error bars');
     assert.equal(await page.textContent('#fig1Svg .plot-label'), 'Time (s)', 'the unit in the axis title');
-    // (as DRS's cards, v546: the svg under the toolbar's row, 36 px down; the column's head on
-    // that row, its normalisation from the plot's top edge: CLAUDE.md)
+    // (as DRS's cards: the svg under the toolbar's row, 36 px down; the column's title, its
+    // letters, from the plot's top edge on, CLAUDE.md, v549: v546–v548 on the toolbar's row)
     const at = await top(page, '#tab-fig .an-card .pside-nav');
-    assert.deepEqual([await top(page, '#fig1Svg') - at, await top(page, '#tab-fig .an-card .fig-side .param-head') - at, await top(page, '#tab-fig .an-card .fig-side > .param-grid') - at], [36, 0, 36], 'the head on the toolbar\'s line, the list from the plot\'s top');
+    assert.equal(await top(page, '#fig1Svg') - at, 36, 'the plot under the toolbar\'s row');
+    const ft = await firstTop(page, '#tab-fig .an-card', { frame: '#fig1Svg', head: '.fig-side > .param-head' });
+    assert.ok(Math.abs(ft.top - ft.frame) <= 1 && ft.text === 'SERIES', `the title's top on the plot frame's: ${JSON.stringify(ft)}`);
     // The Data card's table as tall as the chart, across the card.
     const sv = await box(page, '#fig1Svg'), tb = await box(page, '#figHead');
     assert.ok(Math.abs(sv.h - tb.h) < 1.5 && tb.w > sv.w + 100, `the table's box the chart's height, wider (${tb.w}×${tb.h}, ${sv.w}×${sv.h})`);

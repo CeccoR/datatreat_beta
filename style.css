@@ -1909,15 +1909,28 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
   gap: 8px;
   margin-bottom: 10px;
 }
-/* Desktop (v546, CLAUDE.md's rule): the header on the line of the plot's selector and
-   toolbar (that line's 30px, its text centred in it), the block under it from the plot's
-   top edge on (the 6px under the line). To v545 the header's top was 5px under the plot's
-   top edge, its block 35px under it. */
-.param-head.aligned { margin-top: 0; min-height: 30px; margin-bottom: 6px; }
-:root.narrow-layout .param-head.aligned { min-height: 0; margin-bottom: 10px; }
-/* (a plot with no selector over it, its toolbar on a line of its own, EPR's: the header on
-   that line, 26px, the block from the plot's top on, the toolbar's 4px gap under it) */
-:root:not(.narrow-layout) .param-head.aligned-tb { min-height: 26px; margin-bottom: 4px; }
+/* ===== The right column's first title (CLAUDE.md, v549). Where a plot is on the left and
+   boxes on the right, the first thing written in the right column, its first title, has
+   its top on the plot frame's top edge: its letters' top, its capitals' (text-box: the
+   line of its first item trimmed to them and to its baseline, so that its box is its
+   letters), `--cap-at` under the column's top, which is where the frame is: 36 px under a
+   column that starts level with the selector's line over the plot (.aligned: that line's
+   30 px and the 6 px under it), 30 px under one level with a toolbar on a line of its own
+   (.aligned-tb, EPR's: its 26 px and 4 px), 0 where the column starts at the frame (a
+   .pside's, SEM's settings). What shares its line (all / one, Default) is centred on its
+   letters and makes it no taller. v546–v548 had the title on the selector's line instead,
+   and v545 its box's top 5 px under the frame's (its letters some 10 px). Stacked (narrow
+   layout), it heads its column under the plot. ===== */
+.param-head.cap-title, .sem-set-head.cap-title { margin-top: var(--cap-at, 0px); margin-bottom: 14px; min-height: 0; align-items: center; }
+.cap-title > :first-child { text-box: trim-both cap alphabetic; }
+.param-head.cap-title > :not(:first-child), .sem-set-head.cap-title > :not(:first-child) { margin-top: -14px; margin-bottom: -14px; }
+:root:not(.narrow-layout) .cap-title.aligned { --cap-at: 36px; }
+:root:not(.narrow-layout) .cap-title.aligned-tb { --cap-at: 30px; }
+/* (a browser with no text-box: the line 3 px taller above its capitals, Inter's at 12 px,
+   and below its baseline) */
+@supports not (text-box: trim-both cap alphabetic){
+  .param-head.cap-title, .sem-set-head.cap-title { margin-top: calc(var(--cap-at, 0px) - 3px); margin-bottom: 11px; }
+}
 /* A plot-style card's parameters (every module's: a plot on the left, its parameters on
    the right), a row each: its name on three fifths of the column, its field on the two
    fifths left (v531: the field's track 40 % and the name's the rest, gap included, so
@@ -2087,18 +2100,15 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 .rv-side > .rv-prog { margin-top: 0; }
 .rv-side > .rv-btns > .btn { height: 33px; }
 :root.narrow-layout .rv-side > .rv-boxes { flex: none; min-height: 300px; }
-/* A .pside's column whose first box has its title above it (Custom's Series, the XRPD
-   standard's Parameters): the title pulled up onto the line of the plot's toolbar (the
-   row above the plot, 30px and its 6px), the box from the plot's top edge on (CLAUDE.md,
-   v546; to v545 the title's top on the plot's). */
-:root:not(.narrow-layout) .pside > .pside-col > .param-head:first-child { margin-top: -36px; min-height: 30px; margin-bottom: 6px; }
+/* (A .pside's column whose first box has its title above it, Custom's Series, the XRPD
+   standard's Parameters, the GC calibration's Standards: the title's letters from the
+   plot's top edge on, .cap-title; v546–v548 pulled it up onto the toolbar's line.) */
 /* The standard's Scherrer side: the parameters at the top; the Caglioti fit, its alert
    and + Add peak at the foot, the button's bottom on the plot's. A fit taller than the
    room left scrolls in its place. */
 /* (gap 0 over .pside-col's 8 px, which had been left in by a weaker selector: 28 px
    between the fit and the button, which the fit's box paid for by scrolling; now 8) */
 .pside > .pside-col.xrd-std-side { gap: 0; }
-.xrd-std-side > .param-head { margin-top: 0; }
 .xrd-std-side > .xrd-cag { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; padding-top: 10px; }
 .xrd-std-side > .cag-alert:not(:empty) { margin-top: 8px; }
 .xrd-std-side > .plot-action-btn { margin-top: 8px; }
@@ -3205,10 +3215,8 @@ button.btn.fig-align.cp-anchored { --btn-bd: var(--accent); --btn-fg: var(--acce
    card goes to one column
    (sem.js fitWork). */
 .sem-set-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 18px 0 8px; }
-.sem-set-head:first-child { margin-top: 0; }
-/* (three columns: the settings' first title on the image's selector line, their first
-   block from the image's top edge on, CLAUDE.md, v546; one column, under the rest) */
-@media (min-width: 761px){ .sem-work:not(.sem-stacked) > .sem-col-set > .sem-set-head:first-child { margin-top: -36px; min-height: 30px; margin-bottom: 6px; } }
+/* (the first, Crop, a .cap-title: its letters on the image's top edge, CLAUDE.md, v549;
+   v546–v548 on the image's selector line) */
 .sem-set-head .sem-check { margin: 0; }
 .sem-pg > .txt-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* One column: the image on top, the thumbnails in the middle, the settings under
@@ -3398,9 +3406,9 @@ button.an-add.is-drop { border-color: var(--accent); }
 
 /* The Custom module (fig.js; to v530 named Figure). Its Plot cards are .pside (v531; the
    Data card too to v533): the nav over the plot, the column beside it spanning that
-   box exactly, its head at the top (5 px under the box's top, as the analysis cards'
-   .param-head.aligned is under their plots') and its list scrolling in the room left. */
-.fig-side > .param-head { margin-top: 5px; }
+   box exactly, its head at the top (its letters on the plot's top edge, .cap-title, v549;
+   5 px under it stacked) and its list scrolling in the room left. */
+:root.narrow-layout .fig-side > .param-head { margin-top: 5px; }
 .fig-pside > .pside-col.fig-side { gap: 0; }
 /* The Data card: the roles' box at the right of the file's arrows; the file's table whole,
    across the card (v534: to v533 a Plot card's chart's width, the series' names beside it),
@@ -3586,8 +3594,8 @@ table.gci-values th, table.gci-values td { white-space: nowrap; padding: 4px 6px
 .gci-cal-unit select { width: auto; margin-left: 6px; padding: 2px 6px; border-radius: 6px; font: inherit; color: var(--text); background: var(--panel2); border: 1px solid var(--line); }
 table.gci-cal-levels th, table.gci-cal-levels td { white-space: nowrap; padding: 3px 7px; }
 table.gci-cal-levels td input[type="text"] { width: 76px; }
+table.gci-cal-levels td input[type="checkbox"] { width: auto; margin: 0; }
 table.gci-cal-levels tr.is-excluded td { opacity: 0.45; }
-table.gci-cal-levels td.gci-cal-src { max-width: 220px; overflow: hidden; text-overflow: ellipsis; color: var(--muted); font-size: 12px; }
 .gci-thumb { display: block; color: var(--muted); }
 .gci-cal-fits { margin-top: 14px; }
 .gci-cal-gas { min-width: 300px; }
@@ -3602,11 +3610,36 @@ table.gci-cal-dev th, table.gci-cal-dev td { padding: 3px 7px; font-size: 12px; 
 .gci-nb-lb { fill: var(--muted); }
 .legend i.mk-box.gci-mk-nb { background: var(--muted); opacity: 0.4; }
 .gci-win input { width: 58px; }
-/* (the calibration's plots a strip each, over the levels' table, which is as wide as it needs) */
+/* (the calibration's plots a strip each, under the standards) */
 .gci-cal-gas svg.plot { aspect-ratio: 2.4; }
-.gci-cal-table { margin-top: 14px; }
-table.gci-cal-levels { width: auto; min-width: 60%; }
-.gci-cal-fits { margin-top: 4px; }
+.gci-cal-fits { margin-top: 16px; }
+/* The calibration's window (v549): the standard chosen at the left, drawn as the card's
+   chromatogram, and the standards' table at the right, half and half, a .pside: the
+   table's box spans the plot's height and scrolls inside (its head kept in view), its
+   title's letters on the plot's top edge (.cap-title). Stacked (narrow), the table under
+   the plot, no taller than most of the screen, without its number and thumbnail columns.
+   With no standard yet, the table alone, saying what to drop. */
+.gci-cal-pside { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); margin-top: 4px; }
+.gci-cal-pside.is-empty { display: block; }
+.gci-cal-pside.is-empty > :not(.pside-col) { display: none; }
+.pside > .pside-col.gci-cal-side { gap: 0; }
+.gci-cal-side > .gci-cal-table { flex: 1 1 0; min-height: 0; margin-top: 0; padding: 0 8px 6px; overflow: auto; }
+.gci-cal-modal .gci-cal-table { overscroll-behavior: contain; }
+.gci-cal-pside.is-empty .gci-cal-table, :root.narrow-layout .gci-cal-side > .gci-cal-table { flex: none; max-height: 70vh; }
+table.gci-cal-levels { width: 100%; }
+table.gci-cal-levels thead th { position: sticky; top: 0; z-index: 1; background: var(--panel2); }
+/* (the injection's name takes the room the other columns leave, cut with "…": whole in its tooltip) */
+table.gci-cal-levels th, table.gci-cal-levels td { width: 1%; }
+table.gci-cal-levels .gci-cal-src { width: 100%; max-width: 0; }
+.gci-cal-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+td.gci-cal-src.gci-bad { font-weight: 500; }
+.gci-cal-notice:not(:empty) { margin-top: 6px; }
+.gci-cal-fit { margin: 6px 0 0; }
+.gci-cal-fit:empty { display: none; }
+:root.narrow-layout table.gci-cal-levels .gci-cal-k, :root.narrow-layout table.gci-cal-levels .gci-cal-th, :root.narrow-layout table.gci-cal-levels .gci-cal-a { display: none; }
+:root.narrow-layout table.gci-cal-levels th, :root.narrow-layout table.gci-cal-levels td { padding: 3px 4px; }
+:root.narrow-layout table.gci-cal-levels td input[type="text"] { width: 54px; }
+
 .gci-risks { margin: 6px 0 8px; padding-left: 20px; }
 .gci-risks li { margin: 2px 0; }
 /* (the alerts of the Integration card and of a rate card's source name files whose names do not break: they wrap anywhere) */

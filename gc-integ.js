@@ -1,18 +1,21 @@
 import { esc, csvLine, fmtNum, alertHtml, setupDropzone, X_SVG, bytesKey, fixed, exactKey, objId, guardNumericInput, flashFieldInvalid, kept } from './utils.js';
 import { Plot, svgEl, linkX, niceTicks } from './plot.js';
 import { plotWrap, chipRow, viewOf, setView, PLOT_DL_ICON } from './modcharts.js';
-import { cardInfo } from './cards.js';
+import { cardInfo, fileSafe, nameDownloads } from './cards.js';
 import { isObj, oneOf } from './modkit.js';
 import { decodeText } from './textdata.js';
 import { DEFAULT_METHOD, readTcd, windowCurves, fitCalibration, transferK } from './gc-tcd.js';
 import { integrateMany } from './gc-tcd-pool.js';
 import { snavHtml, snav } from './snav.js';
+import { looksTcd, stemOf } from './gc-pair.js';
 
 /* =========================================================
    GC: THE INTEGRATION CARD (v544; v545: its layout, the chromatogram over its residuals,
    the run overview one gas at a time, the selectors, no trapezoids, the suspicious rule;
    v546: the toolbar back over the plot, the chromatogram's selector over the overview,
-   the boxes' titles above them, the transfer's k under Peaks, the overview's marks, 10 %)
+   the boxes' titles above them, the transfer's k under Peaks, the overview's marks, 10 %;
+   v549: the calibration's standards a GC table and its raw chromatograms, named by the
+   table, each drawn as the card's chromatogram; Windows' title on the plot's top edge)
    The raw chromatograms (TCD) of a GC card integrated again by the engine (gc-tcd.js):
    each injection's H₂ and O₂ peaks fitted with a model of the window they sit in, turned
    into concentrations by a calibration of standards or by the GC software's own scale, and
@@ -121,14 +124,20 @@ const compact = r => r && deNull(JSON.parse(JSON.stringify(r, (k, v)=> k === 'pa
    of them at least (10); these where the method has none. */
 const TRANSFER = { minValue: 0.02, minCount: 10 };
 
-/* ---- The calibration (a card's): its unit, intercept modes, files and levels ---- */
+/* ---- The calibration (a card's): its unit, intercept modes, files and levels ----
+   A file of it (v549): the standards' raw chromatograms (name, rawBytes: what is
+   integrated, its results keyed by these bytes as any file's) and the GC software's table
+   of the same injections (`table`: { name, rawBytes }), read for one thing only, each
+   injection's name; a level per chromatogram, typed by hand. A file of v544–v548's has no
+   table: kept as it is, its standards named by column until the table is dropped. */
 const blankLevel = ()=> ({ h2: null, o2: null, on: true });
 function calIn(c){
   const s = isObj(c) ? c : {}, z = isObj(s.zero) ? s.zero : {};
   const lv = v => fin(v) ? v : null;
   const files = Array.isArray(s.files) ? s.files.filter(f=> isObj(f) && f.rawBytes instanceof Uint8Array).map(f=> ({
     name: typeof f.name === 'string' && f.name ? f.name : 'calibration.csv', rawBytes: f.rawBytes,
-    levels: Array.isArray(f.levels) ? f.levels.map(x=> isObj(x) ? { h2: lv(x.h2), o2: lv(x.o2), on: x.on !== false } : blankLevel()) : [] })) : [];
+    levels: Array.isArray(f.levels) ? f.levels.map(x=> isObj(x) ? { h2: lv(x.h2), o2: lv(x.o2), on: x.on !== false } : blankLevel()) : [],
+    ...(isObj(f.table) && f.table.rawBytes instanceof Uint8Array ? { table: { name: typeof f.table.name === 'string' && f.table.name ? f.table.name : 'calibration table.csv', rawBytes: f.table.rawBytes } } : {}) })) : [];
   return { unit: oneOf(s.unit, UNITS), zero: { h2: z.h2 === true, o2: z.o2 === true }, files };
 }
 const calCopy = c => ({ unit: c.unit, zero: { ...c.zero }, files: c.files.map(f=> ({ ...f, levels: f.levels.map(l=> ({ ...l })) })) });
@@ -151,8 +160,8 @@ const CONC_HTML = (()=>{
       `${im(k)}: area per %mol; ${im(c)}: %mol. A line through zero, whatever the software's own calibration was.`)
     + '</ol></div>';
 })();
-export const INTEG_INFO = `The <b>Integration</b> card integrates again the raw chromatograms of the thermal-conductivity detector (TCD), the files of a column per injection that the GC software writes beside its table, and hands the results to the <b>Production Rate</b> cards below it. Each injection's <b>H₂ and O₂</b> are fitted together in one <b>window</b> of retention time (268–326 s by default): a smooth baseline (a straight line, with the <b>step</b> the detector makes after O₂), a peak shape for H₂, for O₂ and for the system peak at 310 s (<b>S310</b>, fitted so that its tail does not end up in O₂'s area; the step and S310 are drawn but go no further). The fit is made in <b>two passes</b>: the first, with a robust loss, finds <b>spikes</b> and <b>glitch zones</b> (marked on the plot in red), which the second, an ordinary least-squares fit, leaves out, so that a spike is never read as gas; a fit that looks wrong is started again from a generic start, and the better of the two kept. <b>The selectors</b>: the file (a pair, or raw chromatograms alone) at the top left of the plot, the chromatogram at the top left of the run overview; the arrows step through them (← → the chromatograms), and the name, or the small arrow after it, opens the list of them all, to go straight to one. <b>The plot</b>: the chromatogram on top (raw, model, baseline with its step, H₂, O₂ and S310 each drawn on the baseline, the spikes and glitch zones left out in red, the neighbouring peaks the model has no shape for in grey) and its <b>residuals</b> under it (the data less the model, inside the fit window only; blank outside it). The two share the retention time: a zoom or a pan in either (the one under the pointer) moves both along it at once, each keeping its own vertical scale. The plot holds the whole chromatogram and opens on the H₂/O₂ window, where a double click with a tool on brings it back. Its one toolbar, at its top right, gives both: the images, the CSV (the chromatogram on show, its model and parts and its residuals), and the figure composer, where they are two panels, one of which can be removed. <b>Windows</b>: the method is the card's, in these numbers, which are its source of truth: the fit window's edges (the green lines on the chromatogram drag them as an aid, snapping to the data's 0.2 s, and write into the numbers), with the peaks' nominal places. Moving an edge by 1–2 s changes the areas by a few hundredths of a per cent; by 5 s it reaches the peaks the model has no shape for, the system peak at 262–267.5 s and N₂ from about 330.5 s (grey on the chromatogram), and the fit degrades: the card says so. <b>Peaks</b>: the chromatogram on show, per gas: the area of its fitted shape ± its standard deviation, its apex, χ²<sub>r</sub> (how well the model follows the data: about 1, within the noise), its concentration and the GC table's value; under the table, the units, where a concentration is taken from the GC software's table its k for the file on show, and why the chromatogram is suspicious, if it is. <b>Suspicious</b>: a chromatogram is, for a gas, where χ²<sub>r</sub> is above 4 after the fit's restart (some fits are fragile: the robust pass stops at its 100th evaluation), where the fit did not converge, or where its area is out of proportion with the GC software's table: over the run (the pair), k is the median of area / table value across its injections with a table value, and an injection is suspicious when its area is further from k × its table value than 10 % of that, and than k × 15 ppm (0.0015 %mol, in the table's unit). Areas are compared, not concentrations (with O₂'s free intercept every calibrated value would differ from the table by one factor): a scale that differs from the table's alike at every injection marks none, an injection off on its own does. A glitch zone left out of the fit does not make it suspicious. <b>The colours</b>: in the chromatogram selector and its list, a suspicious chromatogram's name is red (suspicious for either gas); on the run overview a fit is a blue dot, whatever the gas, red where its injection is suspicious for that gas; the GC table's values are small grey crosses, never red, hidden under the fit's dot where the two agree; in Peaks a χ²<sub>r</sub> above 4 and an area out of proportion are red. The <b>run overview</b> shows, for the file chosen, one gas at a time (H₂ or O₂), as area or as concentration: every injection's fit, and the GC table's value beside it (as area, the table's value times the run's k, on the fits' scale), against the injection time (the injection's number when there is no table). A point under the pointer is drawn in a lighter shade and half again as large, and says its injection, its time, the fit, the table's value and χ²<sub>r</sub>; a click shows its chromatogram, whose point stays so, as does one chosen by the arrows, the list or the keys. Integration runs by itself in the background when raw chromatograms are loaded, or a little after the method changes; <b>Stop</b> stops it, <b>Re-integrate</b> runs what is left. A changed window integrates every file again; a file added, only itself. <b>Pairs</b>: a table and its raw chromatograms (the same name with _TCD) share a row of the file list; the table's rows with a date are its injections, which must be as many as the chromatograms (else the card says so, and Analysis keeps the table). <b>Concentrations</b>: <b>Calibration…</b> opens the standards' window: drop their raw chromatograms, type each standard's H₂ and O₂ (blank: not a standard of that gas), choose the unit and, per gas, a free intercept (the default: O₂'s response has a real intercept, about −500 ppm, and a line forced through zero biases its low levels by −8 to −26 % while R² barely moves; each level's deviation from the line is shown, since R² cannot tell) or a zero one; the line area = slope × c + intercept is fitted to them and a sample's concentration is (area − intercept) / slope. Standards always win. Without them, the card <b>takes the calibration from the GC software's table</b>: for each pair, k is the median of our area over the table's value across the injections well above the noise (a table value of at least 0.02 %mol for H₂, 0.012 %mol for O₂, ten injections at least), and the concentration is area / k (an info alert says so, and Peaks gives the k of the file on show). <b>The risks of a calibration taken from the GC software</b>, which standards avoid:<ul class="gci-risks"><li>it <b>borrows the software's scale</b>, and assumes that the software's areas are proportional to ours, which a different baseline or peak split breaks (for O₂, on H₂'s tail and before the step, they may well differ);</li><li>the transferred line <b>goes through zero</b>, even if the software's own calibration had an intercept (O₂'s response has one, about −500 ppm: the low levels then come out biased);</li><li>it needs <b>enough injections above the threshold</b> (ten at 0.02 %mol of H₂, 0.012 %mol of O₂): with fewer there is none, and Analysis keeps the table;</li><li>if the <b>software's calibration is wrong, so is this one</b>: it reproduces the table's scale, it does not check it.</li></ul>A Production Rate card takes its values from the nearest Integration card above it; one with none above keeps the tables. ${CONC_HTML}${cardInfo(false, false)}`;
-const CAL_INFO = `Each column of a raw calibration file is a standard's chromatogram, integrated with this card's method. Type in each row the standard's H₂ and O₂ concentrations in the unit chosen (blank: not a standard of that gas; the file's own names, cal_… included, are never read), and untick a row to leave it out. Per gas, the line area = slope × c + intercept is fitted by least squares to the standards (free intercept), or through zero; R², and each level's deviation from the line, say how well it holds. The calibration is this card's, saved with the project and its files, and applies to every pair of the card; a gas with two standards or more (one, through zero) is calibrated, the other taken from the GC software's table.`;
+export const INTEG_INFO = `The <b>Integration</b> card integrates again the raw chromatograms of the thermal-conductivity detector (TCD), the files of a column per injection that the GC software writes beside its table, and hands the results to the <b>Production Rate</b> cards below it. Each injection's <b>H₂ and O₂</b> are fitted together in one <b>window</b> of retention time (268–326 s by default): a smooth baseline (a straight line, with the <b>step</b> the detector makes after O₂), a peak shape for H₂, for O₂ and for the system peak at 310 s (<b>S310</b>, fitted so that its tail does not end up in O₂'s area; the step and S310 are drawn but go no further). The fit is made in <b>two passes</b>: the first, with a robust loss, finds <b>spikes</b> and <b>glitch zones</b> (marked on the plot in red), which the second, an ordinary least-squares fit, leaves out, so that a spike is never read as gas; a fit that looks wrong is started again from a generic start, and the better of the two kept. <b>The selectors</b>: the file (a pair, or raw chromatograms alone) at the top left of the plot, the chromatogram at the top left of the run overview; the arrows step through them (← → the chromatograms), and the name, or the small arrow after it, opens the list of them all, to go straight to one. <b>The plot</b>: the chromatogram on top (raw, model, baseline with its step, H₂, O₂ and S310 each drawn on the baseline, the spikes and glitch zones left out in red, the neighbouring peaks the model has no shape for in grey) and its <b>residuals</b> under it (the data less the model, inside the fit window only; blank outside it). The two share the retention time: a zoom or a pan in either (the one under the pointer) moves both along it at once, each keeping its own vertical scale. The plot holds the whole chromatogram and opens on the H₂/O₂ window, where a double click with a tool on brings it back. Its one toolbar, at its top right, gives both: the images, the CSV (the chromatogram on show, its model and parts and its residuals), and the figure composer, where they are two panels, one of which can be removed. <b>Windows</b>: the method is the card's, in these numbers, which are its source of truth: the fit window's edges (the green lines on the chromatogram drag them as an aid, snapping to the data's 0.2 s, and write into the numbers), with the peaks' nominal places. Moving an edge by 1–2 s changes the areas by a few hundredths of a per cent; by 5 s it reaches the peaks the model has no shape for, the system peak at 262–267.5 s and N₂ from about 330.5 s (grey on the chromatogram), and the fit degrades: the card says so. <b>Peaks</b>: the chromatogram on show, per gas: the area of its fitted shape ± its standard deviation, its apex, χ²<sub>r</sub> (how well the model follows the data: about 1, within the noise), its concentration and the GC table's value; under the table, the units, where a concentration is taken from the GC software's table its k for the file on show, and why the chromatogram is suspicious, if it is. <b>Suspicious</b>: a chromatogram is, for a gas, where χ²<sub>r</sub> is above 4 after the fit's restart (some fits are fragile: the robust pass stops at its 100th evaluation), where the fit did not converge, or where its area is out of proportion with the GC software's table: over the run (the pair), k is the median of area / table value across its injections with a table value, and an injection is suspicious when its area is further from k × its table value than 10 % of that, and than k × 15 ppm (0.0015 %mol, in the table's unit). Areas are compared, not concentrations (with O₂'s free intercept every calibrated value would differ from the table by one factor): a scale that differs from the table's alike at every injection marks none, an injection off on its own does. A glitch zone left out of the fit does not make it suspicious. <b>The colours</b>: in the chromatogram selector and its list, a suspicious chromatogram's name is red (suspicious for either gas); on the run overview a fit is a blue dot, whatever the gas, red where its injection is suspicious for that gas; the GC table's values are small grey crosses, never red, hidden under the fit's dot where the two agree; in Peaks a χ²<sub>r</sub> above 4 and an area out of proportion are red. The <b>run overview</b> shows, for the file chosen, one gas at a time (H₂ or O₂), as area or as concentration: every injection's fit, and the GC table's value beside it (as area, the table's value times the run's k, on the fits' scale), against the injection time (the injection's number when there is no table). A point under the pointer is drawn in a lighter shade and half again as large, and says its injection, its time, the fit, the table's value and χ²<sub>r</sub>; a click shows its chromatogram, whose point stays so, as does one chosen by the arrows, the list or the keys. Integration runs by itself in the background when raw chromatograms are loaded, or a little after the method changes; <b>Stop</b> stops it, <b>Re-integrate</b> runs what is left. A changed window integrates every file again; a file added, only itself. <b>Pairs</b>: a table and its raw chromatograms (the same name with _TCD) share a row of the file list; the table's rows with a date are its injections, which must be as many as the chromatograms (else the card says so, and Analysis keeps the table). <b>Concentrations</b>: <b>Calibration…</b> opens the standards' window: drop the GC software's table of the standards together with its raw chromatograms (both are needed, paired by name as in the file list, as many injections as chromatograms; the table names each standard, by its Analysis column, and gives nothing else), see each standard's fit drawn as this card draws a chromatogram (the selector over it, the arrows, ← →, or a click on its row), type each standard's H₂ and O₂ (blank: not a standard of that gas), choose the unit and, per gas, a free intercept (the default: O₂'s response has a real intercept, about −500 ppm, and a line forced through zero biases its low levels by −8 to −26 % while R² barely moves; each level's deviation from the line is shown, since R² cannot tell) or a zero one; the line area = slope × c + intercept is fitted to them and a sample's concentration is (area − intercept) / slope. Standards always win. Without them, the card <b>takes the calibration from the GC software's table</b>: for each pair, k is the median of our area over the table's value across the injections well above the noise (a table value of at least 0.02 %mol for H₂, 0.012 %mol for O₂, ten injections at least), and the concentration is area / k (an info alert says so, and Peaks gives the k of the file on show). <b>The risks of a calibration taken from the GC software</b>, which standards avoid:<ul class="gci-risks"><li>it <b>borrows the software's scale</b>, and assumes that the software's areas are proportional to ours, which a different baseline or peak split breaks (for O₂, on H₂'s tail and before the step, they may well differ);</li><li>the transferred line <b>goes through zero</b>, even if the software's own calibration had an intercept (O₂'s response has one, about −500 ppm: the low levels then come out biased);</li><li>it needs <b>enough injections above the threshold</b> (ten at 0.02 %mol of H₂, 0.012 %mol of O₂): with fewer there is none, and Analysis keeps the table;</li><li>if the <b>software's calibration is wrong, so is this one</b>: it reproduces the table's scale, it does not check it.</li></ul>A Production Rate card takes its values from the nearest Integration card above it; one with none above keeps the tables. ${CONC_HTML}${cardInfo(false, false)}`;
+const CAL_INFO = `The standards come as a pair, as in the file list: the GC software's table of their injections (its default CSV or its .txt export) and its raw chromatograms (TCD), the same name with _TCD (a browser's " (1)" aside). Drop the two together: either one alone is not loaded (it waits in this window, said in red, until its partner is dropped), nor is a pair whose table has not as many injections as there are chromatograms (one name a chromatogram). The table gives each standard its <b>name</b> and nothing else: its Analysis column (the .txt export's sample column if it has one, else the injection's number); no value or concentration is read from the table or from any name, cal_… included. Each chromatogram is integrated with this card's method. <b>The plot</b> shows the standard chosen as the card shows a chromatogram, over its residuals (the raw data, the model, the baseline with its step, H₂, O₂ and S310, the spikes and glitch zones left out, the fit window's edges), with the same toolbar; choose it with the selector over the plot (its name opens the list of them all), its arrows or ← →, or a click on its row. <b>Standards</b>: type in each row the standard's H₂ and O₂ concentrations in the unit chosen (blank: not a standard of that gas), and untick a row to leave it out; a name too long for its column is whole in its tooltip. Per gas, the line area = slope × c + intercept is fitted by least squares to the standards (free intercept), or through zero; R², and each level's deviation from the line, say how well it holds. The calibration is this card's, saved with the project and its files, and applies to every pair of the card; a gas with two standards or more (one, through zero) is calibrated, the other taken from the GC software's table. A calibration saved before v549 (raw chromatograms alone) opens as it was, its concentrations and results kept, nothing fitted again, its standards named by column: an alert says so, and dropping its table names them.`;
 
 export function createInteg(ctx){
   const { kit } = ctx;
@@ -170,6 +179,19 @@ export function createInteg(ctx){
     return d;
   }
   const fileKey = rec => rec.rawBytes instanceof Uint8Array ? bytesKey(rec.rawBytes) : 'name:' + rec.name;
+  /* ---- A calibration's table (v549), read once per file (by its bytes) as gc.js reads a
+     GC table (ctx.readTable), its injections' names with it ---- */
+  const tabs = new WeakMap();
+  function tableOf(b){
+    if (!(b instanceof Uint8Array)) return null;
+    let t = tabs.get(b);
+    if (!t){
+      try { t = ctx.readTable ? ctx.readTable(decodeText(b)) : null; } catch(e){ t = null; }
+      if (!t || t.error || !Array.isArray(t.injDates) || !t.injDates.length) t = { error: t && t.error || 'not a GC table (no injection date and H₂ or O₂ column under a header)' };
+      tabs.set(b, t);
+    }
+    return t;
+  }
 
   /* ---- The results ---- */
   const store = new Map();
@@ -305,6 +327,8 @@ export function createInteg(ctx){
     // What it shows (no state): the file and the chromatogram, by the file's name.
     let selName = null, selK = 0, wasMethod = null, next = null;
     let chrom = null, resid = null, over = null, ovPts = [];
+    // (the calibration's window: the standard on show, its row; its plots; what it drew, for its CSV)
+    let calSel = 0, calPlots = { chrom: null, resid: null }, calDrawn = null;
 
     const calModal = calWindow();
 
@@ -336,12 +360,20 @@ export function createInteg(ctx){
     }
 
     /* ---- Concentrations: the standards' line per gas, else the software's scale ---- */
+    /* A standard's name (v549): its injection's in the table (its Analysis column), else
+       its injection's number; a file with no table (saved by v544–v548) by its column. */
+    function stdName(f, j){
+      const t = f.table ? tableOf(f.table.rawBytes) : null;
+      if (!t || t.error) return `column ${j + 1}`;
+      const n = Array.isArray(t.names) && typeof t.names[j] === 'string' ? t.names[j].trim() : '';
+      return n || `injection ${j + 1}`;
+    }
     function calRows(){
       const rows = [];
       cal.files.forEach((f, fi)=>{
         const d = dataOf(f), res = d.error ? null : resultsAt(keyOf(f, method));
         const n = d.error ? 0 : d.cols.length;
-        for (let j = 0; j < n; j++) rows.push({ f, fi, j, d, lv: f.levels[j] || blankLevel(), r: res && res[j] });
+        for (let j = 0; j < n; j++) rows.push({ f, fi, j, d, lv: f.levels[j] || blankLevel(), r: res && res[j], name: stdName(f, j) });
       });
       return rows;
     }
@@ -401,8 +433,9 @@ export function createInteg(ctx){
        between the two selectors), the chromatogram over its residuals (together a Tauc
        plot's size), their legend; then the run overview (as wide, half as tall) under the
        chromatogram's selector, its own toolbar at the right of that line. At the right, as
-       a Tauc card's parameters: Windows (its title on the selector's line, its box's top on
-       the plot's: CLAUDE.md), the Peaks of the chromatogram on show and Calibration…. */
+       a Tauc card's parameters: Windows (v549: its title's letters' top on the plot frame's,
+       .cap-title, CLAUDE.md; v546–v548 on the selector's line), the Peaks of the
+       chromatogram on show and Calibration…. */
     const body = el.querySelector('.gci-body');
     body.innerHTML = `
       <div class="gci-bar" id="${p}Bar">
@@ -432,7 +465,7 @@ export function createInteg(ctx){
           <div id="${p}OverLegend" class="legend gci-legend"></div>
         </div>
         <div class="col mw280 gci-side">
-          <div class="txt-mini param-head aligned gci-head gci-win-head"><span>Windows</span><button type="button" class="btn btn-sm gci-reset" title="The engine's default windows" hidden>Default</button></div>
+          <div class="txt-mini param-head aligned cap-title gci-head gci-win-head"><span>Windows</span><button type="button" class="btn btn-sm gci-reset" title="The engine's default windows" hidden>Default</button></div>
           <div class="peak-box gci-win-box"><div class="gci-method" id="${p}Method"></div></div>
           <div class="txt-mini param-head gci-head gci-values-head"><span>Peaks</span></div>
           <div class="peak-box gci-values-box"><div class="peak-scroll" id="${p}Values"></div></div>
@@ -477,6 +510,19 @@ export function createInteg(ctx){
     $('Stop').addEventListener('click', ()=> stop());
     $('Cal').addEventListener('click', ()=> calModal.open());
 
+    // The fit's own marks of a result r, the window of gas g's (any window, g omitted).
+    function fitMarks(r, g){
+      if (!r) return [];
+      if (typeof r.error === 'string') return [`not integrated: ${r.error}`];
+      const ws0 = Array.isArray(r.windows) ? r.windows : [], wk = g && r.gases && r.gases[g] ? r.gases[g].window : null;
+      const ws = wk ? ws0.filter(x=> x.key === wk) : ws0, out = [];
+      const w = ws.find(x=> fin(x.chi2r) && x.chi2r > CHI2_HIGH);
+      if (w) out.push(`χ²ᵣ ${w.chi2r.toFixed(2)}, above ${CHI2_HIGH}${w.restarted ? ' (after a restart)' : ''}`);
+      if (ws.some(x=> x.ok === false && !x.beyondData)) out.push('the fit did not converge');
+      // (ENGINE.md §4: a standard's column that ends at 309 s, before its window does: no fit)
+      if (ws.some(x=> x.beyondData === true)) out.push('the chromatogram ends before its window does: not fitted');
+      return out;
+    }
     /* The judge of entry e's results `res` (see PROP_TOL): J(k, gases) the reasons that mark
        injection k (none: []), J.bad(k, g) whether it is suspicious for gas g (any gas: g
        omitted), J.off(k, g) its area's relative deviation from k × its table value where
@@ -503,19 +549,6 @@ export function createInteg(ctx){
         if (!fin(A) || !fin(T)) return null;
         const U = ppm ? 1e4 : 1, ku = P.k/U, want = ku*T*U, floor = ku*PROP_FLOOR[ppm ? 'ppm' : '%mol'];
         return Math.abs(A - want) > Math.max(PROP_TOL*Math.abs(want), floor) ? (want ? (A - want)/want : Infinity) : null;
-      };
-      // The fit's own marks, the window of gas g's (any window, g omitted).
-      const fitMarks = (r, g)=>{
-        if (!r) return [];
-        if (typeof r.error === 'string') return [`not integrated: ${r.error}`];
-        const ws0 = Array.isArray(r.windows) ? r.windows : [], wk = g && r.gases && r.gases[g] ? r.gases[g].window : null;
-        const ws = wk ? ws0.filter(x=> x.key === wk) : ws0, out = [];
-        const w = ws.find(x=> fin(x.chi2r) && x.chi2r > CHI2_HIGH);
-        if (w) out.push(`χ²ᵣ ${w.chi2r.toFixed(2)}, above ${CHI2_HIGH}${w.restarted ? ' (after a restart)' : ''}`);
-        if (ws.some(x=> x.ok === false && !x.beyondData)) out.push('the fit did not converge');
-        // (ENGINE.md §4: a standard's column that ends at 309 s, before its window does: no fit)
-        if (ws.some(x=> x.beyondData === true)) out.push('the chromatogram ends before its window does: not fitted');
-        return out;
       };
       const offText = (k, g)=>{ const d = off(k, g); return d == null ? null : `${gasOf(g).txt}: ${fin(d) ? (d > 0 ? '+' : '') + (100*d).toFixed(1) + ' %' : 'not 0'} off the GC table's proportion (k = ${sig(prop[g].k, 5)})`; };
       const J = (k, gases = Object.keys(GAS))=>{
@@ -554,34 +587,46 @@ export function createInteg(ctx){
        the time's numbers and title. */
     let drawn = null;       // what the chromatogram's CSV gives: { e, k, t, y, curves }
     function drawChrom(e, keep){
-      const svg = $('Chrom'), rs = $('Resid'), leg = $('ChromLegend');
-      const vc = keep && chrom ? viewOf(chrom) : null, vr = keep && resid ? viewOf(resid) : null;
-      chrom = new Plot(svg, { xlabel: 'Retention time (s)', ylabel: 'TCD signal', noXTickLabels: true, noXTitle: true, xTickMarks: true, margin: { l: 58, r: 20, t: 15, b: 0 } });
-      resid = new Plot(rs, { xlabel: 'Retention time (s)', ylabel: 'Residual', xTickMarks: true, margin: { l: 58, r: 20, t: 0, b: 40 } });
+      const o = drawPair({ svg: $('Chrom'), rs: $('Resid'), leg: $('ChromLegend'), wrap: el.querySelector('.gci-pair'), keep, was: { chrom, resid },
+        d: e ? e.d : null, k: selK, R: e && !e.d.error ? resOf(e.tcd) : null, key: e ? e.name + '#' + selK : '',
+        file: e ? e.tcd.name : '', what: e ? `${e.label}, chromatogram ${selK + 1}` : '', overlay: P => overlayOn(P, drag ? drag.m : method, true) });
+      chrom = o.chrom; resid = o.resid;
+      drawn = o.drawn ? { e, ...o.drawn } : null;
+      $('Notice').innerHTML = o.notice;
+    }
+    /* One chromatogram over its residuals, drawn into a pair of svgs: the card's (the
+       chromatogram on show) or the calibration window's (the standard chosen, v549), alike.
+       o: { svg, rs (the residuals' svg), leg, wrap (their plot-wrap), keep, was ({ chrom,
+       resid }: the plots before, their zoom kept with `keep` on the same data), d (readTcd's
+       read), k (its chromatogram), R (resOf's), key (the data's, for the zoom), file, what
+       (the notices' names), overlay(P) (drawn over the chromatogram, again at each zoom) }.
+       → { chrom, resid, drawn ({ k, t, y, curves, stale }, the CSV's; null: nothing drawn),
+       notice (an alert's markup, or '') }. */
+    function drawPair(o){
+      const vc = o.keep && o.was.chrom ? viewOf(o.was.chrom) : null, vr = o.keep && o.was.resid ? viewOf(o.was.resid) : null;
+      const chrom = new Plot(o.svg, { xlabel: 'Retention time (s)', ylabel: 'TCD signal', noXTickLabels: true, noXTitle: true, xTickMarks: true, margin: { l: 58, r: 20, t: 15, b: 0 } });
+      const resid = new Plot(o.rs, { xlabel: 'Retention time (s)', ylabel: 'Residual', xTickMarks: true, margin: { l: 58, r: 20, t: 0, b: 40 } });
       linkX([chrom, resid]);
-      const tools = { group: [chrom, resid] };
+      const tools = { group: [chrom, resid] }, out = { chrom, resid, drawn: null, notice: '' }, leg = o.leg;
       leg.innerHTML = '';
-      $('Notice').innerHTML = '';
-      drawn = null;
-      if (!e || e.d.error){ chrom.attachTools(el.querySelector('.gci-pair'), tools); if (e) $('Notice').innerHTML = alertHtml('bad', `${esc(e.tcd.name)}:`, [esc(e.d.error)]); return; }
-      const { t, cols } = e.d, y = cols[selK], [lo, hi] = range(method), [wa, wb] = span(method);
+      if (!o.d || o.d.error){ chrom.attachTools(o.wrap, tools); if (o.d) out.notice = alertHtml('bad', `${esc(o.file)}:`, [esc(o.d.error)]); return out; }
+      const k = o.k, { t, cols } = o.d, y = cols[k], [lo, hi] = range(method), [wa, wb] = span(method);
       const tt = [], yy = [];
       for (let i = 0; i < t.length; i++) if (fin(t[i]) && fin(y[i])){ tt.push(t[i]); yy.push(y[i]); }
       // (the y range the windows' own: a neighbour, N₂ above all, may run off the top)
       const inW = yy.filter((_, i)=> tt[i] >= wa && tt[i] <= wb);
-      if (!inW.length){ chrom.attachTools(el.querySelector('.gci-pair'), tools); $('Notice').innerHTML = alertHtml('warn', `${esc(e.tcd.name)}, chromatogram ${selK + 1}:`, ['no point in the windows']); return; }
-      const R = resOf(e.tcd), r = R.res && R.res[selK];
+      if (!inW.length){ chrom.attachTools(o.wrap, tools); out.notice = alertHtml('warn', `${esc(o.what)}:`, ['no point in the windows']); return out; }
+      const R = o.R || { res: null, m: method, stale: false }, r = R.res && R.res[k];
       let curves = [];
       // (the windows' curves on the points their fit used; a peak's on its baseline)
       if (r) try { curves = (r.windows || []).map(wr=> ({ wr, c: windowCurves(t, y, R.m, wr) })).filter(x=> x.c && x.c.t && x.c.t.length); } catch(err){ curves = []; }
-      drawn = { e, k: selK, t: tt, y: yy, curves, stale: R.stale };
+      out.drawn = { k, t: tt, y: yy, curves, stale: R.stale };
       let ymin = Math.min(...inW), ymax = Math.max(...inW);
       curves.forEach(({ c })=> [c.model, c.base].forEach(arr=> arr && arr.forEach(v=>{ if (fin(v)){ ymin = Math.min(ymin, v); ymax = Math.max(ymax, v); } })));
       const pad5 = (ymax - ymin)*0.06 || 1;
-      const key = e.name + '#' + selK;
       const [c0, c1] = offEdge(ymin - pad5, ymax + pad5, -1, 0.03);
       chrom.setRange(lo, hi, c0, c1);
-      setView(chrom, vc, key);
+      setView(chrom, vc, o.key);
       chrom.drawAxes(); chrom.clearData();
       const items = [];
       // The glitch zones left out of the fit, behind the curves.
@@ -602,23 +647,23 @@ export function createInteg(ctx){
       if (curves.length){ items.splice(1, 0, [C_MODEL, 'model', ''], [C_BASE, 'baseline (with its step)', 'mk-dash']); }
       // The points the fit left out: a spike a cross, a glitch zone's a ring.
       const sp = { x: [], y: [] }, ex = { x: [], y: [] };
-      curves.forEach(({ c })=>{ const d = c.dropped; if (d && Array.isArray(d.t)) d.t.forEach((x, i)=>{ const o = d.kind && d.kind[i] === 'spike' ? sp : ex; o.x.push(x); o.y.push(d.y[i]); }); });
+      curves.forEach(({ c })=>{ const d = c.dropped; if (d && Array.isArray(d.t)) d.t.forEach((x, i)=>{ const q = d.kind && d.kind[i] === 'spike' ? sp : ex; q.x.push(x); q.y.push(d.y[i]); }); });
       if (sp.x.length){ chrom.points(sp.x, sp.y, C_BAD, 4, { shape: 'cross', width: 1.6, label: 'spikes' }); items.push([C_BAD, 'spike left out', '']); }
       if (ex.x.length){ chrom.points(ex.x, ex.y, C_BAD, 2.2, { label: 'glitch' }); items.push([C_BAD, 'glitch zone left out (band)', 'mk-dots']); }
       items.push([C_EDGE, 'fit window', '']);
-      leg.innerHTML = items.map(([c, n, k])=> `<span>${k ? `<i class="${k}" style="color:${c}"></i>` : `<i style="background:${c}"></i>`}${esc(n)}</span>`).join('')
+      leg.innerHTML = items.map(([c, n, kk])=> `<span>${kk ? `<i class="${kk}" style="color:${c}"></i>` : `<i style="background:${c}"></i>`}${esc(n)}</span>`).join('')
         + '<span><i class="mk-box gci-mk-nb"></i>peaks the model leaves out</span>';
-      // The windows' edges (dragged: the method changes as the line is let go), the peaks'
-      // places and the neighbours, drawn over the data, again at each zoom.
-      chrom._onView = ()=> overlay();
-      overlay();
+      // The windows' edges, the peaks' places and the neighbours, drawn over the data, again
+      // at each zoom.
+      chrom._onView = ()=> o.overlay(chrom);
+      o.overlay(chrom);
       // The residuals, inside the fit window only (blank outside it), on the same time.
       const rx = [], ry = [];
       curves.forEach(({ c })=>{ if (c.residual) c.t.forEach((x, i)=>{ if (fin(c.residual[i])){ rx.push(x); ry.push(c.residual[i]); } }); });
       const rm = ry.length ? Math.max(...ry.map(Math.abs)) : 1;
       const [r0, r1] = offEdge(-rm*1.1 || -1, rm*1.1 || 1, 1, 0.1);
       resid.setRange(lo, hi, r0, r1);
-      setView(resid, vr, key);
+      setView(resid, vr, o.key);
       resid.xmin = chrom.xmin; resid.xmax = chrom.xmax;
       resid.drawAxes(); resid.clearData();
       curves.forEach(({ wr })=> (wr.excluded || []).forEach(z=>{ if (Array.isArray(z) && fin(z[0]) && fin(z[1])) resid.vband(z[0], z[1], C_BAD, 0.14); }));
@@ -626,9 +671,10 @@ export function createInteg(ctx){
         resid.line([rx[0], rx[rx.length - 1]], [0, 0], C_TABLE, 1, '3,3', { label: 'zero', key: 'zero' });
         resid.line(rx, ry, C_MODEL, 1, undefined, { label: 'residual', key: 'residual' });
       }
-      chrom.attachTools(el.querySelector('.gci-pair'), tools);
-      if (!r && e.n) $('Notice').innerHTML = alertHtml('info', `${esc(e.label)}, chromatogram ${selK + 1}:`, ['not integrated yet: the model is drawn once it is']);
-      else if (R.stale) $('Notice').innerHTML = alertHtml('warn', 'Method changed:', ['the model and the values shown are the previous method\'s until this file is integrated again']);
+      chrom.attachTools(o.wrap, tools);
+      if (!r) out.notice = alertHtml('info', `${esc(o.what)}:`, ['not integrated yet: the model is drawn once it is']);
+      else if (R.stale) out.notice = alertHtml('warn', 'Method changed:', ['the model and the values shown are the previous method\'s until this file is integrated again']);
+      return out;
     }
     /* The two panels meet: a tick's number on the edge they share (the chromatogram's foot,
        side −1; the residuals' top, side 1) would be cut in two. The range moved off it, by
@@ -640,13 +686,14 @@ export function createInteg(ctx){
     }
     // (dragging: the method as it would be, its lines where they are being taken)
     let drag = null;
-    function overlay(){
-      if (!chrom) return;
-      const P = chrom, g = P.gOverlay, { w: W, h } = P.size(), m = P.margin;
+    const overlay = ()=>{ if (chrom) overlayOn(chrom, drag ? drag.m : method, true); };
+    /* Over the chromatogram of plot P, method M's: the neighbours, the peaks' places, the
+       windows' edges (dragged, `edit`: the card's; fixed in the calibration's window). */
+    function overlayOn(P, M, edit){
+      const g = P.gOverlay, { w: W, h } = P.size(), m = P.margin;
       // (the overlay is this card's alone: its lines drawn anew, the plot's copies of them too)
       g.innerHTML = '';
       P._stored = P._stored.filter(x=> x.type !== 'vline');
-      const M = drag ? drag.m : method;
       const add = (tag, at, text)=>{ const node = svgEl(tag, { 'pointer-events': 'none', class: 'gci-ov', ...at }); if (text) node.textContent = text; g.appendChild(node); return node; };
       // The neighbours the model has no peak for: a grey zone each, named.
       NEIGHBOURS.forEach(z=>{
@@ -664,7 +711,8 @@ export function createInteg(ctx){
       }));
       // The edges, dragged.
       M.windows.forEach((w, wi)=> ['from', 'to'].forEach(side=>{
-        P.vline(w[side], C_EDGE, true, v=> onDrag(wi, side, v), v=> onDrop(wi, side, v));
+        if (edit) P.vline(w[side], C_EDGE, true, v=> onDrag(wi, side, v), v=> onDrop(wi, side, v));
+        else P.vline(w[side], C_EDGE, false);
       }));
     }
     // A line dragged snaps to the data's grid (0.2 s) and writes into its field.
@@ -938,7 +986,9 @@ export function createInteg(ctx){
         + (transfer ? alertHtml('info', 'Calibration taken from the GC software\'s table (no standards for the gas): see the risks in this card\'s instructions.', []) : '');
     }
 
-    /* ---- The calibration's window ---- */
+    /* ---- The calibration's window (v549: a table and its raw chromatograms, both needed,
+       the standards named by the table; the standard chosen drawn as the card's chromatogram,
+       over its residuals, at the left of the standards' table, CLAUDE.md's tops aligned) ---- */
     function calWindow(){
       const m = document.createElement('div');
       m.className = 'modal-backdrop xrd-std-modal gci-cal-modal';
@@ -953,42 +1003,118 @@ export function createInteg(ctx){
           <div class="instr-block xrd-std-instr" style="display:none">${CAL_INFO}</div>
           <div class="dropzone xrd-std-dz gci-cal-dz">
             <div class="dz-icon">⤒</div>
-            <div class="dz-title">Drag here the standards' raw chromatograms (TCD), or click to select them.</div>
-            <div class="txt-meta">.csv · a column per standard</div>
+            <div class="dz-title">Drag here the standards' GC table and its raw chromatograms (TCD) together, or click to select them.</div>
+            <div class="txt-meta">the table (.csv, or the .txt export) and its _TCD .csv · both needed</div>
             <input type="file" class="gci-cal-in" multiple accept=".csv,.txt,.CSV,.TXT" style="display:none">
           </div>
           <div class="xrd-std-alerts gci-cal-alerts"></div>
+          <div class="gci-cal-warn"></div>
           <div class="gci-cal-files"></div>
           <div class="gci-cal-unit"><label class="txt-label">Concentration unit <select class="gci-cal-unit-in" aria-label="Concentration unit">${UNITS.map(u=> `<option value="${u}">${u}</option>`).join('')}</select></label><span class="gci-cal-status txt-meta"></span></div>
+          <div class="pside gci-cal-pside">
+            <div class="plot-nav-row pside-nav gci-cal-nav"><div class="plot-nav-left">${snavHtml({ idx: p + 'CalIdx', name: p + 'CalName', prevCls: 'gci-cprev', nextCls: 'gci-cnext', what: 'standard', cls: 'gci-csel' })}</div></div>
+            <div class="pside-plot">
+              <div class="plot-wrap gci-pair gci-cal-pair">
+                <svg class="plot gci-chrom" id="${p}CalChrom"></svg>
+                <svg class="plot gci-resid" id="${p}CalResid"></svg>
+                <button class="btn plot-dl-btn" data-dl-svg="${p}CalChrom" data-dl-also="${p}CalResid" data-csv-mod="gc" data-csv-names="standard_chromatogram.csv" data-dl-name="GC_standard_chromatogram.svg" data-dl-legend="${p}CalLegend">${PLOT_DL_ICON}</button>
+              </div>
+            </div>
+            <div class="pside-under"><div id="${p}CalLegend" class="legend gci-legend gci-cal-legend"></div><p class="txt-meta gci-cal-fit"></p><div class="gci-notice gci-cal-notice"></div></div>
+            <div class="pside-col gci-cal-side">
+              <div class="txt-mini param-head cap-title gci-cal-head"><span>Standards</span></div>
+              <div class="peak-box gci-cal-table"><table class="gci-cal-levels"><thead><tr><th class="gci-cal-k">#</th><th class="gci-cal-th"></th><th class="gci-cal-src">Injection</th><th class="gci-cal-a">H<sub>2</sub> area</th><th class="gci-cal-a">O<sub>2</sub> area</th><th>H<sub>2</sub> <span class="gci-u"></span></th><th>O<sub>2</sub> <span class="gci-u"></span></th><th title="Use this standard">Use</th></tr></thead><tbody></tbody></table></div>
+            </div>
+          </div>
           <div class="row gci-cal-fits"></div>
-          <div class="peak-scroll gci-cal-table"><table class="gci-cal-levels"><thead><tr><th>#</th><th></th><th>File, column</th><th>H<sub>2</sub> area</th><th>O<sub>2</sub> area</th><th>H<sub>2</sub> <span class="gci-u"></span></th><th>O<sub>2</sub> <span class="gci-u"></span></th><th title="Use this standard">Use</th></tr></thead><tbody></tbody></table></div>
         </div>
       </div>`;
       ctx.layer.appendChild(m);
       const q = s => m.querySelector(s), info = q('.instr-info'), instr = q('.xrd-std-instr');
       info.addEventListener('click', ()=>{ const o = instr.style.display === 'none'; instr.style.display = o ? '' : 'none'; info.classList.toggle('is-on', o); info.setAttribute('aria-expanded', String(o)); });
-      let from = null, isOpen = false;
-      const onKey = e =>{ if (e.key === 'Escape' && ctx.shown()){ e.stopPropagation(); close(); } };
+      let from = null, isOpen = false, rowsNow = [];
+      /* ← → step the standards, as the card's chromatograms (utils.js SAMPLE_NAV leaves the
+         keys to a window over the page): not from a field, nor under a window over this one
+         (the figure composer's); Escape closes it. */
+      const above = ()=> [...document.querySelectorAll('.modal-backdrop, .fig-backdrop')].some(x=> x !== m && x.getClientRects().length > 0);
+      const onKey = e =>{
+        if (e.key === 'Escape' && ctx.shown()){ e.stopPropagation(); close(); return; }
+        if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !e.ctrlKey && !e.metaKey && !e.altKey && ctx.shown() && !above()){
+          const t = document.activeElement && document.activeElement.tagName;
+          if (t === 'INPUT' || t === 'SELECT' || t === 'TEXTAREA') return;
+          e.preventDefault();
+          stepStd(e.key === 'ArrowLeft' ? -1 : 1);
+        }
+      };
       function open(){ if (isOpen) return; isOpen = true; from = document.activeElement; m.style.display = 'flex'; document.addEventListener('keydown', onKey); paint(); ensure(); q('.gci-cal-box').focus({ preventScroll: true }); }
-      function close(){ if (!isOpen) return; isOpen = false; m.style.display = 'none'; document.removeEventListener('keydown', onKey); if (from && from.isConnected) from.focus({ preventScroll: true }); from = null; }
+      // (the files waiting for their partner, and what was said of them, let go)
+      function close(){ if (!isOpen) return; isOpen = false; held = []; q('.gci-cal-alerts').innerHTML = ''; stdNav.close(); m.style.display = 'none'; document.removeEventListener('keydown', onKey); if (from && from.isConnected) from.focus({ preventScroll: true }); from = null; }
       m.addEventListener('click', e=>{ if (e.target === m || e.target.closest('.xrd-std-x')) close(); });
       // A change: the card's, a step; the cards below follow.
       // (`levels`: a level typed or ticked, its field kept as it is: the fits drawn again, not the table)
       const changed = levels =>{ valuesKept.clear(); draw(true); if (levels) paintFits(); else paint(); kit.commit(); ctx.changed(); };
+
+      /* The files dropped (v549): each told by what it holds, raw chromatograms (gc-pair.js
+         looksTcd) or a GC table (gc.js's reader); a table and raw chromatograms of one name
+         (with and without _TCD, a browser's " (1)" aside: stemOf) a pair, loaded when the
+         table has as many injections as there are chromatograms. A file whose partner is not
+         there is not loaded: it waits (`held`, not in the project) until it is dropped, and
+         is let go as the window closes. A table whose partner is a calibration file of
+         v544–v548's (raw chromatograms alone) names its standards. */
+      let held = [];
+      const plural = (n, w)=> `${n} ${w}${n === 1 ? '' : 's'}`;
       setupDropzone(q('.gci-cal-dz'), q('.gci-cal-in'), async list=>{
-        const bad = [], add = [];
+        const bad = [], got = [];
         for (const f of list){
           const bytes = new Uint8Array(await f.arrayBuffer());
-          let d;
-          try { d = readTcd(decodeText(bytes)); } catch(e){ d = { error: String(e && e.message || e) }; }
-          if (!d || d.error || !d.cols || !d.cols.length){ bad.push(`${f.name}${d && d.error ? ` (${d.error})` : ''}`); continue; }
-          if (cal.files.some(x=> x.name === f.name)){ bad.push(`${f.name} (already loaded)`); continue; }
-          read.set(bytes, d);
-          add.push({ name: f.name, rawBytes: bytes, levels: d.cols.map(blankLevel) });
+          let text;
+          try { text = decodeText(bytes); } catch(e){ bad.push(`${f.name}: not text`); continue; }
+          if (looksTcd(text)){
+            let d;
+            try { d = readTcd(text); } catch(e){ d = { error: String(e && e.message || e) }; }
+            if (!d || d.error || !d.cols || !d.cols.length){ bad.push(`${f.name}: raw chromatograms that cannot be read${d && d.error ? ` (${d.error})` : ''}`); continue; }
+            got.push({ kind: 'tcd', name: f.name, bytes, d });
+          } else {
+            const t = tableOf(bytes);
+            if (t.error){ bad.push(`${f.name}: neither raw chromatograms nor a GC table (${t.error})`); continue; }
+            got.push({ kind: 'table', name: f.name, bytes, t });
+          }
         }
+        const pool = [...held.filter(h=> !got.some(g=> g.name === h.name)), ...got], stem = x => stemOf(x.name).stem;
+        const loaded = new Set(cal.files.flatMap(f=> f.table ? [f.name, f.table.name] : [f.name]));
+        const add = [], named = [];
+        pool.forEach(x=>{ if (loaded.has(x.name)){ x.done = true; bad.push(`${x.name}: already loaded`); } });
+        // (a pair's counts: the table's injections, its rows with a date and a value as the
+        // file list counts them, one a chromatogram)
+        const counts = (t, n)=> t.injDates.length === n ? '' : `${plural(t.injDates.length, 'injection')} in the table, ${plural(n, 'chromatogram')}: they must be as many (a name a chromatogram), nothing integrated`;
+        pool.filter(x=> x.kind === 'tcd' && !x.done).forEach(c=>{
+          const t = pool.find(x=> x.kind === 'table' && !x.done && stem(x) === stem(c));
+          if (!t) return;
+          c.done = t.done = true;
+          const why = counts(t.t, c.d.cols.length);
+          if (why){ bad.push(`${t.name} + ${c.name}: ${why}`); return; }
+          read.set(c.bytes, c.d);
+          add.push({ name: c.name, rawBytes: c.bytes, levels: c.d.cols.map(blankLevel), table: { name: t.name, rawBytes: t.bytes } });
+        });
+        pool.filter(x=> x.kind === 'table' && !x.done).forEach(t=>{
+          const fi = cal.files.findIndex((f, i)=> !f.table && !named.some(z=> z.fi === i) && stemOf(f.name).stem === stem(t));
+          if (fi < 0) return;
+          t.done = true;
+          const d = dataOf(cal.files[fi]), why = d.error ? `its raw chromatograms cannot be read (${d.error})` : counts(t.t, d.cols.length);
+          if (why){ bad.push(`${t.name} + ${cal.files[fi].name}: ${why}`); return; }
+          named.push({ fi, table: { name: t.name, rawBytes: t.bytes } });
+        });
+        held = pool.filter(x=> !x.done);
+        held.forEach(x=> bad.push(x.kind === 'tcd'
+          ? `${x.name}: raw chromatograms without their GC table (the same name without _TCD, .csv or .txt): drop the table too (this file waits here for it)`
+          : `${x.name}: a GC table without its raw chromatograms (the same name with _TCD): drop them too (this file waits here for them)`));
         q('.gci-cal-alerts').innerHTML = bad.length ? alertHtml('bad', 'Not loaded:', bad.map(esc)) : '';
-        if (!add.length) return;
-        cal = { ...calCopy(cal), files: [...calCopy(cal).files, ...add] };
+        if (!add.length && !named.length) return;
+        const c = calCopy(cal);
+        named.forEach(({ fi, table })=>{ c.files[fi] = { ...c.files[fi], table }; });
+        if (add.length) calSel = calRows().length;
+        c.files.push(...add);
+        cal = c;
         changed();
         ensure();
       });
@@ -1013,6 +1139,10 @@ export function createInteg(ctx){
         cal = c; changed(true);
       });
       q('.gci-cal-levels').addEventListener('keydown', e=>{ if (e.key === 'Enter' && e.target.matches('input[type="text"]')) e.target.blur(); });
+      // A row clicked, or a field of it taken (Tab), shows its standard.
+      const pickRow = e =>{ const tr = e.target.closest('tr[data-row]'); if (tr && +tr.dataset.row !== calSel){ calSel = +tr.dataset.row; selPaint(false); } };
+      q('.gci-cal-levels').addEventListener('click', pickRow);
+      q('.gci-cal-levels').addEventListener('focusin', pickRow);
       q('.gci-cal-fits').addEventListener('click', e=>{
         const b = e.target.closest('[data-zero]');
         if (!b) return;
@@ -1020,6 +1150,51 @@ export function createInteg(ctx){
         if (c.zero[g] === z) return;
         c.zero[g] = z; cal = c; changed();
       });
+
+      /* The standard on show: its selector (snav.js: its name, the table's; red where its
+         fit is suspicious), its arrows and ← →, a click on its row. */
+      const fullName = x => `${x.name} (${x.f.table ? `${x.f.table.name}, ` : ''}${x.f.name}, column ${x.j + 1})`;
+      const stdNav = snav(q('.gci-csel'), {
+        count: ()=> rowsNow.length, index: ()=> calSel,
+        label: i => rowsNow[i] ? rowsNow[i].name : '',
+        title: i => rowsNow[i] ? fullName(rowsNow[i]) : '',
+        bad: i => !!(rowsNow[i] && fitMarks(rowsNow[i].r).length),
+        go: i =>{ calSel = i; selPaint(true); },
+      });
+      function stepStd(d){ const n = rowsNow.length; if (n < 2) return; calSel = (calSel + d + n) % n; selPaint(true); }
+      q('.gci-cprev').addEventListener('click', ()=> stepStd(-1));
+      q('.gci-cnext').addEventListener('click', ()=> stepStd(1));
+      // (`scroll`: chosen elsewhere than in the table, its row brought into the table's view)
+      function selPaint(scroll){
+        const trs = [...m.querySelectorAll('.gci-cal-levels tr[data-row]')];
+        trs.forEach(tr=> tr.classList.toggle('selected', +tr.dataset.row === calSel));
+        stdNav.update();
+        drawStd(false);
+        const tr = trs[calSel], box = q('.gci-cal-table');
+        if (scroll && tr && box.scrollHeight > box.clientHeight){
+          const b = box.getBoundingClientRect(), r = tr.getBoundingClientRect(), hd = box.querySelector('thead').getBoundingClientRect().height;
+          if (r.top < b.top + hd) box.scrollTop -= b.top + hd - r.top;
+          else if (r.bottom > b.bottom) box.scrollTop += r.bottom - b.bottom;
+        }
+      }
+      // Its chromatogram over its residuals, as the card's (drawPair), the windows' edges fixed.
+      function drawStd(keep){
+        const x = rowsNow[calSel] || null;
+        q('.gci-cal-pside').classList.toggle('is-empty', !x);
+        if (!isOpen) return;
+        const o = drawPair({ svg: q('svg.gci-chrom'), rs: q('svg.gci-resid'), leg: q('.gci-cal-legend'), wrap: q('.gci-cal-pair'), keep, was: calPlots,
+          d: x ? x.d : null, k: x ? x.j : 0, R: x ? resOf(x.f) : null, key: x ? fileKey(x.f) + '#' + x.j : '', file: x ? x.f.name : '', what: x ? x.name : '', overlay: P => overlayOn(P, method, false) });
+        calPlots = { chrom: o.chrom, resid: o.resid };
+        calDrawn = x && o.drawn ? { x, ...o.drawn } : null;
+        q('.gci-cal-notice').innerHTML = o.notice;
+        // (its fit in a line under the plot: each gas's area and χ²ᵣ, what makes it suspicious)
+        const r = x && x.r, gs = r && r.gases ? Object.keys(GAS).filter(g=> r.gases[g]) : [], fl = r ? fitMarks(r) : [];
+        q('.gci-cal-fit').innerHTML = gs.map(g=>{ const v = r.gases[g]; return `${gasOf(g).label}: area ${sig(v.area, 5)} ± ${sig(v.sd, 2)}, χ²<sub>r</sub> ${fin(v.chi2r) ? v.chi2r.toFixed(2) : '—'}`; }).join(' · ')
+          + (fl.length ? `<span class="gci-bad"> · ⚠ ${fl.map(esc).join('; ')}</span>` : '');
+        const n = fileSafe(a.name);
+        nameDownloads(q('.gci-cal-pair'), `${n} - GC_standard_chromatogram.svg`, `${n} - standard_chromatogram.csv`);
+      }
+
       // A thumbnail of a standard's chromatogram over the windows: a polyline, no plot.
       function thumb(d, j){
         const [lo, hi] = range(method), t = d.t, y = d.cols[j], xs = [], ys = [];
@@ -1033,19 +1208,32 @@ export function createInteg(ctx){
       function paint(){
         if (!isOpen) return;
         const act = document.activeElement, was = act && m.contains(act) && act.matches('input[data-fi]') ? { k: `[data-fi="${act.dataset.fi}"][data-j="${act.dataset.j}"][data-g="${act.dataset.g}"]`, v: act.value, s: act.type === 'text' ? act.selectionStart : null } : null;
-        q('.gci-cal-files').innerHTML = cal.files.map((f, i)=> `<div class="xrd-std-row"><span class="txt-mini">Standards</span><span class="xrd-std-name">${esc(f.name)}</span><button type="button" class="peak-del is-danger idle-dim" data-cal-del="${i}" title="Remove this file and its levels">${X_SVG(13)}</button></div>`).join('');
+        const box = q('.gci-cal-table'), top = box.scrollTop;
+        q('.gci-cal-files').innerHTML = cal.files.map((f, i)=> `<div class="xrd-std-row"><span class="txt-mini">Standards</span><span class="xrd-std-name">${f.table ? `${esc(f.table.name)} + ${esc(f.name)}` : `${esc(f.name)} <span class="txt-meta">(no table)</span>`}</span><button type="button" class="peak-del is-danger idle-dim" data-cal-del="${i}" title="Remove these standards and their levels">${X_SVG(13)}</button></div>`).join('');
+        /* A calibration of v544–v548's, its raw chromatograms alone: said, its standards named
+           by column, until its table is dropped (an alert dismissed stays so while the same
+           files lack theirs). */
+        const old = cal.files.filter(f=> !f.table), wk = old.map(f=> f.name).join('\n'), warn = q('.gci-cal-warn');
+        if (warn.dataset.k !== wk){
+          warn.dataset.k = wk;
+          warn.innerHTML = old.length ? alertHtml('warn', 'Calibration tables missing:', old.map(f=> `${esc(f.name)}: its GC table is not in the project (a calibration saved before v549, raw chromatograms alone): its standards are named by column. Drop the table (the same name without _TCD) to name them; nothing else changes.`)) : '';
+        }
         q('.gci-cal-unit-in').value = cal.unit;
         m.querySelectorAll('.gci-u').forEach(s=>{ s.textContent = `(${cal.unit})`; });
-        const rows = calRows(), left = cal.files.reduce((s, f)=>{ const r = resultsAt(keyOf(f, method)); return s + (r ? r.filter(x=> !x).length : dataOf(f).error ? 0 : dataOf(f).cols.length); }, 0);
+        const rows = rowsNow = calRows(), left = cal.files.reduce((s, f)=>{ const r = resultsAt(keyOf(f, method)); return s + (r ? r.filter(x=> !x).length : dataOf(f).error ? 0 : dataOf(f).cols.length); }, 0);
+        if (calSel >= rows.length) calSel = Math.max(0, rows.length - 1);
         q('.gci-cal-status').textContent = !cal.files.length ? 'No standards: each pair takes its calibration from the GC software\'s table.' : left ? `Integrating the standards… (${left} left)` : `${rows.length} chromatogram${rows.length === 1 ? '' : 's'} integrated.`;
         const area = (x, g)=> x.r && x.r.gases && x.r.gases[g] ? sig(x.r.gases[g].area, 5) : '…';
         const val = v => v == null ? '' : esc(String(v));
-        q('.gci-cal-levels tbody').innerHTML = rows.map((x, i)=> `<tr class="${x.lv.on ? '' : 'is-excluded'}"><td>${i + 1}</td><td>${thumb(x.d, x.j)}</td><td class="gci-cal-src" title="${esc(x.f.name)}">${esc(x.f.name)}, ${x.j + 1}</td><td>${area(x, 'h2')}</td><td>${area(x, 'o2')}</td>`
-          + `<td><input type="text" inputmode="decimal" data-fi="${x.fi}" data-j="${x.j}" data-g="h2" value="${val(x.lv.h2)}" aria-label="H2 concentration of standard ${i + 1}" placeholder="—"></td>`
-          + `<td><input type="text" inputmode="decimal" data-fi="${x.fi}" data-j="${x.j}" data-g="o2" value="${val(x.lv.o2)}" aria-label="O2 concentration of standard ${i + 1}" placeholder="—"></td>`
-          + `<td><input type="checkbox" data-fi="${x.fi}" data-j="${x.j}" data-g="on"${x.lv.on ? ' checked' : ''} aria-label="Use standard ${i + 1}"></td></tr>`).join('')
-          || `<tr><td colspan="8" class="txt-meta">Drop the standards' raw chromatograms above.</td></tr>`;
+        q('.gci-cal-levels tbody').innerHTML = rows.map((x, i)=> `<tr class="peak-row${i === calSel ? ' selected' : ''}${x.lv.on ? '' : ' is-excluded'}" data-row="${i}"><td class="gci-cal-k">${i + 1}</td><td class="gci-cal-th">${thumb(x.d, x.j)}</td><td class="gci-cal-src${fitMarks(x.r).length ? ' gci-bad' : ''}" title="${esc(fullName(x))}"><span class="gci-cal-name">${esc(x.name)}</span></td><td class="gci-cal-a">${area(x, 'h2')}</td><td class="gci-cal-a">${area(x, 'o2')}</td>`
+          + `<td><input type="text" inputmode="decimal" data-fi="${x.fi}" data-j="${x.j}" data-g="h2" value="${val(x.lv.h2)}" aria-label="H2 concentration of ${esc(x.name)}" placeholder="—"></td>`
+          + `<td><input type="text" inputmode="decimal" data-fi="${x.fi}" data-j="${x.j}" data-g="o2" value="${val(x.lv.o2)}" aria-label="O2 concentration of ${esc(x.name)}" placeholder="—"></td>`
+          + `<td><input type="checkbox" data-fi="${x.fi}" data-j="${x.j}" data-g="on"${x.lv.on ? ' checked' : ''} aria-label="Use ${esc(x.name)}"></td></tr>`).join('')
+          || `<tr><td colspan="8" class="txt-meta">Drop the standards' GC table and its raw chromatograms above.</td></tr>`;
+        box.scrollTop = top;
         if (was){ const f = m.querySelector('input' + was.k); if (f){ if (f.type === 'text'){ f.value = was.v; } f.focus({ preventScroll: true }); if (was.s != null) try { f.setSelectionRange(was.s, was.s); } catch(e){ /* not a text field */ } } }
+        stdNav.update();
+        drawStd(true);
         paintFits();
       }
       function paintFits(){
@@ -1077,7 +1265,7 @@ export function createInteg(ctx){
             const mA = rs.reduce((s, r)=> s + r.area, 0)/rs.length, fit = rs[0].fitted, dev = fit ? 100*(mA - fit)/fit : NaN;
             return `<tr><td>${sig(+c, 5)}</td><td>${rs.length}</td><td>${sig(mA, 5)}</td><td>${sig(fit, 5)}</td><td class="${fin(dev) && Math.abs(dev) > 3 ? 'gci-bad' : ''}">${fin(dev) ? (dev > 0 ? '+' : '') + dev.toFixed(2) + ' %' : '—'}</td></tr>`; }).join('')}</tbody></table>`;
       }
-      return { open, close, paint, el: m, isOpen: ()=> isOpen, destroy(){ close(); m.remove(); } };
+      return { open, close, paint, el: m, isOpen: ()=> isOpen, destroy(){ close(); stdNav.close(); m.remove(); } };
     }
 
     /* ---- Its CSVs: every chromatogram's values (integration.csv, the run overview's); the
@@ -1086,7 +1274,7 @@ export function createInteg(ctx){
        fit window) ---- */
     function exportEntries(n){
       const es = entries();
-      if (!es.length) return [];
+      if (!es.length) return calModal.isOpen() && calDrawn ? [{ name: `${n} - standard_chromatogram.csv`, text: chromCsv(calDrawn) }] : [];
       const gs = Object.keys(GAS);
       let t = csvLine(['File', 'Table', 'Injection', 'Injection date', ...gs.flatMap(g=> [`${gasOf(g).csv} area`, `${gasOf(g).csv} area sd`, `${gasOf(g).csv} apex (s)`, `${gasOf(g).csv} chi2r`, `${gasOf(g).csv} (%mol)`, `${gasOf(g).csv} source`, `${gasOf(g).csv} table (%mol)`, `${gasOf(g).csv} suspicious`]), 'Flags']);
       es.forEach(e=>{
@@ -1104,21 +1292,26 @@ export function createInteg(ctx){
       });
       const out = [{ name: `${n} - integration.csv`, text: t }];
       const d = drawn;
-      if (d && d.e && es.some(x=> x.name === d.e.name)){
-        const at = new Map(), cols = [], heads = [];
-        const put = (h, xs, ys)=>{ const m = new Map(); xs.forEach((x, i)=> m.set(x, ys[i])); cols.push(m); heads.push(h); };
-        d.curves.forEach(({ wr, c })=>{
-          if (c.model) put(`model ${wr.key}`, c.t, c.model);
-          if (c.base) put(`baseline ${wr.key}`, c.t, c.base);
-          Object.entries(c.peaks || {}).forEach(([name, cv])=> put(`${name} (on the baseline)`, c.t, c.base ? cv.map((v, i)=> v + c.base[i]) : cv));
-          if (c.residual) put(`residual ${wr.key}`, c.t, c.residual);
-        });
-        d.t.forEach((x, i)=> at.set(x, d.y[i]));
-        let ct = csvLine(['Time (s)', 'TCD signal', ...heads]);
-        d.t.forEach(x=>{ ct += csvLine([fmtNum(x, 4), fmtNum(at.get(x), 6), ...cols.map(m=> m.has(x) ? fmtNum(m.get(x), 6) : '')]); });
-        out.push({ name: `${n} - chromatogram.csv`, text: ct });
-      }
+      if (d && d.e && es.some(x=> x.name === d.e.name)) out.push({ name: `${n} - chromatogram.csv`, text: chromCsv(d) });
+      // (v549: the standard on show in the calibration's window, while it is open: its plot's)
+      if (calModal.isOpen() && calDrawn) out.push({ name: `${n} - standard_chromatogram.csv`, text: chromCsv(calDrawn) });
       return out;
+    }
+    // A chromatogram drawn (drawPair's `drawn`): the whole of it, its model and parts and its
+    // residuals, these blank outside the fit window.
+    function chromCsv(d){
+      const at = new Map(), cols = [], heads = [];
+      const put = (h, xs, ys)=>{ const m = new Map(); xs.forEach((x, i)=> m.set(x, ys[i])); cols.push(m); heads.push(h); };
+      d.curves.forEach(({ wr, c })=>{
+        if (c.model) put(`model ${wr.key}`, c.t, c.model);
+        if (c.base) put(`baseline ${wr.key}`, c.t, c.base);
+        Object.entries(c.peaks || {}).forEach(([name, cv])=> put(`${name} (on the baseline)`, c.t, c.base ? cv.map((v, i)=> v + c.base[i]) : cv));
+        if (c.residual) put(`residual ${wr.key}`, c.t, c.residual);
+      });
+      d.t.forEach((x, i)=> at.set(x, d.y[i]));
+      let ct = csvLine(['Time (s)', 'TCD signal', ...heads]);
+      d.t.forEach(x=>{ ct += csvLine([fmtNum(x, 4), fmtNum(at.get(x), 6), ...cols.map(m=> m.has(x) ? fmtNum(m.get(x), 6) : '')]); });
+      return ct;
     }
     const isoLocal = d =>{ const x = new Date(d); return fin(+x) ? `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())} ${pad(x.getHours())}:${pad(x.getMinutes())}:${pad(x.getSeconds())}` : ''; };
 

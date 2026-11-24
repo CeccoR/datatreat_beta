@@ -387,7 +387,7 @@ export function createPeakAnalysis(host, root, o){
           </div>
           <div class="pside-under">${LEGEND}</div>
           <div class="pside-col xrd-std-side">
-            <div class="txt-mini param-head">Parameters</div>
+            <div class="txt-mini param-head cap-title"><span>Parameters</span></div>
             <div class="param-grid">
               <label class="txt-label" for="${p}Smooth">Smoothing width (&#176;2&#952;)</label>
               ${wField(p, 'Smooth', 0)}
@@ -427,7 +427,7 @@ export function createPeakAnalysis(host, root, o){
             ${LEGEND}
           </div>
           <div class="col mw280" style="align-self:flex-start">
-            <div class="txt-mini param-head aligned">Parameters</div>
+            <div class="txt-mini param-head aligned cap-title"><span>Parameters</span></div>
             <div class="param-grid">
               <label class="txt-label" for="${p}Norm">Normalization</label>
               <select id="${p}Norm" class="pg-field">${NORM_OPTIONS}</select>

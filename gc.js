@@ -158,10 +158,14 @@ function parseGCDate(m, dm){
    Two layouts: the default (gcColumns), a header naming the injection date and each
    gas's %mol; the alternative (altColumns, v539), the instrument's .txt, its gases in
    ppm, its files said in an info alert (`altExport`, altAlertsHtml). */
+/* (v549: the column naming each injection, for the calibration's window: the default
+   export's Analysis, else a sample's or a name's column; -1 none) */
+const NAME_COL = /^(analysis|sample( name| id)?|name|injection name)$/;
+const nameCol = fields => fields.map(h=> String(h || '').toLowerCase().replace(/\s+/g, ' ').trim()).findIndex(h=> NAME_COL.test(h));
 function gcColumns(fields){
   const lo = fields.map(h=> h.toLowerCase()), date = lo.findIndex(h=> h.includes('injection date')), gas = {};
   for (const g of GASES){ const i = lo.findIndex(h=> g.col.test(h) && h.includes('%mol')); if (i >= 0 && i !== date) gas[g.key] = i; }
-  return date >= 0 && Object.keys(gas).length ? { date, gas } : null;
+  return date >= 0 && Object.keys(gas).length ? { date, gas, name: nameCol(fields) } : null;
 }
 /* The alternative export (v539): the instrument's .txt, tab-separated, a header of four
    lines over the injections: the columns' names (No., Inject Time, Area ×3, Amount ×3),
@@ -195,12 +199,13 @@ function altColumns(fields, rows, h){
     const k = isAmount(fields[d + o1]) && ALT_GAS[cellName(gasLine[d + og])];
     if (k && !(k in gas)) gas[k] = d;
   }
-  return Object.keys(gas).length ? { date, gas, alt: true } : null;
+  const nm = nameCol(fields), name = nm < 0 ? -1 : nm - o1;
+  return Object.keys(gas).length ? { date, gas, alt: true, name: name >= 0 && name < n ? name : -1 } : null;
 }
-function readGc(text){
+function readGc(text, withNames){
   const t = readTable(textLines(text), (f, sep, rows, h)=> gcColumns(f) || altColumns(f, rows, h), (r, c)=> !!dateFields(r[c.date]));
   if (!t) return null;
-  const { date, gas: idx, alt } = t.cols, injDates = [], gas = {};
+  const { date, gas: idx, alt, name } = t.cols, injDates = [], gas = {}, names = [];
   // The lines with a date, and its fields; day first when every date exists so and not
   // month first, its times never back by more than an hour.
   const rows = t.rows.map(r=> [r, dateFields(r[date])]).filter(x=> x[1]);
@@ -221,7 +226,7 @@ function readGc(text){
     // that gas's series (computeTables) and the alerts count it (blankAlertsHtml). A
     // row with no gas at all is left out, as it was, and the alert counts it too (to
     // v474 it went unsaid).
-    if (any){ injDates.push(d); for (const k in idx) gas[k].push(vals[k]); }
+    if (any){ injDates.push(d); for (const k in idx) gas[k].push(vals[k]); if (name >= 0) names.push(String(r[name] || '').trim()); }
     else emptyRows++;
   }
   /* No injection left: refused with why when a row with a value went for its date (the
@@ -231,7 +236,9 @@ function readGc(text){
   const rest = rows.length - lost;
   if (!injDates.length) return lost ? { error: `no injection to read: ${lost} row${lost > 1 ? 's' : ''} with an injection date that does not exist${rest ? `, ${rest} with no gas value` : ''}` } : null;
   for (const k in gas) fixed(gas[k]);
-  return { injDates, gas, emptyRows, ...(dm && { dayMonth: true }), ...(badDates && { badDates }), ...(named && { monthNames: true }), ...(alt && { altExport: true }) };
+  // (`withNames`, the calibration's window only: each injection's name, null with no column of them)
+  return { injDates, gas, emptyRows, ...(dm && { dayMonth: true }), ...(badDates && { badDates }), ...(named && { monthNames: true }), ...(alt && { altExport: true }),
+    ...(withNames && { names: name >= 0 ? names : null }) };
 }
 
 /* ---- Raw chromatograms (TCD, v544) ----
@@ -1706,6 +1713,8 @@ function createGc({ key, root, layer, shown }){
   const integ = createInteg({
     kit, all: allFiles, cards: ()=> cards(), inst: id => live.get(id), layer, isTcd,
     drawable, shown, changed: ()=> ratesFollow(true), folded: a => deck.isFolded(a),
+    // (v549: a calibration's table, read as any GC table, with its injections' names)
+    readTable: text => readGc(text, true),
   });
   /* A Production Rate card's source of values (v544): the nearest Integration card above it,
      or none (the tables, as to v543). What it reads of it (`srcSig`): which card, its method

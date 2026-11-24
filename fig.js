@@ -196,7 +196,7 @@ const cardBody = a => `
         </div>
         <div class="pside-under"><div id="${P(a)}Legend" class="legend"></div></div>
         <div class="pside-col fig-side">
-          <div class="txt-mini param-head">Series</div>
+          <div class="txt-mini param-head cap-title"><span>Series</span></div>
           <div class="param-grid">
             <label class="txt-label" for="${P(a)}Norm">Normalization</label>
             <select id="${P(a)}Norm" class="pg-field" title="none: the data as they are; local: each series divided by its own largest |y|; global: all by the largest of them">${Object.entries(NORMS).map(([k, l])=> `<option value="${k}">${l}</option>`).join('')}</select>

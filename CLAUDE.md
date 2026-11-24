@@ -11,10 +11,11 @@
   repositories or `.claude/worktrees`. Tests use synthetic fixtures only.
 
 ## UI layout rules
-- **Plot on the left, tables / info / parameters on the right: tops aligned.** The top edge of
-  the right column's first box (table, info, parameter block) lies on the same horizontal line
-  as the top edge of the plot's frame on the left; the rows above them (a box's title, the
-  plot's selector and toolbar) share a line too. Applies to every card laid out this way.
+- **Plot on the left, tables / info / parameters on the right: tops aligned.** The first thing
+  written in the right column (its first title, e.g. "PARAMETERS" or "Windows"; the first box
+  where there is no title) has its top on the same horizontal line as the top edge of the
+  plot's frame on the left, NOT on the line of the plot's selector/toolbar above the frame.
+  Applies to every card laid out this way, in every module.
 - **Sample selectors** (`snav.js`): the `‹ n/N ›` part has one fixed width everywhere, enough
   for `‹ 000/000 ›`; the name after it takes the room up to the toolbar and is cut with "…"
   only where it would reach it.

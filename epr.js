@@ -128,7 +128,7 @@ const cardBody = a => `
           <div id="${P(a)}Legend" class="legend"></div>
         </div>
         <div class="col mw260" style="align-self:flex-start">
-          <div class="txt-mini param-head aligned-tb">Parameters</div>
+          <div class="txt-mini param-head aligned-tb cap-title"><span>Parameters</span></div>
           <div class="param-grid">
             <label class="txt-label" for="${P(a)}Norm">Normalization</label>
             <select id="${P(a)}Norm" class="pg-field">${NORM_OPTIONS}</select>

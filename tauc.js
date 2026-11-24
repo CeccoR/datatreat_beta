@@ -366,7 +366,7 @@ function taucBody(p){
           ${legend(p + 'Legend', [['#6a7585', 'original'], ['#3aa0ff', 'smoothed'], ['#5fcf6a', 'derivative'], ['#ff5050', 'Tauc linear region'], ['#d050ff', 'baseline']])}
         </div>
         <div class="col mw280" style="align-self:flex-start">
-          <div class="txt-mini param-head aligned">Parameters <button type="button" class="mode-chip" id="${p}ModeAll" title="all: one common setup for every sample. one: each sample fully independent (parameters and interval lines). Switching to one, every sample starts from the common setup; back to all, the common setup is the shown sample's.">all</button></div>
+          <div class="txt-mini param-head aligned cap-title"><span>Parameters</span> <button type="button" class="mode-chip" id="${p}ModeAll" title="all: one common setup for every sample. one: each sample fully independent (parameters and interval lines). Switching to one, every sample starts from the common setup; back to all, the common setup is the shown sample's.">all</button></div>
           <div class="param-grid">
             <label class="txt-label" for="${p}A">Tauc exponent</label>
             <select id="${p}A" class="pg-field an-exp">
@@ -404,7 +404,7 @@ function urbachBody(p){
             ['rgba(255,80,80,0.35)', 'Tauc linear region', ` id="${p}LegBand"`]])}
         </div>
         <div class="col mw280" style="align-self:flex-start">
-          <div class="txt-mini param-head aligned">Parameters <button type="button" class="mode-chip" id="${p}ModeAll" title="all: one set of parameters for every sample. one: each sample its own. The interval lines are always each sample's own. Switching to one, every sample starts from the common setup; back to all, the common setup is the shown sample's.">all</button></div>
+          <div class="txt-mini param-head aligned cap-title"><span>Parameters</span> <button type="button" class="mode-chip" id="${p}ModeAll" title="all: one set of parameters for every sample. one: each sample its own. The interval lines are always each sample's own. Switching to one, every sample starts from the common setup; back to all, the common setup is the shown sample's.">all</button></div>
           <div class="param-grid">
             <label class="txt-label" for="${p}Ref">Tauc reference</label>
             <select id="${p}Ref" class="pg-field an-ref" title="The Tauc analysis whose linear region the Urbach region is placed on"></select>

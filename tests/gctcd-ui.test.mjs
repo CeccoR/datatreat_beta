@@ -21,8 +21,8 @@
    - The Integration card: its two selectors (the file's over the chromatogram, the plot's
      toolbar at the right of their line as a Tauc plot's; the chromatogram's over the run
      overview, the overview's toolbar at the right of theirs; no "Run overview" title) and
-     arrows, Windows aligned (its title on the selector's line, its box's top on the plot's
-     frame's), the chromatogram over its residuals (their x linked, each its own y), the
+     arrows, Windows aligned (v549: its title's top on the plot frame's, CLAUDE.md; Default
+     on its line), the chromatogram over its residuals (their x linked, each its own y), the
      overview one gas at a time (one colour for every gas's fits, the table's crosses half
      the size; a point hovered and clicked drawn lighter and half again as large, nothing
      round it, the one on show too), no trapezoid anywhere.
@@ -30,6 +30,14 @@
      in the selector and its list, on the overview, said in Peaks and the CSV), one within
      10 % not, a scale off alike at every injection none.
    - The calibration window: levels typed, free and zero intercept, %mol and ppm, its line.
+     v549: its standards a GC table and its raw chromatograms, dropped together (either alone
+     not loaded, said, waiting for its partner; counts that differ refused, nothing
+     integrated); each standard named by the table's Analysis column (a UTF-16 table; the
+     .txt export's by number), in its row and in the selector over its chromatogram, drawn
+     as the card's (row click, selector, arrows, ← →), its title's top on the plot frame's;
+     at 375 px nothing scrolls sideways. A calibration saved by v544–v548 (raw chromatograms
+     alone) opens as it was, nothing fitted again, named by column, said; its table dropped
+     names it.
    - No standards: the GC software's scale taken over (k = median of area/table value), said
      in an info alert in Integration (its message alone) and in the rate card, the file's k
      under its Peaks, the units said plainly, no superscript.
@@ -42,7 +50,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { start, openModule, settle, moduleState, history, undo, download, readZip, parseCsv, tabLabels, saveAs, ready, ROOT, exportProject, projectFile, importProject, openProject } from './helpers.mjs';
+import { start, openModule, settle, moduleState, history, undo, download, readZip, parseCsv, tabLabels, saveAs, ready, ROOT, exportProject, projectFile, importProject, openProject, firstTop } from './helpers.mjs';
 
 const G = await import(pathToFileURL(path.join(ROOT, 'gc-tcd.js')).href);
 
@@ -94,6 +102,19 @@ const areas = (rows = truth)=> rows.map(([h, o])=> [h*S_H2, o*S_O2]);
 const tableRows = (sw = 1, rows = truth)=> rows.map(([h, o])=> [+(h*sw).toFixed(6), +(o*sw).toFixed(6)]);
 // The standards: H₂ at 0.05, 0.1, 0.2 %mol (no O₂), O₂ at 0.02, 0.05, 0.1 %mol (no H₂).
 const STD = [[0.05, 0], [0.1, 0], [0.2, 0], [0, 0.02], [0, 0.05], [0, 0.1]];
+const stdTcd = name => tcd(name, STD.map(([h, o])=> [h*S_H2, o*S_O2]));
+/* Their GC table (v549) as the GC software writes a calibration's: UTF-16 LE with its mark,
+   ';' between quoted names and the cells, CRLF, an Analysis column naming each injection
+   (the last name long, to be cut in its column), other gases beside H₂ and O₂. Only the
+   names are read: the values here, nonsense on purpose, must go nowhere. */
+const STD_NAMES = ['cal_H2_0.05%_001', 'cal_H2_0.1%_001', 'cal_H2_0.2%_001', 'cal_O2_0.02%_001', 'cal_O2_0.05%_001', 'cal_O2_0.1%_001 and a long remark the software kept'];
+function calTable(name, names = STD_NAMES){
+  const head = '"Analysis";"Injection date";"CH4 (A) [%Mol]";"H2 (B) [%Mol]";"O2 (B) [%Mol]";"N2 (B) [%Mol]";"Total (%)";';
+  const rows = names.map((nm, k)=>{ const m = 10*60 + 33*k, h = Math.floor(m/60); return `"${nm}";10/29/2026 ${h % 12 || 12}:${String(m % 60).padStart(2, '0')}:36 ${h < 12 ? 'AM' : 'PM'};0.00000;${(7 + k).toFixed(5)};${(3 + k).toFixed(5)};57.87601;157.68375;`; });
+  return { name, mimeType: 'text/csv', buffer: Buffer.from('\ufeff' + [head, ...rows].join('\r\n') + '\r\n', 'utf16le') };
+}
+// A standard's chromatogram as the browser reads it back from stdTcd(name)'s file (k: its column).
+const stdY = (name, k)=> chromatogram(STD[k][0]*S_H2, STD[k][1]*S_O2, 101 + 7*k + name.length).map(v=> +v.toFixed(5));
 
 /* ---- The page ---- */
 const rowsOf = page => page.$$eval('#gcFileTableWrap tr.file-row', trs=> trs.map(tr=> ({
@@ -356,8 +377,9 @@ test('the Integration card: its two selectors, the chromatogram over its residua
        toolbar at the right of that line, as a Tauc plot's (to v545 between the selectors);
        the chromatogram's on the line over the run overview (under the chromatogram's
        legend), at its left, the overview's toolbar at the right of its line; each plot 6 px
-       under its line; no "Run overview" title. Then Windows: its title on the file
-       selector's line, its box's top on the chromatogram's frame's (CLAUDE.md). */
+       under its line; no "Run overview" title. Then Windows: its title's top (its letters')
+       on the chromatogram frame's top edge (CLAUDE.md, v549; v546–v548 on the selector's
+       line), its box under it, right of the plot. */
     const geo = await card.evaluate(c=>{
       const r = s => c.querySelector(s).getBoundingClientRect(), mid = b => (b.top + b.bottom)/2;
       const nav = r('.gci-nav'), ovn = r('.gci-ov-nav'), tb = r('.gci-pair > .plot-btn-col'), otb = r('.plot-wrap:has(> svg.gci-over) > .plot-btn-col');
@@ -367,7 +389,7 @@ test('the Integration card: its two selectors, the chromatogram over its residua
         k: [r('.gci-ksel').left - ov.left, mid(r('.gci-ksel')) - mid(ovn), mid(otb) - mid(ovn), otb.right - ov.right, ov.top - ovn.bottom].map(v=> Math.round(v*10)/10),
         below: ovn.top - lg.bottom, steps: [r('.gci-fsel .snav-steps').width, r('.gci-ksel .snav-steps').width],
         caps: [...c.querySelectorAll('.txt-caption')].map(x=> x.textContent), text: c.innerText,
-        win: [r('.gci-win-box').top - ch.top, mid(r('.gci-win-head')) - mid(nav), r('.gci-win-box').left - ch.right] };
+        win: [r('.gci-win-box').top - ch.top, r('.gci-win-box').left - ch.right] };
     });
     assert.deepEqual(geo.order, [true, true], 'the arrows first, then the name');
     const zero = (xs, what)=> xs.forEach((v, i)=> assert.ok(Math.abs(v - [0, 0, 0, 0, 6][i]) <= 1, `${what}: ${xs}`));
@@ -376,7 +398,9 @@ test('the Integration card: its two selectors, the chromatogram over its residua
     assert.ok(geo.below > 0, 'the overview\'s line under the chromatogram\'s legend');
     assert.ok(geo.steps[0] === geo.steps[1] && geo.steps[0] > 100, `the arrows' groups one width: ${geo.steps}`);
     assert.ok(!geo.caps.includes('Run overview') && !/Run overview/i.test(geo.text), 'no "Run overview" title');
-    assert.ok(Math.abs(geo.win[0]) <= 1 && Math.abs(geo.win[1]) <= 1 && geo.win[2] > 0, `Windows: the box's top on the frame's, its title on the selector's line: ${geo.win}`);
+    const wt = await firstTop(page, '#tab-gc .an-card:nth-child(1)', { frame: 'svg.gci-chrom', head: '.gci-win-head' });
+    assert.ok(Math.abs(wt.top - wt.frame) <= 1 && wt.text === 'WINDOWS', `Windows: its title's top on the frame's: ${JSON.stringify(wt)}`);
+    assert.ok(geo.win[0] > 10 && geo.win[1] > 0, `its box under its title, right of the plot: ${geo.win}`);
     // The chromatogram: the raw data, the model, the baseline, H₂, O₂ and S310, the window's lines;
     // its residuals under it. One plot: the two touch, together as tall as a standard plot.
     const chrom = card.locator('svg.plot[id$="Chrom"]'), resid = card.locator('svg.plot[id$="Resid"]');
@@ -599,7 +623,7 @@ test('calibration: standards typed by hand, free and zero intercept, %mol and pp
     await card.locator('.gci-cal').click();
     const m = page.locator('.gci-cal-modal');
     await m.waitFor({ state: 'visible' });
-    await m.locator('.gci-cal-in').setInputFiles([tcd('standards.csv', STD.map(([h, o])=> [h*S_H2, o*S_O2]))]);
+    await m.locator('.gci-cal-in').setInputFiles([calTable('standards.csv'), stdTcd('standards_TCD.csv')]);
     await page.waitForFunction(()=> /integrated/.test(document.querySelector('.gci-cal-modal .gci-cal-status').textContent), null, { timeout: 60000 });
     assert.equal(await m.locator('.gci-cal-levels tbody tr').count(), 6, 'a row a standard');
     assert.equal(await m.locator('.gci-cal-levels tbody tr svg.gci-thumb').count(), 6, 'each its thumbnail');
@@ -648,6 +672,182 @@ test('calibration: standards typed by hand, free and zero intercept, %mol and pp
   } finally { await close(); }
 });
 
+const calDone = page => page.waitForFunction(()=> /integrated/.test(document.querySelector('.gci-cal-modal .gci-cal-status').textContent), null, { timeout: 60000 });
+test('the calibration window (v549): a GC table and its raw chromatograms, both needed, as many; each standard named by the table, drawn as the card\'s chromatogram, chosen by its row, the selector, the arrows and ← →; its title aligned; 375 px', async ()=>{
+  const { page, errors, csp, close } = await env.page();
+  try {
+    await openModule(page, 'gc');
+    await load(page, [table('run.csv', tableRows()), tcd('run_TCD.csv', areas())], 1);
+    await integrated(page);
+    const card = page.locator('#tab-gc .an-card').nth(0), m = page.locator('.gci-cal-modal');
+    await card.locator('.gci-cal').click(); await m.waitFor({ state: 'visible' });
+    const n0 = await fitted(page), s0 = await steps(page);
+    const said = async ()=> (await m.locator('.gci-cal-alerts .alert').allInnerTexts()).map(t=> t.replace(/\s+/g, ' ').trim());
+    const rows = ()=> m.locator('.gci-cal-levels tbody tr[data-row]').count();
+    // Raw chromatograms alone: not loaded, said in red, nothing integrated, no step.
+    await m.locator('.gci-cal-in').setInputFiles([stdTcd('std_TCD.csv')]); await settle(page);
+    let a = await said();
+    assert.equal(a.length, 1); assert.equal(await m.locator('.gci-cal-alerts .alert.bad').count(), 1);
+    assert.match(a[0], /Not loaded: std_TCD\.csv: raw chromatograms without their GC table \(the same name without _TCD, \.csv or \.txt\): drop the table too/);
+    assert.equal(await rows(), 0, 'no standard');
+    assert.match(await m.locator('.gci-cal-status').textContent(), /^No standards/);
+    // A table alone (of another name): the same; the raw chromatograms still said.
+    await m.locator('.gci-cal-in').setInputFiles([calTable('other.csv')]); await settle(page);
+    a = await said();
+    assert.match(a[0], /std_TCD\.csv: raw chromatograms without their GC table/);
+    assert.match(a[0], /other\.csv: a GC table without its raw chromatograms \(the same name with _TCD\): drop them too/);
+    assert.equal(await rows(), 0);
+    // A pair whose counts differ (5 injections in the table, 6 chromatograms): refused, nothing integrated.
+    await m.locator('.gci-cal-in').setInputFiles([calTable('five.csv', STD_NAMES.slice(0, 5)), stdTcd('five_TCD.csv')]); await settle(page);
+    a = await said();
+    assert.ok(a[0].includes('five.csv + five_TCD.csv: 5 injections in the table, 6 chromatograms: they must be as many (a name a chromatogram), nothing integrated'), a[0]);
+    assert.equal(await rows(), 0);
+    assert.equal(await fitted(page), n0, 'nothing integrated');
+    assert.equal(await steps(page), s0, 'no step');
+    // The table of the raw chromatograms waiting dropped: the pair loaded, one step; the alert
+    // says only what is left.
+    await m.locator('.gci-cal-in').setInputFiles([calTable('std.csv')]);
+    await calDone(page); await settle(page);
+    a = await said();
+    assert.ok(a.length === 1 && !a[0].includes('std_TCD.csv') && a[0].includes('other.csv'), a.join(' | '));
+    assert.equal(await steps(page), s0 + 1, 'one step');
+    assert.equal(await fitted(page), n0 + 6, 'its six chromatograms integrated');
+    assert.deepEqual(await m.locator('.xrd-std-row .xrd-std-name').allTextContents(), ['std.csv + std_TCD.csv']);
+    // Each standard named by the table's Analysis column (UTF-16 LE, ';', quoted); nothing
+    // else read from it: no concentration.
+    assert.deepEqual(await m.locator('.gci-cal-levels tbody .gci-cal-name').allTextContents(), STD_NAMES);
+    assert.deepEqual(await m.locator('.gci-cal-levels thead th').allTextContents(), ['#', '', 'Injection', 'H2 area', 'O2 area', 'H2 (%mol)', 'O2 (%mol)', 'Use']);
+    const long = await m.locator('.gci-cal-levels tbody tr').nth(5).locator('td.gci-cal-src').evaluate(td=>{ const n = td.querySelector('.gci-cal-name'); return { cut: n.scrollWidth > n.clientWidth + 0.5, title: td.title }; });
+    assert.ok(long.cut && long.title === `${STD_NAMES[5]} (std.csv, std_TCD.csv, column 6)`, `the long name cut, whole in its tooltip: ${JSON.stringify(long)}`);
+    assert.deepEqual(await m.locator('.gci-cal-levels tbody input[type="text"]').evaluateAll(xs=> xs.map(x=> x.value)), Array(12).fill(''), 'no concentration read');
+    // The standard on show: the selector's name the table's, the plot its chromatogram
+    // (the file's own values), the model, its residuals; the windows' edges fixed.
+    const shown = ()=> page.evaluate(()=>{
+      const M = document.querySelector('.gci-cal-modal'), P = M.querySelector('svg.gci-chrom')._plot, Q = M.querySelector('svg.gci-resid')._plot, raw = P._stored.find(e=> e.key === 'raw');
+      return { ys: raw ? Array.from(raw.ys.slice(100, 106)) : null, model: P._stored.some(e=> /^model /.test(e.key || '')), resid: Q._stored.some(e=> e.key === 'residual'),
+        idx: M.querySelector('.gci-csel .nav-count').textContent, name: M.querySelector('.gci-csel .snav-name').textContent, sel: [...M.querySelectorAll('tbody tr.selected')].map(tr=> +tr.dataset.row),
+        grips: M.querySelectorAll('svg.gci-chrom .plot-goverlay circle').length, edges: P._stored.filter(e=> e.type === 'vline').length, fit: M.querySelector('.gci-cal-fit').textContent };
+    });
+    const showing = async (k, what)=>{
+      const v = await shown();
+      assert.deepEqual(v.ys, stdY('std_TCD.csv', k).slice(100, 106), `${what}: standard ${k + 1}'s chromatogram`);
+      assert.ok(v.model && v.resid, `${what}: its model and residuals`);
+      assert.deepEqual([v.idx, v.name, v.sel], [`${k + 1}/6`, STD_NAMES[k], [k]], what);
+      assert.ok(v.grips === 0 && v.edges === 2, `${what}: the window's two edges, fixed`);
+      assert.match(v.fit, /^H2: area -?[\d.]+ ± [\d.]+, χ²r [\d.]+ · O2: area -?[\d.]+/, what);
+    };
+    await showing(0, 'loaded: the first standard');
+    await m.locator('.gci-cal-levels tbody tr').nth(2).locator('td').first().click(); await settle(page);
+    await showing(2, 'its row clicked');
+    await m.locator('.gci-cnext').click(); await settle(page);
+    await showing(3, 'the selector\'s next arrow');
+    await m.locator('.gci-cal-box').focus();
+    await page.keyboard.press('ArrowRight'); await settle(page);
+    await showing(4, '→');
+    await page.keyboard.press('ArrowLeft'); await page.keyboard.press('ArrowLeft'); await settle(page);
+    await showing(2, '← twice');
+    // (a field of a row taken shows its standard; ← → there move in the field, not the standards)
+    await m.locator('input[data-j="1"][data-g="o2"]').click(); await settle(page);
+    await showing(1, 'a field of its row taken');
+    await page.keyboard.press('ArrowRight'); await settle(page);
+    await showing(1, '→ in a field');
+    assert.equal(await card.locator('.gci-ksel .nav-count').textContent(), '1/12', 'the card behind the window unmoved');
+    const list = await listOf(page, '.gci-cal-modal .gci-csel');
+    assert.deepEqual(list.map(x=> x.text), STD_NAMES, 'its list: the table\'s names');
+    await page.locator('.gci-cal-modal .gci-csel .snav-pick').click();
+    await page.locator('.snav-menu [data-i="5"]').click(); await settle(page);
+    await showing(5, 'the list');
+    // The toolbar the card's: one for both panels; the CSV the standard's whole chromatogram.
+    assert.equal(await m.locator('.gci-cal-pair .plot-tool-btn[title="Zoom area"]').count(), 1);
+    const cz = await download(page, ()=> m.locator('.gci-cal-pair .plot-csv-btn').click());
+    const crows = parseCsv(cz.buf.toString('utf8').replace(/^﻿/, ''), ';');
+    assert.ok(cz.name.endsWith(' - standard_chromatogram.csv') && ['Time (s)', 'TCD signal', 'model H2O2', 'residual H2O2'].every(h=> crows[0].includes(h)), `${cz.name}: ${crows[0].join(' | ')}`);
+    assert.equal(crows.length - 1, T.length);
+    assert.ok(Math.abs(num(crows[101][1]) - stdY('std_TCD.csv', 5)[100]) < 1e-3, 'the standard on show\'s');
+    // CLAUDE.md: the plot on the left, the table on the right: Standards' top (its letters') on
+    // the plot frame's, the toolbar on the selector's line, the table's box down to the plot's foot.
+    const st = await firstTop(page, '.gci-cal-modal', { frame: '.gci-cal-pair svg.gci-chrom', head: '.gci-cal-side > .param-head' });
+    assert.ok(Math.abs(st.top - st.frame) <= 1 && st.text === 'STANDARDS', `Standards' top on the frame's: ${JSON.stringify(st)}`);
+    const lay = await m.evaluate(M=>{ const r = s => M.querySelector(s).getBoundingClientRect(), mid = b => (b.top + b.bottom)/2;
+      return { tb: mid(r('.gci-cal-pair > .plot-btn-col')) - mid(r('.gci-cal-nav')), foot: r('.gci-cal-table').bottom - r('.gci-cal-pair svg.gci-resid').bottom, left: r('.gci-cal-side').left - r('.gci-cal-pair svg.gci-chrom').right }; });
+    assert.ok(Math.abs(lay.tb) <= 1 && Math.abs(lay.foot) <= 1 && lay.left > 0, JSON.stringify(lay));
+    // The .txt export's table, no name column: its standards by number.
+    await m.locator('.gci-cal-in').setInputFiles([altTable('alt.txt', [[0.1, 0], [0, 0.05]]), tcd('alt_TCD.csv', [[0.1*S_H2, 0], [0, 0.05*S_O2]])]);
+    await page.waitForFunction(()=> document.querySelectorAll('.gci-cal-modal tbody tr[data-row]').length === 8);
+    await calDone(page); await settle(page);
+    assert.deepEqual((await m.locator('.gci-cal-levels tbody .gci-cal-name').allTextContents()).slice(6), ['injection 1', 'injection 2']);
+    assert.equal(await m.locator('.gci-csel .nav-count').textContent(), '7/8', 'the first new standard shown');
+    // 375 px: nothing scrolls sideways, neither the window nor its table; the plot over the
+    // table; the names in their column.
+    await page.setViewportSize({ width: 375, height: 800 }); await settle(page);
+    const narrow = await m.evaluate(M=>{ const sc = M.querySelector('.xrd-std-scroll'), tb = M.querySelector('.gci-cal-table'), r = s => M.querySelector(s).getBoundingClientRect();
+      return { sc: sc.scrollWidth - sc.clientWidth, page: document.documentElement.scrollWidth - window.innerWidth, tb: tb.scrollWidth - tb.clientWidth, below: r('.gci-cal-side').top - r('.gci-cal-pair svg.gci-resid').bottom,
+        name: M.querySelector('tbody tr .gci-cal-name').clientWidth, right: r('.gci-cal-table').right - window.innerWidth }; });
+    assert.ok(narrow.sc <= 0 && narrow.page <= 0 && narrow.tb <= 0 && narrow.right <= 0, `no sideways scroll: ${JSON.stringify(narrow)}`);
+    assert.ok(narrow.below > 0 && narrow.name > 90, `the table under the plot, the names shown: ${JSON.stringify(narrow)}`);
+    // Closed and opened again: the file waiting let go, nothing said.
+    await page.keyboard.press('Escape'); await settle(page);
+    await card.locator('.gci-cal').click(); await m.waitFor({ state: 'visible' });
+    assert.deepEqual(await said(), []);
+    await m.locator('.gci-cal-in').setInputFiles([stdTcd('other_TCD.csv')]); await settle(page);
+    assert.match((await said())[0], /other_TCD\.csv: raw chromatograms without their GC table/, 'other.csv no longer waits');
+    assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
+  } finally { await close(); }
+});
+
+test('a calibration saved by v544–v548 (raw chromatograms alone) opens as it was: its levels and rates, nothing fitted again, its standards named by column, said; its table dropped names them', async ()=>{
+  const { page, errors, csp, close } = await env.page();
+  try {
+    await openModule(page, 'gc');
+    await load(page, [table('run.csv', tableRows()), tcd('run_TCD.csv', areas())], 1);
+    await integrated(page);
+    let card = page.locator('#tab-gc .an-card').nth(0);
+    const m = page.locator('.gci-cal-modal');
+    await card.locator('.gci-cal').click(); await m.waitFor({ state: 'visible' });
+    await m.locator('.gci-cal-in').setInputFiles([calTable('std.csv'), stdTcd('std_TCD.csv')]);
+    await calDone(page);
+    for (const [i, [h, o]] of STD.entries()) for (const [g, v] of [['h2', h], ['o2', o]]) if (v){ const f = m.locator(`input[data-j="${i}"][data-g="${g}"]`); await f.fill(String(v)); await f.press('Enter'); await settle(page); }
+    await m.locator('.xrd-std-x').click(); await settle(page);
+    const rates = (await zip(page))['mean_rates.csv'][1];
+    const { obj } = await exportProject(page), st = obj.state, c0 = st.cards.find(c=> c.type === 'integ');
+    assert.equal(c0.cal.files[0].table.name, 'std.csv', 'v549 keeps the table');
+    // As v544–v548 saved it: the calibration's files their raw chromatograms alone.
+    const old = { ...st, cards: st.cards.map(c=> c === c0 ? { ...c, cal: { ...c.cal, files: c.cal.files.map(({ table: _t, ...f })=> f) } } : c) };
+    const n0 = await fitted(page);
+    await importProject(page, projectFile(env, 'v548.datatreat', { ...obj, title: 'Old v548', appVersion: 'v548', state: old }, { sign: true }));
+    await openProject(page, 'gc', 'Old v548');
+    await integrated(page);
+    assert.equal(await fitted(page), n0, 'nothing fitted again');
+    const cal = (await moduleState(page, 'gc')).cards.find(c=> c.type === 'integ').cal;
+    assert.deepEqual(cal.files.map(f=> [f.name, 'table' in f]), [['std_TCD.csv', false]], 'nothing added');
+    assert.deepEqual(cal.files[0].levels, c0.cal.files[0].levels, 'its levels as they were');
+    assert.deepEqual((await zip(page))['mean_rates.csv'][1], rates, 'the same rates');
+    // The window: its standards by column, their levels in their fields; the table missing said.
+    card = page.locator('#tab-gc .an-card').nth(0);
+    await card.locator('.gci-cal').click(); await m.waitFor({ state: 'visible' }); await settle(page);
+    assert.deepEqual(await m.locator('.gci-cal-levels tbody .gci-cal-name').allTextContents(), STD.map((_, j)=> `column ${j + 1}`));
+    assert.deepEqual(await m.locator('.gci-cal-levels tbody input[data-g="h2"]').evaluateAll(xs=> xs.map(x=> x.value)), ['0.05', '0.1', '0.2', '', '', '']);
+    assert.equal(await m.locator('.gci-csel .snav-name').textContent(), 'column 1');
+    assert.deepEqual(await m.locator('.xrd-std-row .xrd-std-name').allTextContents(), ['std_TCD.csv (no table)']);
+    const w = (await m.locator('.gci-cal-warn .alert.warn').innerText()).replace(/\s+/g, ' ');
+    assert.match(w, /std_TCD\.csv: its GC table is not in the project \(a calibration saved before v549, raw chromatograms alone\): its standards are named by column\. Drop the table \(the same name without _TCD\) to name them/);
+    assert.match(await m.locator('.gci-cal-status').textContent(), /6 chromatograms integrated/);
+    assert.equal(await fitted(page), n0, 'nothing fitted with the window open');
+    // Its table dropped alone: it names them, one step; nothing else changes, nothing said.
+    const s1 = await steps(page);
+    await m.locator('.gci-cal-in').setInputFiles([calTable('std.csv')]); await settle(page);
+    assert.deepEqual(await m.locator('.gci-cal-levels tbody .gci-cal-name').allTextContents(), STD_NAMES);
+    assert.deepEqual(await m.locator('.gci-cal-alerts .alert, .gci-cal-warn .alert').count(), 0);
+    assert.equal(await steps(page), s1 + 1);
+    const cal2 = (await moduleState(page, 'gc')).cards.find(c=> c.type === 'integ').cal;
+    assert.deepEqual([cal2.files[0].table.name, cal2.files[0].levels], ['std.csv', c0.cal.files[0].levels]);
+    assert.equal(await fitted(page), n0, 'nothing fitted');
+    await m.locator('.xrd-std-x').click(); await settle(page);
+    assert.deepEqual((await zip(page))['mean_rates.csv'][1], rates, 'the same rates');
+    assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
+  } finally { await close(); }
+});
+
 test('no standards: the GC software\'s scale taken over (k, the median of area/table value), said in an info alert; the rates the table\'s', async ()=>{
   const { page, errors, csp, close } = await env.page();
   try {
@@ -689,6 +889,12 @@ test('the project: saved and reloaded with its pairs, method, calibration and re
     const to = card.locator('.gci-method input[data-k="w0:to"]');
     await to.fill('328'); await to.press('Enter'); await settle(page);
     assert.equal(await steps(page), s0 + 1);
+    // Default shown (not the engine's windows) on Windows' line, centred on its letters; the
+    // title's top still on the chromatogram frame's (CLAUDE.md).
+    const wt = await firstTop(page, '#tab-gc .an-card:nth-child(1)', { frame: 'svg.gci-chrom', head: '.gci-win-head' });
+    const def = await card.evaluate(c=>{ const b = c.querySelector('.gci-reset'), r = b.getBoundingClientRect(), t = c.querySelector('.gci-win-head > span').getBoundingClientRect(); return { hidden: b.hidden, mid: (r.top + r.bottom)/2 - (t.top + t.bottom)/2, right: c.querySelector('.gci-side').getBoundingClientRect().right - r.right }; });
+    assert.ok(!def.hidden && Math.abs(def.mid) <= 1 && Math.abs(def.right) <= 1, `Default on the title's line, at its right: ${JSON.stringify(def)}`);
+    assert.ok(Math.abs(wt.top - wt.frame) <= 1, `the title's top on the frame's: ${JSON.stringify(wt)}`);
     assert.match(await card.locator('.gci-status').textContent(), /Method changed|Integrating/);
     await integrated(page);
     assert.equal(await fitted(page), 2*N);
@@ -702,7 +908,7 @@ test('the project: saved and reloaded with its pairs, method, calibration and re
     // Standards and a level: then saved, the page reloaded.
     await card.locator('.gci-cal').click();
     const m = page.locator('.gci-cal-modal');
-    await m.locator('.gci-cal-in').setInputFiles([tcd('std.csv', STD.map(([h, o])=> [h*S_H2, o*S_O2]))]);
+    await m.locator('.gci-cal-in').setInputFiles([calTable('std.csv'), stdTcd('std_TCD.csv')]);
     await page.waitForFunction(()=> /integrated/.test(document.querySelector('.gci-cal-modal .gci-cal-status').textContent), null, { timeout: 60000 });
     for (const [i, [h]] of STD.entries()) if (h){ const f = m.locator(`input[data-j="${i}"][data-g="h2"]`); await f.fill(String(h)); await f.press('Enter'); await settle(page); }
     await m.locator('.xrd-std-x').click(); await settle(page);
@@ -719,6 +925,7 @@ test('the project: saved and reloaded with its pairs, method, calibration and re
     assert.equal(after.files[0].mate.name, 'keep_TCD.csv');
     assert.equal(after.cards[0].method.windows[0].to, 328);
     assert.deepEqual(after.cards[0].cal.files[0].levels.map(l=> l.h2), [0.05, 0.1, 0.2, null, null, null]);
+    assert.deepEqual([after.cards[0].cal.files[0].name, after.cards[0].cal.files[0].table.name], ['std_TCD.csv', 'std.csv'], 'the pair kept, its table too');
     assert.deepEqual((await zip(page))['mean_rates.csv'][1], rates, 'the same rates');
     assert.equal(await page.locator('#tab-gc .an-card').nth(0).locator('table.gci-values tbody tr').count(), 2, 'its curves and values drawn from the results');
     assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
