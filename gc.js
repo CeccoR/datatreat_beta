@@ -245,19 +245,19 @@ function readGc(text, withNames){
    A file is a table or raw chromatograms by what it holds (looksTcd: no header, a line of
    numbers), never by its name. Raw chromatograms are kept as their bytes and the number of
    chromatograms (`tcd: { n }`), read again from the bytes when they are shown or integrated
-   (gc-integ.js); `read` is readTcd's result as the drop read it, handed over so that it is
-   not read twice. A row of the file list is one record: a table, raw chromatograms, or a
+   (gc-integ.js), but for the drop's own reading, handed over (`seen`) so that it is not
+   read twice. A row of the file list is one record: a table, raw chromatograms, or a
    pair, the first file's record with the second as its `mate` (a table first beside raw
    chromatograms). Only a table heading its row is a sample of the analysis (`isTable`). */
 const isTcd = f => isObj(f) && isObj(f.tcd);
 const isTable = f => isObj(f) && isArr(f.injDates) && isObj(f.gas);
 const hasTcd = r => isTcd(r) || (isObj(r) && isTcd(r.mate));
-// (`seen`: readTcd's results by their bytes, for the Integration cards; gc-integ.js prime)
+// (`seen(bytes, read)`: readTcd's result, for the Integration cards: gc-integ.js prime)
 function readGcAny(text, bytes, seen){
   if (!looksTcd(text)) return readGc(text);
   const d = readTcd(text);
-  if (!d || d.error || !d.cols || !d.cols.length) return { error: `raw chromatograms that cannot be read${d && d.error ? `: ${d.error}` : ''}` };
-  if (seen && bytes) seen(bytes, d);
+  if (d.error) return { error: `raw chromatograms that cannot be read: ${d.error}` };
+  seen(bytes, d);
   return { tcd: { n: d.cols.length } };
 }
 
@@ -662,7 +662,8 @@ function createGc({ key, root, layer, shown }){
     return [...out.values()];
   }
 
-  // A gas on show: one of the included samples has it (hasGas).
+  // A gas on show: one of the included samples has it (hasGas), in its table: a gas the table
+  // lacks that the raw chromatograms paired with it give (by standards) keeps its chip greyed.
   const gasPresent = k => files.some(f=> hasGas(f, k));
   /* The empty cells skipped, per file and gas: the blank cells of a row kept, and the
      rows with none of the file's gases (dropped at parse, `emptyRows`, an empty cell for
@@ -1153,7 +1154,7 @@ function createGc({ key, root, layer, shown }){
       const box = $('Src');
       if (!box) return;
       const above = integAbove(a), name = above ? (cards().find(x=> live.get(x.id) === above) || {}).name : '';
-      const used = [], kept = [], txt = { h2: 'H₂', o2: 'O₂' };
+      const used = [], kept = [], txt = Object.fromEntries(GASES.map(g=> [g.key, gasTxt(g)]));
       const k5 = v => Number.isFinite(v) ? String(+v.toPrecision(5)) : '?';
       const how = (s, g)=> s.how[g] === 'cal' ? 'calibrated by the standards' : `calibration taken from the GC software's table (k = ${k5(s.k[g] && s.k[g].k)})`;
       dataTables.forEach(d=>{
@@ -1694,7 +1695,7 @@ function createGc({ key, root, layer, shown }){
     if (!card || !c) return;
     const n = fileSafe(a.name);
     if (a.type === 'integ'){
-      // (v545: the chromatogram over its residuals, one plot, one toolbar; the run overview)
+      // (the chromatogram over its residuals, one toolbar; the run overview)
       nameDownloads(card.querySelector('.gci-pair'), `${n} - GC_chromatogram.svg`, `${n} - chromatogram.csv`);
       nameDownloads(card.querySelector('svg.gci-over').closest('.plot-wrap'), `${n} - GC_run_overview.svg`, `${n} - integration.csv`);
       return;
@@ -1711,7 +1712,8 @@ function createGc({ key, root, layer, shown }){
      written into the history, the job (gc-integ.js). Results that came in, a method or a
      calibration changed: the Production Rate cards below follow (ratesFollow). */
   const integ = createInteg({
-    kit, all: allFiles, cards: ()=> cards(), inst: id => live.get(id), layer, isTcd,
+    kit, all: allFiles, gases: GASES.map(g=> ({ key: g.key, label: g.label, txt: gasTxt(g), csv: g.csv, color: g.bar })),
+    cards: ()=> cards(), inst: id => live.get(id), layer, isTcd,
     drawable, shown, changed: ()=> ratesFollow(true), folded: a => deck.isFolded(a),
     // (v549: a calibration's table, read as any GC table, with its injections' names)
     readTable: text => readGc(text, true),

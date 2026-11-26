@@ -1,17 +1,36 @@
 /* =========================================================
-   GC-TCD PEAK INTEGRATION ENGINE (prototype, not wired into the app)
-   A port, as it is, of the Python v2.1 integration of the TCD chromatograms
-   (forma_universale.py / reintegra_tcd.py v2.1): the 8-parameter peak shape (two equal
-   Gaussians, the second shifted, convolved with two exponential tails), the electrical
-   spike finder, the two-pass fit (robust soft-L1 pass to find narrow glitches, then
-   ordinary least squares without them, restarted from the generic start when the result
-   looks suspicious), scipy's least_squares(method='trf') with bounds, x_scale and the block
-   Jacobian (v545: the classical trapezoids, a check beside the fit, removed). Output only
-   for H2 and O2: the system peak at 310 s and the baseline step after O2 are fitted because
-   the fit needs them, and returned for display; they are not gases.
+   GC-TCD PEAK INTEGRATION ENGINE (v544)
+   A port, as it is, of the H₂/O₂ part of the Python v2.1 integration of the TCD
+   chromatograms (forma_universale.py / reintegra_tcd.py v2.1): the 8-parameter peak shape (two
+   equal Gaussians, the second shifted, convolved with two exponential tails), the electrical
+   spike finder, the two-pass fit (robust soft-L1 pass to find narrow glitches, then ordinary
+   least squares without them, restarted from the generic start when the result looks
+   suspicious), scipy's least_squares(method='trf') with bounds, x_scale and the block
+   Jacobian. Output only for H2 and O2: the system peak at 310 s and the baseline step after
+   O2 are fitted because the fit needs them, and returned for display; they are not gases.
+   v2.1's classical trapezoids, a check beside the fit, are left out (from v545), as are N₂,
+   the column-order check (trova_ordine: the columns are taken in the table's order) and the
+   standards' column alignment (the levels are typed).
    Pure ES module: no DOM, no import; runs in Node, in the page and in a worker.
-========================================================= */
 
+   Where it departs from scipy/numpy, at the rounding level only: the SVD of the augmented
+   Jacobian by Householder QR then one-sided Jacobi, pinv(JᵀJ) by a Jacobi eigen-
+   decomposition, sequential dot products, W. J. Cody's erfc/erfcx (relative error ≤ 9e-16 on
+   the model's branches), np.sum and np.mean in numpy's own pairwise
+   order (checked bit for bit). As in scipy, the soft-L1 loss
+   applies to every residual, the priors' too (the Python's comment says the data only), so
+   that the same minima are found. transferK leaves non-finite areas out (numpy's median would
+   give NaN). The noise is v2.1's (MAD of the differences over the window, peak flanks
+   included: on strong synthetic peaks it reads 1.6 × the true noise, so χ²ᵣ reads low); kept,
+   since the glitch thresholds and the restart rule are scaled to it.
+   Checked against v2.1 on 411 real chromatograms (377 of runs, 34 standards): on the runs the
+   areas agree to 5.5e-6 (H₂) and 2.5e-5 (O₂) relative at most, about what v2.1 differs from
+   itself by with its data moved by one ulp (1.3e-5, 2.4e-5), the apex times identical, the
+   spikes and the glitch zones the same. Some fits of large O₂ standards are fragile in v2.1 itself (the
+   robust pass stops at its 100th evaluation and the minimum reached then depends on rounding:
+   up to about 2 % in O₂); JS lands on outcomes v2.1 also gives under a one-ulp change. About
+   0.16 s a chromatogram in V8, 1.8 × faster than v2.1.
+========================================================= */
 const SQ2 = Math.SQRT2;                 // np.sqrt(2.0)
 const EPS = 2.220446049250313e-16;      // np.finfo(float).eps
 
@@ -20,7 +39,9 @@ const EPS = 2.220446049250313e-16;      // np.finfo(float).eps
    (the numbers of reintegra_tcd.py v2.1, CFG and fit_picchi/_fit defaults)
 --------------------------------------------------------- */
 const deepFreeze = o =>{ if (o && typeof o === 'object' && !Object.isFrozen(o)){ Object.values(o).forEach(deepFreeze); Object.freeze(o); } return o; };
-// Frozen throughout: a variant is made from a copy, structuredClone(DEFAULT_METHOD).
+/* Frozen throughout: a variant is made from a copy, structuredClone(DEFAULT_METHOD). Its JSON
+   is part of the key the app keeps the results under (gc-integ.js methodKey): any change to
+   it, even of a setting no fit reads, fits every saved project again. */
 export const DEFAULT_METHOD = deepFreeze({
   windows: [{ key: 'H2O2', from: 268, to: 326, baseDegree: 1,
     peaks: [{ name: 'H2', t: 287.3, gas: 'h2' }, { name: 'O2', t: 302.3, gas: 'o2' }, { name: 'S310', t: 310.2, gas: null }],
@@ -46,8 +67,7 @@ export const DEFAULT_METHOD = deepFreeze({
 /* The peak shape's internal parameters after A and mu, their weak priors, limits and
    start (forma_universale.py: INT, PRIOR, LIMITI, INIZIO). ls = ln sigma, dm = dmu/sigma,
    lr1 = ln(tau1/sigma), lr2 = ln((tau2 − tau1)/sigma). */
-export const SHAPE = deepFreeze({
-  names: ['A', 'mu', 'sigma', 'dmu', 'fc', 'tau1', 'tau2', 'w2'],
+const SHAPE = deepFreeze({
   internal: ['ls', 'dm', 'fc', 'lr1', 'lr2', 'w2'],
   log: ['ls', 'lr1', 'lr2'],
   prior: { ls: [0.5, 0.5], dm: [0.0, 0.7], fc: [0.0, 0.4], lr1: [1.0, 0.7], lr2: [4.0, 0.5], w2: [0.07, 0.03] },
@@ -56,7 +76,7 @@ export const SHAPE = deepFreeze({
 });
 const NP = 8, NPR = 6;
 const INT = SHAPE.internal;
-const isLog = c => c === 'ls' || c === 'lr1' || c === 'lr2';
+const isLog = c => SHAPE.log.includes(c);
 const v_ = (c, x)=> isLog(c) ? Math.log(x) : x;
 const PRIOR_MEAN = INT.map(c=> v_(c, SHAPE.prior[c][0])), PRIOR_SD = INT.map(c=> SHAPE.prior[c][1]);
 const LIM_LO = INT.map(c=> v_(c, SHAPE.limits[c][0])), LIM_HI = INT.map(c=> v_(c, SHAPE.limits[c][1]));
@@ -82,10 +102,10 @@ function pairwise(a, i0, n){
   let n2 = Math.floor(n/2); n2 -= n2 % 8;
   return pairwise(a, i0, n2) + pairwise(a, i0 + n2, n - n2);
 }
-export const npSum = a => pairwise(a, 0, a.length);
-export const npMean = a => pairwise(a, 0, a.length)/a.length;
+const npSum = a => pairwise(a, 0, a.length);
+const npMean = a => pairwise(a, 0, a.length)/a.length;
 // np.median: the middle value, or the mean of the two middle values.
-export function median(a){
+function median(a){
   const s = Float64Array.from(a).sort(), n = s.length;
   if (!n) return NaN;
   const h = n >> 1;
@@ -103,9 +123,10 @@ function diffNoise(y){
 
 /* ---------------------------------------------------------
    erfc, erfcx: W. J. Cody's rational Chebyshev approximations (CALERF, netlib specfun),
-   relative error about 1e-16 over the whole range (see the notes for the check against
-   scipy.special). The coefficients are Cody's, written in their shortest round-trip form
-   (the same doubles).
+   against scipy.special a relative error of 9e-16 at most on the branches the model takes
+   (erfcx at x ≥ 0, erfc below 0; 17,000 points from −30 to 1e8), 6e-14 elsewhere, where
+   exp(−x²) itself loses as much. The coefficients are Cody's, written in their shortest
+   round-trip form (the same doubles).
 --------------------------------------------------------- */
 const CA = [3.1611237438705655, 113.86415415105016, 377.485237685302, 3209.3775891384694, 0.18577770618460315];
 const CB = [23.601290952344122, 244.02463793444417, 1282.6165260773723, 2844.236833439171];
@@ -117,7 +138,7 @@ const CP = [0.30532663496123236, 0.36034489994980445, 0.12578172611122926, 0.016
 const CQ = [2.568520192289822, 1.8729528499234673, 0.5279051029514285, 0.06051834131244132, 0.0023352049762686918];
 const SQRPI = 0.5641895835477563;   // 1/sqrt(pi)
 const THRESH = 0.46875, XSMALL = 1.11e-16, XBIG = 26.543, XHUGE = 6.71e7, XMAX = 2.53e307, XNEG = -26.628;
-// jint 0: erf, 1: erfc, 2: erfcx = exp(x²) erfc(x)
+// jint 1: erfc, 2: erfcx = exp(x²) erfc(x) (CALERF's 0, erf, the model never needs)
 function calerf(x, jint){
   if (Number.isNaN(x)) return NaN;
   const y = Math.abs(x);
@@ -126,8 +147,7 @@ function calerf(x, jint){
     ysq = 0; if (y > XSMALL) ysq = y*y;
     xnum = CA[4]*ysq; xden = ysq;
     for (let i = 0; i < 3; i++){ xnum = (xnum + CA[i])*ysq; xden = (xden + CB[i])*ysq; }
-    result = x*(xnum + CA[3])/(xden + CB[3]);
-    if (jint !== 0) result = 1 - result;
+    result = 1 - x*(xnum + CA[3])/(xden + CB[3]);
     if (jint === 2) result = Math.exp(ysq)*result;
     return result;
   }
@@ -152,15 +172,13 @@ function calerf(x, jint){
       if (jint !== 2){ ysq = Math.trunc(y*16)/16; del = (y - ysq)*(y + ysq); result = Math.exp(-ysq*ysq)*Math.exp(-del)*result; }
     }
   }
-  if (jint === 0){ result = (0.5 - result) + 0.5; if (x < 0) result = -result; }
-  else if (jint === 1){ if (x < 0) result = 2 - result; }
+  if (jint === 1){ if (x < 0) result = 2 - result; }
   else if (x < 0){
     if (x < XNEG) result = Infinity;
     else { ysq = Math.trunc(x*16)/16; del = (x - ysq)*(x + ysq); const e = Math.exp(ysq*ysq)*Math.exp(del); result = (e + e) - result; }
   }
   return result;
 }
-export const erf = x => calerf(x, 0);
 export const erfc = x => calerf(x, 1);
 export const erfcx = x => calerf(x, 2);
 
@@ -681,14 +699,14 @@ function windowModel(p, tw, tc, npk, ng, nb, comp = true){
 
 /* _fit: t, y the chromatogram (finite points), win a window of the method; opts:
    { loss: 'linear' | 'soft_l1', excluded: [[a, b]], p0: a start vector }.
-   Returns the fit with its points and curves (internal; integrateChromatogram keeps a
-   compact copy). */
-export function fitOnce(t, y, win, fitIn, { loss = 'linear', excluded = [], p0: pStart = null, noise: noiseIn = null } = {}){
+   Returns the fit with its points, its model and residuals (fitPeaks reads them;
+   integrateChromatogram keeps a compact copy). */
+function fitOnce(t, y, win, fitIn, { loss = 'linear', excluded = [], p0: pStart = null } = {}){
   const fit = fitDefaults(fitIn);
   const idx = [];
   for (let i = 0; i < t.length; i++) if (t[i] >= win.from && t[i] <= win.to && Number.isFinite(y[i])) idx.push(i);
   const tAll = Float64Array.from(idx, i=> t[i]), yAll = Float64Array.from(idx, i=> y[i]);
-  let noise = noiseIn == null ? diffNoise(yAll) : noiseIn;
+  let noise = diffNoise(yAll);
   const sp = findSpikes(yAll, noise, { threshold: fit.spikes.threshold, fraction: fit.spikes.fraction, rounds: fit.spikes.roundsFit });
   const spikeT = [];
   for (let i = 0; i < sp.length; i++) if (sp[i]) spikeT.push(tAll[i]);
@@ -787,7 +805,7 @@ export function fitOnce(t, y, win, fitIn, { loss = 'linear', excluded = [], p0: 
   const sol = leastSquaresTrf(residuals, jacobian, x0, lo, hi, { xScale: sc, maxNfev: robust ? fit.maxNfevRobust : fit.maxNfev,
     loss: robust ? loss : 'linear', fScale: robust ? fit.robustFScale : 1.0 });
   const p = sol.x;
-  const { total, base, comp } = windowModel(p, tw, tc, npk, ng, nb, true);
+  const { total, base } = windowModel(p, tw, tc, npk, ng, nb, false);
   const res = new Float64Array(N), res2 = new Float64Array(N);
   for (let i = 0; i < N; i++){ res[i] = yw[i] - total[i]; res2[i] = res[i]**2; }
   const mse = npMean(res2);
@@ -803,8 +821,8 @@ export function fitOnce(t, y, win, fitIn, { loss = 'linear', excluded = [], p0: 
   return {
     p: Array.from(p), areas: peaks.map((_, k)=> p[NP*k]), sd, params: peaks.map((_, k)=> physical(p, NP*k)),
     steps: stepsC.map((_, k)=> ({ h: p[iG + 3*k], t0: p[iG + 3*k + 1], width: Math.exp(p[iG + 3*k + 2]) })),
-    rms: Math.sqrt(mse), noise, chi2r: mse/noise**2, cost: sol.cost, spikes: spikeT, nRemoved: tAll.length - N,
-    ok: sol.success, status: sol.status, nfev: sol.nfev, t: tw, y: yw, res, mod: total, base, comp, tc,
+    rms: Math.sqrt(mse), noise, chi2r: mse/noise**2, cost: sol.cost, spikes: spikeT,
+    ok: sol.success, nfev: sol.nfev, t: tw, res, mod: total, base, tc,
   };
 }
 
@@ -813,7 +831,7 @@ export function fitOnce(t, y, win, fitIn, { loss = 'linear', excluded = [], p0: 
    larger than half the peaks' signal within 1 s; 2) ordinary least squares without them
    (± 0.6 s), from the robust solution. Restarted from the generic start when chi²_r > 4 or
    a step is more than 3 sd from its prior, the lower cost kept. */
-export function fitPeaks(t, y, win, fitIn){
+function fitPeaks(t, y, win, fitIn){
   const fit = fitDefaults(fitIn);
   if (!fit.maskGlitches){ const r = fitOnce(t, y, win, fit); r.excluded = []; r.nfevTotal = r.nfev; r.restarted = false; r.restartWon = false; return r; }
   const r0 = fitOnce(t, y, win, fit, { loss: fit.robustLoss });
@@ -844,7 +862,6 @@ export function fitPeaks(t, y, win, fitIn){
     if (r2.cost < r.cost){ r = r2; restartWon = true; }
   }
   r.excluded = excluded; r.nfevTotal = nfevTotal; r.restarted = restarted; r.restartWon = restartWon;
-  r.robust = { nfev: r0.nfev, cost: r0.cost, ok: r0.ok };
   return r;
 }
 

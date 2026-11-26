@@ -2,7 +2,7 @@ import { esc, csvLine, fmtNum, alertHtml, setupDropzone, X_SVG, bytesKey, fixed,
 import { Plot, svgEl, linkX, niceTicks } from './plot.js';
 import { plotWrap, chipRow, viewOf, setView, PLOT_DL_ICON } from './modcharts.js';
 import { cardInfo, fileSafe, nameDownloads } from './cards.js';
-import { isObj, oneOf } from './modkit.js';
+import { isObj, oneOf, num } from './modkit.js';
 import { decodeText } from './textdata.js';
 import { DEFAULT_METHOD, readTcd, windowCurves, fitCalibration, transferK } from './gc-tcd.js';
 import { integrateMany } from './gc-tcd-pool.js';
@@ -10,12 +10,8 @@ import { snavHtml, snav } from './snav.js';
 import { looksTcd, stemOf } from './gc-pair.js';
 
 /* =========================================================
-   GC: THE INTEGRATION CARD (v544; v545: its layout, the chromatogram over its residuals,
-   the run overview one gas at a time, the selectors, no trapezoids, the suspicious rule;
-   v546: the toolbar back over the plot, the chromatogram's selector over the overview,
-   the boxes' titles above them, the transfer's k under Peaks, the overview's marks, 10 %;
-   v549: the calibration's standards a GC table and its raw chromatograms, named by the
-   table, each drawn as the card's chromatogram; Windows' title on the plot's top edge)
+   GC: THE INTEGRATION CARD (v544; laid out as a DRS card from v545; the calibration's
+   standards a GC table and its raw chromatograms from v549)
    The raw chromatograms (TCD) of a GC card integrated again by the engine (gc-tcd.js):
    each injection's H₂ and O₂ peaks fitted with a model of the window they sit in, turned
    into concentrations by a calibration of standards or by the GC software's own scale, and
@@ -29,33 +25,33 @@ import { looksTcd, stemOf } from './gc-pair.js';
      of their own, and saved with the project (the module state's `integ`, the keys its cards
      use), so that a project reopened, a tab woken or an undo never fits again;
    - the job: what no result is held for, integrated in the background (gc-tcd-pool.js), one
-     file after another, with its progress and Stop on every Integration card.
-   ctx: { kit, all (every record, in list order), cards() (the deck's records), inst(id),
-   drawable(), shown(), folded(rec), layer, isTcd(rec), changed() (results came in: the cards below
-   follow) }.
+     file after another, with its progress and Stop on every Integration card. It is not
+     the module's `busy` (utils.js registerBusy): undo works while it runs, and a tab put to
+     sleep or closed during a run lets it go, the files done kept, the rest integrated as the
+     tab wakes or the project reopens.
+   ctx: { kit, all (every record, in list order), gases (gc.js GASES: each gas's key, label,
+   txt, csv and colour), cards() (the deck's records), inst(id), drawable(), shown(),
+   folded(rec), layer, isTcd(rec), readTable(text) (a GC table read as gc.js reads one, its
+   injections' names with it), changed() (results came in: the cards below follow) }.
 ========================================================= */
-const GAS = {
-  h2: { label: 'H<sub>2</sub>', txt: 'H₂', csv: 'H2', color: '#3aa0ff' },
-  o2: { label: 'O<sub>2</sub>', txt: 'O₂', csv: 'O2', color: '#ff7a59' },
-};
-const gasOf = k => GAS[k] || { label: esc(k), txt: k, csv: k, color: '#4cc9a0' };
 const PEAK_COLORS = ['#9b7bff', '#4cc9a0', '#e3b341', '#d95fd0'];
 const C_RAW = '#8a95a3', C_MODEL = '#e0457b', C_BASE = '#d4a72c', C_EDGE = '#4cc9a0', C_BAD = '#ff3b3b', C_TABLE = '#9aa3ad';
-/* The run overview's marks (v546): every gas's fits in one colour (H₂'s blue), the
-   suspicious red; a fit's dot of radius OV_R, the GC table's grey cross half the size it
-   was (OV_CROSS, its arms' half-span: under a dot, hidden by it); a point hovered or on
-   show drawn again OV_HL_R times as large as the dot is seen (v547: its radius plus half
-   the 1 px stroke plot.js rings it with; v548: half again as large, a tenth larger to
-   v547), OV_HL_TINT of the way to white. */
-const C_FIT = GAS.h2.color, OV_R = 3.2, OV_CROSS = 1.75, OV_HL_R = 1.5, OV_HL_TINT = 0.4;
+/* The run overview's marks: every gas's fits in one colour (H₂'s blue, C_FIT), the
+   suspicious red; a fit's dot of radius OV_R, the GC table's grey cross smaller (OV_CROSS,
+   its arms' half-span: under a dot, hidden by it); a point hovered or on show drawn again
+   OV_HL_R times as large as the dot is seen (its radius plus half the 1 px stroke plot.js
+   rings it with), OV_HL_TINT of the way to white. */
+const OV_R = 3.2, OV_CROSS = 1.75, OV_HL_R = 1.5, OV_HL_TINT = 0.4;
 const MARGIN = 4;            // s shown either side of the windows (and of their neighbours)
-/* The peaks beside the H₂/O₂ window that its model has no peak for (ENGINE.md §6): the system
-   peak at 262–267.5 s and N₂ from about 330.5 s. Drawn on the chromatogram; an edge of a
-   window inside one is said (±5 s from the default reaches them, and the fit degrades). */
+/* The peaks beside the H₂/O₂ window that its model has no peak for: the system peak at
+   262–267.5 s and N₂ from about 330.5 s. Drawn on the chromatogram; an edge of a window
+   inside one is said: on real runs an edge moved by 1–2 s changes H₂ by 0.01–0.02 % at high
+   levels and by about one formal sd at low ones, but by 5 s it reaches these and the fit
+   degrades. */
 const NEIGHBOURS = [{ name: 'S264', from: 262, to: 267.5 }, { name: 'N2', from: 330.5, to: 337.6 }];
-/* What marks a chromatogram as suspicious for a gas (judge, v545), any of:
-   1. a χ²ᵣ above 4, after the fit's restart (ENGINE.md §8: the robust pass stops at 100
-      evaluations, and its worst outcome reads χ²ᵣ 41; a clean real run reads 2–3.5);
+/* What marks a chromatogram as suspicious for a gas (judge), any of:
+   1. a χ²ᵣ above 4, after the fit's restart (the robust pass stops at 100 evaluations, and
+      its worst outcome reads χ²ᵣ 41; a clean real run reads 2–3.5);
    2. a fit that did not converge (or a chromatogram the engine could not fit);
    3. its area out of proportion with the GC software's table: over the run (the pair), at
       each injection with a table value r_i = A_i / T_i, k = median(r_i) (transferK's
@@ -63,18 +59,19 @@ const NEIGHBOURS = [{ name: 'S264', from: 262, to: 267.5 }, { name: 'N2', from: 
       k × 15 ppm), the floor in the table's unit (0.0015 %mol, or 15 ppm for the .txt
       export). No comparison where the table has no value. Areas, not concentrations: with
       O₂'s free intercept every calibrated O₂ would differ from the table by one factor.
-      (v546: 10 %; at 3 %, to v545, nearly every O₂ of a real run was marked: the GC
-      software ignores H₂'s tail under O₂, which the fit models.)
-   A glitch zone left out of the fit is no longer one (v544 marked it). */
+      (10 % from v546: at 3 % nearly every O₂ of a real run was marked, the GC software
+      ignoring H₂'s tail under O₂, which the fit models.)
+   A glitch zone left out of the fit is not one (v544 marked it). */
 const PROP_TOL = 0.10, PROP_FLOOR = { '%mol': 0.0015, ppm: 15 };
 const CHI2_HIGH = 4;
-/* The method's fields (ENGINE.md §6): the windows' edges, numbers that are its source of
-   truth, the lines on the chromatogram an aid that snaps to the data's 0.2 s and writes into
-   them. (v545: the trapezoids, a check beside the fit, are gone.) */
-const SNAP = 0.2, snap = v => Math.round(v/SNAP)*SNAP, round1 = v => +v.toFixed(2);
+/* The method's fields: the windows' edges, numbers that are its source of truth (exact,
+   kept with the method, the same for every injection), the lines on the chromatogram an aid
+   that snaps to the data's 0.2 s and writes into them. */
+const SNAP = 0.2, snap = v => Math.round(v/SNAP)*SNAP, round2 = v => +v.toFixed(2);
 const UNITS = ['%mol', 'ppm'];
 const toPct = (v, unit)=> unit === 'ppm' ? v/1e4 : v;
 const fin = v => Number.isFinite(v);
+const plural = (n, w)=> `${n} ${w}${n === 1 ? '' : 's'}`;
 const sig = (v, n = 4)=> fin(v) ? (Math.abs(v) >= 1e6 || (Math.abs(v) < 1e-3 && v) ? v.toExponential(n - 1) : String(+v.toPrecision(n))) : '—';
 
 /* ---- The method: the engine's own, its windows' edges the card's ---- */
@@ -92,7 +89,7 @@ function methodIn(m){
   });
   return out;
 }
-// (a stored result's null, JSON's NaN, read back as NaN, never as 0: ENGINE.md §8)
+// (a stored result's null, JSON's NaN, read back as NaN, never as 0)
 const deNull = v => v === null ? NaN : Array.isArray(v) ? v.map(deNull) : isObj(v) ? Object.fromEntries(Object.entries(v).map(([k, x])=> [k, deNull(x)])) : v;
 const methodKey = m => exactKey(m.windows.map(w=> [w.key, w.from, w.to]).concat([JSON.stringify(m)]));
 /* A results' key as v544 wrote it (a project saved then): its method held the trapezoids
@@ -113,16 +110,11 @@ function normKey(key){
 }
 const noTrap = r =>{ if (isObj(r) && isObj(r.gases)) Object.values(r.gases).forEach(x=>{ if (isObj(x)) delete x.trap; }); return r; };
 const isDefault = m => methodKey(m) === methodKey(methodIn(null));
-// A number kept as JSON writes it, rounded to 8 digits (a result as the store keeps it).
 /* A result as the store keeps it (and the project): JSON's (a NaN is null, read back as
    none), its numbers to 8 digits, a peak's physical parameters left out (the window's `p`
    gives them, windowCurves draws from it). */
 const r8 = v => typeof v === 'number' && fin(v) ? +v.toPrecision(8) : v;
 const compact = r => r && deNull(JSON.parse(JSON.stringify(r, (k, v)=> k === 'params' ? undefined : typeof v === 'number' ? r8(v) : ArrayBuffer.isView(v) ? Array.from(v, r8) : v)));
-/* The GC software's scale (transferK): the injections whose table value is at least the
-   method's minValue (%mol: 0.02 for H₂, the Python's h2_min_calib, 0.012 for O₂), minCount
-   of them at least (10); these where the method has none. */
-const TRANSFER = { minValue: 0.02, minCount: 10 };
 
 /* ---- The calibration (a card's): its unit, intercept modes, files and levels ----
    A file of it (v549): the standards' raw chromatograms (name, rawBytes: what is
@@ -133,7 +125,7 @@ const TRANSFER = { minValue: 0.02, minCount: 10 };
 const blankLevel = ()=> ({ h2: null, o2: null, on: true });
 function calIn(c){
   const s = isObj(c) ? c : {}, z = isObj(s.zero) ? s.zero : {};
-  const lv = v => fin(v) ? v : null;
+  const lv = v => num(v, null);
   const files = Array.isArray(s.files) ? s.files.filter(f=> isObj(f) && f.rawBytes instanceof Uint8Array).map(f=> ({
     name: typeof f.name === 'string' && f.name ? f.name : 'calibration.csv', rawBytes: f.rawBytes,
     levels: Array.isArray(f.levels) ? f.levels.map(x=> isObj(x) ? { h2: lv(x.h2), o2: lv(x.o2), on: x.on !== false } : blankLevel()) : [],
@@ -165,6 +157,10 @@ const CAL_INFO = `The standards come as a pair, as in the file list: the GC soft
 
 export function createInteg(ctx){
   const { kit } = ctx;
+  // The gases (gc.js GASES), by key; a peak of another gas, should a window name one, drawn so.
+  const GAS = Object.fromEntries(ctx.gases.map(g=> [g.key, g]));
+  const gasOf = k => GAS[k] || { label: esc(k), txt: k, csv: k, color: '#4cc9a0' };
+  const C_FIT = GAS.h2.color;
   /* ---- The raw chromatograms, read once per file (by its bytes) ---- */
   const read = new WeakMap();
   function dataOf(rec){
@@ -173,11 +169,12 @@ export function createInteg(ctx){
     let d = read.get(b);
     if (!d){
       try { d = readTcd(decodeText(b)); } catch(e){ d = { error: String(e && e.message || e) }; }
-      if (!d || (!d.error && !(d.cols && d.cols.length))) d = { error: d && d.error || 'no chromatogram in it' };
       read.set(b, d);
     }
     return d;
   }
+  // (a file a drop read, gc.js's or the calibration window's: what it read kept, not read again)
+  const prime = (bytes, d)=>{ read.set(bytes, d); };
   const fileKey = rec => rec.rawBytes instanceof Uint8Array ? bytesKey(rec.rawBytes) : 'name:' + rec.name;
   /* ---- A calibration's table (v549), read once per file (by its bytes) as gc.js reads a
      GC table (ctx.readTable), its injections' names with it ---- */
@@ -186,8 +183,8 @@ export function createInteg(ctx){
     if (!(b instanceof Uint8Array)) return null;
     let t = tabs.get(b);
     if (!t){
-      try { t = ctx.readTable ? ctx.readTable(decodeText(b)) : null; } catch(e){ t = null; }
-      if (!t || t.error || !Array.isArray(t.injDates) || !t.injDates.length) t = { error: t && t.error || 'not a GC table (no injection date and H₂ or O₂ column under a header)' };
+      try { t = ctx.readTable(decodeText(b)); } catch(e){ t = null; }
+      if (!t || t.error) t = { error: t && t.error || 'not a GC table (no injection date and H₂ or O₂ column under a header)' };
       tabs.set(b, t);
     }
     return t;
@@ -254,7 +251,6 @@ export function createInteg(ctx){
     }));
     return out;
   }
-  const pending = ()=> wanted().reduce((s, g)=> s + g.miss.length, 0);
   // Run what is wanted (`force`: Re-integrate, after a Stop); a job on a file still wanted
   // goes on, one on a file no longer wanted (its method changed) gives way.
   function ensure(force){
@@ -275,7 +271,7 @@ export function createInteg(ctx){
     const ac = new AbortController();
     const prev = store.get(g.key);
     const work = prev && prev.length === g.d.cols.length ? prev.slice() : new Array(g.d.cols.length).fill(null);
-    const j = job = { key: g.key, ac, work, total, done, doneHere: 0, miss: g.miss, name: g.rec.name, t0: performance.now() };
+    const j = job = { key: g.key, ac, work, total, done, doneHere: 0, name: g.rec.name };
     let last = performance.now();
     integrateMany(g.d.t, g.miss.map(c=> g.d.cols[c]), {
       method: g.method, signal: ac.signal,
@@ -325,7 +321,7 @@ export function createInteg(ctx){
     // (the run overview's gas, one at a time, and its y: view keys of the state)
     let ovGas = 'h2', ovY = 'conc';
     // What it shows (no state): the file and the chromatogram, by the file's name.
-    let selName = null, selK = 0, wasMethod = null, next = null;
+    let selName = null, selK = 0, wasMethod = null;
     let chrom = null, resid = null, over = null, ovPts = [];
     // (the calibration's window: the standard on show, its row; its plots; what it drew, for its CSV)
     let calSel = 0, calPlots = { chrom: null, resid: null }, calDrawn = null;
@@ -392,7 +388,7 @@ export function createInteg(ctx){
       if (L) return { how: 'cal', fit: L, f: A => toPct((A - L.intercept)/L.slope, cal.unit) };
       if (!tableVals) return { why: `no standards for ${gasOf(g).txt} and no table to take its scale from` };
       let T = null;
-      try { T = transferK(areas, Array.from(tableVals, v=> fin(v) ? v : NaN), (isObj(method.transfer) && isObj(method.transfer[g]) ? method.transfer[g] : TRANSFER)); } catch(e){ T = null; }
+      try { T = transferK(areas, Array.from(tableVals, v=> fin(v) ? v : NaN), method.transfer[g]); } catch(e){ T = null; }
       if (!T || !fin(T.k) || !T.k) return { why: `no standards for ${gasOf(g).txt}, and too few injections above the threshold to take the GC software's scale` };
       return { how: 'transfer', k: T.k, n: T.n, f: A => A/T.k };
     }
@@ -407,7 +403,7 @@ export function createInteg(ctx){
       const d = dataOf(tcd);
       if (d.error) return { why: `its raw chromatograms could not be read (${d.error})` };
       const n = d.cols.length, rows = f.injDates.length;
-      if (n !== rows) return { why: `${rows} row${rows === 1 ? '' : 's'} in the table, ${n} chromatogram${n === 1 ? '' : 's'}` };
+      if (n !== rows) return { why: `${plural(rows, 'row')} in the table, ${plural(n, 'chromatogram')}` };
       const res = resultsAt(keyOf(tcd, method));
       if (!res || res.some(x=> !x)){ const st = status(); return { why: st.halted ? 'its integration was stopped before its end' : 'its integration is not done yet', waiting: true }; }
       const vk = exactKey([keyOf(tcd, method), calKey(), Object.keys(f.gas).map(k=> [k, objId(f.gas[k])]), objId(res)]);
@@ -425,17 +421,16 @@ export function createInteg(ctx){
       return out;
     }
 
-    /* ---- Its markup (v545; v546) ----
+    /* ---- Its markup ----
        The status line (only while there is something to say: the progress and Stop as it
        integrates), the alerts; then, as a DRS card is laid out, the plot's column at the
        left, as wide as a Tauc card's plot: the file's selector over the plot at its left
-       and the plot's toolbar at its right, as a Tauc plot's (v546: to v545 the toolbar sat
-       between the two selectors), the chromatogram over its residuals (together a Tauc
-       plot's size), their legend; then the run overview (as wide, half as tall) under the
-       chromatogram's selector, its own toolbar at the right of that line. At the right, as
-       a Tauc card's parameters: Windows (v549: its title's letters' top on the plot frame's,
-       .cap-title, CLAUDE.md; v546–v548 on the selector's line), the Peaks of the
-       chromatogram on show and Calibration…. */
+       and the plot's toolbar at its right, as a Tauc plot's, the chromatogram over its
+       residuals (together a Tauc plot's size), their legend; then the run overview (as
+       wide, half as tall) under the chromatogram's selector, its own toolbar at the right of
+       that line. At the right, as a Tauc card's parameters: Windows (its title's letters'
+       top on the plot frame's, .cap-title, CLAUDE.md), the Peaks of the chromatogram on show
+       and Calibration…. */
     const body = el.querySelector('.gci-body');
     body.innerHTML = `
       <div class="gci-bar" id="${p}Bar">
@@ -477,6 +472,8 @@ export function createInteg(ctx){
        (over the run overview); a suspicious one's name red, in the list too ---- */
     const pad = v => String(v).padStart(2, '0');
     const clock = d =>{ const x = new Date(d); return fin(+x) ? `${pad(x.getDate())}/${pad(x.getMonth() + 1)} ${pad(x.getHours())}:${pad(x.getMinutes())}` : ''; };
+    // (integration.csv's injection date: local time, as the table logged it)
+    const isoLocal = d =>{ const x = new Date(d); return fin(+x) ? `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())} ${pad(x.getHours())}:${pad(x.getMinutes())}:${pad(x.getSeconds())}` : ''; };
     // (the selector's name short, its count beside it; the tooltip and the overview's label whole)
     const injName = (e, k)=> `Injection ${k + 1}${aligned(e) ? ' · ' + clock(e.table.injDates[k]) : ''}`;
     const injShort = (e, k)=> aligned(e) ? `#${k + 1} · ${clock(e.table.injDates[k])}` : `Injection ${k + 1}`;
@@ -519,7 +516,7 @@ export function createInteg(ctx){
       const w = ws.find(x=> fin(x.chi2r) && x.chi2r > CHI2_HIGH);
       if (w) out.push(`χ²ᵣ ${w.chi2r.toFixed(2)}, above ${CHI2_HIGH}${w.restarted ? ' (after a restart)' : ''}`);
       if (ws.some(x=> x.ok === false && !x.beyondData)) out.push('the fit did not converge');
-      // (ENGINE.md §4: a standard's column that ends at 309 s, before its window does: no fit)
+      // (a column that ends before its window does, as a real standard's at 309 s: no fit)
       if (ws.some(x=> x.beyondData === true)) out.push('the chromatogram ends before its window does: not fitted');
       return out;
     }
@@ -527,7 +524,7 @@ export function createInteg(ctx){
        injection k (none: []), J.bad(k, g) whether it is suspicious for gas g (any gas: g
        omitted), J.off(k, g) its area's relative deviation from k × its table value where
        that is out of proportion (else null), J.prop[g] the run's { k, n } (null without a
-       table value), J.chiMax. */
+       table value). */
     function judge(e, res){
       res = res || [];
       const tab = aligned(e) ? e.table : null, ppm = !!(tab && tab.altExport === true);
@@ -564,7 +561,7 @@ export function createInteg(ctx){
         if (g == null) return J(k).length > 0;
         return fitMarks(r, g).length > 0 || (typeof r.error !== 'string' && off(k, g) != null);
       };
-      J.off = off; J.prop = prop; J.chiMax = CHI2_HIGH;
+      J.off = off; J.prop = prop;
       return J;
     }
 
@@ -580,7 +577,7 @@ export function createInteg(ctx){
     // The H₂/O₂ zone the plot opens on: the windows and their neighbours (NEIGHBOURS), a margin round them.
     const span = m =>[Math.min(...m.windows.map(w=> w.from)), Math.max(...m.windows.map(w=> w.to))];
     const range = m =>{ const [a, b] = span(m); return [Math.min(a, ...NEIGHBOURS.map(z=> z.from)) - MARGIN, Math.max(b, ...NEIGHBOURS.map(z=> z.to)) + MARGIN]; };
-    /* The chromatogram on show (v545): one plot of two panels that share the retention time
+    /* The chromatogram on show: one plot of two panels that share the retention time
        (plot.js linkX), the chromatogram over its residuals, a Tauc plot's size together,
        three to one. The whole chromatogram is drawn; the view opens (and a reset comes back)
        on the H₂/O₂ zone, the y on the windows' own data. Only the residuals' axis carries
@@ -595,7 +592,7 @@ export function createInteg(ctx){
       $('Notice').innerHTML = o.notice;
     }
     /* One chromatogram over its residuals, drawn into a pair of svgs: the card's (the
-       chromatogram on show) or the calibration window's (the standard chosen, v549), alike.
+       chromatogram on show) or the calibration window's (the standard chosen), alike.
        o: { svg, rs (the residuals' svg), leg, wrap (their plot-wrap), keep, was ({ chrom,
        resid }: the plots before, their zoom kept with `keep` on the same data), d (readTcd's
        read), k (its chromatogram), R (resOf's), key (the data's, for the zoom), file, what
@@ -718,14 +715,14 @@ export function createInteg(ctx){
     // A line dragged snaps to the data's grid (0.2 s) and writes into its field.
     function onDrag(wi, side, v){
       if (!drag) drag = { m: clone(method) };
-      drag.m.windows[wi][side] = round1(snap(v));
+      drag.m.windows[wi][side] = round2(snap(v));
       overlay();
       paintMethod(drag.m);
     }
     function onDrop(wi, side, v){
       const m = drag ? drag.m : clone(method);
       drag = null;
-      m.windows[wi][side] = round1(snap(v));
+      m.windows[wi][side] = round2(snap(v));
       setMethod(m);
     }
     // A method set (a step): its results looked for, else integrated a little later.
@@ -790,15 +787,14 @@ export function createInteg(ctx){
         const tv = aligned(e) && e.table.gas[g] ? e.table.gas[g][selK] : NaN, tShown = tUnit === 'ppm' ? tv*1e4 : tv;
         const off = J.off(selK, g) != null;
         return `<tr><td>${gasOf(g).label}</td><td class="${off ? 'gci-bad' : ''}"${off ? ' title="Out of proportion with the GC table"' : ''}>${sig(x.area, 5)} ± ${sig(x.sd, 2)}</td>`
-          + `<td>${fin(x.tApex) ? x.tApex.toFixed(2) : '—'}</td><td class="${fin(x.chi2r) && x.chi2r > J.chiMax ? 'gci-bad' : ''}">${fin(x.chi2r) ? x.chi2r.toFixed(2) : '—'}</td>`
+          + `<td>${fin(x.tApex) ? x.tApex.toFixed(2) : '—'}</td><td class="${fin(x.chi2r) && x.chi2r > CHI2_HIGH ? 'gci-bad' : ''}">${fin(x.chi2r) ? x.chi2r.toFixed(2) : '—'}</td>`
           + `<td>${fin(shown) ? shown.toPrecision(4) + (units.length > 1 ? ' ' + esc(unitOf(g)) : '') : '—'}</td>`
           + `<td>${fin(tShown) ? tShown.toPrecision(4) : '—'}</td></tr>`;
       });
       const fl = J(selK);
       /* Under the table (the narrow column keeping its headers short): the columns' units,
          and, where a gas's concentration is taken from the GC software's table (no
-         standards), its k for the file on show (v546: to v545 a superscript ᵗ on the value,
-         and the k of every file in the card's info alert). */
+         standards), its k for the file on show (the card's info alert does not list them). */
       const cU = units.length === 1 ? units[0] : null;
       const said = cU && aligned(e) && cU === tUnit ? [`Conc. and GC table in ${esc(cU)}`] : [cU ? `Conc. in ${esc(cU)}` : '', aligned(e) ? `GC table in ${tUnit}` : ''].filter(Boolean);
       const tr = gs.filter(g=> conv[g] && conv[g].how === 'transfer');
@@ -820,7 +816,7 @@ export function createInteg(ctx){
       return out;
     }
 
-    /* ---- The run overview (v545; v546): one gas at a time, every injection's fit (blue
+    /* ---- The run overview: one gas at a time, every injection's fit (blue
        whatever the gas, red where it is suspicious for that gas) and the GC table's value
        (a small grey cross; as area, times the run's k); a point hovered drawn lighter and
        half again as large, and says what it is, the chromatogram on show's as well; a click
@@ -859,8 +855,8 @@ export function createInteg(ctx){
       const ylo = all.length ? Math.min(0, ...all) : 0, yhi = all.length ? Math.max(...all) : 1;
       over.setRange(xmin - dx, xmax + dx, ylo, yhi*1.08 || 1);
       over.drawAxes(); over.clearData();
-      // (v546: the crosses half the size they were, under the fits' dots, which cover them
-      // where the two agree; the fits one colour whatever the gas, the suspicious red)
+      // (the crosses under the fits' dots, which cover them where the two agree; the fits one
+      // colour whatever the gas, the suspicious red)
       if (table) over.points(xs, table, C_TABLE, OV_CROSS, { shape: 'cross', width: 1.4, label: mode === 'conc' ? `${G.txt} GC table` : `${G.txt} GC table × k`, key: g + ' table' });
       over.points(xs, fit.map((v, k)=> bad[k] ? NaN : v), C_FIT, OV_R, { fill: true, label: `${G.txt} fit`, key: g + ' fit' });
       if (bad.some(Boolean)) over.points(xs, fit.map((v, k)=> bad[k] ? v : NaN), C_BAD, OV_R, { fill: true, label: `${G.txt} fit, suspicious`, key: g + ' suspicious' });
@@ -886,11 +882,9 @@ export function createInteg(ctx){
     // A lighter tint of a colour (#rrggbb): `f` of the way to white.
     const tint = (hex, f)=>{ const n = parseInt(hex.slice(1), 16), ch = s => Math.round(((n >> s) & 255) + (255 - ((n >> s) & 255))*f); return `rgb(${ch(16)},${ch(8)},${ch(0)})`; };
     /* The points brightened: the chromatogram on show's, and the one under the pointer with
-       its label (in the overlay: drawn again at each zoom, never exported). v546: the point
-       alone, drawn again in a lighter shade of its colour and half again as large as the dot
-       as seen (v548; a tenth larger to v547), with no stroke: (OV_R + 0.5)·OV_HL_R, the 0.5
-       half the dot's 1 px ring (to v546 OV_R·OV_HL_R, smaller than the ringed dot under it;
-       to v545 a halo round it and a ring, its centre near white). */
+       its label (in the overlay: drawn again at each zoom, never exported). The point alone,
+       drawn again in a lighter shade of its colour and half again as large as the dot as
+       seen, with no stroke: (OV_R + 0.5)·OV_HL_R, the 0.5 half the dot's 1 px ring. */
     function paintHl(){
       if (!over) return;
       const old = over.gOverlay.querySelector('.gci-hl');
@@ -941,9 +935,9 @@ export function createInteg(ctx){
         state = 'running';
         html = `<span class="gci-prog"><span class="gci-prog-bar" style="width:${pct}%"></span></span><span>Integrating… ${st.job.done} / ${st.job.total} chromatograms · ${esc(st.job.name)}</span>`;
       } else if (st.failed){ state = 'failed'; html = `<span class="gci-bad">The integration failed: ${esc(st.failed)}</span>`; }
-      else if (left && st.halted){ state = 'stopped'; html = `<span>Stopped: ${left} chromatogram${left === 1 ? '' : 's'} not integrated with this method.</span>`; }
+      else if (left && st.halted){ state = 'stopped'; html = `<span>Stopped: ${plural(left, 'chromatogram')} not integrated with this method.</span>`; }
       else if (left && st.soon){ state = 'soon'; html = `<span>Method changed: integrating again in a moment…</span>`; }
-      else if (left){ state = 'left'; html = `<span>${left} chromatogram${left === 1 ? '' : 's'} to integrate.</span>`; }
+      else if (left){ state = 'left'; html = `<span>${plural(left, 'chromatogram')} to integrate.</span>`; }
       // (all integrated: nothing to say, the line folds away)
       else if (total) state = 'done';
       else { state = 'none'; html = `<span class="txt-meta">No raw chromatograms (TCD) loaded: drop them beside their tables.</span>`; }
@@ -958,12 +952,12 @@ export function createInteg(ctx){
       const es = entries(), lines = { warn: [] };
       es.forEach(e=>{
         if (e.d.error) return;
-        if (e.table && e.rows !== e.n) lines.warn.push(`${esc(e.label)}: ${e.rows} row${e.rows === 1 ? '' : 's'} in the table, ${e.n} chromatogram${e.n === 1 ? '' : 's'}: not aligned. Integrated all the same; Analysis uses the table alone.`);
+        if (e.table && e.rows !== e.n) lines.warn.push(`${esc(e.label)}: ${plural(e.rows, 'row')} in the table, ${plural(e.n, 'chromatogram')}: not aligned. Integrated all the same; Analysis uses the table alone.`);
         if (!e.table && e.twin) lines.warn.push(`${esc(e.label)}: two files of raw chromatograms paired (${esc(e.tcd.name)}, ${esc(e.twin)}): shown here, left out of Analysis (no injection times).`);
         else if (!e.table) lines.warn.push(`${esc(e.label)}: raw chromatograms with no table: no injection times (Analysis leaves them out), a concentration only with standards.`);
       });
       // (a calibration taken from the GC software's table, for some file: said once; each
-      // file's k under its Peaks, v546)
+      // file's k under its Peaks)
       const transfer = es.filter(aligned).some(e=>{ const R = resOf(e.tcd); if (!R.res || R.res.some(x=> !x)) return false; const c = convAll(e, R.res); return Object.keys(GAS).some(g=> c[g] && c[g].how === 'transfer'); });
       /* A gas calibrated by standards whose injections fall outside the standards' range:
          extrapolated, said (below the lowest standard the intercept weighs most: the real O₂
@@ -986,9 +980,9 @@ export function createInteg(ctx){
         + (transfer ? alertHtml('info', 'Calibration taken from the GC software\'s table (no standards for the gas): see the risks in this card\'s instructions.', []) : '');
     }
 
-    /* ---- The calibration's window (v549: a table and its raw chromatograms, both needed,
-       the standards named by the table; the standard chosen drawn as the card's chromatogram,
-       over its residuals, at the left of the standards' table, CLAUDE.md's tops aligned) ---- */
+    /* ---- The calibration's window: a table and its raw chromatograms, both needed, the
+       standards named by the table; the standard chosen drawn as the card's chromatogram,
+       over its residuals, at the left of the standards' table, CLAUDE.md's tops aligned ---- */
     function calWindow(){
       const m = document.createElement('div');
       m.className = 'modal-backdrop xrd-std-modal gci-cal-modal';
@@ -1062,7 +1056,6 @@ export function createInteg(ctx){
          is let go as the window closes. A table whose partner is a calibration file of
          v544–v548's (raw chromatograms alone) names its standards. */
       let held = [];
-      const plural = (n, w)=> `${n} ${w}${n === 1 ? '' : 's'}`;
       setupDropzone(q('.gci-cal-dz'), q('.gci-cal-in'), async list=>{
         const bad = [], got = [];
         for (const f of list){
@@ -1072,7 +1065,7 @@ export function createInteg(ctx){
           if (looksTcd(text)){
             let d;
             try { d = readTcd(text); } catch(e){ d = { error: String(e && e.message || e) }; }
-            if (!d || d.error || !d.cols || !d.cols.length){ bad.push(`${f.name}: raw chromatograms that cannot be read${d && d.error ? ` (${d.error})` : ''}`); continue; }
+            if (d.error){ bad.push(`${f.name}: raw chromatograms that cannot be read (${d.error})`); continue; }
             got.push({ kind: 'tcd', name: f.name, bytes, d });
           } else {
             const t = tableOf(bytes);
@@ -1093,7 +1086,7 @@ export function createInteg(ctx){
           c.done = t.done = true;
           const why = counts(t.t, c.d.cols.length);
           if (why){ bad.push(`${t.name} + ${c.name}: ${why}`); return; }
-          read.set(c.bytes, c.d);
+          prime(c.bytes, c.d);
           add.push({ name: c.name, rawBytes: c.bytes, levels: c.d.cols.map(blankLevel), table: { name: t.name, rawBytes: t.bytes } });
         });
         pool.filter(x=> x.kind === 'table' && !x.done).forEach(t=>{
@@ -1222,7 +1215,7 @@ export function createInteg(ctx){
         m.querySelectorAll('.gci-u').forEach(s=>{ s.textContent = `(${cal.unit})`; });
         const rows = rowsNow = calRows(), left = cal.files.reduce((s, f)=>{ const r = resultsAt(keyOf(f, method)); return s + (r ? r.filter(x=> !x).length : dataOf(f).error ? 0 : dataOf(f).cols.length); }, 0);
         if (calSel >= rows.length) calSel = Math.max(0, rows.length - 1);
-        q('.gci-cal-status').textContent = !cal.files.length ? 'No standards: each pair takes its calibration from the GC software\'s table.' : left ? `Integrating the standards… (${left} left)` : `${rows.length} chromatogram${rows.length === 1 ? '' : 's'} integrated.`;
+        q('.gci-cal-status').textContent = !cal.files.length ? 'No standards: each pair takes its calibration from the GC software\'s table.' : left ? `Integrating the standards… (${left} left)` : `${plural(rows.length, 'chromatogram')} integrated.`;
         const area = (x, g)=> x.r && x.r.gases && x.r.gases[g] ? sig(x.r.gases[g].area, 5) : '…';
         const val = v => v == null ? '' : esc(String(v));
         q('.gci-cal-levels tbody').innerHTML = rows.map((x, i)=> `<tr class="peak-row${i === calSel ? ' selected' : ''}${x.lv.on ? '' : ' is-excluded'}" data-row="${i}"><td class="gci-cal-k">${i + 1}</td><td class="gci-cal-th">${thumb(x.d, x.j)}</td><td class="gci-cal-src${fitMarks(x.r).length ? ' gci-bad' : ''}" title="${esc(fullName(x))}"><span class="gci-cal-name">${esc(x.name)}</span></td><td class="gci-cal-a">${area(x, 'h2')}</td><td class="gci-cal-a">${area(x, 'o2')}</td>`
@@ -1257,7 +1250,7 @@ export function createInteg(ctx){
         if (L) P.line([0, xmax*1.08], [L.intercept, L.slope*xmax*1.08 + L.intercept], C_MODEL, 1.3, undefined, { label: 'fit', key: 'fit' });
         P.points(xs, ys, gasOf(g).color, 3.5, { fill: true, label: 'standards', key: 'standards' });
         P.attachTools(svg.closest('.plot-wrap'));
-        if (!L){ const one = new Set(xs).size === 1; stats.innerHTML = `<p class="txt-meta">${pts.length} standard${pts.length === 1 ? '' : 's'}${one ? ' at one concentration' : ''}: a free intercept needs two concentrations at least${cal.zero[g] ? '' : '; a zero intercept fits one'}.</p>`; return; }
+        if (!L){ const one = new Set(xs).size === 1; stats.innerHTML = `<p class="txt-meta">${plural(pts.length, 'standard')}${one ? ' at one concentration' : ''}: a free intercept needs two concentrations at least${cal.zero[g] ? '' : '; a zero intercept fits one'}.</p>`; return; }
         const levels = new Map();
         (L.residuals || []).forEach(r=>{ const k = String(r.conc); if (!levels.has(k)) levels.set(k, []); levels.get(k).push(r); });
         stats.innerHTML = `<p class="gci-cal-line">slope <b>${sig(L.slope, 6)}</b> area/${esc(cal.unit)}, intercept <b>${sig(L.intercept, 5)}</b>${cal.zero[g] ? ' (fixed)' : ''}, R² = <b>${fin(L.r2) ? L.r2.toFixed(5) : '—'}</b>, n = ${L.n}</p>`
@@ -1265,7 +1258,7 @@ export function createInteg(ctx){
             const mA = rs.reduce((s, r)=> s + r.area, 0)/rs.length, fit = rs[0].fitted, dev = fit ? 100*(mA - fit)/fit : NaN;
             return `<tr><td>${sig(+c, 5)}</td><td>${rs.length}</td><td>${sig(mA, 5)}</td><td>${sig(fit, 5)}</td><td class="${fin(dev) && Math.abs(dev) > 3 ? 'gci-bad' : ''}">${fin(dev) ? (dev > 0 ? '+' : '') + dev.toFixed(2) + ' %' : '—'}</td></tr>`; }).join('')}</tbody></table>`;
       }
-      return { open, close, paint, el: m, isOpen: ()=> isOpen, destroy(){ close(); stdNav.close(); m.remove(); } };
+      return { open, paint, isOpen: ()=> isOpen, destroy(){ close(); stdNav.close(); m.remove(); } };
     }
 
     /* ---- Its CSVs: every chromatogram's values (integration.csv, the run overview's); the
@@ -1293,7 +1286,7 @@ export function createInteg(ctx){
       const out = [{ name: `${n} - integration.csv`, text: t }];
       const d = drawn;
       if (d && d.e && es.some(x=> x.name === d.e.name)) out.push({ name: `${n} - chromatogram.csv`, text: chromCsv(d) });
-      // (v549: the standard on show in the calibration's window, while it is open: its plot's)
+      // (the standard on show in the calibration's window, while it is open: its plot's)
       if (calModal.isOpen() && calDrawn) out.push({ name: `${n} - standard_chromatogram.csv`, text: chromCsv(calDrawn) });
       return out;
     }
@@ -1313,21 +1306,20 @@ export function createInteg(ctx){
       d.t.forEach(x=>{ ct += csvLine([fmtNum(x, 4), fmtNum(at.get(x), 6), ...cols.map(m=> m.has(x) ? fmtNum(m.get(x), 6) : '')]); });
       return ct;
     }
-    const isoLocal = d =>{ const x = new Date(d); return fin(+x) ? `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())} ${pad(x.getHours())}:${pad(x.getMinutes())}:${pad(x.getSeconds())}` : ''; };
 
     return {
-      kind: 'integ',
       method: ()=> method,
       tcdRecs,
       valuesFor,
       // (a change of its that the cards below read: their sources' key)
       sig: ()=> exactKey([methodKey(method), calKey()]),
       paintStatus(all){ paintStatus(all); if (calModal.isOpen()) calModal.paint(); },
+      // (what gc.js asks of every card: no per-sample arrays, no sample picked, no bars, no Results)
       slots: ()=> [],
       clear(){ selName = null; selK = 0; },
       unselect(){},
       shows(){ const e = cur(); return e ? { file: e.name, k: selK } : null; },
-      showNext(v){ next = isObj(v) ? v : null; if (next && typeof next.file === 'string'){ selName = next.file; selK = Number.isInteger(next.k) && next.k >= 0 ? next.k : 0; } },
+      showNext(v){ if (isObj(v) && typeof v.file === 'string'){ selName = v.file; selK = Number.isInteger(v.k) && v.k >= 0 ? v.k : 0; } },
       bars(){},
       renderTable(){ renderSel(); paintAlerts(); paintStatus(); },
       compute(keep){ draw(keep); },
@@ -1346,12 +1338,9 @@ export function createInteg(ctx){
         valuesKept.clear();
         if (calModal.isOpen()) calModal.paint();
       },
-      calOpen: ()=> calModal.open(),
       destroy(){ calModal.destroy(); fileNav.close(); injNav.close(); },
     };
   }
 
-  // (a file the drop read: its chromatograms kept by its bytes, not read again)
-  const prime = (bytes, d)=>{ if (bytes instanceof Uint8Array && d && !d.error) read.set(bytes, d); };
-  return { card, saved, load, ensure, stop, later, status, pending, dataOf, prime, destroy(){ dead = true; stop(); clearTimeout(soon); cancelAnimationFrame(painting); }, store };
+  return { card, saved, load, ensure, prime, destroy(){ dead = true; stop(); clearTimeout(soon); cancelAnimationFrame(painting); } };
 }

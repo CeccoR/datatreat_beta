@@ -3538,14 +3538,15 @@ td.fname-parts { padding-top: 3px; padding-bottom: 3px; }
 .fpart.drop-alone { outline: 1.5px dashed var(--accent); outline-offset: -1.5px; opacity: 0.9; }
 .fpart.is-warn .fname-text { color: var(--warn, #d9a21b); text-decoration: underline dotted; text-underline-offset: 2px; }
 
-/* ===== GC: the Integration card (gc-integ.js, v544; v545: laid out as a DRS card) =====
+/* ===== GC: the Integration card (gc-integ.js, v544; laid out as a DRS card from v545) =====
    The status line, folded away while it has nothing to say. The plot's column as a Tauc
    card's (.mw520, flex 2), the side as its parameters' (.mw280). Over the plot one line:
-   the file's selector at its left, the chromatogram's at its right (mirrored), the plot's
-   toolbar between them. The chromatogram over its residuals, three to one, together a Tauc
-   plot's size (φ : 1): 4φ/3 : 1 and 4φ : 1, the border between them dropped so that the
-   residuals' top axis sits on the chromatogram's bottom one; the run overview as wide and
-   half as tall (2φ : 1). Narrow, the two a standard plot and a half, the overview half. */
+   the file's selector at its left, the plot's toolbar at its right; over the run overview
+   the chromatogram's selector and the overview's toolbar alike. The chromatogram over its
+   residuals, three to one, together a Tauc plot's size (φ : 1): 4φ/3 : 1 and 4φ : 1, the
+   border between them dropped so that the residuals' top axis sits on the chromatogram's
+   bottom one; the run overview as wide and half as tall (2φ : 1). Narrow, the two a
+   standard plot and a half, the overview half. */
 .gci-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
 .gci-bar[hidden] { display: none; }
 .gci-status { flex: 1 1 260px; min-width: 0; display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text); }
@@ -3570,11 +3571,11 @@ svg.plot.gci-over { aspect-ratio: 3.236; }
 .gci-legend { margin-top: 6px; }
 .gci-legend i.gci-mk { width: 9px; height: 9px; border-radius: 0; background: none; border: 1.5px solid currentColor; color: var(--muted); }
 .gci-legend i.gci-mk-dot { border-radius: 50%; background: currentColor; }
-/* (the GC table's cross, as small on the key as on the plot, v546) */
+/* (the GC table's cross, as small on the key as on the plot) */
 .gci-legend i.gci-mk-x { width: 6px; height: 6px; border: none; color: #9aa3ad; background: linear-gradient(45deg, transparent 38%, currentColor 38% 62%, transparent 62%), linear-gradient(-45deg, transparent 38%, currentColor 38% 62%, transparent 62%); }
 .plot-chips.gci-ov-sel { gap: 10px; }
 .gci-ov-sel > span { display: flex; gap: 4px; }
-/* (v546: each box's title above it, Windows' on the selector's line: .param-head.aligned) */
+/* (each box's title above it, Windows' letters on the plot frame's top edge: .cap-title.aligned) */
 .gci-head { justify-content: space-between; }
 .gci-head .gci-reset[hidden] { display: none; }
 .gci-side > .peak-box { margin-top: 0; }
@@ -3582,7 +3583,7 @@ svg.plot.gci-over { aspect-ratio: 3.236; }
 .gci-method { font-size: 12px; padding: 2px 2px 0; }
 .gci-win { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; padding: 2px 0; color: var(--muted); }
 .gci-win-name { color: var(--text); font-weight: 600; min-width: 48px; }
-.gci-win input { width: 64px; padding: 2px 5px; margin-left: 3px; }
+.gci-win input { width: 58px; padding: 2px 5px; margin-left: 3px; }
 .gci-win-peaks { font-size: 11px; flex-basis: 100%; }
 table.gci-values th, table.gci-values td { white-space: nowrap; padding: 4px 6px; }
 .gci-bad { color: var(--bad); font-weight: 600; }
@@ -3597,7 +3598,6 @@ table.gci-cal-levels td input[type="text"] { width: 76px; }
 table.gci-cal-levels td input[type="checkbox"] { width: auto; margin: 0; }
 table.gci-cal-levels tr.is-excluded td { opacity: 0.45; }
 .gci-thumb { display: block; color: var(--muted); }
-.gci-cal-fits { margin-top: 14px; }
 .gci-cal-gas { min-width: 300px; }
 .gci-cal-gas-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
 .gci-cal-zero { display: flex; gap: 4px; }
@@ -3609,7 +3609,6 @@ table.gci-cal-dev th, table.gci-cal-dev td { padding: 3px 7px; font-size: 12px; 
 .gci-nb { fill: var(--muted); opacity: 0.13; }
 .gci-nb-lb { fill: var(--muted); }
 .legend i.mk-box.gci-mk-nb { background: var(--muted); opacity: 0.4; }
-.gci-win input { width: 58px; }
 /* (the calibration's plots a strip each, under the standards) */
 .gci-cal-gas svg.plot { aspect-ratio: 2.4; }
 .gci-cal-fits { margin-top: 16px; }

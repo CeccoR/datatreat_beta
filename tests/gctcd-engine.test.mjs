@@ -1,17 +1,16 @@
-/* The GC-TCD peak integration engine (gc-tcd.js, a prototype not wired into the app), in
-   Node: no browser. erfc and erfcx against scipy.special's values; the solver, a port of
-   scipy's least_squares(method='trf'), on two toy problems with scipy's own answers (bounds,
+/* The GC-TCD peak integration engine (gc-tcd.js, the Integration card's), in Node: no
+   browser. erfc and erfcx against scipy.special's values; the solver, a port of scipy's
+   least_squares(method='trf'), on two toy problems with scipy's own answers (bounds,
    x_scale, soft_l1); a synthetic chromatogram drawn from the model itself (H2, O2, the
    system peak at 310 s and the baseline step after O2, Gaussian noise of a seeded generator
    and one electrical spike) integrated back to its areas within their sd, the step and the
    system peak too, the spike found; a window past the data's end NaN; no trapezoid any more
    (v545: neither in the method nor in a result); the curves of a window redrawn from its
-   stored parameters; the raw-text
-   reader (decimal comma, a trailing ';', a short column, CRLF; '.' decimals and ','
-   separators); the calibration line with and without intercept; the software's factor
-   carried over (median of area/%mol); and the workers' pool (gc-tcd-pool.js) on
-   worker_threads made to look like Web Workers: the results of one call each, in order,
-   progress said, cancelled by an AbortSignal. */
+   stored parameters; the raw-text reader (decimal comma, a trailing ';', a short column,
+   CRLF; '.' decimals and ',' separators); the calibration line with and without intercept;
+   the software's factor carried over (median of area/%mol); and the workers' pool
+   (gc-tcd-pool.js) on worker_threads made to look like Web Workers: the results of one call
+   each, in order, progress said, cancelled by an AbortSignal. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Worker as NodeWorker } from 'node:worker_threads';

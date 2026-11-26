@@ -866,7 +866,7 @@ function moveFileTo(all, from, to, slots, isSample = anySample){
          the whole file it would land on (none: the dragged file itself, dashed, where it
          has a partner to leave), and callbacks.onPartDrop({ i, p }, { i, p } | null) takes
          the drop: the file p of row i onto file p of row i (null: off every file, to stand
-         alone).
+         alone). The grip answers the pointer only (mouse, pen, touch): no key pairs or swaps.
 ========================================================= */
 // A perfect 1:1 cross with rounded stroke caps (replaces the plain ✕ glyph).
 // Inked box 15×15, centred on (12,12) — same size as the download glyph below.

@@ -1,5 +1,5 @@
 /* =========================================================
-   GC-TCD POOL (prototype)
+   GC-TCD POOL (v544)
    Many chromatograms integrated over a few module workers (gc-tcd.worker.js), as the
    Rietveld pool makes them (new Worker(URL, { type: 'module' }), same origin: CSP
    script-src 'self'). Each worker takes the next chromatogram as it ends one; the results
@@ -18,12 +18,12 @@
    → Promise of { results: [...] (integrateChromatogram's, or { error }), ms: [per
      chromatogram, in its worker], wall } .
    A chromatogram whose worker fails gets { error } and a fresh worker takes the next one.
-   Not shared with the Rietveld pool's cap (Web Locks): when wired into the app, a GC run
-   and a refinement at once would each take cores − 1.
+   Not under the Rietveld pool's cap (xrd-rv-pool.js, Web Locks): a GC run and a refinement
+   at once each take cores − 1.
 ========================================================= */
 const URL_W = new URL('./gc-tcd.worker.js', import.meta.url);
 
-export function poolSize(){
+function poolSize(){
   const cores = (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) || 2;
   return Math.max(1, cores - 1);
 }

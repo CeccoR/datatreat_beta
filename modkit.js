@@ -75,7 +75,7 @@ export function moduleKit(mod, o){
   const parts = Object.fromEntries(['invalid', 'upload', ...(o.parts || [])].map(k=> [k, '']));
   const slots = ()=> o.slots ? o.slots() : [];
   const isSample = o.sample || (()=> true);
-  const kit = { all, files, alerts: parts, isSample };
+  const kit = { all, files, alerts: parts };
 
   /* ---- Alerts: each dismiss button (data-action "<mod>-dismiss-<part>") empties its part,
      or does what o.dismiss says. ---- */
@@ -140,14 +140,14 @@ export function moduleKit(mod, o){
   // A file read: last in the list and among the included, with its entry in every
   // per-sample array.
   kit.add = f =>{ all.push(f); if (!isSample(f)) return; files.push(f); slots().forEach(s=> s.arr.push(s.make(undefined, f))); };
-  /* Text files dropped on the module: each decoded (textdata.js) and read by `read(text, bytes)` (the bytes too: GC keeps what it read of them),
-     which gives what the file holds, or null when it cannot, or { error } saying why (a
-     reader that throws leaves out that file, not the rest of the drop). A name already
-     loaded is not loaded again. Each record is { name, label, ...what it holds, color,
-     rawBytes } (the file as it came, for its download); then `done(had)`, `had` the files
-     there were. `more`: { names() the names loaded beside the records' own (GC's files
-     paired inside a row), collect(records) to place the records read instead of adding
-     each (GC pairs them) }. */
+  /* Text files dropped on the module: each decoded (textdata.js) and read by
+     `read(text, bytes)` (the bytes too: GC keeps what it read of them), which gives what
+     the file holds, or null when it cannot, or { error } saying why (a reader that throws
+     leaves out that file, not the rest of the drop). A name already loaded is not loaded
+     again. Each record is { name, label, ...what it holds, color, rawBytes } (the file as
+     it came, for its download); then `done(had)`, `had` the files there were. `more`:
+     { names() the names loaded beside the records' own (GC's files paired inside a row),
+     collect(records) to place the records read instead of adding each (GC pairs them) }. */
   kit.dropText = (read, done, more = {})=> setupDropzone($(mod + 'Dropzone'), $(mod + 'Files'), async list=>{
     const had = all.length, names = new Set([...all.map(f=> f.name), ...(more.names ? more.names() : [])]), bad = [], dup = [], got = [];
     for (const f of list){

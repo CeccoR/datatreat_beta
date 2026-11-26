@@ -1,7 +1,7 @@
 import { esc } from './utils.js';
 
 /* =========================================================
-   THE SAMPLE SELECTOR (v545; v546: its sizing, no mirror)
+   THE SAMPLE SELECTOR (v545; v546: its sizing)
    One selector for every module that steps through its samples, files, images, traces or
    chromatograms: DRS's Tauc and Urbach cards, XRPD's Peaks/Scherrer and Rietveld cards, SEM's
    image, Iodometry's trace, Custom's file in its Data card, GC's Integration card (its file,
@@ -139,5 +139,5 @@ export function snav(el, o){
   pick.addEventListener('click', ()=>{ if (menu) close(); else open(); });
   pick.addEventListener('keydown', e=>{ if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !menu){ e.preventDefault(); open(); } });
   update();
-  return { update, close, open, isOpen: ()=> !!menu, el };
+  return { update, close };
 }

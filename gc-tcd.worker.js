@@ -1,7 +1,7 @@
 /* =========================================================
-   GC-TCD WORKER (prototype)
+   GC-TCD WORKER (v544)
    Integrates one chromatogram a message with gc-tcd.js, off the page's thread:
-   { id, t, y, method } → { id, type: 'result', res } or { id, type: 'error', message }.
+   { id, t, y, method } → { id, type: 'result', res, ms } or { id, type: 'error', message }.
    A module worker of the app's own origin, as xrd-rietveld.worker.js (CSP script-src 'self').
 ========================================================= */
 import { integrateChromatogram, DEFAULT_METHOD } from './gc-tcd.js';

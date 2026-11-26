@@ -398,9 +398,8 @@ class Plot{
     return this._renderLine(entry);
   }
   /* Open-circle scatter (unconnected). Only points within the x-view are drawn. `o` (GC's
-     overview of a run, v544): `shape` 'circle' (the default), 'square', 'diamond' or
-     'cross', `fill` (a filled mark), `width` (its stroke), `label` and `key` as line()'s
-     meta. */
+     Integration card, v544): `shape` 'circle' (the default) or 'cross', `fill` (a filled
+     mark), `width` (its stroke), `label` and `key` as line()'s meta. */
   points(xs, ys, color, r, o){
     const entry = {type:'points', xs, ys, color, r:r||2, shape: o && o.shape, fill: !!(o && o.fill), sw: o && o.width, label: o && o.label, key: o && o.key};
     this._stored.push(entry);
@@ -415,12 +414,10 @@ class Plot{
       const xv=entry.xs[i], yv=entry.ys[i];
       if (!isFinite(xv)||!isFinite(yv)) continue;
       if (xv<this.xmin||xv>this.xmax) continue; // cull off-view for speed
-      const cxs = px(xv).toFixed(2), cys = py(yv).toFixed(2), cx = +cxs, cy = +cys;
-      if (!entry.shape || entry.shape === 'circle'){ g.appendChild(svgEl('circle',{cx:cxs, cy:cys, r:rr, ...paint})); continue; }
-      if (entry.shape === 'square') g.appendChild(svgEl('rect',{x:cx-rr, y:cy-rr, width:2*rr, height:2*rr, ...paint}));
-      else if (entry.shape === 'diamond') g.appendChild(svgEl('path',{d:`M${cx},${cy-rr*1.3}L${cx+rr*1.3},${cy}L${cx},${cy+rr*1.3}L${cx-rr*1.3},${cy}Z`, ...paint}));
-      else if (entry.shape === 'cross') g.appendChild(svgEl('path',{d:`M${cx-rr},${cy-rr}L${cx+rr},${cy+rr}M${cx-rr},${cy+rr}L${cx+rr},${cy-rr}`, fill:'none', stroke:entry.color, 'stroke-width':sw}));
-      else g.appendChild(svgEl('circle',{cx, cy, r:rr, ...paint}));
+      const cxs = px(xv).toFixed(2), cys = py(yv).toFixed(2);
+      if (entry.shape !== 'cross'){ g.appendChild(svgEl('circle',{cx:cxs, cy:cys, r:rr, ...paint})); continue; }
+      const cx = +cxs, cy = +cys;
+      g.appendChild(svgEl('path',{d:`M${cx-rr},${cy-rr}L${cx+rr},${cy+rr}M${cx-rr},${cy+rr}L${cx+rr},${cy-rr}`, fill:'none', stroke:entry.color, 'stroke-width':sw}));
     }
     this.gData.appendChild(g);
     entry._el = g;
@@ -660,25 +657,23 @@ class Plot{
     const L = this._linked;
     if (L) for (const q of L) if (q !== this && q.svg._plot === q && (q.xmin !== this.xmin || q.xmax !== this.xmax)){ q.xmin = this.xmin; q.xmax = this.xmax; q._refresh(); }
   }
-  /* `o` (v545, linked panels: linkX): { host } the element that holds the toolbar and the
-     page's download button, in place of the plot's box (a line of its own above the panels);
-     { group } the panels the toolbar serves, this one first: the images and the composer
-     take them all, the tools arm them all. */
+  /* `o` (v545, linked panels: linkX): { group } the panels the toolbar serves, this one
+     first: the images and the composer take them all, the tools arm them all. */
   attachTools(wrapEl, o){
-    const box = (o && o.host) || wrapEl, group = o && o.group && o.group.length > 1 ? o.group : null;
+    const group = o && o.group && o.group.length > 1 ? o.group : null;
     const also = group ? group.filter(p=> p !== this).map(p=> p.svg) : null;
     // The previous tool row is dropped at the END of this function, not here: it
     // holds the page's download button (and the CSV button built from it), which
     // are adopted rather than recreated, so removing it first would lose them.
-    const old = box.querySelector('.plot-tool-btns');
+    const old = wrapEl.querySelector('.plot-tool-btns');
     // Group the download button + tool buttons into a single column
-    let col = box.querySelector('.plot-btn-col');
+    let col = wrapEl.querySelector('.plot-btn-col');
     if (!col){
       col = document.createElement('div');
       col.className = 'plot-btn-col';
-      const dlBtn = box.querySelector('.plot-dl-btn');
-      if (dlBtn) box.insertBefore(col, dlBtn);
-      else box.appendChild(col);
+      const dlBtn = wrapEl.querySelector('.plot-dl-btn');
+      if (dlBtn) wrapEl.insertBefore(col, dlBtn);
+      else wrapEl.appendChild(col);
     }
     const div = document.createElement('div');
     div.className = 'plot-tool-btns';
@@ -742,7 +737,7 @@ class Plot{
     figBtn.onclick = async ()=>{
       if (_figOpening) return;
       _figOpening = true;
-      const dlBtn = box.querySelector('.plot-dl-btn');
+      const dlBtn = wrapEl.querySelector('.plot-dl-btn');
       const legId = dlBtn && dlBtn.dataset.dlLegend;
       const name = (dlBtn && dlBtn.dataset.dlName || 'figure').replace(/\.[^.]+$/, '');
       try {
@@ -756,8 +751,8 @@ class Plot{
     // Order, top to bottom: composer, CSV, download image, snapshot, copy, pan, zoom.
     // The download button belongs to the page, so it is adopted rather than created;
     // the CSV button is built from the descriptors it carries.
-    const dlBtn2 = box.querySelector('.plot-dl-btn');
-    let csvBtn = box.querySelector('.plot-csv-btn');
+    const dlBtn2 = wrapEl.querySelector('.plot-dl-btn');
+    let csvBtn = wrapEl.querySelector('.plot-csv-btn');
     if (!csvBtn && dlBtn2 && dlBtn2.dataset.csvMod && dlBtn2.dataset.csvNames)
       csvBtn = makeCsvButton(dlBtn2.dataset.csvMod, dlBtn2.dataset.csvNames);
     if (dlBtn2 && !dlBtn2.title) dlBtn2.title = 'Download image';   // like the others
@@ -774,8 +769,8 @@ class Plot{
     // The line above the plot that the toolbar shares (style.css: a .plot-nav-row just before
     // the plot's box, or before the block that box opens), told how many buttons it holds:
     // the line keeps clear of them, and no more (a sample selector's name cut only there).
-    const prev = box.previousElementSibling || (box.parentElement && box.parentElement.firstElementChild === box ? box.parentElement.previousElementSibling : null);
-    if (box.classList.contains('plot-wrap') && prev && prev.classList.contains('plot-nav-row')) prev.style.setProperty('--tb-n', String(div.children.length));
+    const prev = wrapEl.previousElementSibling || (wrapEl.parentElement && wrapEl.parentElement.firstElementChild === wrapEl ? wrapEl.parentElement.previousElementSibling : null);
+    if (wrapEl.classList.contains('plot-wrap') && prev && prev.classList.contains('plot-nav-row')) prev.style.setProperty('--tb-n', String(div.children.length));
     // Re-assert the current mode onto the freshly built buttons/cursor so a re-run
     // of attachTools (e.g. on data refresh) can't leave a stale/partial state.
     this.setMode(this._mode || null);
