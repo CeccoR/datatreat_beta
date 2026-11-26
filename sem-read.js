@@ -256,8 +256,8 @@ function hashBytes(b){
   for (let i = 0; i < b.length; i++){ h ^= b[i]; h = Math.imul(h, 0x01000193); }
   return (h >>> 0).toString(16).padStart(8, '0') + '-' + b.length;
 }
-// A file's base64 read into its bytes: a project of v517 or before held it so (sem.js
-// semRestore; from v518 the bytes are kept, and no base64 made). The browser's own (fromBase64),
+// A file's base64 read into its bytes: a project of v517 or before held it so (sem-model.js
+// restoreInto; from v518 the bytes are kept, and no base64 made). The browser's own (fromBase64),
 // where it has it, gives the same, sooner.
 function fromB64(b64){
   if (Uint8Array.fromBase64) return Uint8Array.fromBase64(b64);

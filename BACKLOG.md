@@ -194,7 +194,8 @@ was proposed; nothing here is in the code yet.
 - **Long functions.** A handful of functions run to hundreds of lines: `createRietveld`
   (xrd-rv.js, ~1300), `createPeakAnalysis` (xrd-peaks.js, ~1100), `autoRefine`
   (xrd-rietveld.js, ~800), `shapeView` (xrd-shape3d.js, ~750), `drawFigure` (figure.js,
-  ~560), and the modules that are one closure each (tauc.js to v555, gc.js to v556, sem.js). Not a bug:
+  ~560), and the modules that were one closure each (tauc.js to v555, gc.js to v556,
+  sem.js to v557). Not a bug:
   in them a change acts far from where it is made, the parts cannot be tested one by
   one, and a closure holds on to whatever it once referenced (up to v473 a closed
   Scherrer card stayed in memory through its keyboard listener). Proposed: no rewrite;
@@ -327,7 +328,61 @@ was proposed; nothing here is in the code yet.
   walks, cards added, folded, closed and moved, results coming in, the tab hidden): 2.2
   million entries each, none different. tests/gcmodel.test.mjs keeps the calculations'
   tests, the fixtures' CSVs as v556's page wrote them and 60 cases as v556's gc.js gave them
-  (golden digests). Still one closure: sem.js.
+  (golden digests). Done for sem.js in v558, the last of the three, the same way: what SEM
+  works out in `sem-model.js` (the crop's rules: fitted to an image, resized by a handle,
+  typed, re-ratioed, reset, dragged, its handles and what a press takes; the editor's view
+  fitted, zoomed and kept; the levels, each normalisation, an image's curve and its key; the
+  settings' scope; the linked crop; the alerts' lines; a file read as the list holds it; the
+  groups placed, named, kept in step, moved and reset; what the figure takes of an image,
+  and its images for the composer; the state saved and read back from every version; what
+  the tab shows beside it; the CSV) and its markup in `sem-html.js` (the alerts, the Image
+  box, the groups' boxes, the scope's and the reference's options, the chain on a
+  thumbnail), plain functions tested in Node, handed utils.js's and modkit.js's helpers and
+  sem.js's own keeping of the files (an image's header, its crop's statistics, the one
+  RawRef of its bytes); the page left in `sem.js`, no longer one closure: what the files are
+  made into and the reading worker as they were, the instance a state object (S) the
+  functions at module level take, its wiring in named functions (`wireLoading`,
+  `wireThumbs`, `wireEditor`, `wireCrop`, `wireGroups`, `wireGroupDrag`, `wireIntensity`,
+  `wireIntChoices`), the editor drawn in two (`drawEditor`, `drawCrop`). The file 1765 lines
+  to 1226 (createSem 1323 to 40, the longest function now; the next 24); the model 719, the
+  markup 92. The same operations in the same order: in the browser, a session of 257 steps
+  (the three fixtures and ten images more: 8 and 16 bits, pixels made square in both, a
+  warning, an image under 64 px, one with no magnification, a big-endian file, one at the
+  top levels, names with markup; files refused, skipped and dropped twice, the alerts
+  dismissed, undone and redone; the image chosen by the arrows, the keys, a thumbnail and
+  the list; the crop typed (a comma, letters, past the edges, under 64 px), every ratio,
+  dragged by every handle free and locked, moved out of the image, a click's jitter, hovered
+  by a mouse and a finger; Zoom area, the wheel, Pan, Fit and a double click, the zoom kept
+  through a resize; links, Link all and Unlink all with an image smaller than the crop;
+  every normalisation, the reference, values refused, the image's own correction, the
+  Default boxes, a group's scope and back; files left out (the reference among them),
+  relabelled, moved, downloaded and removed; groups renamed, emptied, scaled, added, removed
+  and reset, images dragged into an empty group, into a new one, onto their own and nowhere,
+  by a finger held and one that scrolled; the figure composer opened, edited, exported as
+  SVG and PNG, undone while open, its group reset away; the CSVs, saved, exported, reloaded
+  with a zoom kept, a second SEM tab reading while hidden; 45 old and malformed states) gave
+  v557's DOM, field values and fields flashed invalid, every canvas's pixels, state,
+  history, results made (utils.js kept), banners, focus, layers, the composer, downloads and
+  CSVs at every step, 5397 fields, none different (v557 against itself, none either); in
+  Node, v557's sem.js and this one, each run from its source on a page of stubs recording
+  every markup, value, style, class, attribute and canvas call, through 1200 random sessions
+  of 80 steps (images of every kind dropped, refused and twice, one at the top levels in 300
+  of them; states as saved, old and malformed; the crop typed, re-ratioed, reset and dragged
+  by every handle; the view zoomed and panned; links, the settings and their scope; the
+  groups edited and images dragged between them; the list's files removed, moved, left out
+  and relabelled; the alerts dismissed; undo and redo; the tab hidden, shown and resized;
+  time passing; the CSV, what it shows): 37 million entries each, none different. Eight
+  mutations of the new code (a crop rule, the histogram's normalisation at the top levels,
+  the outline's order, a note of the Image box, a key of a state read back, the groups'
+  order, the zoom kept, the alerts' order) were each caught: seven by the browser session,
+  six by the Node sessions, six by the new tests (the normalisation's by the tests alone: a
+  65535th of the grey, which the 8-bit image does not show). tests/semmodel.test.mjs keeps
+  the calculations' tests, the fixtures' CSV as v557's page wrote it and 60 cases as v557's
+  sem.js gave them (golden digests). Of the three modules named above none is one closure
+  now. Still long (v558): `createRietveld` (xrd-rv.js, 1204 lines), the Integration cards'
+  `createInteg` (gc-integ.js, 1189), `createPeakAnalysis` (xrd-peaks.js, 908), `createFig`
+  (fig.js, 552), `createDeck` (cards.js, 515), `createXrd` (xrd.js, 488), `createIodo`
+  (iodo.js, 407), `wireControls` (figure.js, 372).
   The others when work takes us into them.
 - **The browser storage is shared with every page of the same origin.** On GitHub Pages
   the app lives at `ceccor.github.io/datatreat_beta/`, and every project published under

@@ -22,9 +22,12 @@ The page has three cards, in this order:
 
 The groups come first: an image's crop is then set knowing its group, whose common scale may narrow it (dashed in the editor, §4.2).
 
-The code is in four files: `sem-read.js` (reading), `sem-read.worker.js` (reading the
-files dropped off the page's thread, §6.3), `sem.js` (the module) and `sem-figure.js`
-(the figure, a kind of figure of the composer in `figure.js`).
+The code is in six files: `sem-read.js` (reading), `sem-read.worker.js` (reading the
+files dropped off the page's thread, §6.3), `sem.js` (the module: what the files are made
+into, the canvases and the tab's wiring), `sem-model.js` (from v558, what it works out: the
+crop's rules, the view, the curves, the groups, the state saved and read back, the CSV,
+tested in Node), `sem-html.js` (from v558, its markup) and `sem-figure.js` (the figure, a
+kind of figure of the composer in `figure.js`).
 
 ## 1. Files
 
