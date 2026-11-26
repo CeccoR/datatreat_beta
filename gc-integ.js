@@ -1,13 +1,12 @@
-import { esc, csvLine, fmtNum, alertHtml, setupDropzone, X_SVG, bytesKey, fixed, exactKey, objId, guardNumericInput, flashFieldInvalid, kept } from './utils.js';
+import { esc, csvLine, fmtNum, alertHtml, setupDropzone, X_SVG, bytesKey, exactKey, objId, guardNumericInput, flashFieldInvalid, kept } from './utils.js';
 import { Plot, svgEl, linkX, niceTicks } from './plot.js';
 import { plotWrap, chipRow, viewOf, setView, PLOT_DL_ICON } from './modcharts.js';
 import { cardInfo, fileSafe, nameDownloads } from './cards.js';
 import { isObj, oneOf, num } from './modkit.js';
-import { decodeText } from './textdata.js';
-import { DEFAULT_METHOD, readTcd, windowCurves, fitCalibration, transferK } from './gc-tcd.js';
 import { integrateMany } from './gc-tcd-pool.js';
 import { snavHtml, snav } from './snav.js';
-import { looksTcd, stemOf } from './gc-pair.js';
+import * as M from './gc-integ-model.js';
+import * as H from './gc-integ-html.js';
 
 /* =========================================================
    GC: THE INTEGRATION CARD (v544; laid out as a DRS card from v545; the calibration's
@@ -33,1314 +32,684 @@ import { looksTcd, stemOf } from './gc-pair.js';
    txt, csv and colour), cards() (the deck's records), inst(id), drawable(), shown(),
    folded(rec), layer, isTcd(rec), readTable(text) (a GC table read as gc.js reads one, its
    injections' names with it), changed() (results came in: the cards below follow) }.
-========================================================= */
-const PEAK_COLORS = ['#9b7bff', '#4cc9a0', '#e3b341', '#d95fd0'];
-const C_RAW = '#8a95a3', C_MODEL = '#e0457b', C_BASE = '#d4a72c', C_EDGE = '#4cc9a0', C_BAD = '#ff3b3b', C_TABLE = '#9aa3ad';
-/* The run overview's marks: every gas's fits in one colour (H₂'s blue, C_FIT), the
-   suspicious red; a fit's dot of radius OV_R, the GC table's grey cross smaller (OV_CROSS,
-   its arms' half-span: under a dot, hidden by it); a point hovered or on show drawn again
-   OV_HL_R times as large as the dot is seen (its radius plus half the 1 px stroke plot.js
-   rings it with), OV_HL_TINT of the way to white. */
-const OV_R = 3.2, OV_CROSS = 1.75, OV_HL_R = 1.5, OV_HL_TINT = 0.4;
-const MARGIN = 4;            // s shown either side of the windows (and of their neighbours)
-/* The peaks beside the H₂/O₂ window that its model has no peak for: the system peak at
-   262–267.5 s and N₂ from about 330.5 s. Drawn on the chromatogram; an edge of a window
-   inside one is said: on real runs an edge moved by 1–2 s changes H₂ by 0.01–0.02 % at high
-   levels and by about one formal sd at low ones, but by 5 s it reaches these and the fit
-   degrades. */
-const NEIGHBOURS = [{ name: 'S264', from: 262, to: 267.5 }, { name: 'N2', from: 330.5, to: 337.6 }];
-/* What marks a chromatogram as suspicious for a gas (judge), any of:
-   1. a χ²ᵣ above 4, after the fit's restart (the robust pass stops at 100 evaluations, and
-      its worst outcome reads χ²ᵣ 41; a clean real run reads 2–3.5);
-   2. a fit that did not converge (or a chromatogram the engine could not fit);
-   3. its area out of proportion with the GC software's table: over the run (the pair), at
-      each injection with a table value r_i = A_i / T_i, k = median(r_i) (transferK's
-      quantity, with no threshold); suspicious where |A_i − k·T_i| > max(10 % of k·T_i,
-      k × 15 ppm), the floor in the table's unit (0.0015 %mol, or 15 ppm for the .txt
-      export). No comparison where the table has no value. Areas, not concentrations: with
-      O₂'s free intercept every calibrated O₂ would differ from the table by one factor.
-      (10 % from v546: at 3 % nearly every O₂ of a real run was marked, the GC software
-      ignoring H₂'s tail under O₂, which the fit models.)
-   A glitch zone left out of the fit is not one (v544 marked it). */
-const PROP_TOL = 0.10, PROP_FLOOR = { '%mol': 0.0015, ppm: 15 };
-const CHI2_HIGH = 4;
-/* The method's fields: the windows' edges, numbers that are its source of truth (exact,
-   kept with the method, the same for every injection), the lines on the chromatogram an aid
-   that snaps to the data's 0.2 s and writes into them. */
-const SNAP = 0.2, snap = v => Math.round(v/SNAP)*SNAP, round2 = v => +v.toFixed(2);
-const UNITS = ['%mol', 'ppm'];
-const toPct = (v, unit)=> unit === 'ppm' ? v/1e4 : v;
-const fin = v => Number.isFinite(v);
-const plural = (n, w)=> `${n} ${w}${n === 1 ? '' : 's'}`;
-const sig = (v, n = 4)=> fin(v) ? (Math.abs(v) >= 1e6 || (Math.abs(v) < 1e-3 && v) ? v.toExponential(n - 1) : String(+v.toPrecision(n))) : '—';
 
-/* ---- The method: the engine's own, its windows' edges the card's ---- */
-// (DEFAULT_METHOD is deep-frozen: a card's method is a copy)
-const clone = m => structuredClone(m);
-/* A method as a project holds it (RESTORED): the default's, each window's edges where the
-   saved one has that window with edges that are numbers, its start before its end. What
-   else a method holds is the engine's, as it is (a v544 project's trapezoids ignored). */
-function methodIn(m){
-  const out = clone(DEFAULT_METHOD);
-  const ws = isObj(m) && Array.isArray(m.windows) ? m.windows : [];
-  out.windows.forEach(w=>{
-    const s = ws.find(x=> isObj(x) && x.key === w.key);
-    if (s && fin(s.from) && fin(s.to) && s.from < s.to){ w.from = s.from; w.to = s.to; }
+   SPLIT (v560): what the cards work out (the method, the results' keys and store, what the
+   job integrates, the entries, the concentrations, the suspicious rule, what the plots draw,
+   the status and the alerts' facts, the CSVs, the calibration's files paired and its lines,
+   the card's state) in gc-integ-model.js (plain functions, tested in Node); their words and
+   markup in gc-integ-html.js; here the page: the instance's state (S), each card's (C) and
+   its calibration window's (W), their fields, plots and listeners, the job's run. Each is a
+   function at module level of S (and of a card's C, its window's W), not a closure inside
+   createInteg: what a listener holds is what it is handed.
+========================================================= */
+// utils.js's, modkit.js's and plot.js's helpers the model takes (gc-integ-model.js U), and
+// what the markup takes (gc-integ-html.js u).
+const U = { isObj, oneOf, num, esc, exactKey, bytesKey, objId, fmtNum, csvLine, niceTicks };
+const HU = { esc, alertHtml, X_SVG, snavHtml, plotWrap, chipRow, PLOT_DL_ICON };
+export const INTEG_INFO = H.integInfo(cardInfo(false, false));
+
+/* =========================================================
+   THE INSTANCE (createInteg): its state S, which every function below takes:
+     ctx, kit              its context (above) and the module's kit
+     GAS, gasOf, C_FIT     the gases by key, a gas's words (another's drawn so), the fits' colour
+     read, tabs            the raw chromatograms read and the calibrations' tables, by their
+                           bytes (gc-integ-model.js dataOf, tableOf)
+     store                 the results: a key `bytes|method` → a result per chromatogram
+     job, halted, soon, failed   the file being integrated ({ key, ac, work, total, done,
+                           doneHere, name }), a Stop, the method's change waiting (its
+                           timer), why the last run failed
+     dead                  its instance let go, a tab asleep or closed: a job's end writes nothing
+     painting, paintAll    the frame every card's status waits for, and whether its plots too
+========================================================= */
+export function createInteg(ctx){
+  const S = {
+    ctx, kit: ctx.kit, ...M.gasTable(U, ctx.gases), read: new WeakMap(), tabs: new WeakMap(),
+    store: new Map(), job: null, halted: false, soon: 0, failed: '', dead: false, painting: 0, paintAll: false,
+  };
+  return {
+    card: (a, el)=> makeCard(S, a, el),
+    saved: ()=> M.savedResults(U, S),
+    load: obj => M.loadResults(U, S.store, obj),
+    ensure: force => ensure(S, force),
+    prime: (bytes, d)=> M.prime(S, bytes, d),
+    destroy(){ S.dead = true; stop(S); clearTimeout(S.soon); cancelAnimationFrame(S.painting); },
+  };
+}
+// A file's results written: the store's, and every state of the history that holds the file.
+function write(S, key, arr){
+  S.store.set(key, arr);
+  const fk = key.slice(0, key.indexOf('|'));
+  S.kit.patch(s=> M.withResult(U, s, fk, key, arr));
+}
+
+/* ---- The job: every (file, method) a card uses with a chromatogram not integrated ---- */
+// Run what is wanted (`force`: Re-integrate, after a Stop); a job on a file still wanted
+// goes on, one on a file no longer wanted (its method changed) gives way.
+function ensure(S, force){
+  clearTimeout(S.soon); S.soon = 0;
+  if (force){ S.halted = false; S.failed = ''; }
+  if (S.halted){ paint(S); return; }
+  const w = M.wanted(U, S);
+  if (S.job){
+    if (w.some(g=> g.key === S.job.key)){ S.job.total = S.job.done + M.missing(w) - S.job.doneHere; paint(S); return; }
+    S.job.ac.abort(); S.job = null;
+  }
+  if (!w.length){ paint(S); return; }
+  run(S, w[0], M.missing(w), 0);
+}
+// A method changed: run after the edits settle (a second without another).
+function later(S){ clearTimeout(S.soon); S.soon = setTimeout(()=>{ S.soon = 0; ensure(S); }, 1200); paint(S); }
+function run(S, g, total, done){
+  const ac = new AbortController();
+  const work = M.workOf(S, g);
+  const j = S.job = { key: g.key, ac, work, total, done, doneHere: 0, name: g.rec.name };
+  let last = performance.now();
+  integrateMany(g.d.t, g.miss.map(c=> g.d.cols[c]), {
+    method: g.method, signal: ac.signal,
+    onProgress: (_done, _n, i, r)=>{
+      if (S.job !== j) return;
+      work[g.miss[i]] = M.resultIn(U, r);
+      j.done++; j.doneHere++;
+      // (counted for the tests, as utils.js kept counts what is worked out: a project reopened fits none)
+      kept.made['gc-tcd'] = (kept.made['gc-tcd'] || 0) + 1;
+      // (what came in, shown every half second; written at the file's end)
+      if (performance.now() - last > 500){ last = performance.now(); paint(S, true); }
+    },
+  }).then(()=> ran(S, j, g, work), e=> runFailed(S, j, g, work, e));
+  paint(S);
+}
+// A file's run ended: its results written, the cards below told, the next file run.
+function ran(S, j, g, work){
+  if (S.job !== j || S.dead) return;
+  S.job = null;
+  write(S, g.key, work.slice());
+  S.ctx.changed();
+  const next = S.halted ? [] : M.wanted(U, S);
+  if (next.length) run(S, next[0], j.done + M.missing(next), j.done);
+  else paint(S, true);
+}
+// Stopped (what is done kept), or failed (said, and halted).
+function runFailed(S, j, g, work, e){
+  if (S.job === j) S.job = null;
+  if (S.dead) return;
+  if (work.some(Boolean)) write(S, g.key, work.slice());
+  if (!e || e.name !== 'AbortError'){ S.failed = String(e && e.message || e); S.halted = true; }
+  S.ctx.changed();
+  paint(S, true);
+}
+function stop(S){ S.halted = true; clearTimeout(S.soon); S.soon = 0; if (S.job){ S.job.ac.abort(); } paint(S); }
+// Every card's status (and, with `all`, its plots: results came in).
+function paint(S, all){
+  S.paintAll = S.paintAll || !!all;
+  if (S.painting || S.dead) return;
+  S.painting = requestAnimationFrame(()=>{ const a = S.paintAll; S.painting = 0; S.paintAll = false; if (!S.dead) M.integCards(S).forEach(c=> c.paintStatus(a)); });
+}
+
+/* =========================================================
+   A CARD: `a` its record (cards.js), `el` its element; its state C:
+     a, el, p, $(id)        its record, its element, its ids' prefix, an element of it by its id's end
+     method, wasMethod      its method, and the one before it (whose results are shown, said
+                           stale, until the file is integrated again)
+     cal                    its calibration (gc-integ-model.js calIn)
+     ovGas, ovY             the run overview's gas and y (view keys of the state)
+     selName, selK          what it shows (no state): the file, by its name, and its chromatogram
+     chrom, resid, over     its plots: the chromatogram, its residuals, the run overview
+     drawn                  what the chromatogram's CSV gives: { e, k, t, y, curves, stale }
+     drag                   a window's edge being dragged: { m } the method as it would be
+     ovPts, ovLook, hovK    the overview's points, what a point says, the one hovered (−1: none)
+     shownJ                 the judge of the entry on show (renderSel)
+     fileNav, injNav        its selectors (snav.js): the file's, the chromatogram's
+     calSel, calPlots, calDrawn   the calibration window's standard on show (its row), its
+                           plots, what it drew (for its CSV)
+     valuesKept             Analysis's values, kept while nothing changes (valuesFor)
+     W                      its calibration's window (calWindow)
+   It gives gc.js what every card of the deck gives (cardApi).
+========================================================= */
+function makeCard(S, a, el){
+  const p = 'gc' + a.id;
+  const C = {
+    a, el, p, $: id => el.querySelector('#' + p + id),
+    method: M.methodIn(U, null), cal: M.calIn(U, null), ovGas: 'h2', ovY: 'conc',
+    selName: null, selK: 0, wasMethod: null, chrom: null, resid: null, over: null, ovPts: [],
+    calSel: 0, calPlots: { chrom: null, resid: null }, calDrawn: null,
+    W: null, valuesKept: new Map(), shownJ: null, fileNav: null, injNav: null, drawn: null, drag: null, hovK: -1, ovLook: null,
+  };
+  C.W = calWindow(S, C);
+  el.querySelector('.gci-body').innerHTML = H.cardHtml(HU, p);
+  wireNav(S, C);
+  wireCard(S, C);
+  return cardApi(S, C);
+}
+/* ---- The selectors (snav.js): the file (over the chromatogram), and its chromatogram
+   (over the run overview); a suspicious one's name red, in the list too ---- */
+function wireNav(S, C){
+  const { el } = C, es = ()=> M.entriesOf(S);
+  C.fileNav = snav(el.querySelector('.gci-fsel'), {
+    count: ()=> es().length, index: ()=>{ const c = M.curOf(S, C); return c ? es().findIndex(x=> x.name === c.name) : 0; },
+    label: i => M.fileLabel(es()[i]),
+    title: i => M.fileTitle(es()[i]),
+    go: i =>{ const x = es()[i]; if (x){ C.selName = x.name; C.selK = 0; draw(S, C); } },
   });
+  C.injNav = snav(el.querySelector('.gci-ksel'), {
+    count: ()=>{ const e = M.curOf(S, C); return e ? e.n : 0; }, index: ()=> C.selK,
+    label: k => M.injShort(M.curOf(S, C), k),
+    title: k =>{ const e = M.curOf(S, C); return `${M.injName(e, k)}${e ? ` of ${e.n}` : ''}${C.shownJ && C.shownJ.bad(k) ? ' (suspicious)' : ''}`; },
+    bad: k => !!(C.shownJ && C.shownJ.bad(k)),
+    go: k =>{ C.selK = k; draw(S, C); },
+  });
+  const on = (sel, fn)=> el.querySelector(sel).addEventListener('click', fn);
+  on('.gci-fprev', ()=>{ if (M.stepFile(S, C, -1)) draw(S, C); });
+  on('.gci-fnext', ()=>{ if (M.stepFile(S, C, 1)) draw(S, C); });
+  on('.gci-kprev', ()=>{ if (M.stepK(S, C, -1)) draw(S, C); });
+  on('.gci-knext', ()=>{ if (M.stepK(S, C, 1)) draw(S, C); });
+}
+// Its buttons, Default, the run overview's pointer and its chips.
+function wireCard(S, C){
+  const { el, $ } = C;
+  $('Run').addEventListener('click', ()=> ensure(S, true));
+  $('Stop').addEventListener('click', ()=> stop(S));
+  $('Cal').addEventListener('click', ()=> openCal(S, C, C.W));
+  el.querySelector('.gci-reset').addEventListener('click', ()=> setMethod(S, C, M.methodIn(U, null)));
+  $('Over').addEventListener('pointermove', ev=>{ const k = ovAt(C, ev); if (k !== C.hovK){ C.hovK = k; paintHl(C); } });
+  $('Over').addEventListener('pointerleave', ()=>{ if (C.hovK >= 0){ C.hovK = -1; paintHl(C); } });
+  $('Over').addEventListener('click', ev=> onOverClick(S, C, ev));
+  el.addEventListener('click', ev=> onChip(S, C, ev));
+}
+// What gc.js asks of every card of the deck, and what the instance asks of an Integration card.
+function cardApi(S, C){
+  return {
+    method: ()=> C.method,
+    tcdRecs: ()=> M.tcdRecs(S, C),
+    valuesFor: f => M.valuesFor(U, S, C, f),
+    // (a change of its that the cards below read: their sources' key)
+    sig: ()=> exactKey([M.methodKey(U, C.method), M.calKey(U, C)]),
+    paintStatus(all){ paintStatus(S, C, all); if (C.W.isOpen) paintWindow(S, C, C.W); },
+    // (what gc.js asks of every card: no per-sample arrays, no sample picked, no bars, no Results)
+    slots: ()=> [],
+    clear(){ C.selName = null; C.selK = 0; },
+    unselect(){},
+    shows: ()=> M.showsOf(S, C),
+    showNext: v => M.showNext(U, C, v),
+    bars(){},
+    renderTable(){ renderSel(S, C); paintAlerts(S, C); paintStatus(S, C); },
+    compute(keep){ draw(S, C, keep); },
+    computeQuiet(){ renderSel(S, C); paintAlerts(S, C); paintStatus(S, C); },
+    hasResults: ()=> false,
+    exportEntries: n => exportEntries(S, C, n),
+    snapshot: ()=> M.snapshotOf(C),
+    restore(s0){ M.restoreCard(U, S, C, s0); if (C.W.isOpen) paintWindow(S, C, C.W); },
+    destroy(){ destroyCal(C.W); C.fileNav.close(); C.injNav.close(); },
+  };
+}
+
+/* ---- What it draws ---- */
+function draw(S, C, keep){
+  renderSel(S, C);
+  paintStatus(S, C);
+  paintAlerts(S, C);
+  if (!S.ctx.drawable() || S.ctx.folded(C.a)) return;
+  const e = M.curOf(S, C);
+  drawChrom(S, C, e, keep); drawOverview(S, C, e); paintValues(S, C, e); paintMethod(S, C);
+}
+function renderSel(S, C){
+  const e = M.curOf(S, C);
+  if (e){ C.selName = e.name; if (C.selK >= e.n) C.selK = Math.max(0, e.n - 1); }
+  C.shownJ = e && !e.d.error ? M.judge(S, e, M.resOf(U, S, C, e.tcd).res) : null;
+  C.fileNav.update(); C.injNav.update();
+}
+/* The chromatogram on show: one plot of two panels that share the retention time
+   (plot.js linkX), the chromatogram over its residuals, a Tauc plot's size together,
+   three to one. The whole chromatogram is drawn; the view opens (and a reset comes back)
+   on the H₂/O₂ zone, the y on the windows' own data. Only the residuals' axis carries
+   the time's numbers and title. */
+function drawChrom(S, C, e, keep){
+  const o = drawPair(S, C, { svg: C.$('Chrom'), rs: C.$('Resid'), leg: C.$('ChromLegend'), wrap: C.el.querySelector('.gci-pair'), keep, was: { chrom: C.chrom, resid: C.resid },
+    d: e ? e.d : null, k: C.selK, R: e && !e.d.error ? M.resOf(U, S, C, e.tcd) : null, key: e ? e.name + '#' + C.selK : '',
+    file: e ? e.tcd.name : '', what: e ? `${e.label}, chromatogram ${C.selK + 1}` : '', overlay: P => overlayOn(S, C, P, C.drag ? C.drag.m : C.method, true) });
+  C.chrom = o.chrom; C.resid = o.resid;
+  C.drawn = o.drawn ? { e, ...o.drawn } : null;
+  C.$('Notice').innerHTML = o.notice;
+}
+/* One chromatogram over its residuals, drawn into a pair of svgs: the card's (the
+   chromatogram on show) or the calibration window's (the standard chosen), alike.
+   o: { svg, rs (the residuals' svg), leg, wrap (their plot-wrap), keep, was ({ chrom,
+   resid }: the plots before, their zoom kept with `keep` on the same data), d (readTcd's
+   read), k (its chromatogram), R (resOf's), key (the data's, for the zoom), file, what
+   (the notices' names), overlay(P) (drawn over the chromatogram, again at each zoom) }.
+   → { chrom, resid, drawn ({ k, t, y, curves, stale }, the CSV's; null: nothing drawn),
+   notice (an alert's markup, or '') }. */
+function drawPair(S, C, o){
+  const vc = o.keep && o.was.chrom ? viewOf(o.was.chrom) : null, vr = o.keep && o.was.resid ? viewOf(o.was.resid) : null;
+  const chrom = new Plot(o.svg, { xlabel: 'Retention time (s)', ylabel: 'TCD signal', noXTickLabels: true, noXTitle: true, xTickMarks: true, margin: { l: 58, r: 20, t: 15, b: 0 } });
+  const resid = new Plot(o.rs, { xlabel: 'Retention time (s)', ylabel: 'Residual', xTickMarks: true, margin: { l: 58, r: 20, t: 0, b: 40 } });
+  linkX([chrom, resid]);
+  const tools = { group: [chrom, resid] }, out = { chrom, resid, drawn: null, notice: '' };
+  o.leg.innerHTML = '';
+  const D = M.chromOf(U, o, C.method);
+  if (D.fail){ chrom.attachTools(o.wrap, tools); out.notice = H.pairNotice(HU, o, D); return out; }
+  out.drawn = { k: D.k, t: D.tt, y: D.yy, curves: D.curves, stale: D.R.stale };
+  o.leg.innerHTML = H.chromLegendHtml(HU, drawChromPanel(S, chrom, D, vc, o.key));
+  // The windows' edges, the peaks' places and the neighbours, drawn over the data, again
+  // at each zoom.
+  chrom._onView = ()=> o.overlay(chrom);
+  o.overlay(chrom);
+  drawResidPanel(resid, chrom, D, vr, o.key);
+  chrom.attachTools(o.wrap, tools);
+  out.notice = H.pairNotice(HU, o, D);
   return out;
 }
-// (a stored result's null, JSON's NaN, read back as NaN, never as 0)
-const deNull = v => v === null ? NaN : Array.isArray(v) ? v.map(deNull) : isObj(v) ? Object.fromEntries(Object.entries(v).map(([k, x])=> [k, deNull(x)])) : v;
-const methodKey = m => exactKey(m.windows.map(w=> [w.key, w.from, w.to]).concat([JSON.stringify(m)]));
-/* A results' key as v544 wrote it (a project saved then): its method held the trapezoids
-   (`trapezoid`, and its fit's spikes.roundsTrapezoid), which no fit ever read, and the key
-   holds the method's JSON, so v545's key for the same file and windows differs. Read back
-   without them it is v545's key, and the results are found under it: nothing is fitted
-   again (the results themselves are the fit's: their `trap`, the trapezoids', dropped). */
-function normKey(key){
-  const i = key.indexOf('|');
-  let a, m;
-  try { a = JSON.parse(key.slice(i + 1)); m = Array.isArray(a) && typeof a[a.length - 1] === 'string' ? JSON.parse(a[a.length - 1]) : null; } catch(e){ return key; }
-  const sp = isObj(m) && isObj(m.fit) && isObj(m.fit.spikes) ? m.fit.spikes : null;
-  if (i < 0 || !isObj(m) || !('trapezoid' in m || (sp && 'roundsTrapezoid' in sp))) return key;
-  delete m.trapezoid;
-  if (sp) delete sp.roundsTrapezoid;
-  a[a.length - 1] = JSON.stringify(m);
-  return key.slice(0, i + 1) + exactKey(a);
+// The chromatogram's panel: the glitch zones, the raw data, each window's baseline, model
+// and peaks, the points left out. → the legend's entries.
+function drawChromPanel(S, chrom, D, vc, key){
+  chrom.setRange(D.lo, D.hi, D.c0, D.c1);
+  setView(chrom, vc, key);
+  chrom.drawAxes(); chrom.clearData();
+  // The glitch zones left out of the fit, behind the curves.
+  M.bandsOf(D.curves).forEach(z=> chrom.vband(z[0], z[1], M.C_BAD, 0.14));
+  chrom.line(D.tt, D.yy, M.C_RAW, 1.2, undefined, { label: 'raw', key: 'raw' });
+  const items = [[M.C_RAW, 'raw', '']], pc = { ci: 0 };
+  D.curves.forEach(({ wr, c })=>{
+    if (c.base){ chrom.line(c.t, c.base, M.C_BASE, 1.1, '5,4', { label: `baseline (${wr.key})`, key: 'base ' + wr.key }); }
+    // (the model under its peaks: each peak, on the baseline, drawn over it)
+    if (c.model) chrom.line(c.t, c.model, M.C_MODEL, 1.4, undefined, { label: `model (${wr.key})`, key: 'model ' + wr.key });
+    M.peakLines(S, wr, c, items, pc).forEach(l=> chrom.line(c.t, l.y, l.col, 1.3, l.dash, { label: l.name, key: 'peak ' + l.name }));
+  });
+  const dr = M.droppedOf(D.curves);
+  if (dr.sp.x.length) chrom.points(dr.sp.x, dr.sp.y, M.C_BAD, 4, { shape: 'cross', width: 1.6, label: 'spikes' });
+  if (dr.ex.x.length) chrom.points(dr.ex.x, dr.ex.y, M.C_BAD, 2.2, { label: 'glitch' });
+  return M.legendItems(items, D.curves, dr);
 }
-const noTrap = r =>{ if (isObj(r) && isObj(r.gases)) Object.values(r.gases).forEach(x=>{ if (isObj(x)) delete x.trap; }); return r; };
-const isDefault = m => methodKey(m) === methodKey(methodIn(null));
-/* A result as the store keeps it (and the project): JSON's (a NaN is null, read back as
-   none), its numbers to 8 digits, a peak's physical parameters left out (the window's `p`
-   gives them, windowCurves draws from it). */
-const r8 = v => typeof v === 'number' && fin(v) ? +v.toPrecision(8) : v;
-const compact = r => r && deNull(JSON.parse(JSON.stringify(r, (k, v)=> k === 'params' ? undefined : typeof v === 'number' ? r8(v) : ArrayBuffer.isView(v) ? Array.from(v, r8) : v)));
-
-/* ---- The calibration (a card's): its unit, intercept modes, files and levels ----
-   A file of it (v549): the standards' raw chromatograms (name, rawBytes: what is
-   integrated, its results keyed by these bytes as any file's) and the GC software's table
-   of the same injections (`table`: { name, rawBytes }), read for one thing only, each
-   injection's name; a level per chromatogram, typed by hand. A file of v544–v548's has no
-   table: kept as it is, its standards named by column until the table is dropped. */
-const blankLevel = ()=> ({ h2: null, o2: null, on: true });
-function calIn(c){
-  const s = isObj(c) ? c : {}, z = isObj(s.zero) ? s.zero : {};
-  const lv = v => num(v, null);
-  const files = Array.isArray(s.files) ? s.files.filter(f=> isObj(f) && f.rawBytes instanceof Uint8Array).map(f=> ({
-    name: typeof f.name === 'string' && f.name ? f.name : 'calibration.csv', rawBytes: f.rawBytes,
-    levels: Array.isArray(f.levels) ? f.levels.map(x=> isObj(x) ? { h2: lv(x.h2), o2: lv(x.o2), on: x.on !== false } : blankLevel()) : [],
-    ...(isObj(f.table) && f.table.rawBytes instanceof Uint8Array ? { table: { name: typeof f.table.name === 'string' && f.table.name ? f.table.name : 'calibration table.csv', rawBytes: f.table.rawBytes } } : {}) })) : [];
-  return { unit: oneOf(s.unit, UNITS), zero: { h2: z.h2 === true, o2: z.o2 === true }, files };
+// The residuals' panel, inside the fit window only (blank outside it), on the same time.
+function drawResidPanel(resid, chrom, D, vr, key){
+  const { rx, ry, r0, r1 } = M.residOf(U, D.curves);
+  resid.setRange(D.lo, D.hi, r0, r1);
+  setView(resid, vr, key);
+  resid.xmin = chrom.xmin; resid.xmax = chrom.xmax;
+  resid.drawAxes(); resid.clearData();
+  M.bandsOf(D.curves).forEach(z=> resid.vband(z[0], z[1], M.C_BAD, 0.14));
+  if (rx.length){
+    resid.line([rx[0], rx[rx.length - 1]], [0, 0], M.C_TABLE, 1, '3,3', { label: 'zero', key: 'zero' });
+    resid.line(rx, ry, M.C_MODEL, 1, undefined, { label: 'residual', key: 'residual' });
+  }
 }
-const calCopy = c => ({ unit: c.unit, zero: { ...c.zero }, files: c.files.map(f=> ({ ...f, levels: f.levels.map(l=> ({ ...l })) })) });
+// (dragging: the method as it would be, its lines where they are being taken)
+const overlay = (S, C)=>{ if (C.chrom) overlayOn(S, C, C.chrom, C.drag ? C.drag.m : C.method, true); };
+/* Over the chromatogram of plot P, method meth's: the neighbours, the peaks' places, the
+   windows' edges (dragged, `edit`: the card's; fixed in the calibration's window). */
+function overlayOn(S, C, P, meth, edit){
+  const g = P.gOverlay, { w: W, h } = P.size(), m = P.margin;
+  // (the overlay is this card's alone: its lines drawn anew, the plot's copies of them too)
+  g.innerHTML = '';
+  P._stored = P._stored.filter(x=> x.type !== 'vline');
+  const add = (tag, at, text)=>{ const node = svgEl(tag, { 'pointer-events': 'none', class: 'gci-ov', ...at }); if (text) node.textContent = text; g.appendChild(node); return node; };
+  // The neighbours the model has no peak for: a grey zone each, named.
+  M.NEIGHBOURS.forEach(z=>{
+    const x0 = P.px(z.from), x1 = P.px(z.to);
+    if (x1 < m.l || x0 > W - m.r) return;
+    add('rect', { x: x0, y: m.t, width: Math.max(0, x1 - x0), height: Math.max(0, h - m.t - m.b), class: 'gci-ov gci-nb' });
+    add('text', { x: (x0 + x1)/2, y: m.t + 14, 'font-size': 10, 'text-anchor': 'middle', class: 'gci-ov gci-nb-lb' }, z.name);
+  });
+  // The peaks' places: a thin dotted line each, named at the top.
+  meth.windows.forEach(w=> (w.peaks || []).forEach((pk, i)=>{
+    if (!M.fin(pk.t) || pk.t < P.xmin || pk.t > P.xmax) return;
+    const x = P.px(pk.t), col = pk.gas ? S.gasOf(pk.gas).color : M.PEAK_COLORS[i % M.PEAK_COLORS.length];
+    add('line', { x1: x, x2: x, y1: m.t, y2: h - m.b, stroke: col, 'stroke-width': 1, 'stroke-dasharray': '1,3' });
+    add('text', { x: x + 3, y: m.t + 30 + 11*(i % 3), 'font-size': 10, fill: col }, pk.name);
+  }));
+  // The edges, dragged.
+  meth.windows.forEach((w, wi)=> ['from', 'to'].forEach(side=>{
+    if (edit) P.vline(w[side], M.C_EDGE, true, v=> onDrag(S, C, wi, side, v), v=> onDrop(S, C, wi, side, v));
+    else P.vline(w[side], M.C_EDGE, false);
+  }));
+}
+// A line dragged snaps to the data's grid (0.2 s) and writes into its field.
+function onDrag(S, C, wi, side, v){
+  if (!C.drag) C.drag = { m: M.clone(C.method) };
+  C.drag.m.windows[wi][side] = M.edgeAt(v);
+  overlay(S, C);
+  paintMethod(S, C, C.drag.m);
+}
+function onDrop(S, C, wi, side, v){
+  const m = C.drag ? C.drag.m : M.clone(C.method);
+  C.drag = null;
+  m.windows[wi][side] = M.edgeAt(v);
+  setMethod(S, C, m);
+}
+// A method set (a step): its results looked for, else integrated a little later.
+function setMethod(S, C, m){
+  const w = M.tooShort(m);
+  if (w){ draw(S, C, true); C.$('Notice').innerHTML = H.notTakenHtml(HU, `The ${w.key} window must start at least 5 s before it ends.`); return; }
+  if (M.methodKey(U, m) === M.methodKey(U, C.method)){ draw(S, C, true); return; }
+  M.takeMethod(U, C, m);
+  draw(S, C, true);
+  S.kit.commit();
+  S.ctx.changed();
+  later(S);
+}
 
-/* "From the area to the concentration", a box of its own in the card's instructions, as the
-   Production Rate card's "From the reading to the rates" (gc.js RATES_HTML): the standards'
-   line, a concentration from it, and the GC software's scale taken over, typeset in MathML. */
-const CONC_HTML = (()=>{
-  const mi = s => `<mi>${s}</mi>`, mo = s => `<mo>${s}</mo>`, up = s => `<mi mathvariant="normal">${s}</mi>`;
-  const mrow = (...xs)=> `<mrow>${xs.join('')}</mrow>`, mfrac = (a, b)=> `<mfrac>${a}${b}</mfrac>`, msub = (a, b)=> `<msub>${a}${b}</msub>`;
-  const display = (...xs)=> `<math display="block">${xs.join('')}</math>`, im = (...xs)=> `<math>${xs.join('')}</math>`;
-  const A = mi('A'), c = mi('c'), s = mi('s'), b = mi('b'), k = mi('k'), i = mi('i'), eq = mo('='), Ai = msub(A, i), ci = msub(c, msub(mi('T'), i));
-  const step = (title, what, eqs, ...lines)=> `<li><b>${title}.</b> ${what}<div class="instr-eqbox">${eqs.join('')}</div>${lines.map(l=> `<div class="instr-units">${l}</div>`).join('')}</li>`;
-  return '<div class="instr-math"><h4 class="instr-math-head">From the area to the concentration</h4><ol class="instr-steps">'
-    + step('The standards\' line', 'Fitted by least squares to the standards of the gas (free intercept), or through zero.', [display(A, eq, s, mo('⋅'), c, mo('+'), b)],
-      `${im(A)}: the fitted area; ${im(c)}: the standard's concentration, in the unit chosen (%mol or ppm); ${im(s)}: the slope, area per unit; ${im(b)}: the intercept (0 through zero).`)
-    + step('A concentration from it', 'Each injection\'s area turned back into a concentration; in ppm, divided by 10⁴ for the rates, which take %mol.', [display(c, eq, mfrac(mrow(A, mo('−'), b), s))])
-    + step('Without standards: the GC software\'s scale', `For each pair, over its injections ${im(i)} whose table value ${im(ci)} is at least 0.02 %mol for H₂, 0.012 %mol for O₂ (ten of them at least), the median of the area over the table's value; then each concentration.`,
-      [display(k, eq, up('median'), mrow(mo('('), mfrac(Ai, ci), mo(')'))), display(c, eq, mfrac(A, k))],
-      `${im(k)}: area per %mol; ${im(c)}: %mol. A line through zero, whatever the software's own calibration was.`)
-    + '</ol></div>';
-})();
-export const INTEG_INFO = `The <b>Integration</b> card integrates again the raw chromatograms of the thermal-conductivity detector (TCD), the files of a column per injection that the GC software writes beside its table, and hands the results to the <b>Production Rate</b> cards below it. Each injection's <b>H₂ and O₂</b> are fitted together in one <b>window</b> of retention time (268–326 s by default): a smooth baseline (a straight line, with the <b>step</b> the detector makes after O₂), a peak shape for H₂, for O₂ and for the system peak at 310 s (<b>S310</b>, fitted so that its tail does not end up in O₂'s area; the step and S310 are drawn but go no further). The fit is made in <b>two passes</b>: the first, with a robust loss, finds <b>spikes</b> and <b>glitch zones</b> (marked on the plot in red), which the second, an ordinary least-squares fit, leaves out, so that a spike is never read as gas; a fit that looks wrong is started again from a generic start, and the better of the two kept. <b>The selectors</b>: the file (a pair, or raw chromatograms alone) at the top left of the plot, the chromatogram at the top left of the run overview; the arrows step through them (← → the chromatograms), and the name, or the small arrow after it, opens the list of them all, to go straight to one. <b>The plot</b>: the chromatogram on top (raw, model, baseline with its step, H₂, O₂ and S310 each drawn on the baseline, the spikes and glitch zones left out in red, the neighbouring peaks the model has no shape for in grey) and its <b>residuals</b> under it (the data less the model, inside the fit window only; blank outside it). The two share the retention time: a zoom or a pan in either (the one under the pointer) moves both along it at once, each keeping its own vertical scale. The plot holds the whole chromatogram and opens on the H₂/O₂ window, where a double click with a tool on brings it back. Its one toolbar, at its top right, gives both: the images, the CSV (the chromatogram on show, its model and parts and its residuals), and the figure composer, where they are two panels, one of which can be removed. <b>Windows</b>: the method is the card's, in these numbers, which are its source of truth: the fit window's edges (the green lines on the chromatogram drag them as an aid, snapping to the data's 0.2 s, and write into the numbers), with the peaks' nominal places. Moving an edge by 1–2 s changes the areas by a few hundredths of a per cent; by 5 s it reaches the peaks the model has no shape for, the system peak at 262–267.5 s and N₂ from about 330.5 s (grey on the chromatogram), and the fit degrades: the card says so. <b>Peaks</b>: the chromatogram on show, per gas: the area of its fitted shape ± its standard deviation, its apex, χ²<sub>r</sub> (how well the model follows the data: about 1, within the noise), its concentration and the GC table's value; under the table, the units, where a concentration is taken from the GC software's table its k for the file on show, and why the chromatogram is suspicious, if it is. <b>Suspicious</b>: a chromatogram is, for a gas, where χ²<sub>r</sub> is above 4 after the fit's restart (some fits are fragile: the robust pass stops at its 100th evaluation), where the fit did not converge, or where its area is out of proportion with the GC software's table: over the run (the pair), k is the median of area / table value across its injections with a table value, and an injection is suspicious when its area is further from k × its table value than 10 % of that, and than k × 15 ppm (0.0015 %mol, in the table's unit). Areas are compared, not concentrations (with O₂'s free intercept every calibrated value would differ from the table by one factor): a scale that differs from the table's alike at every injection marks none, an injection off on its own does. A glitch zone left out of the fit does not make it suspicious. <b>The colours</b>: in the chromatogram selector and its list, a suspicious chromatogram's name is red (suspicious for either gas); on the run overview a fit is a blue dot, whatever the gas, red where its injection is suspicious for that gas; the GC table's values are small grey crosses, never red, hidden under the fit's dot where the two agree; in Peaks a χ²<sub>r</sub> above 4 and an area out of proportion are red. The <b>run overview</b> shows, for the file chosen, one gas at a time (H₂ or O₂), as area or as concentration: every injection's fit, and the GC table's value beside it (as area, the table's value times the run's k, on the fits' scale), against the injection time (the injection's number when there is no table). A point under the pointer is drawn in a lighter shade and half again as large, and says its injection, its time, the fit, the table's value and χ²<sub>r</sub>; a click shows its chromatogram, whose point stays so, as does one chosen by the arrows, the list or the keys. Integration runs by itself in the background when raw chromatograms are loaded, or a little after the method changes; <b>Stop</b> stops it, <b>Re-integrate</b> runs what is left. A changed window integrates every file again; a file added, only itself. <b>Pairs</b>: a table and its raw chromatograms (the same name with _TCD) share a row of the file list; the table's rows with a date are its injections, which must be as many as the chromatograms (else the card says so, and Analysis keeps the table). <b>Concentrations</b>: <b>Calibration…</b> opens the standards' window: drop the GC software's table of the standards together with its raw chromatograms (both are needed, paired by name as in the file list, as many injections as chromatograms; the table names each standard, by its Analysis column, and gives nothing else), see each standard's fit drawn as this card draws a chromatogram (the selector over it, the arrows, ← →, or a click on its row), type each standard's H₂ and O₂ (blank: not a standard of that gas), choose the unit and, per gas, a free intercept (the default: O₂'s response has a real intercept, about −500 ppm, and a line forced through zero biases its low levels by −8 to −26 % while R² barely moves; each level's deviation from the line is shown, since R² cannot tell) or a zero one; the line area = slope × c + intercept is fitted to them and a sample's concentration is (area − intercept) / slope. Standards always win. Without them, the card <b>takes the calibration from the GC software's table</b>: for each pair, k is the median of our area over the table's value across the injections well above the noise (a table value of at least 0.02 %mol for H₂, 0.012 %mol for O₂, ten injections at least), and the concentration is area / k (an info alert says so, and Peaks gives the k of the file on show). <b>The risks of a calibration taken from the GC software</b>, which standards avoid:<ul class="gci-risks"><li>it <b>borrows the software's scale</b>, and assumes that the software's areas are proportional to ours, which a different baseline or peak split breaks (for O₂, on H₂'s tail and before the step, they may well differ);</li><li>the transferred line <b>goes through zero</b>, even if the software's own calibration had an intercept (O₂'s response has one, about −500 ppm: the low levels then come out biased);</li><li>it needs <b>enough injections above the threshold</b> (ten at 0.02 %mol of H₂, 0.012 %mol of O₂): with fewer there is none, and Analysis keeps the table;</li><li>if the <b>software's calibration is wrong, so is this one</b>: it reproduces the table's scale, it does not check it.</li></ul>A Production Rate card takes its values from the nearest Integration card above it; one with none above keeps the tables. ${CONC_HTML}${cardInfo(false, false)}`;
-const CAL_INFO = `The standards come as a pair, as in the file list: the GC software's table of their injections (its default CSV or its .txt export) and its raw chromatograms (TCD), the same name with _TCD (a browser's " (1)" aside). Drop the two together: either one alone is not loaded (it waits in this window, said in red, until its partner is dropped), nor is a pair whose table has not as many injections as there are chromatograms (one name a chromatogram). The table gives each standard its <b>name</b> and nothing else: its Analysis column (the .txt export's sample column if it has one, else the injection's number); no value or concentration is read from the table or from any name, cal_… included. Each chromatogram is integrated with this card's method. <b>The plot</b> shows the standard chosen as the card shows a chromatogram, over its residuals (the raw data, the model, the baseline with its step, H₂, O₂ and S310, the spikes and glitch zones left out, the fit window's edges), with the same toolbar; choose it with the selector over the plot (its name opens the list of them all), its arrows or ← →, or a click on its row. <b>Standards</b>: type in each row the standard's H₂ and O₂ concentrations in the unit chosen (blank: not a standard of that gas), and untick a row to leave it out; a name too long for its column is whole in its tooltip. Per gas, the line area = slope × c + intercept is fitted by least squares to the standards (free intercept), or through zero; R², and each level's deviation from the line, say how well it holds. The calibration is this card's, saved with the project and its files, and applies to every pair of the card; a gas with two standards or more (one, through zero) is calibrated, the other taken from the GC software's table. A calibration saved before v549 (raw chromatograms alone) opens as it was, its concentrations and results kept, nothing fitted again, its standards named by column: an alert says so, and dropping its table names them.`;
+/* ---- Windows: the fit windows' edges (their lines on the chromatogram an aid), each a
+   step, with the peaks' nominal places ---- */
+function paintMethod(S, C, m = C.method){
+  const box = C.$('Method'), reset = C.el.querySelector('.gci-reset');
+  const focus = document.activeElement && box.contains(document.activeElement) ? document.activeElement.dataset.k : null;
+  const warn = M.intrusions(m);
+  reset.hidden = M.isDefault(U, m);
+  box.innerHTML = H.methodHtml(HU, m, warn);
+  box.querySelectorAll('input').forEach(inp=> wireEdge(S, C, inp));
+  if (focus){ const f = box.querySelector(`input[data-k="${focus}"]`); if (f) f.focus(); }
+}
+// A window's edge typed: a number (either decimal mark), else refused and put back.
+function wireEdge(S, C, inp){
+  guardNumericInput(inp, {});
+  const [wi, side] = inp.dataset.k.slice(1).split(':');
+  inp.addEventListener('change', ()=>{
+    const v = +String(inp.value).replace(',', '.'), n = M.clone(C.method);
+    if (!M.fin(v)){ flashFieldInvalid(inp); inp.value = C.method.windows[+wi][side]; return; }
+    n.windows[+wi][side] = v;
+    setMethod(S, C, n);
+  });
+  inp.addEventListener('keydown', e=>{ if (e.key === 'Enter') inp.blur(); });
+}
+/* ---- Peaks: the values of the chromatogram on show ---- */
+function paintValues(S, C, e){ C.$('Values').innerHTML = H.valuesHtml(HU, S.gasOf, M.peaksOf(U, S, C, e)); }
 
-export function createInteg(ctx){
-  const { kit } = ctx;
-  // The gases (gc.js GASES), by key; a peak of another gas, should a window name one, drawn so.
-  const GAS = Object.fromEntries(ctx.gases.map(g=> [g.key, g]));
-  const gasOf = k => GAS[k] || { label: esc(k), txt: k, csv: k, color: '#4cc9a0' };
-  const C_FIT = GAS.h2.color;
-  /* ---- The raw chromatograms, read once per file (by its bytes) ---- */
-  const read = new WeakMap();
-  function dataOf(rec){
-    const b = rec && rec.rawBytes;
-    if (!(b instanceof Uint8Array)) return { error: 'its bytes are not stored in this browser' };
-    let d = read.get(b);
-    if (!d){
-      try { d = readTcd(decodeText(b)); } catch(e){ d = { error: String(e && e.message || e) }; }
-      read.set(b, d);
-    }
-    return d;
+/* ---- The run overview: one gas at a time, every injection's fit (blue
+   whatever the gas, red where it is suspicious for that gas) and the GC table's value
+   (a small grey cross; as area, times the run's k); a point hovered drawn lighter and
+   half again as large, and says what it is, the chromatogram on show's as well; a click
+   shows its chromatogram ---- */
+function drawOverview(S, C, e){
+  const svg = C.$('Over'), leg = C.$('OverLegend');
+  const over = C.over = new Plot(svg, { xlabel: M.aligned(e) ? 'Time from the first injection (h)' : 'Injection', ylabel: '' });
+  // (its points answer the pointer themselves: no trace picked, no crosshair)
+  svg._noPick = true; svg._suppressReadout = true;
+  C.ovPts = []; C.ovLook = null;
+  const gasBox = C.el.querySelector('.gci-ov-gas'), yBox = C.el.querySelector('.gci-ov-y');
+  if (!e || e.d.error || !e.n){ gasBox.innerHTML = ''; yBox.innerHTML = ''; leg.innerHTML = ''; over.attachTools(svg.closest('.plot-wrap')); return; }
+  const O = M.overviewOf(U, S, C, e);
+  gasBox.innerHTML = H.ovGasHtml(S.gasOf, Object.keys(S.GAS), O.g);
+  yBox.innerHTML = H.ovYHtml(HU, O);
+  over.ylabel = O.ylabel;
+  over.setRange(O.xr[0], O.xr[1], O.yr[0], O.yr[1]);
+  over.drawAxes(); over.clearData();
+  // (the crosses under the fits' dots, which cover them where the two agree; the fits one
+  // colour whatever the gas, the suspicious red)
+  const { G, xs, fit, bad, g } = O;
+  if (O.table) over.points(xs, O.table, M.C_TABLE, M.OV_CROSS, { shape: 'cross', width: 1.4, label: O.mode === 'conc' ? `${G.txt} GC table` : `${G.txt} GC table × k`, key: g + ' table' });
+  over.points(xs, fit.map((v, k)=> bad[k] ? NaN : v), S.C_FIT, M.OV_R, { fill: true, label: `${G.txt} fit`, key: g + ' fit' });
+  if (bad.some(Boolean)) over.points(xs, fit.map((v, k)=> bad[k] ? v : NaN), M.C_BAD, M.OV_R, { fill: true, label: `${G.txt} fit, suspicious`, key: g + ' suspicious' });
+  C.ovPts = O.pts; C.ovLook = O.look;
+  leg.innerHTML = H.overLegendHtml(O, S.C_FIT, M.C_BAD);
+  over._onView = ()=> paintHl(C);
+  paintHl(C);
+  over.attachTools(svg.closest('.plot-wrap'));
+}
+/* The points brightened: the chromatogram on show's, and the one under the pointer with
+   its label (in the overlay: drawn again at each zoom, never exported). The point alone,
+   drawn again in a lighter shade of its colour and half again as large as the dot as
+   seen, with no stroke: (OV_R + 0.5)·OV_HL_R, the 0.5 half the dot's 1 px ring. */
+function paintHl(C){
+  const over = C.over;
+  if (!over) return;
+  const old = over.gOverlay.querySelector('.gci-hl');
+  if (old) old.remove();
+  const g = svgEl('g', { class: 'gci-hl', 'pointer-events': 'none' });
+  over.gOverlay.appendChild(g);
+  const mark = q =>{
+    const x = over.px(q.x), y = over.py(q.y);
+    g.appendChild(svgEl('circle', { cx: x, cy: y, r: +((M.OV_R + 0.5)*M.OV_HL_R).toFixed(3), fill: M.tint(q.color, M.OV_HL_TINT), stroke: 'none', class: 'gci-hl-pt' }));
+    return [x, y];
+  };
+  const sel = C.ovPts.find(q=> q.k === C.selK);
+  if (sel) mark(sel);
+  const hov = C.hovK >= 0 ? C.ovPts.find(q=> q.k === C.hovK) : null;
+  if (hov){ const [x, y] = hov === sel ? [over.px(hov.x), over.py(hov.y)] : mark(hov); if (C.ovLook) over.tagAt(g, x, y, C.ovLook(hov.k), hov.color); }
+  g.dataset.sel = sel ? String(sel.k) : '';
+  g.dataset.hov = hov ? String(hov.k) : '';
+}
+// The injection nearest the pointer on screen, within 14 px (−1: none).
+function ovAt(C, ev){
+  if (!C.over || !C.ovPts.length) return -1;
+  const b = C.$('Over').getBoundingClientRect();
+  return M.nearest(C.over, C.ovPts, ev.clientX - b.left, ev.clientY - b.top);
+}
+function onOverClick(S, C, ev){
+  if (!C.over || C.over._mode) return;
+  const k = ovAt(C, ev);
+  if (k >= 0 && k !== C.selK){ C.selK = k; draw(S, C); }
+}
+// The overview's chips: its gas, its y (view keys: a step).
+function onChip(S, C, ev){
+  const gc = ev.target.closest('.gci-ov-chip'), yc = ev.target.closest('.gci-ovy-chip');
+  if (gc && !gc.disabled && S.GAS[gc.dataset.g] && gc.dataset.g !== C.ovGas){ C.ovGas = gc.dataset.g; draw(S, C, true); S.kit.commit(); }
+  if (yc && !yc.disabled && yc.dataset.y !== C.ovY){ C.ovY = oneOf(yc.dataset.y, ['conc', 'area']); draw(S, C, true); S.kit.commit(); }
+}
+
+/* ---- The status, the card's alerts ---- */
+function paintStatus(S, C, all){
+  const box = C.$('Status'), x = M.progressOf(U, S, C), html = H.statusHtml(HU, x);
+  box.innerHTML = html;
+  box.dataset.state = x.state;
+  C.$('Bar').hidden = !html;
+  C.$('Stop').style.display = x.st.job ? '' : 'none';
+  C.$('Run').style.display = !x.st.job && x.left ? '' : 'none';
+  if (all){ C.valuesKept.clear(); if (S.ctx.drawable()) draw(S, C, true); }
+}
+function paintAlerts(S, C){ C.$('Alerts').innerHTML = H.alertsHtml(HU, S.gasOf, M.alertFacts(U, S, C)); }
+
+/* ---- Its CSVs: every chromatogram's values (integration.csv, the run overview's); the
+   chromatogram on show, its model and parts and its residuals (chromatogram.csv, the
+   chromatogram's plot's: the whole chromatogram, the model's columns blank outside the
+   fit window) ---- */
+function exportEntries(S, C, n){
+  const es = M.entriesOf(S), W = C.W;
+  if (!es.length) return W.isOpen && C.calDrawn ? [{ name: `${n} - standard_chromatogram.csv`, text: M.chromCsv(U, C.calDrawn) }] : [];
+  const out = [{ name: `${n} - integration.csv`, text: M.integrationCsv(U, S, C, es) }];
+  const d = C.drawn;
+  if (d && d.e && es.some(x=> x.name === d.e.name)) out.push({ name: `${n} - chromatogram.csv`, text: M.chromCsv(U, d) });
+  // (the standard on show in the calibration's window, while it is open: its plot's)
+  if (W.isOpen && C.calDrawn) out.push({ name: `${n} - standard_chromatogram.csv`, text: M.chromCsv(U, C.calDrawn) });
+  return out;
+}
+
+/* =========================================================
+   THE CALIBRATION'S WINDOW (a card's): a table and its raw chromatograms, both needed, the
+   standards named by the table; the standard chosen drawn as the card's chromatogram, over
+   its residuals, at the left of the standards' table, CLAUDE.md's tops aligned. Its state W:
+     m, q(sel)             its backdrop in the layer, an element of it
+     isOpen, from          whether open, what had the focus before it opened
+     rowsNow               the standards' rows as last drawn (gc-integ-model.js calRows)
+     held                  the files dropped waiting for their partner (not in the project),
+                           let go as it closes
+     stdNav, onKey         the standards' selector (snav.js), its keys' listener (while open)
+========================================================= */
+function calWindow(S, C){
+  const m = document.createElement('div');
+  m.className = 'modal-backdrop xrd-std-modal gci-cal-modal';
+  m.style.display = 'none';
+  m.innerHTML = H.calHtml(HU, C.p);
+  S.ctx.layer.appendChild(m);
+  const W = { m, q: s => m.querySelector(s), from: null, isOpen: false, rowsNow: [], held: [], stdNav: null, onKey: null };
+  W.onKey = e => onCalKey(S, C, W, e);
+  const info = W.q('.instr-info'), instr = W.q('.xrd-std-instr');
+  info.addEventListener('click', ()=>{ const o = instr.style.display === 'none'; instr.style.display = o ? '' : 'none'; info.classList.toggle('is-on', o); info.setAttribute('aria-expanded', String(o)); });
+  m.addEventListener('click', e=>{ if (e.target === m || e.target.closest('.xrd-std-x')) closeCal(W); });
+  setupDropzone(W.q('.gci-cal-dz'), W.q('.gci-cal-in'), list => onCalDrop(S, C, W, list));
+  wireCalEdits(S, C, W);
+  wireCalNav(S, C, W);
+  return W;
+}
+/* ← → step the standards, as the card's chromatograms (utils.js SAMPLE_NAV leaves the
+   keys to a window over the page): not from a field, nor under a window over this one
+   (the figure composer's); Escape closes it. */
+const above = W => [...document.querySelectorAll('.modal-backdrop, .fig-backdrop')].some(x=> x !== W.m && x.getClientRects().length > 0);
+function onCalKey(S, C, W, e){
+  if (e.key === 'Escape' && S.ctx.shown()){ e.stopPropagation(); closeCal(W); return; }
+  if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !e.ctrlKey && !e.metaKey && !e.altKey && S.ctx.shown() && !above(W)){
+    const t = document.activeElement && document.activeElement.tagName;
+    if (t === 'INPUT' || t === 'SELECT' || t === 'TEXTAREA') return;
+    e.preventDefault();
+    stepStd(S, C, W, e.key === 'ArrowLeft' ? -1 : 1);
   }
-  // (a file a drop read, gc.js's or the calibration window's: what it read kept, not read again)
-  const prime = (bytes, d)=>{ read.set(bytes, d); };
-  const fileKey = rec => rec.rawBytes instanceof Uint8Array ? bytesKey(rec.rawBytes) : 'name:' + rec.name;
-  /* ---- A calibration's table (v549), read once per file (by its bytes) as gc.js reads a
-     GC table (ctx.readTable), its injections' names with it ---- */
-  const tabs = new WeakMap();
-  function tableOf(b){
-    if (!(b instanceof Uint8Array)) return null;
-    let t = tabs.get(b);
-    if (!t){
-      try { t = ctx.readTable(decodeText(b)); } catch(e){ t = null; }
-      if (!t || t.error) t = { error: t && t.error || 'not a GC table (no injection date and H₂ or O₂ column under a header)' };
-      tabs.set(b, t);
-    }
-    return t;
+}
+function openCal(S, C, W){ if (W.isOpen) return; W.isOpen = true; W.from = document.activeElement; W.m.style.display = 'flex'; document.addEventListener('keydown', W.onKey); paintWindow(S, C, W); ensure(S); W.q('.gci-cal-box').focus({ preventScroll: true }); }
+// (the files waiting for their partner, and what was said of them, let go)
+function closeCal(W){ if (!W.isOpen) return; W.isOpen = false; W.held = []; W.q('.gci-cal-alerts').innerHTML = ''; W.stdNav.close(); W.m.style.display = 'none'; document.removeEventListener('keydown', W.onKey); if (W.from && W.from.isConnected) W.from.focus({ preventScroll: true }); W.from = null; }
+function destroyCal(W){ closeCal(W); W.stdNav.close(); W.m.remove(); }
+// A change: the card's, a step; the cards below follow.
+// (`levels`: a level typed or ticked, its field kept as it is: the fits drawn again, not the table)
+function calChanged(S, C, W, levels){ C.valuesKept.clear(); draw(S, C, true); if (levels) paintFits(S, C, W); else paintWindow(S, C, W); S.kit.commit(); S.ctx.changed(); }
+
+/* The files dropped (v549), each told by what it holds and paired (gc-integ-model.js
+   takeDropped, pairDropped): a pair loaded when its table has as many injections as there
+   are chromatograms; a file whose partner is not there waits (W.held) until it is dropped;
+   a table whose partner is a calibration file of v544–v548's names its standards. */
+async function onCalDrop(S, C, W, list){
+  const bad = [], got = [];
+  for (const f of list){
+    const x = M.takeDropped(S, f.name, new Uint8Array(await f.arrayBuffer()));
+    if (x.bad) bad.push(x.bad); else got.push(x);
   }
-
-  /* ---- The results ---- */
-  const store = new Map();
-  // (`dead`: its instance let go, a tab asleep or closed: a job's end writes nothing)
-  let job = null, halted = false, soon = 0, failed = '', dead = false;
-  const keyOf = (rec, m)=> fileKey(rec) + '|' + methodKey(m);
-  // (the job's own, as they come, over the store's)
-  const resultsAt = key => job && job.key === key ? job.work : store.get(key) || null;
-  const integCards = ()=> ctx.cards().filter(a=> a.type === 'integ').map(a=> ctx.inst(a.id)).filter(Boolean);
-  function usedKeys(){
-    const out = new Set();
-    integCards().forEach(c=> c.tcdRecs().forEach(r=> out.add(keyOf(r, c.method()))));
-    return out;
+  const P = M.pairDropped(S, C.cal, W.held, got, bad);
+  W.held = P.held;
+  W.q('.gci-cal-alerts').innerHTML = H.dropAlertHtml(HU, bad);
+  if (!P.add.length && !P.named.length) return;
+  if (P.add.length) C.calSel = M.calRows(U, S, C).length;
+  C.cal = M.calWith(C.cal, P.add, P.named);
+  calChanged(S, C, W);
+  ensure(S);
+}
+// Its files removed, its unit, the levels typed or ticked, a row picked, an intercept's chip.
+function wireCalEdits(S, C, W){
+  const q = W.q;
+  q('.gci-cal-files').addEventListener('click', e=>{
+    const b = e.target.closest('[data-cal-del]');
+    if (!b) return;
+    const c = M.calCopy(C.cal); c.files.splice(+b.dataset.calDel, 1); C.cal = c; calChanged(S, C, W);
+  });
+  q('.gci-cal-unit-in').addEventListener('change', e=>{ const c = M.calCopy(C.cal); c.unit = oneOf(e.target.value, M.UNITS); C.cal = c; calChanged(S, C, W); });
+  q('.gci-cal-levels').addEventListener('change', e=> onLevel(S, C, W, e));
+  q('.gci-cal-levels').addEventListener('keydown', e=>{ if (e.key === 'Enter' && e.target.matches('input[type="text"]')) e.target.blur(); });
+  // A row clicked, or a field of it taken (Tab), shows its standard.
+  const pickRow = e =>{ const tr = e.target.closest('tr[data-row]'); if (tr && +tr.dataset.row !== C.calSel){ C.calSel = +tr.dataset.row; selPaint(S, C, W, false); } };
+  q('.gci-cal-levels').addEventListener('click', pickRow);
+  q('.gci-cal-levels').addEventListener('focusin', pickRow);
+  q('.gci-cal-fits').addEventListener('click', e=>{
+    const b = e.target.closest('[data-zero]');
+    if (!b) return;
+    const c = M.calCopy(C.cal), g = b.dataset.g, z = b.dataset.zero === '1';
+    if (c.zero[g] === z) return;
+    c.zero[g] = z; C.cal = c; calChanged(S, C, W);
+  });
+}
+// A level typed (blank: none; a number at least 0, else refused and put back) or a row ticked.
+function onLevel(S, C, W, e){
+  const inp = e.target.closest('input[data-fi]');
+  if (!inp) return;
+  const c = M.calCopy(C.cal), f = c.files[+inp.dataset.fi], j = +inp.dataset.j;
+  if (!f) return;
+  while (f.levels.length <= j) f.levels.push(M.blankLevel());
+  if (inp.type === 'checkbox'){ f.levels[j].on = inp.checked; inp.closest('tr').classList.toggle('is-excluded', !inp.checked); }
+  else {
+    const v = M.levelIn(inp.value);
+    if (Number.isNaN(v)){ flashFieldInvalid(inp); inp.value = f.levels[j][inp.dataset.g] == null ? '' : String(f.levels[j][inp.dataset.g]); return; }
+    f.levels[j][inp.dataset.g] = v;
   }
-  // The module state's `integ`: the results the cards use, none where there are none.
-  function saved(){
-    const out = {};
-    usedKeys().forEach(k=>{ const v = store.get(k); if (v && v.some(Boolean)) out[k] = v; });
-    return Object.keys(out).length ? out : null;
+  C.cal = c; calChanged(S, C, W, true);
+}
+
+/* The standard on show: its selector (snav.js: its name, the table's; red where its
+   fit is suspicious), its arrows and ← →, a click on its row. */
+function wireCalNav(S, C, W){
+  W.stdNav = snav(W.q('.gci-csel'), {
+    count: ()=> W.rowsNow.length, index: ()=> C.calSel,
+    label: i => W.rowsNow[i] ? W.rowsNow[i].name : '',
+    title: i => W.rowsNow[i] ? M.fullName(W.rowsNow[i]) : '',
+    bad: i => !!(W.rowsNow[i] && M.fitMarks(W.rowsNow[i].r).length),
+    go: i =>{ C.calSel = i; selPaint(S, C, W, true); },
+  });
+  W.q('.gci-cprev').addEventListener('click', ()=> stepStd(S, C, W, -1));
+  W.q('.gci-cnext').addEventListener('click', ()=> stepStd(S, C, W, 1));
+}
+function stepStd(S, C, W, d){ const n = W.rowsNow.length; if (n < 2) return; C.calSel = (C.calSel + d + n) % n; selPaint(S, C, W, true); }
+// (`scroll`: chosen elsewhere than in the table, its row brought into the table's view)
+function selPaint(S, C, W, scroll){
+  const trs = [...W.m.querySelectorAll('.gci-cal-levels tr[data-row]')];
+  trs.forEach(tr=> tr.classList.toggle('selected', +tr.dataset.row === C.calSel));
+  W.stdNav.update();
+  drawStd(S, C, W, false);
+  const tr = trs[C.calSel], box = W.q('.gci-cal-table');
+  if (scroll && tr && box.scrollHeight > box.clientHeight) rowInView(box, tr);
+}
+function rowInView(box, tr){
+  const b = box.getBoundingClientRect(), r = tr.getBoundingClientRect(), hd = box.querySelector('thead').getBoundingClientRect().height;
+  if (r.top < b.top + hd) box.scrollTop -= b.top + hd - r.top;
+  else if (r.bottom > b.bottom) box.scrollTop += r.bottom - b.bottom;
+}
+// Its chromatogram over its residuals, as the card's (drawPair), the windows' edges fixed.
+function drawStd(S, C, W, keep){
+  const x = W.rowsNow[C.calSel] || null;
+  W.q('.gci-cal-pside').classList.toggle('is-empty', !x);
+  if (!W.isOpen) return;
+  const o = drawPair(S, C, { svg: W.q('svg.gci-chrom'), rs: W.q('svg.gci-resid'), leg: W.q('.gci-cal-legend'), wrap: W.q('.gci-cal-pair'), keep, was: C.calPlots,
+    d: x ? x.d : null, k: x ? x.j : 0, R: x ? M.resOf(U, S, C, x.f) : null, key: x ? M.fileKey(U, x.f) + '#' + x.j : '', file: x ? x.f.name : '', what: x ? x.name : '', overlay: P => overlayOn(S, C, P, C.method, false) });
+  C.calPlots = { chrom: o.chrom, resid: o.resid };
+  C.calDrawn = x && o.drawn ? { x, ...o.drawn } : null;
+  W.q('.gci-cal-notice').innerHTML = o.notice;
+  // (its fit in a line under the plot: each gas's area and χ²ᵣ, what makes it suspicious)
+  W.q('.gci-cal-fit').innerHTML = H.calFitHtml(HU, S.gasOf, Object.keys(S.GAS), x);
+  const n = fileSafe(C.a.name);
+  nameDownloads(W.q('.gci-cal-pair'), `${n} - GC_standard_chromatogram.svg`, `${n} - standard_chromatogram.csv`);
+}
+// (drawn anew while the standards are integrated: the field typed in keeps the focus)
+function paintWindow(S, C, W){
+  if (!W.isOpen) return;
+  const was = focusedLevel(W), box = W.q('.gci-cal-table'), top = box.scrollTop;
+  W.q('.gci-cal-files').innerHTML = H.calFilesHtml(HU, C.cal.files);
+  paintCalWarn(C, W);
+  W.q('.gci-cal-unit-in').value = C.cal.unit;
+  W.m.querySelectorAll('.gci-u').forEach(s=>{ s.textContent = `(${C.cal.unit})`; });
+  const rows = W.rowsNow = M.calRows(U, S, C), left = M.stdsLeft(U, S, C);
+  if (C.calSel >= rows.length) C.calSel = Math.max(0, rows.length - 1);
+  W.q('.gci-cal-status').textContent = H.calStatusText(C.cal.files, left, rows.length);
+  const [lo, hi] = M.range(C.method);
+  W.q('.gci-cal-levels tbody').innerHTML = H.levelRowsHtml(HU, rows, C.calSel, lo, hi);
+  box.scrollTop = top;
+  if (was) refocus(W, was);
+  W.stdNav.update();
+  drawStd(S, C, W, true);
+  paintFits(S, C, W);
+}
+// The level's field that has the focus: its key, value and caret (null: none).
+function focusedLevel(W){
+  const act = document.activeElement;
+  return act && W.m.contains(act) && act.matches('input[data-fi]') ? { k: `[data-fi="${act.dataset.fi}"][data-j="${act.dataset.j}"][data-g="${act.dataset.g}"]`, v: act.value, s: act.type === 'text' ? act.selectionStart : null } : null;
+}
+function refocus(W, was){
+  const f = W.m.querySelector('input' + was.k);
+  if (f){ if (f.type === 'text'){ f.value = was.v; } f.focus({ preventScroll: true }); if (was.s != null) try { f.setSelectionRange(was.s, was.s); } catch(e){ /* not a text field */ } }
+}
+/* A calibration of v544–v548's, its raw chromatograms alone: said, its standards named
+   by column, until its table is dropped (an alert dismissed stays so while the same
+   files lack theirs). */
+function paintCalWarn(C, W){
+  const old = C.cal.files.filter(f=> !f.table), wk = old.map(f=> f.name).join('\n'), warn = W.q('.gci-cal-warn');
+  if (warn.dataset.k !== wk){ warn.dataset.k = wk; warn.innerHTML = H.calWarnHtml(HU, old); }
+}
+function paintFits(S, C, W){
+  const fits = W.q('.gci-cal-fits');
+  fits.innerHTML = H.calFitsHtml(HU, S.gasOf, Object.keys(S.GAS), C.p, C.cal.zero);
+  Object.keys(S.GAS).forEach(g=> drawCalGas(S, C, g, fits.querySelector(`.gci-cal-gas[data-g="${g}"]`)));
+}
+function drawCalGas(S, C, g, box){
+  const G = M.calGasOf(U, S, C, g), stats = box.querySelector('.gci-cal-stats'), svg = box.querySelector('svg.plot');
+  const P = new Plot(svg, { xlabel: `${S.gasOf(g).txt} (${C.cal.unit})`, ylabel: 'Area' });
+  if (G.pts.length){
+    P.setRange(0, G.xmax*1.08, G.ylo, G.ymax*1.08);
+    P.drawAxes(); P.clearData();
+    if (G.L) P.line([0, G.xmax*1.08], [G.L.intercept, G.L.slope*G.xmax*1.08 + G.L.intercept], M.C_MODEL, 1.3, undefined, { label: 'fit', key: 'fit' });
+    P.points(G.xs, G.ys, S.gasOf(g).color, 3.5, { fill: true, label: 'standards', key: 'standards' });
   }
-  // A state's results taken in (RESTORED: an array of objects or nulls under each key),
-  // merged with those held (a result held is never taken away). A key of v544's is read as
-  // v545's (normKey), its results without their trapezoids.
-  function load(obj){
-    if (!isObj(obj)) return;
-    for (const k0 of Object.keys(obj)){
-      const v = obj[k0], k = normKey(k0);
-      if (!Array.isArray(v)) continue;
-      const had = store.get(k), arr = v.map(x=> isObj(x) && isObj(x.gases) && Array.isArray(x.windows) ? noTrap(deNull(x)) : null);
-      if (had && had.length === arr.length) store.set(k, had.map((x, i)=> x || arr[i]));
-      else if (!had || !had.some(Boolean)) store.set(k, arr);
-    }
-  }
-  // Whether a state holds the file of this bytes' key (its rows, a pair's mate, a card's
-  // calibration): the states a result is written into.
-  function holds(s, fk){
-    if (!isObj(s)) return false;
-    const has = r => isObj(r) && r.rawBytes instanceof Uint8Array && bytesKey(r.rawBytes) === fk;
-    if (Array.isArray(s.files) && s.files.some(f=> has(f) || (isObj(f) && has(f.mate)))) return true;
-    return Array.isArray(s.cards) && s.cards.some(c=> isObj(c) && isObj(c.cal) && Array.isArray(c.cal.files) && c.cal.files.some(has));
-  }
-  function write(key, arr){
-    store.set(key, arr);
-    const fk = key.slice(0, key.indexOf('|'));
-    kit.patch(s=> holds(s, fk) ? { ...s, integ: { ...(isObj(s.integ) ? s.integ : {}), [key]: arr } } : s);
-  }
-
-  /* ---- The job: every (file, method) a card uses with a chromatogram not integrated ---- */
-  function wanted(){
-    const out = [], seen = new Set();
-    integCards().forEach(c=> c.tcdRecs().forEach(r=>{
-      const m = c.method(), key = keyOf(r, m);
-      if (seen.has(key)) return;
-      seen.add(key);
-      const d = dataOf(r);
-      if (d.error) return;
-      const have = store.get(key) || [];
-      const miss = d.cols.map((_, j)=> j).filter(j=> !have[j]);
-      if (miss.length) out.push({ key, rec: r, method: m, miss, d });
-    }));
-    return out;
-  }
-  // Run what is wanted (`force`: Re-integrate, after a Stop); a job on a file still wanted
-  // goes on, one on a file no longer wanted (its method changed) gives way.
-  function ensure(force){
-    clearTimeout(soon); soon = 0;
-    if (force){ halted = false; failed = ''; }
-    if (halted){ paint(); return; }
-    const w = wanted();
-    if (job){
-      if (w.some(g=> g.key === job.key)){ job.total = job.done + w.reduce((s, g)=> s + g.miss.length, 0) - job.doneHere; paint(); return; }
-      job.ac.abort(); job = null;
-    }
-    if (!w.length){ paint(); return; }
-    run(w[0], w.reduce((s, g)=> s + g.miss.length, 0), 0);
-  }
-  // A method changed: run after the edits settle (a second without another).
-  function later(){ clearTimeout(soon); soon = setTimeout(()=>{ soon = 0; ensure(); }, 1200); paint(); }
-  function run(g, total, done){
-    const ac = new AbortController();
-    const prev = store.get(g.key);
-    const work = prev && prev.length === g.d.cols.length ? prev.slice() : new Array(g.d.cols.length).fill(null);
-    const j = job = { key: g.key, ac, work, total, done, doneHere: 0, name: g.rec.name };
-    let last = performance.now();
-    integrateMany(g.d.t, g.miss.map(c=> g.d.cols[c]), {
-      method: g.method, signal: ac.signal,
-      onProgress: (_done, _n, i, r)=>{
-        if (job !== j) return;
-        // (a chromatogram the engine could not fit is a result too, its error said: else it
-        // would be wanted again at once, and fail again)
-        work[g.miss[i]] = r && !r.error ? compact(r) : { error: String(r && r.error || 'the integration failed'), gases: {}, windows: [] };
-        j.done++; j.doneHere++;
-        // (counted for the tests, as utils.js kept counts what is worked out: a project reopened fits none)
-        kept.made['gc-tcd'] = (kept.made['gc-tcd'] || 0) + 1;
-        // (what came in, shown every half second; written at the file's end)
-        if (performance.now() - last > 500){ last = performance.now(); paint(true); }
-      },
-    }).then(()=>{
-      if (job !== j || dead) return;
-      job = null;
-      write(g.key, work.slice());
-      ctx.changed();
-      const next = halted ? [] : wanted();
-      if (next.length) run(next[0], j.done + next.reduce((s, x)=> s + x.miss.length, 0), j.done);
-      else paint(true);
-    }, e=>{
-      if (job === j) job = null;
-      if (dead) return;
-      if (work.some(Boolean)) write(g.key, work.slice());
-      if (!e || e.name !== 'AbortError'){ failed = String(e && e.message || e); halted = true; }
-      ctx.changed();
-      paint(true);
-    });
-    paint();
-  }
-  function stop(){ halted = true; clearTimeout(soon); soon = 0; if (job){ job.ac.abort(); } paint(); }
-  // Every card's status (and, with `all`, its plots: results came in).
-  let painting = 0, paintAll = false;
-  function paint(all){
-    paintAll = paintAll || !!all;
-    if (painting || dead) return;
-    painting = requestAnimationFrame(()=>{ const a = paintAll; painting = 0; paintAll = false; if (!dead) integCards().forEach(c=> c.paintStatus(a)); });
-  }
-  const status = ()=> ({ job, halted, soon: !!soon, failed });
-
-  /* ---- A card ---- */
-  function card(a, el){
-    const p = 'gc' + a.id, $ = id => el.querySelector('#' + p + id);
-    let method = methodIn(null), cal = calIn(null);
-    // (the run overview's gas, one at a time, and its y: view keys of the state)
-    let ovGas = 'h2', ovY = 'conc';
-    // What it shows (no state): the file and the chromatogram, by the file's name.
-    let selName = null, selK = 0, wasMethod = null;
-    let chrom = null, resid = null, over = null, ovPts = [];
-    // (the calibration's window: the standard on show, its row; its plots; what it drew, for its CSV)
-    let calSel = 0, calPlots = { chrom: null, resid: null }, calDrawn = null;
-
-    const calModal = calWindow();
-
-    /* The pairs and files of raw chromatograms it shows: one entry each, in list order (the
-       row's included). A table with its raw chromatograms: the table's label, its dates
-       when they are as many as the chromatograms; raw chromatograms alone, or two files of
-       them paired: each by itself, with no time. */
-    function entries(){
-      const out = [];
-      ctx.all.forEach(r=>{
-        if (r.included === false) return;
-        const mate = r.mate;
-        if (ctx.isTcd(r)){
-          out.push({ name: r.name, label: r.label, tcd: r, table: null, twin: mate && ctx.isTcd(mate) ? mate.name : null });
-          if (mate && ctx.isTcd(mate)) out.push({ name: mate.name, label: `${r.label} · ${mate.name}`, tcd: mate, table: null, twin: r.name });
-        } else if (mate && ctx.isTcd(mate)) out.push({ name: mate.name, label: r.label, tcd: mate, table: r });
-      });
-      return out.map(e=>{ const d = dataOf(e.tcd); return { ...e, d, n: d.error ? 0 : d.cols.length, rows: e.table ? e.table.injDates.length : null }; });
-    }
-    const tcdRecs = ()=> [...entries().map(e=> e.tcd), ...cal.files];
-    const cur = ()=>{ const es = entries(); return es.find(e=> e.name === selName) || es[0] || null; };
-    const aligned = e => !!(e && e.table && !e.d.error && e.rows === e.n);
-    // The results of entry e: under the method, else (stale) the one before it.
-    function resOf(rec){
-      const now = resultsAt(keyOf(rec, method));
-      if (now && now.some(Boolean)) return { res: now, m: method, stale: false };
-      if (wasMethod){ const old = resultsAt(keyOf(rec, wasMethod)); if (old && old.some(Boolean)) return { res: old, m: wasMethod, stale: true }; }
-      return { res: now, m: method, stale: false };
-    }
-
-    /* ---- Concentrations: the standards' line per gas, else the software's scale ---- */
-    /* A standard's name (v549): its injection's in the table (its Analysis column), else
-       its injection's number; a file with no table (saved by v544–v548) by its column. */
-    function stdName(f, j){
-      const t = f.table ? tableOf(f.table.rawBytes) : null;
-      if (!t || t.error) return `column ${j + 1}`;
-      const n = Array.isArray(t.names) && typeof t.names[j] === 'string' ? t.names[j].trim() : '';
-      return n || `injection ${j + 1}`;
-    }
-    function calRows(){
-      const rows = [];
-      cal.files.forEach((f, fi)=>{
-        const d = dataOf(f), res = d.error ? null : resultsAt(keyOf(f, method));
-        const n = d.error ? 0 : d.cols.length;
-        for (let j = 0; j < n; j++) rows.push({ f, fi, j, d, lv: f.levels[j] || blankLevel(), r: res && res[j], name: stdName(f, j) });
-      });
-      return rows;
-    }
-    function calFit(g){
-      const pts = calRows().filter(x=> x.lv.on && fin(x.lv[g]) && x.r && x.r.gases && x.r.gases[g] && fin(x.r.gases[g].area)).map(x=> ({ conc: x.lv[g], area: x.r.gases[g].area }));
-      let fit;
-      try { fit = pts.length ? fitCalibration(pts, { zeroIntercept: cal.zero[g] }) : null; } catch(e){ fit = null; }
-      return fit && fin(fit.slope) && fit.slope ? { ...fit, pts } : null;
-    }
-    const calKey = ()=> exactKey([cal.unit, cal.zero, cal.files.map(f=> [fileKey(f), f.levels])]);
-    /* How a gas's areas become %mol for an entry: { how: 'cal', f } with the standards, else
-       { how: 'transfer', k, n, f } from the table (`tableVals`, %mol, the injections'), else
-       { why }. */
-    function convOf(g, areas, tableVals){
-      const L = calFit(g);
-      if (L) return { how: 'cal', fit: L, f: A => toPct((A - L.intercept)/L.slope, cal.unit) };
-      if (!tableVals) return { why: `no standards for ${gasOf(g).txt} and no table to take its scale from` };
-      let T = null;
-      try { T = transferK(areas, Array.from(tableVals, v=> fin(v) ? v : NaN), method.transfer[g]); } catch(e){ T = null; }
-      if (!T || !fin(T.k) || !T.k) return { why: `no standards for ${gasOf(g).txt}, and too few injections above the threshold to take the GC software's scale` };
-      return { how: 'transfer', k: T.k, n: T.n, f: A => A/T.k };
-    }
-    /* What Analysis takes for a table record f (a sample) paired with its raw chromatograms,
-       or null for one with none (the table, nothing said): { gas: { h2, o2 } in %mol (an
-       array fixed, kept while nothing changes), how: { gas: 'cal' | 'transfer' | 'table' },
-       why: { gas: why the table }, k } or { why } (the table for every gas). */
-    const valuesKept = new Map();
-    function valuesFor(f){
-      const tcd = f && f.mate && ctx.isTcd(f.mate) ? f.mate : null;
-      if (!tcd) return null;
-      const d = dataOf(tcd);
-      if (d.error) return { why: `its raw chromatograms could not be read (${d.error})` };
-      const n = d.cols.length, rows = f.injDates.length;
-      if (n !== rows) return { why: `${plural(rows, 'row')} in the table, ${plural(n, 'chromatogram')}` };
-      const res = resultsAt(keyOf(tcd, method));
-      if (!res || res.some(x=> !x)){ const st = status(); return { why: st.halted ? 'its integration was stopped before its end' : 'its integration is not done yet', waiting: true }; }
-      const vk = exactKey([keyOf(tcd, method), calKey(), Object.keys(f.gas).map(k=> [k, objId(f.gas[k])]), objId(res)]);
-      if (valuesKept.has(vk)) return valuesKept.get(vk);
-      const gas = {}, how = {}, why = {}, k = {};
-      Object.keys(GAS).forEach(g=>{
-        const areas = res.map(x=> x.gases && x.gases[g] && fin(x.gases[g].area) ? x.gases[g].area : NaN);
-        const c = convOf(g, areas, f.gas[g]);
-        if (c.f){ gas[g] = fixed(areas.map(A=> fin(A) ? c.f(A) : NaN)); how[g] = c.how; if (c.how === 'transfer') k[g] = { k: c.k, n: c.n }; }
-        else if (f.gas[g]){ gas[g] = f.gas[g]; how[g] = 'table'; why[g] = c.why; }
-      });
-      const out = { gas, how, why, k, areas: Object.fromEntries(Object.keys(GAS).map(g=> [g, res.map(x=> x.gases && x.gases[g] ? x.gases[g].area : NaN)])) };
-      if (valuesKept.size > 64) valuesKept.delete(valuesKept.keys().next().value);
-      valuesKept.set(vk, out);
-      return out;
-    }
-
-    /* ---- Its markup ----
-       The status line (only while there is something to say: the progress and Stop as it
-       integrates), the alerts; then, as a DRS card is laid out, the plot's column at the
-       left, as wide as a Tauc card's plot: the file's selector over the plot at its left
-       and the plot's toolbar at its right, as a Tauc plot's, the chromatogram over its
-       residuals (together a Tauc plot's size), their legend; then the run overview (as
-       wide, half as tall) under the chromatogram's selector, its own toolbar at the right of
-       that line. At the right, as a Tauc card's parameters: Windows (its title's letters'
-       top on the plot frame's, .cap-title, CLAUDE.md), the Peaks of the chromatogram on show
-       and Calibration…. */
-    const body = el.querySelector('.gci-body');
-    body.innerHTML = `
-      <div class="gci-bar" id="${p}Bar">
-        <div class="gci-status" id="${p}Status" role="status"></div>
-        <div class="gci-acts">
-          <button type="button" class="btn gci-run" id="${p}Run" title="Integrate what is not integrated with this method">↻ Re-integrate</button>
-          <button type="button" class="btn gci-stop" id="${p}Stop" title="Stop the integration (what is done is kept)">Stop</button>
-        </div>
-      </div>
-      <div class="gci-alerts" id="${p}Alerts"></div>
-      <div class="gci-notice" id="${p}Notice"></div>
-      <div class="row gci-row">
-        <div class="col mw520 gci-main">
-          <div class="plot-nav-row gci-nav">
-            <div class="plot-nav-left">${snavHtml({ idx: p + 'FileIdx', name: p + 'File', prevCls: 'gci-fprev', nextCls: 'gci-fnext', what: 'file', keys: false, cls: 'gci-fsel' })}</div>
-          </div>
-          <div class="plot-wrap gci-pair">
-            <svg class="plot gci-chrom" id="${p}Chrom"></svg>
-            <svg class="plot gci-resid" id="${p}Resid"></svg>
-            <button class="btn plot-dl-btn" data-dl-svg="${p}Chrom" data-dl-also="${p}Resid" data-csv-mod="gc" data-csv-names="chromatogram.csv" data-dl-name="GC_chromatogram.svg" data-dl-legend="${p}ChromLegend">${PLOT_DL_ICON}</button>
-          </div>
-          <div id="${p}ChromLegend" class="legend gci-legend"></div>
-          <div class="plot-nav-row gci-ov-nav">
-            <div class="plot-nav-left">${snavHtml({ idx: p + 'InjIdx', name: p + 'Inj', prevCls: 'gci-kprev', nextCls: 'gci-knext', what: 'chromatogram', cls: 'gci-ksel' })}</div>
-          </div>${plotWrap(p + 'Over', { mod: 'gc', name: 'GC_run_overview.svg', legend: p + 'OverLegend', csv: 'integration.csv', cls: 'gci-over',
-            extra: `\n              <span class="plot-chips gci-ov-sel"><span class="gci-ov-gas"></span><span class="gci-ov-y"></span></span>` })}
-          <div id="${p}OverLegend" class="legend gci-legend"></div>
-        </div>
-        <div class="col mw280 gci-side">
-          <div class="txt-mini param-head aligned cap-title gci-head gci-win-head"><span>Windows</span><button type="button" class="btn btn-sm gci-reset" title="The engine's default windows" hidden>Default</button></div>
-          <div class="peak-box gci-win-box"><div class="gci-method" id="${p}Method"></div></div>
-          <div class="txt-mini param-head gci-head gci-values-head"><span>Peaks</span></div>
-          <div class="peak-box gci-values-box"><div class="peak-scroll" id="${p}Values"></div></div>
-          <button type="button" class="btn plot-action-btn gci-cal" id="${p}Cal" title="The standards: their raw chromatograms and concentrations">Calibration…</button>
-        </div>
-      </div>`;
-
-    /* ---- The selectors (snav.js): the file (over the chromatogram), and its chromatogram
-       (over the run overview); a suspicious one's name red, in the list too ---- */
-    const pad = v => String(v).padStart(2, '0');
-    const clock = d =>{ const x = new Date(d); return fin(+x) ? `${pad(x.getDate())}/${pad(x.getMonth() + 1)} ${pad(x.getHours())}:${pad(x.getMinutes())}` : ''; };
-    // (integration.csv's injection date: local time, as the table logged it)
-    const isoLocal = d =>{ const x = new Date(d); return fin(+x) ? `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())} ${pad(x.getHours())}:${pad(x.getMinutes())}:${pad(x.getSeconds())}` : ''; };
-    // (the selector's name short, its count beside it; the tooltip and the overview's label whole)
-    const injName = (e, k)=> `Injection ${k + 1}${aligned(e) ? ' · ' + clock(e.table.injDates[k]) : ''}`;
-    const injShort = (e, k)=> aligned(e) ? `#${k + 1} · ${clock(e.table.injDates[k])}` : `Injection ${k + 1}`;
-    let shownJ = null;      // the judge of the entry on show (renderSel)
-    const fileNav = snav(el.querySelector('.gci-fsel'), {
-      count: ()=> entries().length, index: ()=>{ const c = cur(); return c ? entries().findIndex(x=> x.name === c.name) : 0; },
-      label: i =>{ const x = entries()[i]; return x ? x.label + (x.table ? '' : ' (no table)') : ''; },
-      title: i =>{ const x = entries()[i]; return x ? `${x.label}${x.table ? ` (${x.table.name} + ${x.tcd.name})` : ` (${x.tcd.name}, no table)`}` : ''; },
-      go: i =>{ const x = entries()[i]; if (x){ selName = x.name; selK = 0; draw(); } },
-    });
-    const injNav = snav(el.querySelector('.gci-ksel'), {
-      count: ()=>{ const e = cur(); return e ? e.n : 0; }, index: ()=> selK,
-      label: k => injShort(cur(), k),
-      title: k =>{ const e = cur(); return `${injName(e, k)}${e ? ` of ${e.n}` : ''}${shownJ && shownJ.bad(k) ? ' (suspicious)' : ''}`; },
-      bad: k => !!(shownJ && shownJ.bad(k)),
-      go: k =>{ selK = k; draw(); },
-    });
-    function renderSel(){
-      const e = cur();
-      if (e){ selName = e.name; if (selK >= e.n) selK = Math.max(0, e.n - 1); }
-      shownJ = e && !e.d.error ? judge(e, resOf(e.tcd).res) : null;
-      fileNav.update(); injNav.update();
-    }
-    const stepFile = d =>{ const es = entries(), c = cur(), i = c ? es.findIndex(x=> x.name === c.name) : -1; if (es.length < 2) return; selName = es[(i + d + es.length) % es.length].name; selK = 0; draw(); };
-    const stepK = d =>{ const e = cur(); if (!e || e.n < 2) return; selK = (selK + d + e.n) % e.n; draw(); };
-    el.querySelector('.gci-fprev').addEventListener('click', ()=> stepFile(-1));
-    el.querySelector('.gci-fnext').addEventListener('click', ()=> stepFile(1));
-    el.querySelector('.gci-kprev').addEventListener('click', ()=> stepK(-1));
-    el.querySelector('.gci-knext').addEventListener('click', ()=> stepK(1));
-    $('Run').addEventListener('click', ()=> ensure(true));
-    $('Stop').addEventListener('click', ()=> stop());
-    $('Cal').addEventListener('click', ()=> calModal.open());
-
-    // The fit's own marks of a result r, the window of gas g's (any window, g omitted).
-    function fitMarks(r, g){
-      if (!r) return [];
-      if (typeof r.error === 'string') return [`not integrated: ${r.error}`];
-      const ws0 = Array.isArray(r.windows) ? r.windows : [], wk = g && r.gases && r.gases[g] ? r.gases[g].window : null;
-      const ws = wk ? ws0.filter(x=> x.key === wk) : ws0, out = [];
-      const w = ws.find(x=> fin(x.chi2r) && x.chi2r > CHI2_HIGH);
-      if (w) out.push(`χ²ᵣ ${w.chi2r.toFixed(2)}, above ${CHI2_HIGH}${w.restarted ? ' (after a restart)' : ''}`);
-      if (ws.some(x=> x.ok === false && !x.beyondData)) out.push('the fit did not converge');
-      // (a column that ends before its window does, as a real standard's at 309 s: no fit)
-      if (ws.some(x=> x.beyondData === true)) out.push('the chromatogram ends before its window does: not fitted');
-      return out;
-    }
-    /* The judge of entry e's results `res` (see PROP_TOL): J(k, gases) the reasons that mark
-       injection k (none: []), J.bad(k, g) whether it is suspicious for gas g (any gas: g
-       omitted), J.off(k, g) its area's relative deviation from k × its table value where
-       that is out of proportion (else null), J.prop[g] the run's { k, n } (null without a
-       table value). */
-    function judge(e, res){
-      res = res || [];
-      const tab = aligned(e) ? e.table : null, ppm = !!(tab && tab.altExport === true);
-      const prop = {};
-      Object.keys(GAS).forEach(g=>{
-        const tv = tab && tab.gas[g];
-        prop[g] = null;
-        if (!tv) return;
-        const areas = res.map(x=> x && x.gases && x.gases[g] && fin(x.gases[g].area) ? x.gases[g].area : NaN);
-        let T;
-        try { T = transferK(areas, Array.from(tv, v=> fin(v) ? v : NaN), { minValue: 0, minCount: 1 }); } catch(err){ T = null; }
-        if (T && fin(T.k) && T.k > 0) prop[g] = { k: T.k, n: T.n, areas, tv };
-      });
-      // (in the table's unit: %mol, or ppm for the .txt export; k per that unit)
-      const off = (k, g)=>{
-        const P = prop[g];
-        if (!P) return null;
-        const A = P.areas[k], T = P.tv[k];
-        if (!fin(A) || !fin(T)) return null;
-        const U = ppm ? 1e4 : 1, ku = P.k/U, want = ku*T*U, floor = ku*PROP_FLOOR[ppm ? 'ppm' : '%mol'];
-        return Math.abs(A - want) > Math.max(PROP_TOL*Math.abs(want), floor) ? (want ? (A - want)/want : Infinity) : null;
-      };
-      const offText = (k, g)=>{ const d = off(k, g); return d == null ? null : `${gasOf(g).txt}: ${fin(d) ? (d > 0 ? '+' : '') + (100*d).toFixed(1) + ' %' : 'not 0'} off the GC table's proportion (k = ${sig(prop[g].k, 5)})`; };
-      const J = (k, gases = Object.keys(GAS))=>{
-        const r = res[k];
-        if (!r) return [];
-        const out = fitMarks(r);
-        if (typeof r.error !== 'string') gases.forEach(g=>{ const t = offText(k, g); if (t) out.push(t); });
-        return out;
-      };
-      J.bad = (k, g)=>{
-        const r = res[k];
-        if (!r) return false;
-        if (g == null) return J(k).length > 0;
-        return fitMarks(r, g).length > 0 || (typeof r.error !== 'string' && off(k, g) != null);
-      };
-      J.off = off; J.prop = prop;
-      return J;
-    }
-
-    /* ---- What it draws ---- */
-    function draw(keep){
-      renderSel();
-      paintStatus();
-      paintAlerts();
-      if (!ctx.drawable() || ctx.folded(a)) return;
-      const e = cur();
-      drawChrom(e, keep); drawOverview(e); paintValues(e); paintMethod();
-    }
-    // The H₂/O₂ zone the plot opens on: the windows and their neighbours (NEIGHBOURS), a margin round them.
-    const span = m =>[Math.min(...m.windows.map(w=> w.from)), Math.max(...m.windows.map(w=> w.to))];
-    const range = m =>{ const [a, b] = span(m); return [Math.min(a, ...NEIGHBOURS.map(z=> z.from)) - MARGIN, Math.max(b, ...NEIGHBOURS.map(z=> z.to)) + MARGIN]; };
-    /* The chromatogram on show: one plot of two panels that share the retention time
-       (plot.js linkX), the chromatogram over its residuals, a Tauc plot's size together,
-       three to one. The whole chromatogram is drawn; the view opens (and a reset comes back)
-       on the H₂/O₂ zone, the y on the windows' own data. Only the residuals' axis carries
-       the time's numbers and title. */
-    let drawn = null;       // what the chromatogram's CSV gives: { e, k, t, y, curves }
-    function drawChrom(e, keep){
-      const o = drawPair({ svg: $('Chrom'), rs: $('Resid'), leg: $('ChromLegend'), wrap: el.querySelector('.gci-pair'), keep, was: { chrom, resid },
-        d: e ? e.d : null, k: selK, R: e && !e.d.error ? resOf(e.tcd) : null, key: e ? e.name + '#' + selK : '',
-        file: e ? e.tcd.name : '', what: e ? `${e.label}, chromatogram ${selK + 1}` : '', overlay: P => overlayOn(P, drag ? drag.m : method, true) });
-      chrom = o.chrom; resid = o.resid;
-      drawn = o.drawn ? { e, ...o.drawn } : null;
-      $('Notice').innerHTML = o.notice;
-    }
-    /* One chromatogram over its residuals, drawn into a pair of svgs: the card's (the
-       chromatogram on show) or the calibration window's (the standard chosen), alike.
-       o: { svg, rs (the residuals' svg), leg, wrap (their plot-wrap), keep, was ({ chrom,
-       resid }: the plots before, their zoom kept with `keep` on the same data), d (readTcd's
-       read), k (its chromatogram), R (resOf's), key (the data's, for the zoom), file, what
-       (the notices' names), overlay(P) (drawn over the chromatogram, again at each zoom) }.
-       → { chrom, resid, drawn ({ k, t, y, curves, stale }, the CSV's; null: nothing drawn),
-       notice (an alert's markup, or '') }. */
-    function drawPair(o){
-      const vc = o.keep && o.was.chrom ? viewOf(o.was.chrom) : null, vr = o.keep && o.was.resid ? viewOf(o.was.resid) : null;
-      const chrom = new Plot(o.svg, { xlabel: 'Retention time (s)', ylabel: 'TCD signal', noXTickLabels: true, noXTitle: true, xTickMarks: true, margin: { l: 58, r: 20, t: 15, b: 0 } });
-      const resid = new Plot(o.rs, { xlabel: 'Retention time (s)', ylabel: 'Residual', xTickMarks: true, margin: { l: 58, r: 20, t: 0, b: 40 } });
-      linkX([chrom, resid]);
-      const tools = { group: [chrom, resid] }, out = { chrom, resid, drawn: null, notice: '' }, leg = o.leg;
-      leg.innerHTML = '';
-      if (!o.d || o.d.error){ chrom.attachTools(o.wrap, tools); if (o.d) out.notice = alertHtml('bad', `${esc(o.file)}:`, [esc(o.d.error)]); return out; }
-      const k = o.k, { t, cols } = o.d, y = cols[k], [lo, hi] = range(method), [wa, wb] = span(method);
-      const tt = [], yy = [];
-      for (let i = 0; i < t.length; i++) if (fin(t[i]) && fin(y[i])){ tt.push(t[i]); yy.push(y[i]); }
-      // (the y range the windows' own: a neighbour, N₂ above all, may run off the top)
-      const inW = yy.filter((_, i)=> tt[i] >= wa && tt[i] <= wb);
-      if (!inW.length){ chrom.attachTools(o.wrap, tools); out.notice = alertHtml('warn', `${esc(o.what)}:`, ['no point in the windows']); return out; }
-      const R = o.R || { res: null, m: method, stale: false }, r = R.res && R.res[k];
-      let curves = [];
-      // (the windows' curves on the points their fit used; a peak's on its baseline)
-      if (r) try { curves = (r.windows || []).map(wr=> ({ wr, c: windowCurves(t, y, R.m, wr) })).filter(x=> x.c && x.c.t && x.c.t.length); } catch(err){ curves = []; }
-      out.drawn = { k, t: tt, y: yy, curves, stale: R.stale };
-      let ymin = Math.min(...inW), ymax = Math.max(...inW);
-      curves.forEach(({ c })=> [c.model, c.base].forEach(arr=> arr && arr.forEach(v=>{ if (fin(v)){ ymin = Math.min(ymin, v); ymax = Math.max(ymax, v); } })));
-      const pad5 = (ymax - ymin)*0.06 || 1;
-      const [c0, c1] = offEdge(ymin - pad5, ymax + pad5, -1, 0.03);
-      chrom.setRange(lo, hi, c0, c1);
-      setView(chrom, vc, o.key);
-      chrom.drawAxes(); chrom.clearData();
-      const items = [];
-      // The glitch zones left out of the fit, behind the curves.
-      curves.forEach(({ wr })=> (wr.excluded || []).forEach(z=>{ if (Array.isArray(z) && fin(z[0]) && fin(z[1])) chrom.vband(z[0], z[1], C_BAD, 0.14); }));
-      chrom.line(tt, yy, C_RAW, 1.2, undefined, { label: 'raw', key: 'raw' });
-      items.push([C_RAW, 'raw', '']);
-      let ci = 0;
-      curves.forEach(({ wr, c })=>{
-        if (c.base){ chrom.line(c.t, c.base, C_BASE, 1.1, '5,4', { label: `baseline (${wr.key})`, key: 'base ' + wr.key }); }
-        // (the model under its peaks: each peak, on the baseline, drawn over it)
-        if (c.model) chrom.line(c.t, c.model, C_MODEL, 1.4, undefined, { label: `model (${wr.key})`, key: 'model ' + wr.key });
-        Object.entries(c.peaks || {}).forEach(([name, cv])=>{
-          const pk = (wr.peaks || []).find(x=> x.name === name), g = pk && pk.gas, col = g ? gasOf(g).color : PEAK_COLORS[ci++ % PEAK_COLORS.length];
-          chrom.line(c.t, c.base ? cv.map((v, i)=> v + c.base[i]) : cv, col, 1.3, g ? undefined : '2,3', { label: name, key: 'peak ' + name });
-          if (!items.some(x=> x[1] === name)) items.push([col, name, g ? '' : 'mk-dots']);
-        });
-      });
-      if (curves.length){ items.splice(1, 0, [C_MODEL, 'model', ''], [C_BASE, 'baseline (with its step)', 'mk-dash']); }
-      // The points the fit left out: a spike a cross, a glitch zone's a ring.
-      const sp = { x: [], y: [] }, ex = { x: [], y: [] };
-      curves.forEach(({ c })=>{ const d = c.dropped; if (d && Array.isArray(d.t)) d.t.forEach((x, i)=>{ const q = d.kind && d.kind[i] === 'spike' ? sp : ex; q.x.push(x); q.y.push(d.y[i]); }); });
-      if (sp.x.length){ chrom.points(sp.x, sp.y, C_BAD, 4, { shape: 'cross', width: 1.6, label: 'spikes' }); items.push([C_BAD, 'spike left out', '']); }
-      if (ex.x.length){ chrom.points(ex.x, ex.y, C_BAD, 2.2, { label: 'glitch' }); items.push([C_BAD, 'glitch zone left out (band)', 'mk-dots']); }
-      items.push([C_EDGE, 'fit window', '']);
-      leg.innerHTML = items.map(([c, n, kk])=> `<span>${kk ? `<i class="${kk}" style="color:${c}"></i>` : `<i style="background:${c}"></i>`}${esc(n)}</span>`).join('')
-        + '<span><i class="mk-box gci-mk-nb"></i>peaks the model leaves out</span>';
-      // The windows' edges, the peaks' places and the neighbours, drawn over the data, again
-      // at each zoom.
-      chrom._onView = ()=> o.overlay(chrom);
-      o.overlay(chrom);
-      // The residuals, inside the fit window only (blank outside it), on the same time.
-      const rx = [], ry = [];
-      curves.forEach(({ c })=>{ if (c.residual) c.t.forEach((x, i)=>{ if (fin(c.residual[i])){ rx.push(x); ry.push(c.residual[i]); } }); });
-      const rm = ry.length ? Math.max(...ry.map(Math.abs)) : 1;
-      const [r0, r1] = offEdge(-rm*1.1 || -1, rm*1.1 || 1, 1, 0.1);
-      resid.setRange(lo, hi, r0, r1);
-      setView(resid, vr, o.key);
-      resid.xmin = chrom.xmin; resid.xmax = chrom.xmax;
-      resid.drawAxes(); resid.clearData();
-      curves.forEach(({ wr })=> (wr.excluded || []).forEach(z=>{ if (Array.isArray(z) && fin(z[0]) && fin(z[1])) resid.vband(z[0], z[1], C_BAD, 0.14); }));
-      if (rx.length){
-        resid.line([rx[0], rx[rx.length - 1]], [0, 0], C_TABLE, 1, '3,3', { label: 'zero', key: 'zero' });
-        resid.line(rx, ry, C_MODEL, 1, undefined, { label: 'residual', key: 'residual' });
-      }
-      chrom.attachTools(o.wrap, tools);
-      if (!r) out.notice = alertHtml('info', `${esc(o.what)}:`, ['not integrated yet: the model is drawn once it is']);
-      else if (R.stale) out.notice = alertHtml('warn', 'Method changed:', ['the model and the values shown are the previous method\'s until this file is integrated again']);
-      return out;
-    }
-    /* The two panels meet: a tick's number on the edge they share (the chromatogram's foot,
-       side −1; the residuals' top, side 1) would be cut in two. The range moved off it, by
-       `f` of itself, where its outermost tick lies within that of it. */
-    function offEdge(y0, y1, side, f){
-      const t = niceTicks(y0, y1, 5), d = y1 - y0, k = side > 0 ? t[t.length - 1] : t[0];
-      if (!fin(k) || !(d > 0)) return [y0, y1];
-      return side > 0 ? (y1 - k < f*d ? [y0, k + 1.4*f*d] : [y0, y1]) : (k - y0 < f*d ? [k - 1.4*f*d, y1] : [y0, y1]);
-    }
-    // (dragging: the method as it would be, its lines where they are being taken)
-    let drag = null;
-    const overlay = ()=>{ if (chrom) overlayOn(chrom, drag ? drag.m : method, true); };
-    /* Over the chromatogram of plot P, method M's: the neighbours, the peaks' places, the
-       windows' edges (dragged, `edit`: the card's; fixed in the calibration's window). */
-    function overlayOn(P, M, edit){
-      const g = P.gOverlay, { w: W, h } = P.size(), m = P.margin;
-      // (the overlay is this card's alone: its lines drawn anew, the plot's copies of them too)
-      g.innerHTML = '';
-      P._stored = P._stored.filter(x=> x.type !== 'vline');
-      const add = (tag, at, text)=>{ const node = svgEl(tag, { 'pointer-events': 'none', class: 'gci-ov', ...at }); if (text) node.textContent = text; g.appendChild(node); return node; };
-      // The neighbours the model has no peak for: a grey zone each, named.
-      NEIGHBOURS.forEach(z=>{
-        const x0 = P.px(z.from), x1 = P.px(z.to);
-        if (x1 < m.l || x0 > W - m.r) return;
-        add('rect', { x: x0, y: m.t, width: Math.max(0, x1 - x0), height: Math.max(0, h - m.t - m.b), class: 'gci-ov gci-nb' });
-        add('text', { x: (x0 + x1)/2, y: m.t + 14, 'font-size': 10, 'text-anchor': 'middle', class: 'gci-ov gci-nb-lb' }, z.name);
-      });
-      // The peaks' places: a thin dotted line each, named at the top.
-      M.windows.forEach(w=> (w.peaks || []).forEach((pk, i)=>{
-        if (!fin(pk.t) || pk.t < P.xmin || pk.t > P.xmax) return;
-        const x = P.px(pk.t), col = pk.gas ? gasOf(pk.gas).color : PEAK_COLORS[i % PEAK_COLORS.length];
-        add('line', { x1: x, x2: x, y1: m.t, y2: h - m.b, stroke: col, 'stroke-width': 1, 'stroke-dasharray': '1,3' });
-        add('text', { x: x + 3, y: m.t + 30 + 11*(i % 3), 'font-size': 10, fill: col }, pk.name);
-      }));
-      // The edges, dragged.
-      M.windows.forEach((w, wi)=> ['from', 'to'].forEach(side=>{
-        if (edit) P.vline(w[side], C_EDGE, true, v=> onDrag(wi, side, v), v=> onDrop(wi, side, v));
-        else P.vline(w[side], C_EDGE, false);
-      }));
-    }
-    // A line dragged snaps to the data's grid (0.2 s) and writes into its field.
-    function onDrag(wi, side, v){
-      if (!drag) drag = { m: clone(method) };
-      drag.m.windows[wi][side] = round2(snap(v));
-      overlay();
-      paintMethod(drag.m);
-    }
-    function onDrop(wi, side, v){
-      const m = drag ? drag.m : clone(method);
-      drag = null;
-      m.windows[wi][side] = round2(snap(v));
-      setMethod(m);
-    }
-    // A method set (a step): its results looked for, else integrated a little later.
-    function setMethod(m){
-      const w = m.windows.find(x=> !(x.from < x.to - 5));
-      if (w){ draw(true); confirmBad(`The ${w.key} window must start at least 5 s before it ends.`); return; }
-      if (methodKey(m) === methodKey(method)){ draw(true); return; }
-      wasMethod = method;
-      method = methodIn(m);
-      draw(true);
-      kit.commit();
-      ctx.changed();
-      later();
-    }
-    function confirmBad(t){ $('Notice').innerHTML = alertHtml('warn', 'Not taken:', [esc(t)]); }
-    // A window reaching a neighbour the model has no peak for, said (not refused).
-    const intrusions = m => m.windows.flatMap(w=> NEIGHBOURS.filter(z=> w.from < z.to && w.to > z.from).map(z=>
-      `The ${w.key} window (${w.from}–${w.to} s) reaches ${z.name} (${z.from}–${z.to} s), which its model has no peak for: the fit degrades there.`));
-
-    /* ---- Windows: the fit windows' edges (their lines on the chromatogram an aid), each a
-       step, with the peaks' nominal places ---- */
-    function paintMethod(m = method){
-      const box = $('Method'), reset = el.querySelector('.gci-reset');
-      const focus = document.activeElement && box.contains(document.activeElement) ? document.activeElement.dataset.k : null;
-      const field = (k, v, label)=> `<input type="text" inputmode="decimal" data-k="${k}" value="${esc(String(v))}" aria-label="${esc(label)}">`;
-      const warn = intrusions(m);
-      reset.hidden = isDefault(m);
-      box.innerHTML = m.windows.map((w, wi)=> `<div class="gci-win"><span class="gci-win-name">${esc(w.key)} fit</span>`
-          + `<label>from ${field(`w${wi}:from`, w.from, `${w.key} window from (s)`)}</label>`
-          + `<label>to ${field(`w${wi}:to`, w.to, `${w.key} window to (s)`)} s</label>`
-          + `<span class="gci-win-peaks">${(w.peaks || []).map(pk=> `${esc(pk.name)} ${fin(pk.t) ? pk.t.toFixed(1) : ''}`).join(' · ')}</span></div>`).join('')
-        + (warn.length ? `<p class="gci-flag">⚠ ${warn.map(esc).join(' ')}</p>` : '');
-      box.querySelectorAll('input').forEach(inp=>{
-        guardNumericInput(inp, {});
-        const [wi, side] = inp.dataset.k.slice(1).split(':');
-        inp.addEventListener('change', ()=>{
-          const v = +String(inp.value).replace(',', '.'), n = clone(method);
-          if (!fin(v)){ flashFieldInvalid(inp); inp.value = method.windows[+wi][side]; return; }
-          n.windows[+wi][side] = v;
-          setMethod(n);
-        });
-        inp.addEventListener('keydown', e=>{ if (e.key === 'Enter') inp.blur(); });
-      });
-      if (focus){ const f = box.querySelector(`input[data-k="${focus}"]`); if (f) f.focus(); }
-    }
-    el.querySelector('.gci-reset').addEventListener('click', ()=> setMethod(methodIn(null)));
-
-    /* ---- Peaks: the values of the chromatogram on show ---- */
-    function paintValues(e){
-      const box = $('Values');
-      if (!e || e.d.error){ box.innerHTML = ''; return; }
-      const R = resOf(e.tcd), r = R.res && R.res[selK];
-      if (!r){ box.innerHTML = `<p class="txt-meta">Not integrated yet.</p>`; return; }
-      if (typeof r.error === 'string'){ box.innerHTML = `<p class="gci-flag">⚠ Not integrated: ${esc(r.error)}</p>`; return; }
-      const conv = convAll(e, R.res), J = judge(e, R.res);
-      const gs = Object.keys(GAS).filter(g=> r.gases && r.gases[g]);
-      const unitOf = g =>{ const c = conv[g]; return c && c.how === 'cal' ? cal.unit : '%mol'; };
-      const units = [...new Set(gs.filter(g=> conv[g] && conv[g].f).map(unitOf))], tUnit = e.table && e.table.altExport === true ? 'ppm' : '%mol';
-      const rows = gs.map(g=>{
-        const x = r.gases[g], c = conv[g];
-        const conc = c && c.f && fin(x.area) ? c.f(x.area) : NaN, shown = c && c.how === 'cal' && cal.unit === 'ppm' ? conc*1e4 : conc;
-        const tv = aligned(e) && e.table.gas[g] ? e.table.gas[g][selK] : NaN, tShown = tUnit === 'ppm' ? tv*1e4 : tv;
-        const off = J.off(selK, g) != null;
-        return `<tr><td>${gasOf(g).label}</td><td class="${off ? 'gci-bad' : ''}"${off ? ' title="Out of proportion with the GC table"' : ''}>${sig(x.area, 5)} ± ${sig(x.sd, 2)}</td>`
-          + `<td>${fin(x.tApex) ? x.tApex.toFixed(2) : '—'}</td><td class="${fin(x.chi2r) && x.chi2r > CHI2_HIGH ? 'gci-bad' : ''}">${fin(x.chi2r) ? x.chi2r.toFixed(2) : '—'}</td>`
-          + `<td>${fin(shown) ? shown.toPrecision(4) + (units.length > 1 ? ' ' + esc(unitOf(g)) : '') : '—'}</td>`
-          + `<td>${fin(tShown) ? tShown.toPrecision(4) : '—'}</td></tr>`;
-      });
-      const fl = J(selK);
-      /* Under the table (the narrow column keeping its headers short): the columns' units,
-         and, where a gas's concentration is taken from the GC software's table (no
-         standards), its k for the file on show (the card's info alert does not list them). */
-      const cU = units.length === 1 ? units[0] : null;
-      const said = cU && aligned(e) && cU === tUnit ? [`Conc. and GC table in ${esc(cU)}`] : [cU ? `Conc. in ${esc(cU)}` : '', aligned(e) ? `GC table in ${tUnit}` : ''].filter(Boolean);
-      const tr = gs.filter(g=> conv[g] && conv[g].how === 'transfer');
-      const from = tr.length ? `${tr.length > 1 ? 'Concentrations' : 'Concentration'} from the GC software's table: k = ${tr.map((g, i)=> `${sig(conv[g].k, 5)}${i ? '' : ' area per %mol'} (${gasOf(g).label}, median of ${conv[g].n} injections)`).join(', ')}.` : '';
-      box.innerHTML = `<table class="gci-values"><thead><tr><th>Gas</th><th>Area ± sd</th><th>Apex (s)</th><th>χ²<sub>r</sub></th><th>Conc.</th><th>GC table</th></tr></thead><tbody>${rows.join('')}</tbody></table>`
-        + (said.length ? `<p class="txt-meta gci-units">${said.join('; ')}.</p>` : '')
-        + (from ? `<p class="txt-meta gci-from">${from}</p>` : '')
-        + (fl.length ? `<p class="gci-flag">⚠ Suspicious: ${fl.map(esc).join('; ')}</p>` : '')
-        + (Object.keys(GAS).some(g=> !conv[g] || !conv[g].f) ? `<p class="txt-meta">${Object.keys(GAS).filter(g=> !conv[g] || !conv[g].f).map(g=> `${gasOf(g).txt}: ${esc(conv[g] ? conv[g].why : 'no concentration')}`).join('; ')}.</p>` : '')
-        + (R.stale ? '<p class="txt-meta">(the previous method\'s)</p>' : '');
-    }
-    // Each gas's conversion for entry e (its areas from `res`).
-    function convAll(e, res){
-      const out = {};
-      Object.keys(GAS).forEach(g=>{
-        const areas = (res || []).map(x=> x && x.gases && x.gases[g] && fin(x.gases[g].area) ? x.gases[g].area : NaN);
-        out[g] = convOf(g, areas, aligned(e) ? e.table.gas[g] : null);
-      });
-      return out;
-    }
-
-    /* ---- The run overview: one gas at a time, every injection's fit (blue
-       whatever the gas, red where it is suspicious for that gas) and the GC table's value
-       (a small grey cross; as area, times the run's k); a point hovered drawn lighter and
-       half again as large, and says what it is, the chromatogram on show's as well; a click
-       shows its chromatogram ---- */
-    let hovK = -1, ovLook = null;
-    function drawOverview(e){
-      const svg = $('Over'), leg = $('OverLegend');
-      over = new Plot(svg, { xlabel: aligned(e) ? 'Time from the first injection (h)' : 'Injection', ylabel: '' });
-      // (its points answer the pointer themselves: no trace picked, no crosshair)
-      svg._noPick = true; svg._suppressReadout = true;
-      ovPts = []; ovLook = null;
-      const gasBox = el.querySelector('.gci-ov-gas'), yBox = el.querySelector('.gci-ov-y');
-      if (!e || e.d.error || !e.n){ gasBox.innerHTML = ''; yBox.innerHTML = ''; leg.innerHTML = ''; over.attachTools(svg.closest('.plot-wrap')); return; }
-      const R = resOf(e.tcd), res = R.res || [];
-      const conv = convAll(e, res), J = judge(e, res);
-      const g = GAS[ovGas] ? ovGas : 'h2', c = conv[g], G = gasOf(g);
-      const mode = ovY === 'conc' && c && c.f ? 'conc' : 'area';
-      // (one gas at a time: a chip chooses it, the other's off)
-      gasBox.innerHTML = Object.keys(GAS).map(k=> `<button type="button" class="mode-chip plot-chip gci-ov-chip${k === g ? ' is-on' : ''}" data-g="${k}" aria-pressed="${k === g}" title="Show ${gasOf(k).txt} (one gas at a time)">${gasOf(k).label}</button>`).join('');
-      yBox.innerHTML = chipRow([{ key: 'area', label: 'Area' }, { key: 'conc', label: 'Conc.' }], [mode], { cls: 'plot-chip gci-ovy-chip', data: o=> `data-y="${o.key}"`, name: o=> o.label,
-        can: o=> o.key === 'area' || !!(c && c.f), why: ()=> `No calibration of ${G.txt} and no table to take a scale from` });
-      const t0 = aligned(e) ? Math.min(...e.table.injDates.map(Number)) : 0;
-      const xOf = k => aligned(e) ? (e.table.injDates[k] - t0)/3600e3 : k + 1;
-      const xs = Array.from({ length: e.n }, (_, k)=> xOf(k));
-      const unit = c && c.how === 'cal' ? cal.unit : '%mol', mul = unit === 'ppm' ? 1e4 : 1;
-      const val = A => mode === 'conc' ? (fin(A) ? c.f(A)*mul : NaN) : A;
-      const fit = res.map(x=> x && x.gases && x.gases[g] ? val(x.gases[g].area) : NaN);
-      while (fit.length < e.n) fit.push(NaN);
-      // The table's value: its concentration, or the area it stands for at the run's k.
-      const tv = aligned(e) && e.table.gas[g] ? Array.from(e.table.gas[g]) : null, P = J.prop[g];
-      const table = !tv ? null : mode === 'conc' ? tv.map(v=> fin(v) ? v*mul : NaN) : P ? tv.map(v=> fin(v) ? v*P.k : NaN) : null;
-      const bad = xs.map((_, k)=> J.bad(k, g));
-      const all = [...fit, ...(table || [])].filter(fin);
-      over.ylabel = mode === 'conc' ? `${G.txt} (${unit})` : `${G.txt} area`;
-      const xmin = Math.min(...xs), xmax = Math.max(...xs), dx = (xmax - xmin)*0.04 || 0.5;
-      const ylo = all.length ? Math.min(0, ...all) : 0, yhi = all.length ? Math.max(...all) : 1;
-      over.setRange(xmin - dx, xmax + dx, ylo, yhi*1.08 || 1);
-      over.drawAxes(); over.clearData();
-      // (the crosses under the fits' dots, which cover them where the two agree; the fits one
-      // colour whatever the gas, the suspicious red)
-      if (table) over.points(xs, table, C_TABLE, OV_CROSS, { shape: 'cross', width: 1.4, label: mode === 'conc' ? `${G.txt} GC table` : `${G.txt} GC table × k`, key: g + ' table' });
-      over.points(xs, fit.map((v, k)=> bad[k] ? NaN : v), C_FIT, OV_R, { fill: true, label: `${G.txt} fit`, key: g + ' fit' });
-      if (bad.some(Boolean)) over.points(xs, fit.map((v, k)=> bad[k] ? v : NaN), C_BAD, OV_R, { fill: true, label: `${G.txt} fit, suspicious`, key: g + ' suspicious' });
-      fit.forEach((v, k)=>{ if (fin(v)) ovPts.push({ k, x: xs[k], y: v, color: bad[k] ? C_BAD : C_FIT }); });
-      // What a point hovered says: its injection and time, the fit, the table's value, χ²ᵣ.
-      const tUnit = e.table && e.table.altExport === true ? 'ppm' : '%mol';
-      const fmtV = v => !fin(v) ? '—' : mode === 'conc' ? `${sig(v, 4)} ${unit}` : sig(v, 5);
-      ovLook = k =>{
-        const r = res[k], x = r && r.gases && r.gases[g], tvk = tv ? tv[k] : NaN;
-        const lines = [injName(e, k), `fit: ${fmtV(fit[k])}`];
-        if (tv) lines.push(`GC table: ${fin(tvk) ? sig(tUnit === 'ppm' ? tvk*1e4 : tvk, 4) + ' ' + tUnit : 'n.a.'}`);
-        lines.push(`χ²ᵣ: ${x && fin(x.chi2r) ? x.chi2r.toFixed(2) : '—'}`);
-        if (bad[k]) lines.push('suspicious');
-        return lines;
-      };
-      leg.innerHTML = `<span><i class="gci-mk gci-mk-dot" style="color:${C_FIT}"></i>${G.txt} fit</span>`
-        + (bad.some(Boolean) ? `<span><i class="gci-mk gci-mk-dot" style="color:${C_BAD}"></i>suspicious</span>` : '')
-        + (table ? `<span><i class="gci-mk gci-mk-x"></i>GC table${mode === 'area' ? ' × k' : ''}</span>` : '');
-      over._onView = paintHl;
-      paintHl();
-      over.attachTools(svg.closest('.plot-wrap'));
-    }
-    // A lighter tint of a colour (#rrggbb): `f` of the way to white.
-    const tint = (hex, f)=>{ const n = parseInt(hex.slice(1), 16), ch = s => Math.round(((n >> s) & 255) + (255 - ((n >> s) & 255))*f); return `rgb(${ch(16)},${ch(8)},${ch(0)})`; };
-    /* The points brightened: the chromatogram on show's, and the one under the pointer with
-       its label (in the overlay: drawn again at each zoom, never exported). The point alone,
-       drawn again in a lighter shade of its colour and half again as large as the dot as
-       seen, with no stroke: (OV_R + 0.5)·OV_HL_R, the 0.5 half the dot's 1 px ring. */
-    function paintHl(){
-      if (!over) return;
-      const old = over.gOverlay.querySelector('.gci-hl');
-      if (old) old.remove();
-      const g = svgEl('g', { class: 'gci-hl', 'pointer-events': 'none' });
-      over.gOverlay.appendChild(g);
-      const mark = q =>{
-        const x = over.px(q.x), y = over.py(q.y);
-        g.appendChild(svgEl('circle', { cx: x, cy: y, r: +((OV_R + 0.5)*OV_HL_R).toFixed(3), fill: tint(q.color, OV_HL_TINT), stroke: 'none', class: 'gci-hl-pt' }));
-        return [x, y];
-      };
-      const sel = ovPts.find(q=> q.k === selK);
-      if (sel) mark(sel);
-      const hov = hovK >= 0 ? ovPts.find(q=> q.k === hovK) : null;
-      if (hov){ const [x, y] = hov === sel ? [over.px(hov.x), over.py(hov.y)] : mark(hov); if (ovLook) over.tagAt(g, x, y, ovLook(hov.k), hov.color); }
-      g.dataset.sel = sel ? String(sel.k) : '';
-      g.dataset.hov = hov ? String(hov.k) : '';
-    }
-    // The injection nearest the pointer on screen, within 14 px (−1: none).
-    function ovAt(ev){
-      if (!over || !ovPts.length) return -1;
-      const b = $('Over').getBoundingClientRect(), cx = ev.clientX - b.left, cy = ev.clientY - b.top;
-      let best = -1, bd = 14;
-      ovPts.forEach(q=>{ if (q.x < over.xmin || q.x > over.xmax) return; const d = Math.hypot(over.px(q.x) - cx, over.py(q.y) - cy); if (d < bd){ bd = d; best = q.k; } });
-      return best;
-    }
-    $('Over').addEventListener('pointermove', ev=>{ const k = ovAt(ev); if (k !== hovK){ hovK = k; paintHl(); } });
-    $('Over').addEventListener('pointerleave', ()=>{ if (hovK >= 0){ hovK = -1; paintHl(); } });
-    $('Over').addEventListener('click', ev=>{
-      if (!over || over._mode) return;
-      const k = ovAt(ev);
-      if (k >= 0 && k !== selK){ selK = k; draw(); }
-    });
-    el.addEventListener('click', ev=>{
-      const gc = ev.target.closest('.gci-ov-chip'), yc = ev.target.closest('.gci-ovy-chip');
-      if (gc && !gc.disabled && GAS[gc.dataset.g] && gc.dataset.g !== ovGas){ ovGas = gc.dataset.g; draw(true); kit.commit(); }
-      if (yc && !yc.disabled && yc.dataset.y !== ovY){ ovY = oneOf(yc.dataset.y, ['conc', 'area']); draw(true); kit.commit(); }
-    });
-
-    /* ---- The status, the card's alerts ---- */
-    function paintStatus(all){
-      const st = status(), box = $('Status'), mine = new Set(tcdRecs().map(r=> keyOf(r, method)));
-      const left = wanted().filter(g=> mine.has(g.key)).reduce((s, g)=> s + g.miss.length, 0);
-      const total = entries().reduce((s, e)=> s + e.n, 0);
-      let html = '', state;
-      if (st.job){
-        const pct = st.job.total ? Math.round(100*st.job.done/st.job.total) : 0;
-        state = 'running';
-        html = `<span class="gci-prog"><span class="gci-prog-bar" style="width:${pct}%"></span></span><span>Integrating… ${st.job.done} / ${st.job.total} chromatograms · ${esc(st.job.name)}</span>`;
-      } else if (st.failed){ state = 'failed'; html = `<span class="gci-bad">The integration failed: ${esc(st.failed)}</span>`; }
-      else if (left && st.halted){ state = 'stopped'; html = `<span>Stopped: ${plural(left, 'chromatogram')} not integrated with this method.</span>`; }
-      else if (left && st.soon){ state = 'soon'; html = `<span>Method changed: integrating again in a moment…</span>`; }
-      else if (left){ state = 'left'; html = `<span>${plural(left, 'chromatogram')} to integrate.</span>`; }
-      // (all integrated: nothing to say, the line folds away)
-      else if (total) state = 'done';
-      else { state = 'none'; html = `<span class="txt-meta">No raw chromatograms (TCD) loaded: drop them beside their tables.</span>`; }
-      box.innerHTML = html;
-      box.dataset.state = state;
-      $('Bar').hidden = !html;
-      $('Stop').style.display = st.job ? '' : 'none';
-      $('Run').style.display = !st.job && left ? '' : 'none';
-      if (all){ valuesKept.clear(); if (ctx.drawable()) draw(true); }
-    }
-    function paintAlerts(){
-      const es = entries(), lines = { warn: [] };
-      es.forEach(e=>{
-        if (e.d.error) return;
-        if (e.table && e.rows !== e.n) lines.warn.push(`${esc(e.label)}: ${plural(e.rows, 'row')} in the table, ${plural(e.n, 'chromatogram')}: not aligned. Integrated all the same; Analysis uses the table alone.`);
-        if (!e.table && e.twin) lines.warn.push(`${esc(e.label)}: two files of raw chromatograms paired (${esc(e.tcd.name)}, ${esc(e.twin)}): shown here, left out of Analysis (no injection times).`);
-        else if (!e.table) lines.warn.push(`${esc(e.label)}: raw chromatograms with no table: no injection times (Analysis leaves them out), a concentration only with standards.`);
-      });
-      // (a calibration taken from the GC software's table, for some file: said once; each
-      // file's k under its Peaks)
-      const transfer = es.filter(aligned).some(e=>{ const R = resOf(e.tcd); if (!R.res || R.res.some(x=> !x)) return false; const c = convAll(e, R.res); return Object.keys(GAS).some(g=> c[g] && c[g].how === 'transfer'); });
-      /* A gas calibrated by standards whose injections fall outside the standards' range:
-         extrapolated, said (below the lowest standard the intercept weighs most: the real O₂
-         runs, about 0.03 %mol, lie far under the 0.2 %mol standard). */
-      Object.keys(GAS).forEach(g=>{
-        const L = calFit(g);
-        if (!L) return;
-        const cs = L.pts.map(q=> toPct(q.conc, cal.unit)), lo = Math.min(...cs), hi = Math.max(...cs);
-        es.forEach(e=>{
-          const R = resOf(e.tcd);
-          if (e.d.error || !R.res || R.stale) return;
-          const v = R.res.map(x=> x && x.gases && x.gases[g] && fin(x.gases[g].area) ? toPct((x.gases[g].area - L.intercept)/L.slope, cal.unit) : NaN).filter(fin);
-          const out = v.filter(c=> c < lo || c > hi).length;
-          if (out) lines.warn.push(`${esc(e.label)}: ${out} of ${v.length} injections' ${gasOf(g).label} outside the standards' range (${sig(lo, 3)}–${sig(hi, 3)} %mol): extrapolated${v.some(c=> c < lo) ? `, below the lowest standard, where the intercept (${sig(L.intercept, 4)}) weighs most` : ''}.`);
-        });
-      });
-      const errs = es.filter(e=> e.d.error).map(e=> `${esc(e.tcd.name)}: ${esc(e.d.error)}`);
-      $('Alerts').innerHTML = (errs.length ? alertHtml('bad', 'Raw chromatograms that could not be read:', errs) : '')
-        + (lines.warn.length ? alertHtml('warn', 'Raw chromatograms to check:', lines.warn) : '')
-        + (transfer ? alertHtml('info', 'Calibration taken from the GC software\'s table (no standards for the gas): see the risks in this card\'s instructions.', []) : '');
-    }
-
-    /* ---- The calibration's window: a table and its raw chromatograms, both needed, the
-       standards named by the table; the standard chosen drawn as the card's chromatogram,
-       over its residuals, at the left of the standards' table, CLAUDE.md's tops aligned ---- */
-    function calWindow(){
-      const m = document.createElement('div');
-      m.className = 'modal-backdrop xrd-std-modal gci-cal-modal';
-      m.style.display = 'none';
-      m.innerHTML = `
-      <div class="xrd-std-box gci-cal-box" role="dialog" aria-modal="true" aria-labelledby="${p}CalTitle" tabindex="-1">
-        <div class="xrd-std-head">
-          <h3 class="txt-head" id="${p}CalTitle">Calibration<button type="button" class="instr-info" aria-label="Toggle instructions" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="7.5" r="0.6" fill="currentColor" stroke="none"/></svg></button></h3>
-          <button type="button" class="an-ic xrd-std-x" title="Close" aria-label="Close">${X_SVG(15)}</button>
-        </div>
-        <div class="xrd-std-scroll">
-          <div class="instr-block xrd-std-instr" style="display:none">${CAL_INFO}</div>
-          <div class="dropzone xrd-std-dz gci-cal-dz">
-            <div class="dz-icon">⤒</div>
-            <div class="dz-title">Drag here the standards' GC table and its raw chromatograms (TCD) together, or click to select them.</div>
-            <div class="txt-meta">the table (.csv, or the .txt export) and its _TCD .csv · both needed</div>
-            <input type="file" class="gci-cal-in" multiple accept=".csv,.txt,.CSV,.TXT" style="display:none">
-          </div>
-          <div class="xrd-std-alerts gci-cal-alerts"></div>
-          <div class="gci-cal-warn"></div>
-          <div class="gci-cal-files"></div>
-          <div class="gci-cal-unit"><label class="txt-label">Concentration unit <select class="gci-cal-unit-in" aria-label="Concentration unit">${UNITS.map(u=> `<option value="${u}">${u}</option>`).join('')}</select></label><span class="gci-cal-status txt-meta"></span></div>
-          <div class="pside gci-cal-pside">
-            <div class="plot-nav-row pside-nav gci-cal-nav"><div class="plot-nav-left">${snavHtml({ idx: p + 'CalIdx', name: p + 'CalName', prevCls: 'gci-cprev', nextCls: 'gci-cnext', what: 'standard', cls: 'gci-csel' })}</div></div>
-            <div class="pside-plot">
-              <div class="plot-wrap gci-pair gci-cal-pair">
-                <svg class="plot gci-chrom" id="${p}CalChrom"></svg>
-                <svg class="plot gci-resid" id="${p}CalResid"></svg>
-                <button class="btn plot-dl-btn" data-dl-svg="${p}CalChrom" data-dl-also="${p}CalResid" data-csv-mod="gc" data-csv-names="standard_chromatogram.csv" data-dl-name="GC_standard_chromatogram.svg" data-dl-legend="${p}CalLegend">${PLOT_DL_ICON}</button>
-              </div>
-            </div>
-            <div class="pside-under"><div id="${p}CalLegend" class="legend gci-legend gci-cal-legend"></div><p class="txt-meta gci-cal-fit"></p><div class="gci-notice gci-cal-notice"></div></div>
-            <div class="pside-col gci-cal-side">
-              <div class="txt-mini param-head cap-title gci-cal-head"><span>Standards</span></div>
-              <div class="peak-box gci-cal-table"><table class="gci-cal-levels"><thead><tr><th class="gci-cal-k">#</th><th class="gci-cal-th"></th><th class="gci-cal-src">Injection</th><th class="gci-cal-a">H<sub>2</sub> area</th><th class="gci-cal-a">O<sub>2</sub> area</th><th>H<sub>2</sub> <span class="gci-u"></span></th><th>O<sub>2</sub> <span class="gci-u"></span></th><th title="Use this standard">Use</th></tr></thead><tbody></tbody></table></div>
-            </div>
-          </div>
-          <div class="row gci-cal-fits"></div>
-        </div>
-      </div>`;
-      ctx.layer.appendChild(m);
-      const q = s => m.querySelector(s), info = q('.instr-info'), instr = q('.xrd-std-instr');
-      info.addEventListener('click', ()=>{ const o = instr.style.display === 'none'; instr.style.display = o ? '' : 'none'; info.classList.toggle('is-on', o); info.setAttribute('aria-expanded', String(o)); });
-      let from = null, isOpen = false, rowsNow = [];
-      /* ← → step the standards, as the card's chromatograms (utils.js SAMPLE_NAV leaves the
-         keys to a window over the page): not from a field, nor under a window over this one
-         (the figure composer's); Escape closes it. */
-      const above = ()=> [...document.querySelectorAll('.modal-backdrop, .fig-backdrop')].some(x=> x !== m && x.getClientRects().length > 0);
-      const onKey = e =>{
-        if (e.key === 'Escape' && ctx.shown()){ e.stopPropagation(); close(); return; }
-        if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !e.ctrlKey && !e.metaKey && !e.altKey && ctx.shown() && !above()){
-          const t = document.activeElement && document.activeElement.tagName;
-          if (t === 'INPUT' || t === 'SELECT' || t === 'TEXTAREA') return;
-          e.preventDefault();
-          stepStd(e.key === 'ArrowLeft' ? -1 : 1);
-        }
-      };
-      function open(){ if (isOpen) return; isOpen = true; from = document.activeElement; m.style.display = 'flex'; document.addEventListener('keydown', onKey); paintWindow(); ensure(); q('.gci-cal-box').focus({ preventScroll: true }); }
-      // (the files waiting for their partner, and what was said of them, let go)
-      function close(){ if (!isOpen) return; isOpen = false; held = []; q('.gci-cal-alerts').innerHTML = ''; stdNav.close(); m.style.display = 'none'; document.removeEventListener('keydown', onKey); if (from && from.isConnected) from.focus({ preventScroll: true }); from = null; }
-      m.addEventListener('click', e=>{ if (e.target === m || e.target.closest('.xrd-std-x')) close(); });
-      // A change: the card's, a step; the cards below follow.
-      // (`levels`: a level typed or ticked, its field kept as it is: the fits drawn again, not the table)
-      const changed = levels =>{ valuesKept.clear(); draw(true); if (levels) paintFits(); else paintWindow(); kit.commit(); ctx.changed(); };
-
-      /* The files dropped (v549): each told by what it holds, raw chromatograms (gc-pair.js
-         looksTcd) or a GC table (gc.js's reader); a table and raw chromatograms of one name
-         (with and without _TCD, a browser's " (1)" aside: stemOf) a pair, loaded when the
-         table has as many injections as there are chromatograms. A file whose partner is not
-         there is not loaded: it waits (`held`, not in the project) until it is dropped, and
-         is let go as the window closes. A table whose partner is a calibration file of
-         v544–v548's (raw chromatograms alone) names its standards. */
-      let held = [];
-      setupDropzone(q('.gci-cal-dz'), q('.gci-cal-in'), async list=>{
-        const bad = [], got = [];
-        for (const f of list){
-          const bytes = new Uint8Array(await f.arrayBuffer());
-          let text;
-          try { text = decodeText(bytes); } catch(e){ bad.push(`${f.name}: not text`); continue; }
-          if (looksTcd(text)){
-            let d;
-            try { d = readTcd(text); } catch(e){ d = { error: String(e && e.message || e) }; }
-            if (d.error){ bad.push(`${f.name}: raw chromatograms that cannot be read (${d.error})`); continue; }
-            got.push({ kind: 'tcd', name: f.name, bytes, d });
-          } else {
-            const t = tableOf(bytes);
-            if (t.error){ bad.push(`${f.name}: neither raw chromatograms nor a GC table (${t.error})`); continue; }
-            got.push({ kind: 'table', name: f.name, bytes, t });
-          }
-        }
-        const pool = [...held.filter(h=> !got.some(g=> g.name === h.name)), ...got], stem = x => stemOf(x.name).stem;
-        const loaded = new Set(cal.files.flatMap(f=> f.table ? [f.name, f.table.name] : [f.name]));
-        const add = [], named = [];
-        pool.forEach(x=>{ if (loaded.has(x.name)){ x.done = true; bad.push(`${x.name}: already loaded`); } });
-        // (a pair's counts: the table's injections, its rows with a date and a value as the
-        // file list counts them, one a chromatogram)
-        const counts = (t, n)=> t.injDates.length === n ? '' : `${plural(t.injDates.length, 'injection')} in the table, ${plural(n, 'chromatogram')}: they must be as many (a name a chromatogram), nothing integrated`;
-        pool.filter(x=> x.kind === 'tcd' && !x.done).forEach(c=>{
-          const t = pool.find(x=> x.kind === 'table' && !x.done && stem(x) === stem(c));
-          if (!t) return;
-          c.done = t.done = true;
-          const why = counts(t.t, c.d.cols.length);
-          if (why){ bad.push(`${t.name} + ${c.name}: ${why}`); return; }
-          prime(c.bytes, c.d);
-          add.push({ name: c.name, rawBytes: c.bytes, levels: c.d.cols.map(blankLevel), table: { name: t.name, rawBytes: t.bytes } });
-        });
-        pool.filter(x=> x.kind === 'table' && !x.done).forEach(t=>{
-          const fi = cal.files.findIndex((f, i)=> !f.table && !named.some(z=> z.fi === i) && stemOf(f.name).stem === stem(t));
-          if (fi < 0) return;
-          t.done = true;
-          const d = dataOf(cal.files[fi]), why = d.error ? `its raw chromatograms cannot be read (${d.error})` : counts(t.t, d.cols.length);
-          if (why){ bad.push(`${t.name} + ${cal.files[fi].name}: ${why}`); return; }
-          named.push({ fi, table: { name: t.name, rawBytes: t.bytes } });
-        });
-        held = pool.filter(x=> !x.done);
-        held.forEach(x=> bad.push(x.kind === 'tcd'
-          ? `${x.name}: raw chromatograms without their GC table (the same name without _TCD, .csv or .txt): drop the table too (this file waits here for it)`
-          : `${x.name}: a GC table without its raw chromatograms (the same name with _TCD): drop them too (this file waits here for them)`));
-        q('.gci-cal-alerts').innerHTML = bad.length ? alertHtml('bad', 'Not loaded:', bad.map(esc)) : '';
-        if (!add.length && !named.length) return;
-        const c = calCopy(cal);
-        named.forEach(({ fi, table })=>{ c.files[fi] = { ...c.files[fi], table }; });
-        if (add.length) calSel = calRows().length;
-        c.files.push(...add);
-        cal = c;
-        changed();
-        ensure();
-      });
-      q('.gci-cal-files').addEventListener('click', e=>{
-        const b = e.target.closest('[data-cal-del]');
-        if (!b) return;
-        const c = calCopy(cal); c.files.splice(+b.dataset.calDel, 1); cal = c; changed();
-      });
-      q('.gci-cal-unit-in').addEventListener('change', e=>{ const c = calCopy(cal); c.unit = oneOf(e.target.value, UNITS); cal = c; changed(); });
-      q('.gci-cal-levels').addEventListener('change', e=>{
-        const inp = e.target.closest('input[data-fi]');
-        if (!inp) return;
-        const c = calCopy(cal), f = c.files[+inp.dataset.fi], j = +inp.dataset.j;
-        if (!f) return;
-        while (f.levels.length <= j) f.levels.push(blankLevel());
-        if (inp.type === 'checkbox'){ f.levels[j].on = inp.checked; inp.closest('tr').classList.toggle('is-excluded', !inp.checked); }
-        else {
-          const s = inp.value.trim().replace(',', '.'), v = s === '' ? null : Number(s);
-          if (v !== null && !(fin(v) && v >= 0)){ flashFieldInvalid(inp); inp.value = f.levels[j][inp.dataset.g] == null ? '' : String(f.levels[j][inp.dataset.g]); return; }
-          f.levels[j][inp.dataset.g] = v;
-        }
-        cal = c; changed(true);
-      });
-      q('.gci-cal-levels').addEventListener('keydown', e=>{ if (e.key === 'Enter' && e.target.matches('input[type="text"]')) e.target.blur(); });
-      // A row clicked, or a field of it taken (Tab), shows its standard.
-      const pickRow = e =>{ const tr = e.target.closest('tr[data-row]'); if (tr && +tr.dataset.row !== calSel){ calSel = +tr.dataset.row; selPaint(false); } };
-      q('.gci-cal-levels').addEventListener('click', pickRow);
-      q('.gci-cal-levels').addEventListener('focusin', pickRow);
-      q('.gci-cal-fits').addEventListener('click', e=>{
-        const b = e.target.closest('[data-zero]');
-        if (!b) return;
-        const c = calCopy(cal), g = b.dataset.g, z = b.dataset.zero === '1';
-        if (c.zero[g] === z) return;
-        c.zero[g] = z; cal = c; changed();
-      });
-
-      /* The standard on show: its selector (snav.js: its name, the table's; red where its
-         fit is suspicious), its arrows and ← →, a click on its row. */
-      const fullName = x => `${x.name} (${x.f.table ? `${x.f.table.name}, ` : ''}${x.f.name}, column ${x.j + 1})`;
-      const stdNav = snav(q('.gci-csel'), {
-        count: ()=> rowsNow.length, index: ()=> calSel,
-        label: i => rowsNow[i] ? rowsNow[i].name : '',
-        title: i => rowsNow[i] ? fullName(rowsNow[i]) : '',
-        bad: i => !!(rowsNow[i] && fitMarks(rowsNow[i].r).length),
-        go: i =>{ calSel = i; selPaint(true); },
-      });
-      function stepStd(d){ const n = rowsNow.length; if (n < 2) return; calSel = (calSel + d + n) % n; selPaint(true); }
-      q('.gci-cprev').addEventListener('click', ()=> stepStd(-1));
-      q('.gci-cnext').addEventListener('click', ()=> stepStd(1));
-      // (`scroll`: chosen elsewhere than in the table, its row brought into the table's view)
-      function selPaint(scroll){
-        const trs = [...m.querySelectorAll('.gci-cal-levels tr[data-row]')];
-        trs.forEach(tr=> tr.classList.toggle('selected', +tr.dataset.row === calSel));
-        stdNav.update();
-        drawStd(false);
-        const tr = trs[calSel], box = q('.gci-cal-table');
-        if (scroll && tr && box.scrollHeight > box.clientHeight){
-          const b = box.getBoundingClientRect(), r = tr.getBoundingClientRect(), hd = box.querySelector('thead').getBoundingClientRect().height;
-          if (r.top < b.top + hd) box.scrollTop -= b.top + hd - r.top;
-          else if (r.bottom > b.bottom) box.scrollTop += r.bottom - b.bottom;
-        }
-      }
-      // Its chromatogram over its residuals, as the card's (drawPair), the windows' edges fixed.
-      function drawStd(keep){
-        const x = rowsNow[calSel] || null;
-        q('.gci-cal-pside').classList.toggle('is-empty', !x);
-        if (!isOpen) return;
-        const o = drawPair({ svg: q('svg.gci-chrom'), rs: q('svg.gci-resid'), leg: q('.gci-cal-legend'), wrap: q('.gci-cal-pair'), keep, was: calPlots,
-          d: x ? x.d : null, k: x ? x.j : 0, R: x ? resOf(x.f) : null, key: x ? fileKey(x.f) + '#' + x.j : '', file: x ? x.f.name : '', what: x ? x.name : '', overlay: P => overlayOn(P, method, false) });
-        calPlots = { chrom: o.chrom, resid: o.resid };
-        calDrawn = x && o.drawn ? { x, ...o.drawn } : null;
-        q('.gci-cal-notice').innerHTML = o.notice;
-        // (its fit in a line under the plot: each gas's area and χ²ᵣ, what makes it suspicious)
-        const r = x && x.r, gs = r && r.gases ? Object.keys(GAS).filter(g=> r.gases[g]) : [], fl = r ? fitMarks(r) : [];
-        q('.gci-cal-fit').innerHTML = gs.map(g=>{ const v = r.gases[g]; return `${gasOf(g).label}: area ${sig(v.area, 5)} ± ${sig(v.sd, 2)}, χ²<sub>r</sub> ${fin(v.chi2r) ? v.chi2r.toFixed(2) : '—'}`; }).join(' · ')
-          + (fl.length ? `<span class="gci-bad"> · ⚠ ${fl.map(esc).join('; ')}</span>` : '');
-        const n = fileSafe(a.name);
-        nameDownloads(q('.gci-cal-pair'), `${n} - GC_standard_chromatogram.svg`, `${n} - standard_chromatogram.csv`);
-      }
-
-      // A thumbnail of a standard's chromatogram over the windows: a polyline, no plot.
-      function thumb(d, j){
-        const [lo, hi] = range(method), t = d.t, y = d.cols[j], xs = [], ys = [];
-        for (let i = 0; i < t.length; i += 2) if (t[i] >= lo && t[i] <= hi && fin(y[i])){ xs.push(t[i]); ys.push(y[i]); }
-        if (xs.length < 2) return '';
-        const y0 = Math.min(...ys), y1 = Math.max(...ys) || y0 + 1, W = 72, H = 22;
-        const pts = xs.map((x, i)=> `${((x - lo)/(hi - lo)*W).toFixed(1)},${(H - 1 - (ys[i] - y0)/((y1 - y0) || 1)*(H - 2)).toFixed(1)}`).join(' ');
-        return `<svg class="gci-thumb" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="1"/></svg>`;
-      }
-      // (drawn anew while the standards are integrated: the field typed in keeps the focus)
-      function paintWindow(){
-        if (!isOpen) return;
-        const act = document.activeElement, was = act && m.contains(act) && act.matches('input[data-fi]') ? { k: `[data-fi="${act.dataset.fi}"][data-j="${act.dataset.j}"][data-g="${act.dataset.g}"]`, v: act.value, s: act.type === 'text' ? act.selectionStart : null } : null;
-        const box = q('.gci-cal-table'), top = box.scrollTop;
-        q('.gci-cal-files').innerHTML = cal.files.map((f, i)=> `<div class="xrd-std-row"><span class="txt-mini">Standards</span><span class="xrd-std-name">${f.table ? `${esc(f.table.name)} + ${esc(f.name)}` : `${esc(f.name)} <span class="txt-meta">(no table)</span>`}</span><button type="button" class="peak-del is-danger idle-dim" data-cal-del="${i}" title="Remove these standards and their levels">${X_SVG(13)}</button></div>`).join('');
-        /* A calibration of v544–v548's, its raw chromatograms alone: said, its standards named
-           by column, until its table is dropped (an alert dismissed stays so while the same
-           files lack theirs). */
-        const old = cal.files.filter(f=> !f.table), wk = old.map(f=> f.name).join('\n'), warn = q('.gci-cal-warn');
-        if (warn.dataset.k !== wk){
-          warn.dataset.k = wk;
-          warn.innerHTML = old.length ? alertHtml('warn', 'Calibration tables missing:', old.map(f=> `${esc(f.name)}: its GC table is not in the project (a calibration saved before v549, raw chromatograms alone): its standards are named by column. Drop the table (the same name without _TCD) to name them; nothing else changes.`)) : '';
-        }
-        q('.gci-cal-unit-in').value = cal.unit;
-        m.querySelectorAll('.gci-u').forEach(s=>{ s.textContent = `(${cal.unit})`; });
-        const rows = rowsNow = calRows(), left = cal.files.reduce((s, f)=>{ const r = resultsAt(keyOf(f, method)); return s + (r ? r.filter(x=> !x).length : dataOf(f).error ? 0 : dataOf(f).cols.length); }, 0);
-        if (calSel >= rows.length) calSel = Math.max(0, rows.length - 1);
-        q('.gci-cal-status').textContent = !cal.files.length ? 'No standards: each pair takes its calibration from the GC software\'s table.' : left ? `Integrating the standards… (${left} left)` : `${plural(rows.length, 'chromatogram')} integrated.`;
-        const area = (x, g)=> x.r && x.r.gases && x.r.gases[g] ? sig(x.r.gases[g].area, 5) : '…';
-        const val = v => v == null ? '' : esc(String(v));
-        q('.gci-cal-levels tbody').innerHTML = rows.map((x, i)=> `<tr class="peak-row${i === calSel ? ' selected' : ''}${x.lv.on ? '' : ' is-excluded'}" data-row="${i}"><td class="gci-cal-k">${i + 1}</td><td class="gci-cal-th">${thumb(x.d, x.j)}</td><td class="gci-cal-src${fitMarks(x.r).length ? ' gci-bad' : ''}" title="${esc(fullName(x))}"><span class="gci-cal-name">${esc(x.name)}</span></td><td class="gci-cal-a">${area(x, 'h2')}</td><td class="gci-cal-a">${area(x, 'o2')}</td>`
-          + `<td><input type="text" inputmode="decimal" data-fi="${x.fi}" data-j="${x.j}" data-g="h2" value="${val(x.lv.h2)}" aria-label="H2 concentration of ${esc(x.name)}" placeholder="—"></td>`
-          + `<td><input type="text" inputmode="decimal" data-fi="${x.fi}" data-j="${x.j}" data-g="o2" value="${val(x.lv.o2)}" aria-label="O2 concentration of ${esc(x.name)}" placeholder="—"></td>`
-          + `<td><input type="checkbox" data-fi="${x.fi}" data-j="${x.j}" data-g="on"${x.lv.on ? ' checked' : ''} aria-label="Use ${esc(x.name)}"></td></tr>`).join('')
-          || `<tr><td colspan="8" class="txt-meta">Drop the standards' GC table and its raw chromatograms above.</td></tr>`;
-        box.scrollTop = top;
-        if (was){ const f = m.querySelector('input' + was.k); if (f){ if (f.type === 'text'){ f.value = was.v; } f.focus({ preventScroll: true }); if (was.s != null) try { f.setSelectionRange(was.s, was.s); } catch(e){ /* not a text field */ } } }
-        stdNav.update();
-        drawStd(true);
-        paintFits();
-      }
-      function paintFits(){
-        const fits = q('.gci-cal-fits');
-        fits.innerHTML = Object.keys(GAS).map(g=> `<div class="col gci-cal-gas" data-g="${g}">
-            <div class="gci-cal-gas-head"><span class="txt-mini">${gasOf(g).label}</span>
-              <span class="gci-cal-zero">${chipRow([{ key: 'free', label: 'free intercept' }, { key: 'zero', label: 'zero intercept' }], [cal.zero[g] ? 'zero' : 'free'], { cls: 'plot-chip gci-zero-chip', data: o=> `data-g="${g}" data-zero="${o.key === 'zero' ? 1 : 0}"`, name: o=> o.label })}</span></div>
-            ${plotWrap(`${p}Cal${g}`, { mod: 'gc', name: `GC_calibration_${gasOf(g).csv}.svg`, legend: '' })}
-            <div class="gci-cal-stats"></div></div>`).join('');
-        Object.keys(GAS).forEach(g=> drawCalGas(g, fits.querySelector(`.gci-cal-gas[data-g="${g}"]`)));
-      }
-      function drawCalGas(g, box){
-        const L = calFit(g), stats = box.querySelector('.gci-cal-stats'), svg = box.querySelector('svg.plot');
-        const pts = calRows().filter(x=> x.lv.on && fin(x.lv[g]) && x.r && x.r.gases && x.r.gases[g] && fin(x.r.gases[g].area));
-        const P = new Plot(svg, { xlabel: `${gasOf(g).txt} (${cal.unit})`, ylabel: 'Area' });
-        if (!pts.length){ P.attachTools(svg.closest('.plot-wrap')); stats.innerHTML = `<p class="txt-meta">No standard for ${gasOf(g).label}: each pair takes its scale from the GC software's table.</p>`; return; }
-        const xs = pts.map(x=> x.lv[g]), ys = pts.map(x=> x.r.gases[g].area);
-        const xmax = Math.max(...xs) || 1, ymax = Math.max(...ys, L ? L.slope*xmax + L.intercept : 0) || 1;
-        P.setRange(0, xmax*1.08, Math.min(0, ...ys, L ? L.intercept : 0), ymax*1.08);
-        P.drawAxes(); P.clearData();
-        if (L) P.line([0, xmax*1.08], [L.intercept, L.slope*xmax*1.08 + L.intercept], C_MODEL, 1.3, undefined, { label: 'fit', key: 'fit' });
-        P.points(xs, ys, gasOf(g).color, 3.5, { fill: true, label: 'standards', key: 'standards' });
-        P.attachTools(svg.closest('.plot-wrap'));
-        if (!L){ const one = new Set(xs).size === 1; stats.innerHTML = `<p class="txt-meta">${plural(pts.length, 'standard')}${one ? ' at one concentration' : ''}: a free intercept needs two concentrations at least${cal.zero[g] ? '' : '; a zero intercept fits one'}.</p>`; return; }
-        const levels = new Map();
-        (L.residuals || []).forEach(r=>{ const k = String(r.conc); if (!levels.has(k)) levels.set(k, []); levels.get(k).push(r); });
-        stats.innerHTML = `<p class="gci-cal-line">slope <b>${sig(L.slope, 6)}</b> area/${esc(cal.unit)}, intercept <b>${sig(L.intercept, 5)}</b>${cal.zero[g] ? ' (fixed)' : ''}, R² = <b>${fin(L.r2) ? L.r2.toFixed(5) : '—'}</b>, n = ${L.n}</p>`
-          + `<table class="gci-cal-dev"><thead><tr><th>Level (${esc(cal.unit)})</th><th>n</th><th>Mean area</th><th>Line</th><th>Deviation</th></tr></thead><tbody>${[...levels.entries()].sort((a, b)=> a[0] - b[0]).map(([c, rs])=>{
-            const mA = rs.reduce((s, r)=> s + r.area, 0)/rs.length, fit = rs[0].fitted, dev = fit ? 100*(mA - fit)/fit : NaN;
-            return `<tr><td>${sig(+c, 5)}</td><td>${rs.length}</td><td>${sig(mA, 5)}</td><td>${sig(fit, 5)}</td><td class="${fin(dev) && Math.abs(dev) > 3 ? 'gci-bad' : ''}">${fin(dev) ? (dev > 0 ? '+' : '') + dev.toFixed(2) + ' %' : '—'}</td></tr>`; }).join('')}</tbody></table>`;
-      }
-      return { open, paint: paintWindow, isOpen: ()=> isOpen, destroy(){ close(); stdNav.close(); m.remove(); } };
-    }
-
-    /* ---- Its CSVs: every chromatogram's values (integration.csv, the run overview's); the
-       chromatogram on show, its model and parts and its residuals (chromatogram.csv, the
-       chromatogram's plot's: the whole chromatogram, the model's columns blank outside the
-       fit window) ---- */
-    function exportEntries(n){
-      const es = entries();
-      if (!es.length) return calModal.isOpen() && calDrawn ? [{ name: `${n} - standard_chromatogram.csv`, text: chromCsv(calDrawn) }] : [];
-      const gs = Object.keys(GAS);
-      let t = csvLine(['File', 'Table', 'Injection', 'Injection date', ...gs.flatMap(g=> [`${gasOf(g).csv} area`, `${gasOf(g).csv} area sd`, `${gasOf(g).csv} apex (s)`, `${gasOf(g).csv} chi2r`, `${gasOf(g).csv} (%mol)`, `${gasOf(g).csv} source`, `${gasOf(g).csv} table (%mol)`, `${gasOf(g).csv} suspicious`]), 'Flags']);
-      es.forEach(e=>{
-        if (e.d.error) return;
-        const R = resOf(e.tcd), res = R.stale ? [] : R.res || [], conv = convAll(e, res), J = judge(e, res);
-        for (let k = 0; k < e.n; k++){
-          const r = res[k], times = aligned(e) ? e.table.injDates : null;
-          t += csvLine([e.tcd.name, e.table ? e.table.name : '', String(k + 1), times ? isoLocal(times[k]) : '', ...gs.flatMap(g=>{
-            const x = r && r.gases && r.gases[g], c = conv[g];
-            return [fmtNum(x ? x.area : NaN, 6), fmtNum(x ? x.sd : NaN, 6), fmtNum(x ? x.tApex : NaN, 3), fmtNum(x ? x.chi2r : NaN, 4),
-              x && c && c.f ? fmtNum(c.f(x.area), 6) : '', c && c.f ? (c.how === 'cal' ? 'calibration' : `transfer (k = ${sig(c.k, 6)})`) : '', aligned(e) && e.table.gas[g] ? fmtNum(e.table.gas[g][k], 6) : '',
-              r ? (J.bad(k, g) ? 'yes' : 'no') : ''];
-          }), J(k).join('; ')]);
-        }
-      });
-      const out = [{ name: `${n} - integration.csv`, text: t }];
-      const d = drawn;
-      if (d && d.e && es.some(x=> x.name === d.e.name)) out.push({ name: `${n} - chromatogram.csv`, text: chromCsv(d) });
-      // (the standard on show in the calibration's window, while it is open: its plot's)
-      if (calModal.isOpen() && calDrawn) out.push({ name: `${n} - standard_chromatogram.csv`, text: chromCsv(calDrawn) });
-      return out;
-    }
-    // A chromatogram drawn (drawPair's `drawn`): the whole of it, its model and parts and its
-    // residuals, these blank outside the fit window.
-    function chromCsv(d){
-      const at = new Map(), cols = [], heads = [];
-      const put = (h, xs, ys)=>{ const m = new Map(); xs.forEach((x, i)=> m.set(x, ys[i])); cols.push(m); heads.push(h); };
-      d.curves.forEach(({ wr, c })=>{
-        if (c.model) put(`model ${wr.key}`, c.t, c.model);
-        if (c.base) put(`baseline ${wr.key}`, c.t, c.base);
-        Object.entries(c.peaks || {}).forEach(([name, cv])=> put(`${name} (on the baseline)`, c.t, c.base ? cv.map((v, i)=> v + c.base[i]) : cv));
-        if (c.residual) put(`residual ${wr.key}`, c.t, c.residual);
-      });
-      d.t.forEach((x, i)=> at.set(x, d.y[i]));
-      let ct = csvLine(['Time (s)', 'TCD signal', ...heads]);
-      d.t.forEach(x=>{ ct += csvLine([fmtNum(x, 4), fmtNum(at.get(x), 6), ...cols.map(m=> m.has(x) ? fmtNum(m.get(x), 6) : '')]); });
-      return ct;
-    }
-
-    return {
-      method: ()=> method,
-      tcdRecs,
-      valuesFor,
-      // (a change of its that the cards below read: their sources' key)
-      sig: ()=> exactKey([methodKey(method), calKey()]),
-      paintStatus(all){ paintStatus(all); if (calModal.isOpen()) calModal.paint(); },
-      // (what gc.js asks of every card: no per-sample arrays, no sample picked, no bars, no Results)
-      slots: ()=> [],
-      clear(){ selName = null; selK = 0; },
-      unselect(){},
-      shows(){ const e = cur(); return e ? { file: e.name, k: selK } : null; },
-      showNext(v){ if (isObj(v) && typeof v.file === 'string'){ selName = v.file; selK = Number.isInteger(v.k) && v.k >= 0 ? v.k : 0; } },
-      bars(){},
-      renderTable(){ renderSel(); paintAlerts(); paintStatus(); },
-      compute(keep){ draw(keep); },
-      computeQuiet(){ renderSel(); paintAlerts(); paintStatus(); },
-      hasResults: ()=> false,
-      exportEntries,
-      // (ovGas kept as v544 had it, a list: one gas now)
-      snapshot(){ return { method: clone(method), cal: calCopy(cal), ovGas: [ovGas], ovY }; },
-      restore(s0){
-        const s = isObj(s0) ? s0 : {};
-        const m = methodIn(s.method);
-        if (methodKey(m) !== methodKey(method)) wasMethod = null;
-        method = m; cal = calIn(s.cal);
-        ovGas = (Array.isArray(s.ovGas) ? Object.keys(GAS).find(g=> s.ovGas.includes(g)) : null) || 'h2';
-        ovY = oneOf(s.ovY, ['conc', 'area']);
-        valuesKept.clear();
-        if (calModal.isOpen()) calModal.paint();
-      },
-      destroy(){ calModal.destroy(); fileNav.close(); injNav.close(); },
-    };
-  }
-
-  return { card, saved, load, ensure, prime, destroy(){ dead = true; stop(); clearTimeout(soon); cancelAnimationFrame(painting); } };
+  P.attachTools(svg.closest('.plot-wrap'));
+  stats.innerHTML = H.calStatsHtml(HU, S.gasOf, g, G, C.cal.unit, C.cal.zero[g]);
 }

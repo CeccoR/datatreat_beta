@@ -1,6 +1,6 @@
 /* DataTreat service worker — cache-first offline app shell.
    Bump CACHE when any precached asset changes to force a refresh. */
-const CACHE = 'datatreat-v559';
+const CACHE = 'datatreat-v560';
 const ASSETS = [
   './',
   './index.html',
@@ -40,6 +40,8 @@ const ASSETS = [
   './iodo.js',
   './gc-pair.js',
   './gc-integ.js',
+  './gc-integ-model.js',
+  './gc-integ-html.js',
   './gc-tcd.js',
   './gc-tcd-pool.js',
   './gc-tcd.worker.js',

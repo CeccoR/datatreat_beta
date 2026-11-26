@@ -429,10 +429,70 @@ was proposed; nothing here is in the code yet.
   what it shows) and four of the five run in the browser session (the file it removes had
   no result left); the other three act only on what that session does not record.
   tests/rvmodel.test.mjs keeps the state's and markup's tests and 60 cases as v558's
-  xrd-rv.js gave them (golden digests). Still long (v559): the Integration cards'
-  `createInteg` (gc-integ.js, 1189), `createPeakAnalysis` (xrd-peaks.js, 908), `createFig`
-  (fig.js, 552), `createDeck` (cards.js, 515), `createXrd` (xrd.js, 488), `createIodo`
-  (iodo.js, 407), `wireControls` (figure.js, 372).
+  xrd-rv.js gave them (golden digests). Done for the Integration cards' `createInteg`
+  (gc-integ.js) in v560, the same way: what the cards work out in `gc-integ-model.js` (the
+  method as a project holds it and its key, v544's results' keys read as v545's, a result as
+  the store keeps it; the calibration read back; the raw chromatograms and the calibration's
+  tables read once per file; the results taken in, saved and written into the states that
+  hold their file; what the job integrates; the entries a card shows and their results under
+  the method or the one before it; the standards' names, rows and lines; a gas's
+  concentration by the standards' line or the GC software's scale, what Analysis takes of a
+  sample; the suspicious rule; the chromatogram over its residuals, the run overview and the
+  point nearest the pointer; the status line and the alerts' facts; the CSVs; the
+  calibration window's files told by what they hold and paired, a level as typed, a gas's
+  line and its levels; the card's state saved and put back) and its markup in
+  `gc-integ-html.js` (the instructions, the card's and the calibration window's bodies,
+  Windows, Peaks, the status, the alerts, the notices, the legends, the chips, the window's
+  files, warning, rows, fit and lines), plain functions tested in Node, utils.js's,
+  modkit.js's and plot.js's helpers handed in; the page left in `gc-integ.js`, no longer one
+  closure: the instance a state object (S), each card one (C) and its calibration window one
+  (W), which the functions at module level take: the job (`ensure`, `later`, `run`, `ran`,
+  `runFailed`, `stop`, `paint`), the card's wiring (`makeCard`, `wireNav`, `wireCard`,
+  `cardApi`) and drawing (`draw`, `drawPair` with `drawChromPanel` and `drawResidPanel`,
+  `overlayOn`, `drawOverview`, `paintHl`, `paintMethod`, `paintValues`, `paintStatus`,
+  `paintAlerts`), the window's (`calWindow`, `onCalDrop`, `wireCalEdits`, `onLevel`,
+  `wireCalNav`, `selPaint`, `drawStd`, `paintWindow`, `paintFits`, `drawCalGas`), the
+  listeners in their order. The file 1346 lines to 715 (createInteg 1189 to 14, its card
+  1026 to makeCard's 15, the calibration window 277 to 16, the longest function now 26); the
+  model 777 lines, the markup 270. The same operations in the same order: in the browser, a
+  session of 136 steps (a table alone, then paired with its raw chromatograms; pairs whose
+  counts differ, an injection out of proportion at the rule's edge, a spike, a glitch zone, a
+  column ending early, the .txt export in ppm; raw chromatograms alone and two of them paired
+  by their grips, a broken file refused; the selectors' arrows, keys and lists; the overview
+  hovered and clicked, its gas and y; a window's edge refused, too short, stopped before its
+  run and integrated again, reaching a neighbour, dragged, undone and redone, Default; the
+  card folded; every download; the calibration window: a lone file waiting, its partner, a
+  count that differs, files that are neither, already loaded, levels typed with a comma and
+  refused, a row unticked and picked, ← →, its list, ppm, both intercepts, its downloads and
+  CSV, Escape, undo and redo, a file removed; a second Integration card, moved and closed; a
+  file left out and relabelled; a resize; saved, exported, reloaded with nothing fitted again,
+  a second GC tab; an old calibration with no table named by its table after one whose count
+  differs; 12 old and malformed states) gave v559's DOM, layer, selectors' lists, field
+  values, state, history, kept counts, banners, focus, downloads (SVG, PNG, zip, project) and
+  CSVs at every step: 2312 fields, none different (v559 against itself, none either; gc.js's
+  tables made or taken from its keeper by the garbage collector's timing, their sum
+  compared); in Node, v559's gc-integ.js and this one, each run from its source on a page of
+  stubs recording every markup, text, value, property, style, class, attribute, dataset
+  write, focus, listener, timer, frame, Plot call (its numbers to the last bit), svgEl,
+  selector update, guard and flash, the history patched, the workers' answers the real
+  engine's through the real pool (cached by chromatogram and method), through 1000 random
+  sessions of 80 steps (rows of every kind added, removed, left out, relabelled and
+  unpaired; cards added, folded, moved and closed; the tab hidden; the selectors, the
+  overview and its chips; edges typed and dragged, Default; Re-integrate and Stop; results
+  coming in one or a few at a time, failing, timers and frames run; the calibration window's
+  drops, levels, rows, unit, intercepts, files removed, keys, closed; states and results put
+  back, v544's and malformed; what gc.js asks): 2.1 million entries each, none different.
+  Eight mutations of the new code (the rule's 10 % made 11 %, the panels' edge, the words of
+  a Stop, the hovered point's shade, a level below zero taken, the standard shown after a
+  drop, the history's step before the draw, the order the listeners are added in) were each
+  caught by the Node sessions, five by the new tests (not the last three, the wiring's), five
+  of the six run in the browser session (not the standard after a drop: its drop is made with
+  none loaded) and the standard after a drop by the golden cases run through that
+  gc-integ.js. tests/integmodel.test.mjs keeps the calculations' and markup's tests and 60 cases and three
+  scenes as v559's gc-integ.js gave them (golden digests). Still long (v560):
+  `createPeakAnalysis` (xrd-peaks.js, 908), `createFig` (fig.js, 552), `createDeck`
+  (cards.js, 515), `createXrd` (xrd.js, 488), `createIodo` (iodo.js, 407), `wireControls`
+  (figure.js, 372).
   The others when work takes us into them.
 - **The browser storage is shared with every page of the same origin.** On GitHub Pages
   the app lives at `ceccor.github.io/datatreat_beta/`, and every project published under
