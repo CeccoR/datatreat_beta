@@ -379,7 +379,57 @@ was proposed; nothing here is in the code yet.
   65535th of the grey, which the 8-bit image does not show). tests/semmodel.test.mjs keeps
   the calculations' tests, the fixtures' CSV as v557's page wrote it and 60 cases as v557's
   sem.js gave them (golden digests). Of the three modules named above none is one closure
-  now. Still long (v558): `createRietveld` (xrd-rv.js, 1204 lines), the Integration cards'
+  now. Done for `createRietveld`'s wiring in v559, the same way (its calculations and markup
+  had gone in v513): what the card's state does in `xrd-rv-model.js` (a phase added and
+  removed, the results of files no longer loaded dropped, a group held, a Refinement entry
+  taken or refused, what a run takes as it starts and its words, the keys its views are
+  kept under, the pattern's frame and rows of ticks, the stacked plot, the size chart's note
+  and points, a peak picked and those marked, Williamson–Hall's points and range, the state
+  saved and put back, what it shows beside it) and its markup in `xrd-rv-html.js` (the
+  instructions, the card's frame and its section of the Results, the settings window, the
+  legends, the chips, the solids' boxes, the results' box), plain functions tested in Node,
+  utils.js's helpers handed in; the page left in `xrd-rv.js`, no longer one closure: the
+  card a state object (S) the functions at module level take, its run in named functions
+  (`refine`, `laneHooks`, `written`, `progressed`, `press`, `stdFirst`, `cancel`), its views
+  (`draw`, `drawPlot`, `drawPattern`, `drawStacked`, `drawSizes`, `sizePlot`,
+  `renderSolids`, `renderWidths`, `drawWH`, `renderResults`, `renderPhases`, `renderCell`)
+  and its wiring (`makeSettings`, `wireSettings`, `wireCifs`, `wirePhaseList`,
+  `wireButtons`), the listeners in their order. The file 1465 lines to 1235 (createRietveld
+  1204 to 12, the longest function now `cardState`'s 51, its state's fields with their
+  notes, the next 28); the model 705 lines to 1012, the markup 249 to 450. The same
+  operations in the same order: in the browser, a session of 168 steps (four patterns, one
+  plate-like; CIFs dropped and picked, refused, UTF-16, a name with markup, downloaded,
+  ticked off, removed and undone; Refine and Refine all asking about the standard, every
+  answer; the standard loaded, its CIF and the built-in LaB6 chosen, its settings, refined;
+  every sample refined, the widths' rows hovered and picked, the size chart by peak and by
+  sample, every download; the settings: every mode and depth, the start and its groups,
+  every Refinement field (refused, with a comma, at its default), automatic, the size line,
+  the normalisation, Defaults, Escape, the backdrop, undo and redo inside; from the last
+  result; a free cylinder kept, its PNG, the solid and the cell turned; Cancel, a double
+  click, undo during a run, the standard cleared, refined first and cancelled while waited
+  for; Clear, Clear all; files relabelled, left out, stepped through the list, removed; the
+  card folded, switched to Scherrer and back, a second card added, refined, closed and
+  undone, renamed; the CSVs, saved, exported, reloaded, a second XRPD tab refined; 23 old
+  and malformed states) gave v558's DOM, field values, canvases' pixels, state, history,
+  kept results, banners, the question's window, focus, downloads and CSVs at every step:
+  45025 fields, none different (v558 against itself, none either; each result's time and
+  duration masked); in Node, v558's xrd-rv.js and this one, each run from its source on a
+  page of stubs recording every markup, text, value, property, style, class, attribute,
+  dataset write, listener, Plot call (its numbers to the last bit), 3D view's call and
+  download, the workers' answers the real engine's (cached by payload), through 1000 random
+  sessions of 100 steps (a standard's card and one or two samples'; patterns added, removed,
+  left out, relabelled, moved, stepped; CIFs of every kind; the settings in every field;
+  runs started, answered, cancelled, double-clicked, let through a few messages at a time,
+  undone; Clear; the views clicked; states malformed; the tab hidden and resized; the CSVs,
+  shows): 9.4 million entries, none different. Eight mutations of the new code (the
+  stacked plot's offset, the gap between the rows of ticks, the order of the groups held,
+  χ²'s decimals, the order the listeners are added in, the standard's progress rounded
+  down, the order of what the card shows, the results of a file removed kept) were each
+  caught by the Node sessions, six by the new tests (not the listeners' order nor that of
+  what it shows) and four of the five run in the browser session (the file it removes had
+  no result left); the other three act only on what that session does not record.
+  tests/rvmodel.test.mjs keeps the state's and markup's tests and 60 cases as v558's
+  xrd-rv.js gave them (golden digests). Still long (v559): the Integration cards'
   `createInteg` (gc-integ.js, 1189), `createPeakAnalysis` (xrd-peaks.js, 908), `createFig`
   (fig.js, 552), `createDeck` (cards.js, 515), `createXrd` (xrd.js, 488), `createIodo`
   (iodo.js, 407), `wireControls` (figure.js, 372).

@@ -3,7 +3,12 @@
    the card; tests/rvmodel.test.mjs calls them in Node): a phase read from its CIF; its
    fitting modes, the start and the Refinement settings, made valid, and the card's state
    saved and read back; what a run sends the worker and what the card keeps of its answer;
-   what a result is drawn with (its phases, curves, ticks and sizes); the CSVs.
+   what a result is drawn with (its phases, curves, ticks and sizes); the CSVs. And (v559,
+   out of createRietveld) the card's state S as xrd-rv.js keeps it: its phases, a phase
+   added and removed, the Refinement entries taken or refused, a run's start and its words,
+   the keys its views are kept under and what they are drawn from (the pattern's frame, the
+   stacked plot, the sizes' points, Williamson–Hall's), the state saved and put back, what it
+   shows beside it.
 ========================================================= */
 import { parseCif, expandAtoms, structureCell, checkComposition, cellMass, metric, reflections } from './xrd-cryst.js';
 import { readXrdmlInstrumentText } from './xrd-instr.js';
@@ -697,9 +702,311 @@ function resultsOf(s){
   return results;
 }
 
+/* ---- The card's state (v559, out of xrd-rv.js's createRietveld) ----
+   S: the card's instance as xrd-rv.js keeps it (cardState there): its phases, the standard's
+   LaB6 (lab6) and the phase chosen for it (pick), its results, the settings, the run going
+   on (busy, cur) or waiting for the standard's (waiting), and what its views show. The
+   functions below read and set it, and touch no page. */
+/* A view (the pattern's plot, the widths' table and plot, the Results' charts, a list, a
+   box of text) is drawn again only when what it is drawn from changed: a plot keeps the
+   key of its inputs as last drawn, a box of markup the markup it was given. In a key an
+   object is a number of its own (idOf: the same object, the same number; a pattern's
+   arrays never change, xrd.js), a result is when it was refined (resKey: an undo gives
+   back the same as a copy), and a plot's size on the page is there (xrd-rv.js sizeOf: 0 out
+   of sight, so one drawn hidden is drawn again when shown). Up to v490 every edit drew the
+   whole card again (a setting changed: its plots, tables and 3D cell, 55 ms with 12
+   patterns), and a label changed every card. A value that is no object, which a project
+   read in may hold where one should be (a result or a file's instrument a number), is
+   there as itself: a WeakMap takes no such key (it threw in the restore, which drew such
+   a project before). */
+const ids = new WeakMap();
+let nid = 0;
+const idOf = o => o == null ? '-' : typeof o !== 'object' && typeof o !== 'function' ? typeof o + ':' + String(o) : ids.get(o) || (ids.set(o, ++nid), nid);
+const resKey = r => !r ? '-' : Number.isFinite(r.at) ? 'at' + r.at : 'r' + idOf(r);
+// The key a refined pattern's curves are kept under (xrd-rv.js curvesKept): all they are made
+// from — the 2θ and variance factors, the instrument, what they take from the result
+// (exactly: exactJson), each phase's structure (its prep, one object for one CIF text) and
+// colour, and the role.
+const curveKey = (f, r, list, std) => exactJson([idOf(f.x), idOf(f.varMul), instrOf(f), [r.params, r.models, r.textures, r.fit, r.phases, r.cells],
+  list.map(q=> [q.id, idOf(q.prep), q.color]), !!std]);
+// The card's phases (the standard's: the built-in LaB6 first); the one the standard is refined
+// with; those refined on a pattern f (the standard's the one chosen; a sample's those ticked
+// for it). locked: a run going on, or a sample's waiting for the standard's (what it takes as
+// it starts locked).
+const allPhases = S => S.std ? [S.lab6, ...S.phases] : S.phases;
+const stdPhase = S => allPhases(S).find(q=> q.id === S.pick) || S.lab6;
+const phasesFor = (S, f) => S.std ? [stdPhase(S)] : S.phases.filter(q=> !(f && q.off[f.name]));
+const locked = S => S.busy || !!S.waiting;
+/* A phase added from a CIF (addCifs), its id the next: the default settings, an isotropic
+   size and strain, the rest off — the CIF's B held, also for a CIF that gives none (v428:
+   one ΔB on nanocrystalline samples came out negative, taking up what the model lacks;
+   RIETVELD.md §8.1). The standard's: its own (the instrument's widths, one ΔB). Its colour by
+   the phases there before it (n). */
+const newPhase = (id, text, file, prep, n, std) => ({ id, cif: text, file, color: PHASE_COLORS[n % PHASE_COLORS.length], prep, ...(std ? stdSettings() : defSettings()), off: {} });
+// A phase removed (its row's ×): the standard's choice of it, and every result refined with it
+// (no longer the model's), go with it.
+function dropPhase(S, id){
+  S.phases = S.phases.filter(q=> q.id !== id);
+  if (S.pick === id) S.pick = 0;
+  Object.keys(S.results).forEach(k=>{ if ((S.results[k].phases || []).includes(id)) delete S.results[k]; });
+}
+// The results of files no longer loaded go (all: every file loaded, those left out too).
+function keepLoaded(results, all){
+  const names = new Set(all.map(f=> f.name));
+  Object.keys(results).forEach(k=>{ if (!names.has(k)) delete results[k]; });
+}
+// A start's groups held (the settings' Start): one ticked or not, in HOLDS' order.
+const holdWith = (hold, k, on) => HOLD_KEYS.filter(x=> x === k ? on : hold.includes(x));
+// The settings' Refinement section's note: an entry not taken (fitRefusal), else what it does.
+const fitNoteText = note => note || 'For every pattern, from the next refinement. A result refined with other than the defaults says which, under its statistics.';
+// A mode's row's title in the settings (why it does not apply, na; on the standard, why one ΔB
+// is its default — LAB6_CIF's numbers).
+const modeTitle = (m, na, std) => na || (std && m.k === 'adp' ? m.title + ". On the standard, one ΔB is the default: held, a B 0.1 Å² off moved the profile's X by 10 esd, the profile taking up the intensities' fall with angle" : m.title);
+// The settings' body is built again only when the phases on show change (their key).
+const settingsKeyOf = list => list.map(q=> [q.id, q.color, q.prep.name].join()).join('|');
+/* A Refinement setting entered (xrd-rv.js commitFit, on change or Enter): e, the field's
+   { auto (its 'automatic' box), checked, value, shown (the value it showed) }, autoOn() what
+   automatic gives the pattern on show. Gives { fit }, the settings as taken (a value back at
+   its default dropped; in FITS' order, as restore gives it: the undo history compares states
+   as text); { refused }, the note on a value not allowed; { same }, a value as it was (Enter,
+   then the change on leaving: one step); or null, nothing to take. */
+function fitEntry(fit, m, e, autoOn){
+  const k = m.k, f = { ...fit };
+  if (e.auto){ if (e.checked) delete f[k]; else f[k] = autoOn(); }
+  else if (m.bool) f[k] = e.checked;
+  else if (m.choice){
+    if (!m.choice.some(([v])=> v === e.value) || e.value === fitSettings(fit)[k]) return null;
+    if (e.value === FIT_DEF[k]) delete f[k]; else f[k] = e.value;
+  } else {
+    const was = fitSettings(fit)[k], v = readFit(m, e.value);
+    if (v === null) return { refused: fitRefusal(m, e.value, e.shown) };
+    if (v === was) return { same: true };
+    if (v === FIT_DEF[k]) delete f[k]; else f[k] = v;
+  }
+  return { fit: cleanFit(f) };
+}
+
+/* ---- A run (xrd-rv.js refine) ----
+   What it takes as it starts, the same for all its files (an undo during a run would
+   otherwise change them between files): copies of the phases with their settings and
+   ticks, of the standard's phase, the start, the groups held, the Refinement settings, and
+   the standard's profile (irf: none for the standard; up to v477 read per file, and the
+   standard refined during a batch gave the patterns after it another); fell and bgFreed, the
+   patterns refined from the CIF instead and those whose scales and background are refined
+   rather than held (payloadFor); n patterns, done so far; tell, the standard's run's
+   progress for a sample waiting on it. */
+function runOf(S, irf, n, tell){
+  const copy = q => ({ ...q, on: { ...q.on }, dep: { ...q.dep }, off: { ...q.off } });
+  return { ph: S.phases.map(copy), std: copy(stdPhase(S)), start: S.startFrom, hold: S.hold.slice(), fit: { ...S.fit }, irf,
+    fell: [], bgFreed: [], n, done: 0, tell };
+}
+// Why Refine has nothing to refine (no pattern with a phase): the standard's, a sample's.
+const nothingText = (std, n) => std ? 'Load the standard\'s file to refine it.' : n ? 'No phase ticked for this pattern: add one from a CIF, or tick one.' : 'Add a phase from a CIF to refine.';
+// A run ended: the patterns refined from the CIF though asked from their last result, and
+// those whose scales and background were refined rather than held.
+const runEndText = run => [run.fell.length && `From the CIF, no last result to start from: ${run.fell.join('; ')}.`,
+  run.bgFreed.length && `Scales and background refined, not held: the background's terms changed since the last result (${run.bgFreed.join(', ')}).`].filter(Boolean).join(' ');
+/* A run's progress (xrd-rv-pool.js lanes' progress): one pattern under way, as its lane says
+   it, its stages; several, their names and how many are done. The status's words, or null
+   for none new (lbl: a pattern's label by its index; from: ' from its last result' where it
+   starts so). */
+function progressStatus(run, on, k, stage, what, lbl, from){
+  if (on.length > 1) return what !== 'progress' || stage ? `Refining ${on.map(lbl).join(', ')}… (${run.done} of ${run.n} done)` : null;
+  if (what === 'start') return `Refining ${lbl(k)}${from[k]}…`;
+  if (what === 'done' && on.length) return `Refining ${lbl(on[0])}…`;
+  return stage ? `Refining ${lbl(k)}: ${stage}…` : null;
+}
+// What the standard's run tells a sample waiting on it (the stages say the rest: a start from
+// the last result has its own).
+const progressTell = (on, k, stage, lbl) => stage ? `${lbl(k)}: ${stage}` : on.map(lbl).join(', ');
+// Stopped (cancel): a wait for the standard's run (own: the standard's run started by it, which
+// stops with it); a run, the patterns done kept.
+const waitStopText = own => own ? 'Stopped, the standard\'s refinement with it: nothing refined.' : 'Stopped waiting for the standard\'s refinement: nothing refined.';
+const stoppedText = (run, std) => run.n > 1 ? `Stopped after ${run.done} of ${run.n} patterns: the others keep what they had.` : `Stopped: ${std ? 'the standard' : 'the pattern'} keeps what it had.`;
+// The question Refine asks with no refined standard (xrd-rv.js press, utils.js confirmModal's
+// message, primary and other answer): refine the standard first, or load one.
+const stdQuestion = loaded => [loaded
+  ? 'The instrumental standard is not refined: without its profile the widths, and the sizes from them, include the instrument\'s. Refine it first, with the settings of its window?'
+  : 'No instrumental standard is loaded: without its profile the widths, and the sizes from them, include the instrument\'s.',
+  loaded ? 'Refine the standard first' : 'Load a standard…', 'Refine without the standard'];
+// The standard's run, refined first, gave no profile (r: its { ok, why }).
+const stdFailText = r => r.ok ? 'The standard\'s refinement gave no profile (its file changed meanwhile?): nothing refined.'
+  : r.why === 'stopped' ? 'The standard\'s refinement was stopped: nothing refined.' : `The standard's refinement failed (${String(r.why).replace(/\.$/, '')}): nothing refined.`;
+// Refine's title: a wait for the standard's run (one the standard's window started: Cancel
+// ends the wait, not that run), else why it cannot run now (why).
+const refineTitle = (waiting, why) => waiting ? (waiting.own ? 'The standard is refined first: Cancel stops it' : 'Waiting for the standard\'s refinement: Cancel stops waiting (the standard goes on)') : why;
+/* The standard's run as a sample's Instrumental standard… shows it (run: host.stdRun, null
+   when none runs, else { frac }, not known before the worker's first word): the key it is
+   shown under, its name, its progress along the button's foot and its title. */
+function stdRunView(run){
+  const pct = run && Number.isFinite(run.frac) ? Math.round(Math.max(0, Math.min(1, run.frac))*100) : null;
+  const t = pct == null ? 'refining' : `refining, ${pct} %`;
+  return { key: run ? 'run:' + pct : '', label: `Instrumental standard… (${t})`, prog: pct == null ? '0' : String(pct/100),
+    title: `The instrumental standard is being refined${pct == null ? '' : ` (${pct} %)`}: its window, this button, shows the run and can stop it` };
+}
+// A row's × and tick (the standard's: its choice) while a run goes on or waits (lock): the
+// × disabled, a tick with no pattern on show (f) disabled, as ever; each titled why.
+const ROW_TITLES = { del: ['Remove phase', 'the phase stays until it ends'], on: ['Refined on this pattern (each pattern its own)', 'the tick stays as it is until it ends'],
+  pick: ['The phase the standard is refined with', 'the phase chosen stays until it ends'] };
+const rowLock = (k, lock, f) => ({ off: k === 'del' ? lock : k === 'on' && !f, title: lock ? 'A refinement is running: ' + ROW_TITLES[k][1] : ROW_TITLES[k][0] });
+
+/* ---- What the card's views are drawn from ---- */
+// The pattern's plot (xrd-rv.js drawPlot): the pattern, its instrument, its result, the phases
+// (each one's structure, colour and tick on it, the standard's chosen) and the plot's size.
+const plotKeyOf = (S, f, r, size) => [f.name, idOf(f.x), idOf(f.y), idOf(f.varMul), idOf(instrOf(f)), resKey(r), S.std ? S.pick : '',
+  allPhases(S).map(q=> [q.id, q.color, idOf(q.prep), q.off[f.name] ? 0 : 1].join(':')).join(), size].join('|');
+/* The pattern's plot's frame (drawPattern): from the pattern's lowest to its highest count,
+   a row of ticks a phase (nRows) under it and, with a fit, the difference (diff) under them;
+   range: the plot's [x0, x1, y0, y1] over the scan (xs); off: the difference's shift. */
+function patternFrame(ys, nRows, diff, [xa, xb]){
+  const lo = Math.min(...ys), hi = Math.max(...ys), A = (hi - lo) || 1;
+  const rowH = 0.045*A, rowGap = 0.02*A;
+  const tickTop = lo - rowGap, tickBottom = tickTop - nRows*(rowH + rowGap);
+  let off = 0, range;
+  if (diff){
+    const dHi = Math.max(...diff), dLo = Math.min(...diff);
+    off = tickBottom - rowGap - dHi;
+    range = [xa, xb, off + dLo - 0.03*A, hi + 0.05*A];
+  } else range = [xa, xb, tickBottom - rowGap, hi + 0.05*A];
+  return { rowH, rowGap, tickTop, off, range };
+}
+// A phase's row of ticks (its k-th), as segments: each reflection's 2θ from the row's foot to
+// its top.
+function tickSegs(g, k, { rowH, rowGap, tickTop }){
+  const y1 = tickTop - k*(rowH + rowGap), y0 = y1 - rowH, xs = [], yv = [];
+  g.tt.forEach(t=>{ xs.push(t, t); yv.push(y0, y1); });
+  return { xs, yv };
+}
+/* The Results' stacked plot (drawStacked): shown, the patterns with their observed less the
+   background (y); its key (a label no part of it), its range and each line, normalised as
+   Settings… say (global: each divided by the largest; local: by its own; none: as they are,
+   the largest spacing them, the plot's unit). U: { maxArr } (utils.js). */
+const stackKeyOf = (resNorm, size, shown) => [resNorm, size, ...shown.map(({ f, y })=> [f.name, f.color, idOf(f.x), idOf(y)].join(':'))].join('|');
+function stackOf(U, shown, resNorm){
+  const gmax = Math.max(1e-12, ...shown.map(({ y })=> U.maxArr(y)));
+  const unit = resNorm === 'none' ? gmax : 1, n = shown.length, baseOf = j => -j*1.1*unit;
+  let lo = Infinity, hi = -Infinity;
+  shown.forEach(({ f })=>{ const [a, b] = scanRange(f); lo = Math.min(lo, a); hi = Math.max(hi, b); });
+  if (!isFinite(lo)){ lo = 0; hi = 1; }
+  return { range: [lo, hi, baseOf(Math.max(0, n - 1)), baseOf(0) + 1.1*unit], lines: shown.map(({ f, y }, j)=>{
+    const mx = resNorm === 'local' ? (U.maxArr(y) || 1) : resNorm === 'none' ? 1 : gmax, norm = y.map(v=> v/mx);
+    return { f, norm, ys: norm.map(v=> v + baseOf(j) + 0.05*unit) };
+  }) };
+}
+// The note under the size chart (drawSizes; any: a size to chart).
+const sizeNoteOf = (sizeBy, fs, results, any) => !any ? (sizeBy === 'peak' ? 'No peak the tests use.' : 'No size refined: the size is off, or every phase was refined without one.')
+  : sizeBy === 'peak' ? "Each reflection's own size (Scherrer, K = 0.9, on its FWHM less the instrument's), the peaks the tests use." : sizeKinds(fs, results).map(k=> SIZE_KINDS[k][1]).join(' ');
+// The size chart's points, a colour and an offset each (beside its column's centre by its
+// offset, in the plot's units: svgW the chart's width, n its columns).
+function pointGroups(pts, svgW, n){
+  const groups = new Map();
+  pts.forEach(m=>{ const k = m.color + '|' + m.dx; if (!groups.has(k)) groups.set(k, { color: m.color, dx: m.dx, xs: [], ys: [] }); const g = groups.get(k); g.xs.push(m.x + m.dx/((svgW - 75)/(n + 1))); g.ys.push(m.v); });
+  return groups;
+}
+// A solid's views: the solids of a pattern as last drawn; how one was turned, by pattern and
+// solid; its PNG's name.
+const solidsKeyOf = (f, list) => (f ? f.name : '') + JSON.stringify(list);
+const turnKeyOf = (f, s) => f.name + '|' + s.id + '|' + JSON.stringify([s.type, s.dims, s.frame]);
+const solidPngName = (f, s) => `XRPD_shape_${f.label}_${s.name}.png`.replace(/[^\w.-]+/g, '_');
+// The widths' table, Williamson–Hall plot and tests as last drawn: the pattern, its result,
+// the phases' colours and the plot's size.
+const widthsKeyOf = (f, r, all, size) => [f.name, resKey(r), all.map(q=> q.id + ':' + q.color).join(), size].join('|');
+// A peak of the widths' table (its row's data, d), of the pattern file; two the same; the
+// picked one and the one under the pointer, each once (marked on the pattern and on the
+// Williamson–Hall plot).
+const pkOf = (file, d, colorOf) => ({ file, tt: +d.tt, lab: d.lab, ph: +d.ph, color: colorOf(+d.ph) });
+const samePk = (a, b) => !!a && !!b && a.file === b.file && a.lab === b.lab && a.ph === b.ph;
+const markedOf = (sel, hov) => [sel, hov].filter((k, i, a)=> k && (i === 0 || !a[0] || a[0].lab !== k.lab || a[0].ph !== k.ph));
+/* Williamson–Hall (drawWH): H·cosθ (10⁻³ rad; H the corrected FWHM, not the integral
+   breadth β) against 4·sinθ for the peaks the tests use, each with its esd and hkl (pts),
+   and the models' own points beside them (mods: the isotropic model's and the free
+   shape's); the range from 4·sinθ = 0, where a line meets the axis at Kλ/D, and from 0 up,
+   or from below the lowest error bar or line where one goes under 0 (a negative intercept:
+   no size). */
+function whPoints(phs, colorOf){
+  const D2R = Math.PI/180, pts = [], mods = [];
+  phs.forEach(ph=> ph.rows.forEach(w=>{
+    if (w.overlapped || w.edge || w.weak || w.flat || !(w.W > 0)) return;
+    const x = 4*w.sin, k = 1e3*D2R*w.cos;
+    pts.push({ x, y: w.W*k, e: (w.Wesd || 0)*k, label: w.label, ph: ph.id, color: colorOf(ph.id) });
+    if (Number.isFinite(w.model.iso)) mods.push({ x, y: w.model.iso*k, kind: 'iso' });
+    if (ph.shaped && Number.isFinite(w.model.shape)) mods.push({ x, y: w.model.shape*k, kind: 'shape' });
+  }));
+  return { pts, mods };
+}
+function whRange(pts, mods, phs){
+  const xb = 1.12*Math.max(...pts.map(q=> q.x)) || 1;
+  const ys = pts.flatMap(q=> [q.y - q.e, q.y + q.e]).concat(mods.map(m=> m.y),
+    phs.flatMap(ph=> Number.isFinite(ph.wh.a) ? [1e3*ph.wh.a, 1e3*(ph.wh.a + ph.wh.b*xb)] : []));
+  const y0 = Math.min(0, ...ys), y1 = Math.max(...ys), dy = (y1 - y0) || 1;
+  return [0, xb, y0 < 0 ? y0 - 0.08*dy : 0, y1 + 0.12*dy];
+}
+// The title by the results' box's title (renderFitSet): a result's, or what Refine will refine.
+const fitSetTitle = (done, n) => done ? 'What this result was refined with' : n ? 'What Refine will refine: Settings… changes it' : '';
+// The 3D cell's key (renderCell): by the CIF's content too (ids start again at 1 in each
+// project and after an undo, so another CIF of the same cell kept the atoms shown before, the
+// details the new ones, to v486) and by its name, which a CIF without one takes from its file's.
+const cellKeyOf = q => q.id + '|' + cellKey(q.prep.cell) + '|' + q.prep.src + '|' + q.prep.name;
+
+/* ---- The card's state saved and read back ---- */
+// As saved (stateOf), with its view: a sample card's { sizeBy, resNorm }.
+const snapshotOf = S => stateOf({ phases: S.phases, std: S.std, lab6: S.lab6, pick: S.pick, start: S.startFrom, hold: S.hold, fit: S.fit, nextId: S.nextId, sel: S.sel,
+  results: S.results, view: S.res ? { sizeBy: S.sizeBy, resNorm: S.resNorm } : null });
+/* A state put back into the card (xrd-rv.js restore; keep: a step of the history while a run
+   goes on here or waits, which keeps what the run takes as it starts and the patterns it has
+   written over the state's results). A state whose phases are no list throws, before
+   anything is changed. U: { normOf } (utils.js). */
+function restoreInto(U, S, s, keep){
+  if (!keep){
+    const t = readState(s, S.std);
+    S.phases = t.phases;
+    if (S.std){ Object.assign(S.lab6, t.std); S.pick = t.pick; }
+    S.startFrom = t.start; S.hold = t.hold;
+    // (a note on an entry not taken is about the settings before)
+    S.fit = t.fit; S.fitNote = null;
+    S.nextId = t.nextId;
+    S.setKey = '';
+  }
+  S.sel = Number.isInteger(s.sel) ? s.sel : null;
+  S.results = resultsOf(s);
+  if (keep && S.wrote) Object.assign(S.results, S.wrote);
+  S.sizeBy = s.sizeBy === 'peak' ? 'peak' : 'sample'; S.resNorm = U.normOf(s.resNorm);
+}
+/* What the card shows beside its state (xrd.js shows): the peak picked in its table of
+   widths, how each crystallite's solid was turned (by pattern and solid, as S.solidTurns),
+   the phase on show (by its id and name) and how its unit cell was turned (by the cell's
+   key), given back (nextInto) as its tab wakes or the page is reloaded, the state restored,
+   for its next drawing. */
+function showsOf(S){
+  const turns = new Map(S.solidTurns);
+  S.solidViews.forEach(({ view, turnKey })=>{ if (view.getView) turns.set(turnKey, view.getView()); });
+  const v = {}, q = allPhases(S).find(x=> x.id === S.sel), cell = S.cellV && S.cellKeyShown ? S.cellV.getView() : null;
+  if (S.pkSel) v.pk = { ...S.pkSel };
+  if (turns.size) v.turns = [...turns];
+  if (q) v.sel = { id: q.id, name: q.prep.name };
+  if (cell) v.cell = { key: S.cellKeyShown, R: cell.R };
+  else if (S.cellNext) v.cell = S.cellNext;
+  return Object.keys(v).length ? v : null;
+}
+function nextInto(S, v){
+  const p = v && v.pk;
+  if (p && typeof p.file === 'string' && typeof p.lab === 'string' && Number.isFinite(p.tt) && Number.isFinite(p.ph))
+    S.pkSel = { file: p.file, tt: p.tt, lab: p.lab, ph: p.ph, color: typeof p.color === 'string' ? p.color : '#888' };
+  if (v && Array.isArray(v.turns)) v.turns.slice(-50).forEach(e=>{ if (Array.isArray(e) && typeof e[0] === 'string' && e[1] && typeof e[1] === 'object') S.solidTurns.set(e[0], e[1]); });
+  // (the phase where it is still there under its name; the cell's turn at its next drawing)
+  const s = v && v.sel, q = s && allPhases(S).find(x=> x.id === s.id);
+  if (q && q.prep.name === s.name) S.sel = q.id;
+  const c = v && v.cell;
+  S.cellNext = c && typeof c.key === 'string' && Array.isArray(c.R) ? { key: c.key, R: c.R } : null;
+}
+
 export { PHASE_COLORS, prepPhase, textKey, prepOf, cellKey, MODES, MODE, siteList, listOf, depOf, defSettings, stdSettings, cleanSettings, migrateSettings, engineOf,
   HOLD_KEYS, HOLD_DEFAULT, START_RULE, FIT_DEF, FITS, FIT, fitTxt, readFit, cleanFit, formulaOf,
   SIZE_KINDS, hklShow, hklPlain, hklRuns, plotRuns,
   instrOf, LAB6_ID, irfOf, sameIrf, lastUnusable, payloadFor, resultRecord,
   resultPhases, curvesFrom, exactJson, scanRange, tickRows, groupTicks,
-  sizesOf, sizeKinds, sizeMarks, fitUsed, csvTables, rowsFor, fitShown, naOf, autoInvOf, fitRefusal, stateOf, readState, resultsOf };
+  sizesOf, sizeKinds, sizeMarks, fitUsed, csvTables, rowsFor, fitShown, naOf, autoInvOf, fitRefusal, stateOf, readState, resultsOf,
+  idOf, resKey, curveKey, allPhases, stdPhase, phasesFor, locked, newPhase, dropPhase, keepLoaded, holdWith, fitNoteText, modeTitle, settingsKeyOf, fitEntry,
+  runOf, nothingText, runEndText, progressStatus, progressTell, waitStopText, stoppedText, stdQuestion, stdFailText, refineTitle, stdRunView, ROW_TITLES, rowLock,
+  plotKeyOf, patternFrame, tickSegs, stackKeyOf, stackOf, sizeNoteOf, pointGroups, solidsKeyOf, turnKeyOf, solidPngName, widthsKeyOf, pkOf, samePk, markedOf,
+  whPoints, whRange, fitSetTitle, cellKeyOf, snapshotOf, restoreInto, showsOf, nextInto };

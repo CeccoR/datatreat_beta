@@ -11,12 +11,22 @@
    barred (markup, a list's option, a plot's runs, a label of v479 or older), formulae, what
    a phase is refined with, the instrument's line, the solids' captions; every name from a
    CIF escaped, an apostrophe left as it is. The values are HEAD v511's (xrd-rv.js before the
-   split), read in its page. */
+   split), read in its page.
+   From v559 (out of v558's createRietveld, xrd-rv.js no longer one closure) the card's own
+   state: its phases added and removed, the Refinement entries taken or refused, what a run
+   takes and says, the keys its views are kept under and what they are drawn from (the
+   pattern's frame, the stacked plot, the sizes' points, Williamson–Hall's), the state put back
+   and what the card shows beside it, its markup; and 60 cases as v558's xrd-rv.js gave them,
+   run from its source on a page of stubs (below), their digests in tests/golden/rvmodel.json
+   (npm run test:update writes them anew after a change meant to alter them). utils.js's
+   helpers, which need a page to load, are taken from their source as they stand there. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { CIF, xrdml } from './fixtures.mjs';
+import { createHash } from 'node:crypto';
+import { CIF, xrdml, rng } from './fixtures.mjs';
 import { readXrdmlScanText } from '../xrd-instr.js';
+import { buildModel, fitSettings } from '../xrd-rietveld.js';
 import * as M from '../xrd-rv-model.js';
 import * as H from '../xrd-rv-html.js';
 
@@ -379,4 +389,440 @@ test('the words: indices barred, formulae, what a phase is refined with, the ins
   const cell = H.cellDetailsHtml(q, false), body = H.settingsBodyHtml([q], { p: 'zz', std: false, lab6: null, ...M.rowsFor(false), normOptions: '' });
   for (const html of [rows, cell, body]) assert.ok(!html.includes('<i data-x') && html.includes('&quot;\'&gt;&lt;i data-x=1&gt;&lt;/i&gt;'), 'escaped');
   assert.ok(cell.includes('<div class="rv-ci-note">&quot;\'&gt;&lt;i data-x=1&gt;&lt;/i&gt;.</div>'));
+});
+
+/* ---- v559: the card's state and its views, out of xrd-rv.js's createRietveld ---- */
+const UPDATE = !!process.env.UPDATE_GOLDEN || process.env.npm_lifecycle_event === 'test:update';
+const GOLDEN = new URL('./golden/rvmodel.json', import.meta.url);
+const sha = s => createHash('sha256').update(s).digest('hex');
+// A canonical dump: every number by its shortest round-trip string, NaN, ±∞ and −0 too.
+const canon = v => JSON.stringify(v, function(k, x){ const o = this[k]; return typeof o === 'number' ? (Object.is(o, -0) ? '#-0' : '#' + o) : x; });
+// utils.js's helpers the card takes (it needs a page to load): from its source as they stand.
+function decl(file, name){
+  const src = fs.readFileSync(new URL('../' + file, import.meta.url), 'utf8');
+  let i = src.search(new RegExp(`^(export )?function ${name}\\(`, 'm'));
+  if (i >= 0){
+    let k = src.indexOf(')', i), d = 0;
+    for (k = src.indexOf('{', k); k < src.length; k++){ if (src[k] === '{') d++; else if (src[k] === '}' && !--d) break; }
+    return src.slice(i, k + 1).replace(/^export /, '');
+  }
+  i = src.search(new RegExp(`^(export )?const ${name} = `, 'm'));
+  assert.ok(i >= 0, name + ' in ' + file);
+  const rest = src.slice(i), m = /\n(?=\S)/.exec(rest);
+  return rest.slice(0, m ? m.index : rest.length).replace(/^export /, '');
+}
+const UN = ['fmtData', 'csvField', 'csvJoin', 'csvLine', 'maxArr', 'normOf', 'NORM_OPTIONS', 'X_SVG', 'DL_SVG'];
+const PAGE = new Function('settings', UN.map(n=> decl('utils.js', n)).join('\n') + `\nreturn { ${UN.join(', ')} };`)({ decimal: '.', field: ';' });
+const U = { maxArr: PAGE.maxArr, normOf: PAGE.normOf };
+const HU = { snavHtml: o => `<div class="snav" id="${o.prev}+${o.next}+${o.name}"></div>`, PLOT_DL_ICON: '<svg class="i-dl"></svg>', CSV_ICON: '<svg class="i-csv"></svg>' };
+// A card's state as xrd-rv.js cardState makes it (the fields the model reads and sets).
+const card = (std, o = {})=> ({ std, res: std ? null : {}, phases: [], nextId: 1, results: {}, startFrom: 'cif', hold: HOLD_DEFAULT.slice(), fit: {}, busy: false, cur: null, waiting: null, wrote: null,
+  sel: null, pick: 0, sizeBy: 'sample', resNorm: 'global', fitNote: null, setKey: 'k', solidTurns: new Map(), solidViews: [], pkSel: null, cellV: null, cellKeyShown: '', cellNext: null,
+  lab6: { id: M.LAB6_ID, cif: LAB6, file: '', color: '#4cc9a0', ...M.stdSettings(), prep: M.prepPhase(LAB6, 'LaB6'), off: {} }, ...o });
+
+test('the card\'s state: its phases, a phase added and removed, the Refinement entries taken or refused, what a run takes and says', ()=>{
+  const S = card(false), prep = M.prepOf(SRT, 'SrTiO3.cif');
+  const q1 = M.newPhase(S.nextId++, SRT, 'SrTiO3.cif', prep, 0, false), q2 = M.newPhase(S.nextId++, BTO, 'BaTiO3.cif', M.prepOf(BTO, 'BaTiO3.cif'), 7, false);
+  assert.deepEqual(Object.keys(q1), ['id', 'cif', 'file', 'color', 'prep', 'on', 'dep', 'off'], 'the state\'s key order');
+  assert.deepEqual([q1.id, q1.color, q2.id, q2.color, q1.on, q1.dep, q1.off], [1, '#d4a72c', 2, '#c77dff', DEF.on, DEF.dep, {}]);
+  assert.deepEqual(M.newPhase(9, SRT, 'a.cif', prep, 1, true).on, STD.on, 'the standard\'s own settings');
+  S.phases.push(q1, { ...q2, off: { 's00.xrdml': true } });
+  assert.deepEqual([M.allPhases(S).map(q=> q.id), M.phasesFor(S, { name: 's00.xrdml' }).map(q=> q.id), M.phasesFor(S, { name: 's01.xrdml' }).map(q=> q.id), M.phasesFor(S, null).length], [[1, 2], [1], [1, 2], 2]);
+  const T = card(true, { phases: [q1], pick: 1 });
+  assert.deepEqual([M.allPhases(T).map(q=> q.id), M.stdPhase(T).id, M.phasesFor(T, null).map(q=> q.id), M.stdPhase({ ...T, pick: 7 }).id], [[0, 1], 1, [1], 0]);
+  assert.deepEqual([M.locked(S), M.locked({ busy: true }), M.locked({ waiting: {} })], [false, true, true]);
+  // Removed: the standard's choice of it and every result refined with it go too.
+  S.results = { a: { phases: [1, 2] }, b: { phases: [1] }, c: {}, d: { phases: [2] } };
+  M.dropPhase(S, 2);
+  assert.deepEqual([S.phases.map(q=> q.id), Object.keys(S.results)], [[1], ['b', 'c']]);
+  M.dropPhase(T, 1);
+  assert.deepEqual([T.phases.length, T.pick], [0, 0]);
+  const r = { a: 1, b: 2, 'c d': 3 };
+  M.keepLoaded(r, [{ name: 'b' }, { name: 'c d' }]);
+  assert.deepEqual(r, { b: 2, 'c d': 3 });
+  assert.deepEqual([M.holdWith(['adp', 'cell'], 'linear', true), M.holdWith(['adp', 'cell'], 'cell', false), M.holdWith([], 'x', true)], [['linear', 'cell', 'adp'], ['adp'], []]);
+  // A Refinement entry: kept (a value back at its default dropped, in FITS' order), refused with
+  // the words a value gets, as it was, or nothing to take.
+  const F = M.FIT, e = (value, shown = 'x', o = {})=> ({ auto: false, checked: false, value, shown, ...o }), auto = ()=> true;
+  assert.deepEqual(M.fitEntry({ bgDegree: 8 }, F.maxIter, e('50'), auto), { fit: { maxIter: 50, bgDegree: 8 } });
+  assert.deepEqual(M.fitEntry({ maxIter: 50 }, F.maxIter, e('40'), auto), { fit: {} });
+  assert.deepEqual(M.fitEntry({ maxIter: 50 }, F.maxIter, e('50.0'), auto), { refused: 'Max iterations: a whole number from 1 to 1000, without a point or comma — “50.0” not taken; kept x.' });
+  assert.deepEqual(M.fitEntry({}, F.maxIter, e(' 40 '), auto), { same: true });
+  assert.deepEqual(M.fitEntry({}, F.cellRange, e('7,3', '5'), auto), { fit: { cellRange: 0.073 } });
+  assert.deepEqual(M.fitEntry({}, F.cellRange, e('', '5'), auto), { refused: 'Cell search range (%): a number from 0.5 to 20 %; kept 5.' });
+  assert.deepEqual(M.fitEntry({}, F.bgInv, e('', '', { auto: true, checked: false }), ()=> false), { fit: { bgInv: false } });
+  assert.deepEqual(M.fitEntry({ bgInv: false }, F.bgInv, e('', '', { auto: true, checked: true }), auto), { fit: {} });
+  assert.deepEqual(M.fitEntry({}, F.bgInv, e('', '', { checked: true }), auto), { fit: { bgInv: true } });
+  assert.deepEqual([M.fitEntry({}, F.shapeLine, e('exact'), auto), M.fitEntry({ shapeLine: 'exact' }, F.shapeLine, e('lorentz'), auto), M.fitEntry({}, F.shapeLine, e('lorentz'), auto), M.fitEntry({}, F.shapeLine, e('x'), auto)],
+    [{ fit: { shapeLine: 'exact' } }, { fit: {} }, null, null]);
+  let asked = 0;
+  M.fitEntry({}, F.maxIter, e('5'), ()=> asked++);
+  assert.equal(asked, 0, 'what automatic gives asked only for its box');
+  assert.deepEqual([M.fitNoteText(null), M.fitNoteText('n')], ['For every pattern, from the next refinement. A result refined with other than the defaults says which, under its statistics.', 'n']);
+  assert.deepEqual([M.modeTitle(M.MODE.size, '', false), M.modeTitle(M.MODE.adp, 'na', true)], [M.MODE.size.title, 'na']);
+  assert.match(M.modeTitle(M.MODE.adp, '', true), /^Off: the CIF's B.*\. On the standard, one ΔB is the default: held, a B 0\.1 Å² off moved the profile's X by 10 esd/s);
+  assert.equal(M.settingsKeyOf([q1, { ...q2, prep: { name: 'B,T' } }]), '1,#d4a72c,SrTiO3|2,#c77dff,B,T');
+  // A run takes copies of what it refines with.
+  S.phases = [q1]; S.startFrom = 'last'; S.fit = { maxIter: 9 };
+  const run = M.runOf(S, { U: 1 }, 3, null);
+  assert.deepEqual(Object.keys(run), ['ph', 'std', 'start', 'hold', 'fit', 'irf', 'fell', 'bgFreed', 'n', 'done', 'tell']);
+  assert.ok(run.ph[0] !== q1 && run.ph[0].on !== q1.on && run.ph[0].off !== q1.off && run.ph[0].prep === q1.prep && run.fit !== S.fit && run.hold !== S.hold && run.std.id === 0);
+  assert.deepEqual([run.start, run.hold, run.fit, run.irf, run.n, run.done], ['last', HOLD_DEFAULT, { maxIter: 9 }, { U: 1 }, 3, 0]);
+  // Its words.
+  assert.deepEqual([M.nothingText(true, 0), M.nothingText(false, 2), M.nothingText(false, 0)], ['Load the standard\'s file to refine it.', 'No phase ticked for this pattern: add one from a CIF, or tick one.', 'Add a phase from a CIF to refine.']);
+  assert.deepEqual([M.runEndText({ fell: [], bgFreed: [] }), M.runEndText({ fell: ['a (x)', 'b (y)'], bgFreed: ['a', 'c'] })], ['',
+    'From the CIF, no last result to start from: a (x); b (y). Scales and background refined, not held: the background\'s terms changed since the last result (a, c).']);
+  const lbl = k => ['s0', 's1', 's2'][k], from = ['', ' from its last result'], R0 = { done: 1, n: 3 };
+  assert.deepEqual([[[0, 1], 0, '', 'start'], [[0, 1], 1, '', 'progress'], [[0, 1], 1, 'widths', 'progress'], [[1], 1, '', 'start'], [[2], 0, '', 'done'], [[], 0, '', 'done'], [[1], 1, 'cell', 'progress'], [[1], 1, '', 'progress']]
+    .map(([on, k, stage, what])=> M.progressStatus(R0, on, k, stage, what, lbl, from)),
+  ['Refining s0, s1… (1 of 3 done)', null, 'Refining s0, s1… (1 of 3 done)', 'Refining s1 from its last result…', 'Refining s2…', null, 'Refining s1: cell…', null]);
+  assert.deepEqual([M.progressTell([0, 2], 2, 'cell', lbl), M.progressTell([0, 2], 2, '', lbl), M.progressTell([], 0, '', lbl)], ['s2: cell', 's0, s2', '']);
+  assert.deepEqual([M.waitStopText(true), M.waitStopText(false), M.stoppedText({ n: 3, done: 1 }, false), M.stoppedText({ n: 1, done: 0 }, true), M.stoppedText({ n: 1, done: 0 }, false)],
+    ['Stopped, the standard\'s refinement with it: nothing refined.', 'Stopped waiting for the standard\'s refinement: nothing refined.', 'Stopped after 1 of 3 patterns: the others keep what they had.',
+      'Stopped: the standard keeps what it had.', 'Stopped: the pattern keeps what it had.']);
+  assert.deepEqual(M.stdQuestion(true).slice(1), ['Refine the standard first', 'Refine without the standard']);
+  assert.deepEqual(M.stdQuestion(false).slice(1), ['Load a standard…', 'Refine without the standard']);
+  assert.match(M.stdQuestion(false)[0], /^No instrumental standard is loaded/);
+  assert.deepEqual([M.stdFailText({ ok: true }), M.stdFailText({ ok: false, why: 'stopped' }), M.stdFailText({ ok: false, why: 'Bad cell.' }), M.stdFailText({ ok: false })],
+    ['The standard\'s refinement gave no profile (its file changed meanwhile?): nothing refined.', 'The standard\'s refinement was stopped: nothing refined.',
+      'The standard\'s refinement failed (Bad cell): nothing refined.', 'The standard\'s refinement failed (undefined): nothing refined.']);
+  assert.deepEqual([M.refineTitle(null, 'why'), M.refineTitle({ own: true }, 'x'), M.refineTitle({ own: false }, '')], ['why', 'The standard is refined first: Cancel stops it', 'Waiting for the standard\'s refinement: Cancel stops waiting (the standard goes on)']);
+  assert.deepEqual([null, {}, { frac: 0.256 }, { frac: 7 }, { frac: -1 }].map(M.stdRunView).map(v=> [v.key, v.prog, v.label]), [['', '0', 'Instrumental standard… (refining)'], ['run:null', '0', 'Instrumental standard… (refining)'],
+    ['run:26', '0.26', 'Instrumental standard… (refining, 26 %)'], ['run:100', '1', 'Instrumental standard… (refining, 100 %)'], ['run:0', '0', 'Instrumental standard… (refining, 0 %)']]);
+  assert.equal(M.stdRunView({ frac: 0.5 }).title, 'The instrumental standard is being refined (50 %): its window, this button, shows the run and can stop it');
+  assert.deepEqual([['del', false, null], ['del', true, {}], ['on', false, null], ['on', true, {}], ['pick', false, null]].map(([k, lock, f])=> M.rowLock(k, lock, f)), [
+    { off: false, title: 'Remove phase' }, { off: true, title: 'A refinement is running: the phase stays until it ends' }, { off: true, title: 'Refined on this pattern (each pattern its own)' },
+    { off: false, title: 'A refinement is running: the tick stays as it is until it ends' }, { off: false, title: 'The phase the standard is refined with' }]);
+});
+
+test('what the views are drawn from: the keys, the pattern\'s frame and ticks, the stacked plot, the sizes\' points, Williamson–Hall', ()=>{
+  // An object a number of its own, the same each time; a value that is no object as itself.
+  const a = [1], b = [1];
+  assert.equal(M.idOf(a), M.idOf(a));
+  assert.notEqual(M.idOf(a), M.idOf(b));
+  assert.deepEqual([M.idOf(null), M.idOf(undefined), M.idOf(5), M.idOf('x'), M.idOf(true)], ['-', '-', 'number:5', 'string:x', 'boolean:true']);
+  assert.deepEqual([M.resKey(null), M.resKey({ at: 7 }), M.resKey({ at: 'x' }).startsWith('r')], ['-', 'at7', true]);
+  const f = pattern('s00.xrdml', xrdml(0, { n: 400 })), prep = M.prepOf(SRT, 'SrTiO3.cif'), q = { id: 1, color: '#d4a72c', prep, ...M.defSettings(), off: {} };
+  const S = card(false, { phases: [q] });
+  const k1 = M.plotKeyOf(S, f, null, '700x420');
+  assert.equal(k1, M.plotKeyOf(S, f, null, '700x420'));
+  assert.ok(k1.startsWith('s00.xrdml|') && k1.endsWith('|-||1:#d4a72c:' + M.idOf(prep) + ':1|700x420'), k1);
+  assert.notEqual(M.plotKeyOf({ ...S, phases: [{ ...q, off: { 's00.xrdml': true } }] }, f, null, '700x420'), k1, 'a tick changes it');
+  assert.ok(M.plotKeyOf(card(true, { pick: 0 }), f, { at: 3 }, '0x0').includes('|at3|0|'), 'the standard\'s choice');
+  const r = { params: { a: NaN }, models: {}, textures: null, fit: { bgDegree: 7 }, phases: [1], cells: { 1: 'c' } };
+  assert.equal(M.curveKey(f, r, [q], false), M.curveKey(f, { ...r }, [q], false), 'a copy, the same');
+  assert.notEqual(M.curveKey(f, { ...r, params: { a: null } }, [q], false), M.curveKey(f, r, [q], false), 'a NaN is not a null');
+  assert.notEqual(M.curveKey(f, r, [q], true), M.curveKey(f, r, [q], false), 'the role');
+  // The pattern's frame: a row of ticks a phase under its lowest count, the difference under them.
+  const ys = [10, 30, 110, 20], fr = M.patternFrame(ys, 2, null, [10, 80]);
+  assert.deepEqual(fr, { rowH: 4.5, rowGap: 2, tickTop: 8, off: 0, range: [10, 80, -7, 115] });
+  const fd = M.patternFrame(ys, 1, [-4, 6, 2, 0], [10, 80]);
+  assert.deepEqual([fd.off, fd.range], [-6.5, [10, 80, -13.5, 115]]);
+  assert.deepEqual(M.patternFrame([5, 5], 0, null, [1, 2]).range.map(v=> +v.toFixed(9)), [1, 2, 4.96, 5.05], 'a flat pattern: a span of 1');
+  assert.deepEqual(M.tickSegs({ tt: [20, 30] }, 1, fr), { xs: [20, 20, 30, 30], yv: [-3, 1.5, -3, 1.5] });
+  // The stacked plot: global, local and none.
+  const g = { name: 'g', color: '#111', x: [10, 20, 30] }, h = { name: 'h', color: '#222', x: [30, 15, 50] };
+  const shown = [{ f: g, y: [1, 4, 2] }, { f: h, y: [0, 2, 1] }];
+  const glob = M.stackOf(U, shown, 'global'), loc = M.stackOf(U, shown, 'local'), none = M.stackOf(U, shown, 'none');
+  assert.deepEqual(glob.range, [10, 50, -1.1, 1.1]);
+  assert.deepEqual(glob.lines.map(l=> l.norm), [[0.25, 1, 0.5], [0, 0.5, 0.25]]);
+  assert.deepEqual(glob.lines[1].ys.map(v=> +v.toFixed(6)), [-1.05, -0.55, -0.8]);
+  assert.deepEqual(loc.lines[1].norm, [0, 1, 0.5]);
+  assert.deepEqual([none.range, none.lines[0].norm, none.lines[1].ys.map(v=> +v.toFixed(6))], [[10, 50, -4.4, 4.4], [1, 4, 2], [-4.2, -2.2, -3.2]]);
+  assert.deepEqual(M.stackOf(U, [], 'global').range, [0, 1, -0, 1.1]);
+  assert.equal(M.stackKeyOf('local', '600x360', shown), `local|600x360|g:#111:${M.idOf(g.x)}:${M.idOf(shown[0].y)}|h:#222:${M.idOf(h.x)}:${M.idOf(shown[1].y)}`);
+  assert.deepEqual([M.sizeNoteOf('peak', [], {}, false), M.sizeNoteOf('sample', [], {}, false), M.sizeNoteOf('peak', [], {}, true)], ['No peak the tests use.',
+    'No size refined: the size is off, or every phase was refined without one.', 'Each reflection\'s own size (Scherrer, K = 0.9, on its FWHM less the instrument\'s), the peaks the tests use.']);
+  const sized = { 's00.xrdml': { table: [{ phase: 'SrTiO3', name: 'crystallite_size_nm', value: 12, esd: 1 }, { phase: 'SrTiO3', name: 'shape_a_nm', value: 9, esd: 2 }] } };
+  assert.equal(M.sizeNoteOf('sample', [f], sized, true), M.SIZE_KINDS.scherrer[1] + ' ' + M.SIZE_KINDS.shape[1]);
+  const groups = M.pointGroups([{ x: 1, v: 5, color: 'a', dx: 0 }, { x: 2, v: 6, color: 'a', dx: 0 }, { x: 1, v: 7, color: 'a', dx: 9 }, { x: 1, v: 8, color: 'b', dx: 0 }], 375, 2);
+  assert.deepEqual([...groups.values()], [{ color: 'a', dx: 0, xs: [1, 2], ys: [5, 6] }, { color: 'a', dx: 9, xs: [1.09], ys: [7] }, { color: 'b', dx: 0, xs: [1], ys: [8] }]);
+  // The solids', the widths' keys; a peak picked, the same, those marked.
+  const s = { id: 1, name: 'S<b>', type: 'box', dims: [1, 2, Infinity], frame: [[1, 0, 0]] };
+  assert.deepEqual([M.solidsKeyOf(null, []), M.solidsKeyOf(f, [s]), M.turnKeyOf(f, s), M.solidPngName({ label: 'a b/c' }, s)],
+    ['[]', 's00.xrdml[{"id":1,"name":"S<b>","type":"box","dims":[1,2,null],"frame":[[1,0,0]]}]', 's00.xrdml|1|["box",[1,2,null],[[1,0,0]]]', 'XRPD_shape_a_b_c_S_b_.png']);
+  assert.equal(M.widthsKeyOf(f, { at: 5 }, [q, { id: 0, color: '#4cc9a0' }], '500x360'), 's00.xrdml|at5|1:#d4a72c,0:#4cc9a0|500x360');
+  const p1 = M.pkOf('s00.xrdml', { tt: '32.4', lab: '1-10', ph: '1' }, id=> 'c' + id);
+  assert.deepEqual(Object.entries(p1), [['file', 's00.xrdml'], ['tt', 32.4], ['lab', '1-10'], ['ph', 1], ['color', 'c1']]);
+  const p2 = { ...p1, tt: 1 }, p3 = { ...p1, lab: '110' };
+  assert.deepEqual([M.samePk(p1, p2), M.samePk(p1, p3), M.samePk(null, p1), M.samePk(p1, { ...p1, file: 'x' })], [true, false, false, false]);
+  assert.deepEqual([M.markedOf(p1, p2), M.markedOf(p1, p3), M.markedOf(null, p3), M.markedOf(null, null)], [[p1], [p1, p3], [p3], []]);
+  // Williamson–Hall: the peaks the tests use, the models' points, the range from 0.
+  const row = (o)=> ({ sin: 0.25, cos: 0.95, W: 0.2, Wesd: 0.01, label: '110', model: { iso: 0.21, shape: 0.19 }, ...o });
+  const phs = [{ id: 1, shaped: true, rows: [row(), row({ sin: 0.5, W: 0.3, Wesd: 0, label: '1-11', model: { iso: NaN, shape: 0.3 } }), row({ weak: true }), row({ W: 0 })], wh: { a: 0.001, b: 0.0002 } },
+    { id: 2, shaped: false, rows: [row({ label: '100' })], wh: { a: NaN } }];
+  const { pts, mods } = M.whPoints(phs, id=> 'c' + id), k = 1e3*Math.PI/180*0.95;
+  assert.deepEqual(pts.map(p=> [p.x, +p.y.toFixed(9), +p.e.toFixed(9), p.label, p.ph, p.color]), [[1, +(0.2*k).toFixed(9), +(0.01*k).toFixed(9), '110', 1, 'c1'], [2, +(0.3*k).toFixed(9), 0, '1-11', 1, 'c1'], [1, +(0.2*k).toFixed(9), +(0.01*k).toFixed(9), '100', 2, 'c2']]);
+  assert.deepEqual(mods.map(m=> [m.x, m.kind]), [[1, 'iso'], [1, 'shape'], [2, 'shape'], [1, 'iso']]);
+  const wr = M.whRange(pts, mods, phs), ysAll = [...pts.flatMap(p=> [p.y - p.e, p.y + p.e]), ...mods.map(m=> m.y), 1, 1e3*(0.001 + 0.0002*2.24)];
+  assert.deepEqual(wr, [0, 2.24, 0, Math.max(...ysAll) + 0.12*Math.max(...ysAll)]);
+  assert.deepEqual(M.whRange([{ x: 1, y: -2, e: 1 }], [], []), [0, 1.12, -3 - 0.08*2, -1 + 0.12*2], 'a line under 0: from below it');
+  assert.deepEqual([M.fitSetTitle(true, 0), M.fitSetTitle(false, 2), M.fitSetTitle(false, 0)], ['What this result was refined with', 'What Refine will refine: Settings… changes it', '']);
+  assert.equal(M.cellKeyOf(q), '1|3.905,3.905,3.905,90,90,90|znjilf.507|SrTiO3');
+});
+
+test('the state saved and put back (every value made valid, a run\'s kept through a step), what the card shows beside it', ()=>{
+  const prep = M.prepOf(SRT, 'SrTiO3.cif'), q = { id: 1, cif: SRT, file: 'SrTiO3.cif', color: '#d4a72c', prep, ...M.defSettings(), off: { 's00.xrdml': true } };
+  const S = card(false, { phases: [q], nextId: 2, sel: 1, results: { 's00.xrdml': { params: { a: 1 }, at: 3 } }, sizeBy: 'peak', resNorm: 'local' });
+  const snap = M.snapshotOf(S);
+  assert.deepEqual(Object.keys(snap), ['phases', 'start', 'hold', 'fit', 'nextId', 'sel', 'results', 'sizeBy', 'resNorm']);
+  assert.deepEqual(snap.phases[0].off, { 's00.xrdml': true });
+  assert.ok(snap.results !== S.results && snap.results['s00.xrdml'] === S.results['s00.xrdml'] && snap.hold !== S.hold && snap.fit !== S.fit, 'copies, each result shared');
+  const T = card(true, { phases: [q], pick: 1 }), tsnap = M.snapshotOf(T);
+  assert.deepEqual([tsnap.std, tsnap.pick, 'sizeBy' in tsnap], [{ on: STD.on, dep: STD.dep }, 1, false]);
+  // Put back: every value made valid; the settings' note and key dropped.
+  const R = card(false, { fitNote: 'n', setKey: 'k' });
+  M.restoreInto(U, R, JSON.parse(JSON.stringify({ ...snap, sel: 1.5, sizeBy: 'x', resNorm: 'none', fit: { maxIter: 9, bad: 1 }, hold: ['cell', 'x'], start: 'last' })), false);
+  assert.deepEqual([R.phases.map(x=> [x.id, x.prep === prep, x.off]), R.sel, R.sizeBy, R.resNorm, R.fit, R.hold, R.startFrom, R.fitNote, R.setKey, R.nextId],
+    [[[1, true, { 's00.xrdml': true }]], null, 'sample', 'none', { maxIter: 9 }, ['cell'], 'last', null, '', 2]);
+  assert.ok(Object.isFrozen(R.results['s00.xrdml']));
+  assert.throws(()=> M.restoreInto(U, R, { phases: 5 }, false), /flatMap/, 'phases that are no list throw');
+  assert.equal(R.phases.length, 1, 'before anything is changed');
+  // A step while a run goes on: its phases and settings kept, the patterns it wrote over the state's.
+  const W = card(false, { phases: [q], fit: { maxIter: 5 }, wrote: { 's01.xrdml': { mine: 1 } }, setKey: 'k' });
+  M.restoreInto(U, W, { phases: [], fit: {}, results: { 's00.xrdml': { a: 1 }, 's01.xrdml': { theirs: 1 } }, sel: 1, sizeBy: 'peak' }, true);
+  assert.deepEqual([W.phases.length, W.fit, W.setKey, W.results, W.sel, W.sizeBy], [1, { maxIter: 5 }, 'k', { 's00.xrdml': { a: 1 }, 's01.xrdml': { mine: 1 } }, 1, 'peak']);
+  const T2 = card(true);
+  M.restoreInto(U, T2, { std: { on: { adp: false, size: true }, dep: { adp: 'site' } }, pick: 7, phases: [{ ...snap.phases[0], on: { ...DEF.on, size: true } }] }, false);
+  assert.deepEqual([T2.lab6.on.adp, T2.lab6.on.size, T2.lab6.dep.adp, T2.pick, T2.phases[0].on.size], [false, false, 'site', 0, false], 'the standard\'s rows that do not apply stay off');
+  // What it shows beside its state, and given back.
+  const V = card(false, { phases: [q], sel: 1, pkSel: { file: 'f', tt: 1, lab: '110', ph: 1, color: '#000' }, solidTurns: new Map([['a', { R: [1] }]]),
+    solidViews: [{ turnKey: 'b', view: { getView: ()=> ({ R: [2] }) } }, { turnKey: 'c', view: {} }], cellV: { getView: ()=> ({ R: [3], k: 9 }) }, cellKeyShown: 'K' });
+  const v = M.showsOf(V);
+  assert.deepEqual(v, { pk: V.pkSel, turns: [['a', { R: [1] }], ['b', { R: [2] }]], sel: { id: 1, name: 'SrTiO3' }, cell: { key: 'K', R: [3] } });
+  assert.notEqual(v.pk, V.pkSel);
+  assert.deepEqual(M.showsOf(card(false, { cellNext: { key: 'x', R: [] } })), { cell: { key: 'x', R: [] } });
+  assert.equal(M.showsOf(card(false)), null);
+  const N = card(false, { phases: [q] });
+  M.nextInto(N, { pk: { file: 'f', tt: 2, lab: 'l', ph: 1 }, turns: [['t', { R: [1] }], ['u', 5], [3, {}]], sel: { id: 1, name: 'SrTiO3' }, cell: { key: 'k', R: [1, 2] } });
+  assert.deepEqual([N.pkSel, [...N.solidTurns], N.sel, N.cellNext], [{ file: 'f', tt: 2, lab: 'l', ph: 1, color: '#888' }, [['t', { R: [1] }]], 1, { key: 'k', R: [1, 2] }]);
+  M.nextInto(N, { pk: { file: 'f', tt: 'x', lab: 'l', ph: 1 }, sel: { id: 1, name: 'other' }, cell: { key: 5 } });
+  assert.deepEqual([N.pkSel.tt, N.sel, N.cellNext], [2, 1, null]);
+  M.nextInto(N, null);
+  assert.equal(N.cellNext, null);
+});
+
+test('the card\'s markup: its frame, its section of the Results, its settings window, the legends, the solids, the results; every name escaped', ()=>{
+  const card2 = H.cardHtml('xrdR2', false, HU), std = H.cardHtml('xrdStdR', true, HU), res = H.resHtml('xrdR2', HU);
+  for (const id of ['Svg', 'Legend', 'Instr', 'Cifs', 'CifInput', 'PhaseList', 'CifDz', 'AddCif', 'CellName', 'Cell', 'CellInfo', 'Status', 'ProgWrap', 'ProgBar', 'Refine', 'Settings', 'Clear',
+    'FitSet', 'Results', 'Widths', 'WhSvg', 'WhLegend', 'Tests', 'Solids', 'PkWrap']){ assert.ok(card2.includes(`id="xrdR2${id}"`), id); assert.ok(std.includes(`id="xrdStdR${id}"`), 'std ' + id); }
+  for (const id of ['RefineAll', 'Std', 'ClearAll']){ assert.ok(card2.includes(`id="xrdR2${id}"`), id); assert.ok(!std.includes(`id="xrdStdR${id}"`), 'std ' + id); }
+  assert.ok(card2.includes('<div class="snav" id="xrdR2Prev+xrdR2Next+xrdR2Label"></div>') && !std.includes('class="snav"'), 'the selector the samples\' alone');
+  assert.equal((card2.match(/<svg class="i-dl"><\/svg>/g) || []).length, 2);
+  assert.equal((card2.match(/<svg class="i-csv"><\/svg>/g) || []).length, 1);
+  for (const id of ['ResNone', 'ResSvg', 'ResLegend', 'SizeSvg', 'SizeBy', 'SizeLegend', 'SizeNote']) assert.ok(res.includes(`id="xrdR2${id}"`), id);
+  assert.ok(res.includes('data-size-dl') && res.includes('data-csv-base="rietveld_pattern.csv"'));
+  const m1 = H.settingsModalHtml('xrdR2', false), m2 = H.settingsModalHtml('xrdStdR', true);
+  assert.ok(m1.includes('aria-labelledby="xrdR2SetTitle"') && m1.includes('>Fitting settings</h3>') && m1.includes('on each phase. A change') && m1.includes('<div class="rvs-body"></div>') && m1.includes('data-done'));
+  assert.ok(m2.includes('>Fitting settings: instrumental standard</h3>') && m2.includes('on each phase of the standard. A change'));
+  assert.ok(H.RV_INFO.startsWith('Whole-pattern Rietveld refinement.') && H.RV_STD_INFO.startsWith('The instrumental standard\'s own Rietveld refinement'));
+  // The legends and chips.
+  const evil = `"'><i data-x=1></i>`, esc = '&quot;\'&gt;&lt;i data-x=1&gt;&lt;/i&gt;';
+  assert.equal(H.legendHtml([['#123', evil]]), `<span><i style="background:#123"></i>${esc}</span>`);
+  assert.equal(H.patternLegendHtml(false, [{ color: '#1', name: 'a' }]), '<span><i style="background:var(--plot-errbar)"></i>observed</span><span><i style="background:#1"></i>a</span>');
+  assert.ok(H.patternLegendHtml(true, []).includes('calculated</span><span><i style="background:#ff9933"></i>background</span><span><i style="background:#3aa0ff"></i>difference</span>'));
+  assert.equal(H.sizeChipsHtml('peak', true), '<button type="button" class="mode-chip plot-chip" data-size-by="sample" title="Crystallite size by sample">by sample</button><button type="button" class="mode-chip plot-chip is-on" data-size-by="peak" title="Crystallite size by peak">by peak</button>');
+  assert.ok(H.sizeChipsHtml('sample', false).includes('data-size-by="peak" disabled title="No peak widths: they are measured on a sample refined with its phases">by peak</button>'));
+  assert.match(H.solidsNoneHtml(null), /Isotropic size: no free shape refined/);
+  assert.match(H.solidsNoneHtml({ params: {}, models: { 1: { shape: 'box' } } }), /No free shape kept/);
+  assert.match(H.solidsNoneHtml({ params: null, models: { 1: { shape: 'box' } } }), /Isotropic size/);
+  assert.equal(H.solidHeadHtml({ name: evil }, 2, '<svg></svg>'), `<div class="peak-box-head"><span class="txt-mini">Crystallite shape · ${esc}</span><button class="btn table-csv-btn" title="Download PNG"><svg></svg></button></div><div class="rv-solid-view"></div>`);
+  assert.ok(!H.solidHeadHtml({ name: evil }, 1, '').includes(esc));
+  assert.equal(H.whLegendHtml([{ id: 1, name: evil }], ()=> '#1', 1, 0), `<span><i style="background:#1"></i>${esc}, measured</span><span><i style="background:#9aa3ad"></i>isotropic model</span>`);
+  assert.deepEqual([H.noPatternHtml(true), H.noPatternHtml(false)], ['<div class="rv-note rv-wide">No standard loaded: drop its file above.</div>', '<div class="rv-note rv-wide">No pattern.</div>']);
+  // The results: not refined (a phase, none ticked, none at all), refined; the standard's
+  // profile asked only where the words need it.
+  const q = { prep: { name: evil, warnings: [evil] } }, calls = [];
+  const irf = v => ()=>{ calls.push('irf'); return v; }, stale = v => ()=>{ calls.push('stale'); return v; };
+  const none = H.resultsHtml({ r: null, std: false, shown: [q], n: 1, any: 1, irf: irf(null), stale: stale(false) });
+  assert.ok(none.startsWith('<div class="rv-note rv-wide">Not refined yet.') && none.endsWith(`<div class="rv-note rv-wide rv-warn">⚠ ${esc}: ${esc}</div>`));
+  assert.match(H.resultsHtml({ r: {}, std: true, shown: [], n: 1, any: 0 }), /\(the certified one, held fixed\)/);
+  assert.match(H.resultsHtml({ r: {}, std: false, shown: [], n: 0, any: 2 }), /No phase ticked for this pattern/);
+  assert.match(H.resultsHtml({ r: {}, std: false, shown: [], n: 0, any: 0 }), /No phase: add one from a CIF/);
+  assert.deepEqual(calls, []);
+  const r = { params: {}, stats: { Rwp: 0.1234, Rexp: 0.05, chi2: 6.1 }, phaseResults: [{ name: evil, phase: true, lines: [{ label: 'a (1-10)', value: '1(2)', title: evil }] }], warnings: ['w (-1 1 0)'], irf: { U: 1 } };
+  const done = H.resultsHtml({ r, std: false, shown: [q], n: 1, any: 1, irf: irf({ U: 2 }), stale: stale(true) });
+  assert.deepEqual(calls, ['stale', 'irf']);
+  assert.ok(done.includes('R<sub>wp</sub>: <b>12.34%</b>') && done.includes('χ²: <b>6.10</b>') && done.includes(`<div class="txt-mini rv-phase-name">${esc}</div>`) && done.includes(`title="${esc}"`));
+  assert.ok(done.includes('a (1<span class="hkl-bar"><span class="hkl-sign">-</span>1</span>0): <b>1(2)</b>') && done.includes('⚠ w (<span class="hkl-bar"><span class="hkl-sign">-</span>1</span> 1 0)'));
+  assert.ok(done.endsWith('The standard has been refined again since this result: its profile, zero and asymmetry are not the ones these numbers rest on. Refine this pattern again, or <b>Refine all</b>.</div>'));
+  calls.length = 0;
+  const noIrf = H.resultsHtml({ r: { ...r, irf: null }, std: false, shown: [], n: 1, any: 1, irf: irf(null), stale: stale(true) });
+  assert.deepEqual(calls, ['irf']);
+  assert.match(noIrf, /No instrumental profile \(refine the standard first/);
+  assert.match(H.resultsHtml({ r: { ...r, irf: null }, std: false, shown: [], n: 1, any: 1, irf: irf({}), stale: stale(true) }), /this pattern was refined before the standard was/);
+  assert.match(H.resultsHtml({ r: { ...r, irf: null, irfRefused: true }, std: true, shown: [], n: 1, any: 1, irf: irf({}), stale: stale(true) }), /The samples take this profile/);
+});
+
+/* ---- Cases as v558's xrd-rv.js gave them ----
+   A card (a sample's, or the standard's one case in five) given a state as a project holds
+   it — its phases from three CIFs with their settings and ticks (some of them junk), results
+   with the parameters of each phase's start (the curves drawn from them), their statistics,
+   lines, warnings, sizes and peak widths (some refined with other phases or cells, some with
+   another background), the start, the groups held, the Refinement settings, the phase on
+   show, the size chart's choices — then six steps of its page, as xrd-rv.js wires them, in
+   short (below): a mode switched, a depth, a group held, the start, a Refinement entry (taken,
+   refused, back at its default), automatic, Defaults, a tick, the standard's choice, a phase
+   removed, one shown, the normalisation, Clear, the pattern stepped, another state put back.
+   After the state and after each step, what the card shows once drawn: its state, the
+   phases' list, the line by the results' title, the results, the settings' body, the
+   pattern's frame and legend, and the CSVs. Their digests: tests/golden/rvmodel.json,
+   checked against v558's xrd-rv.js run from its source on a page of stubs. */
+const LAB6_PREP = ()=> Object.assign(M.prepPhase(LAB6, 'LaB6 (NIST SRM 660c)'), { name: 'LaB₆ (NIST SRM 660c)', notes: [] });
+const TEXTS = [['SrTiO3.cif', SRT], ['BaTiO3.cif', BTO], ['LaB6 user.cif', LAB6]];
+export function patternsOf(c){ return c.files.map(([name, k, a])=> pattern(name, xrdml(k, { n: 400, ...(a ? { a, seed: 7 } : {}) }))); }
+export function caseOf(n){
+  const R = rng(5590 + n), u = R.u, pick = a => a[Math.floor(u()*a.length)], int = (a, b)=> a + Math.floor(u()*(b - a + 1));
+  const std = n % 5 === 4, junk = ()=> pick([null, 'x', -1, 0, 2.5, NaN, [], {}, true]);
+  const files = std ? [['lab6std.xrdml', 0, 4.156826]] : [['s00.xrdml', 0], ['s01.xrdml', 1], ['s02 <b>.xrdml', 2]].slice(0, int(1, 3));
+  const phases = Array.from({ length: int(std ? 0 : 1, 3) }, (_, i)=>{
+    const [file, cif] = pick(TEXTS), s = M.defSettings();
+    M.MODES.forEach(m=>{ if (u() < 0.25) s.on[m.k] = !s.on[m.k]; if (u() < 0.25){ const l = m.sites ? M.siteList({ prep: M.prepOf(cif, file) }) : m.list; if (l.length) s.dep[m.k] = pick(l)[0]; } });
+    const q = { id: i + 1 + (u() < 0.2 ? 3 : 0), cif, file, color: pick(M.PHASE_COLORS), ...s, off: u() < 0.3 ? { [files[0][0]]: true } : {} };
+    if (u() < 0.1) q.on = junk();
+    if (u() < 0.05){ delete q.on; delete q.dep; q.shape = pick([true, 'box', 'x']); q.profile = pick(['wppm', 'lognormal', 'lorentz']); q.po = pick(['110', 'auto', '']); }
+    return q;
+  });
+  const state = { phases, start: pick(['cif', 'last', 'x']), hold: u() < 0.8 ? HOLD_DEFAULT.filter(()=> u() < 0.7) : junk(), fit: u() < 0.6 ? {} : pick([{ maxIter: 9 }, { bgDegree: 8, bgInv: true }, { cellRange: 0.1, shapeLine: 'exact' }, junk()]),
+    nextId: phases.length + 4, sel: u() < 0.7 ? pick([...phases.map(q=> q.id), 0, 9]) : junk(), results: {}, sizeBy: pick(['sample', 'peak', 'x']), resNorm: pick(['global', 'local', 'none', 'x']) };
+  if (std){ state.std = u() < 0.7 ? { on: { ...STD.on, po: u() < 0.5 }, dep: { ...STD.dep, adp: pick(['overall', 'site']) } } : junk(); state.pick = pick([0, ...phases.map(q=> q.id), 9]); }
+  // The results: the parameters of each phase's start (resultOf, as the run's are kept).
+  files.forEach(([name], i)=>{ if (u() < 0.7) state.results[name] = { seed: 7*n + i, ids: phases.length && u() < 0.85 ? phases.filter(()=> u() < 0.7).map(q=> q.id) : std ? [0] : [], other: u() < 0.15,
+    fit: u() < 0.8 ? {} : { bgDegree: 7 }, widths: !std && u() < 0.5, irf: !std && u() < 0.6, refused: u() < 0.1, warn: u() < 0.5 }; });
+  if (u() < 0.15) state.results['gone.xrdml'] = { seed: 1, ids: [] };
+  // (a state whose phases are no list: refused, as a whole)
+  if (u() < 0.06) state.phases = pick(['x', 5, {}, true]);
+  const irf = std || u() < 0.3 ? null : { U: 0.01, V: -0.002, W: 0.003, X: 0.02, Y: 0.01, asym: 0, zero: 0.001 };
+  const ops = std ? ['mode', 'depth', 'hold', 'start', 'fit', 'auto', 'bginv', 'def', 'pick', 'del', 'sel', 'clear', 'restore'] : ['mode', 'depth', 'hold', 'start', 'fit', 'auto', 'bginv', 'choice', 'def', 'tick', 'del', 'sel', 'norm', 'clear', 'step', 'restore'];
+  const FIELD = { maxIter: ['50', '1,000', '40', 'x'], shiftTol: ['0,02', '0.01', '-1'], lambda: ['1e-3', '1e-9'], bgDegree: ['8', '2.5', '6'], cellRange: ['7,3', '5', '0'], zeroRange: ['2', '0,5', '9'], shapeFull: ['1', '3'], shapeTiltSets: ['2', '9'] };
+  const steps = Array.from({ length: 6 }, ()=>{
+    const op = pick(ops), i = int(0, 3);
+    if (op === 'mode') return [op, i, pick(M.MODES).k, u() < 0.5];
+    if (op === 'depth'){ const m = pick(M.MODES); return [op, i, m.k, m.sites ? pick(['Sr1', 'O1', 'B1', 'x']) : pick([...m.list.map(([v])=> v), 'x'])]; }
+    if (op === 'hold') return [op, pick(HOLD_DEFAULT.concat('linear')), u() < 0.5];
+    if (op === 'start') return [op, pick(['cif', 'last'])];
+    if (op === 'fit'){ const k = pick(Object.keys(FIELD)); return [op, k, pick(FIELD[k])]; }
+    if (op === 'auto' || op === 'bginv') return [op, u() < 0.5];
+    if (op === 'choice') return [op, pick(['exact', 'lorentz', 'x'])];
+    if (op === 'norm') return [op, pick(['global', 'local', 'none', 'x'])];
+    if (op === 'step') return [op, pick([-1, 1, 2])];
+    if (op === 'restore') return [op, n + 100];
+    return [op, i];
+  });
+  return { std, files, state, irf, steps };
+}
+// A result as the card keeps it, made from the case's words (resultOf: the parameters of the
+// phases' start, built as the engine builds its model).
+export function resultOf(c, f, d){
+  const S = { std: c.std, phases: (Array.isArray(c.state.phases) ? c.state.phases : []).filter(q=> Array.isArray(d.ids) && d.ids.includes(q.id) && q.on && typeof q.on === 'object').map(q=> ({ ...q, prep: M.prepOf(q.cif, q.file) })) };
+  const lab = { id: 0, ...M.stdSettings(), prep: LAB6_PREP(), color: '#4cc9a0', off: {} };
+  const list = d.ids.includes(0) && c.std ? [lab] : S.phases;
+  if (!list.length) return { params: null, phases: d.ids };
+  const run = { ph: list, std: list[0], start: 'cif', hold: [], fit: d.fit, irf: null, fell: [], bgFreed: [] };
+  const pay = M.payloadFor(f, run, {}, c.std);
+  const model = buildModel({ x: pay.x, y: pay.y, instr: pay.instr, phases: pay.phases });
+  const R = rng(d.seed), params = Object.fromEntries(model.par.map(p=> [p.name, p.value]));
+  const res = { params, esd: {}, stats: d.warn ? { Rwp: 0.1 + R.u()/10, Rexp: 0.05, chi2: 4 + R.u() } : { Rwp: null, Rexp: 'x', chi2: 3 },
+    phaseResults: list.map(q=> ({ name: q.prep.name, phase: true, lines: [{ label: 'a (1-10)', value: (3.9 + R.u()/100).toFixed(5) + '(2)', title: d.warn ? 'cell <a>' : '' }] })),
+    warnings: d.warn ? ['On a bound (1 -1 0) <b>', 'A second one'] : [], fit: d.fit, models: Object.fromEntries(list.map(q=> [q.id, { size: true, profile: 'lorentz', strain: 'iso', adp: 'cif', shape: R.u() < 0.3 ? 'box' : false }])),
+    textures: {}, table: list.map(q=> ({ phase: q.prep.name, name: 'crystallite_size_nm', value: 10 + 20*R.u(), esd: R.u() })),
+    irf: d.irf ? { U: 0.01, V: -0.002, W: 0.003, X: 0.02, Y: R.u() < 0.5 ? 0.01 : 0.02, asym: 0, zero: 0.001 } : null, irfRefused: !!d.refused,
+    widths: d.widths ? { corrected: R.u() < 0.5, phases: list.map(q=> ({ id: q.id, name: q.prep.name, shaped: R.u() < 0.5, rows: [0, 1, 2].map(j=> ({ label: ['1-10', '100', '111'][j], plain: ['1-10', '100', '111'][j], tt: 22 + 10*j,
+      rel: R.u(), H: 0.2, Hesd: 0.01, eta: 0.5, Hs: 0.15, HsEsd: 0.01, D: 12 + j, Desd: 1, dd: 0.004, ddEsd: 0.0002, W: 0.2, Wesd: 0.01, sin: 0.2 + j/10, cos: 0.97, model: { iso: 0.16, shape: 0.15 },
+      weak: j === 2 && R.u() < 0.5, flat: j === 1 && R.u() < 0.3, HsMax: 0.05, HsEsdFit: R.u() < 0.3 ? 0.005 : 0 })), wh: {}, orders: [], scores: {} })) } : null };
+  const rec = M.resultRecord(res, list, c.std, d.seed);
+  return d.other ? { ...rec, cells: Object.fromEntries(list.map(q=> [q.id, '1,1,1,90,90,90'])) } : rec;
+}
+// The case's state as a project holds it: its results made (a JSON copy, as xrd.js restores).
+export function stateOf(c, fs){
+  const s = JSON.parse(JSON.stringify(c.state)), byName = new Map(fs.map(f=> [f.name, f]));
+  Object.entries(c.state.results).forEach(([name, d])=>{ const f = byName.get(name) || fs[0]; s.results[name] = JSON.parse(JSON.stringify(resultOf(c, f, d))); });
+  return s;
+}
+// The other state a step puts back: another case's, on these patterns.
+export const otherState = (c, fs, m)=> stateOf({ ...caseOf(m), std: c.std, files: c.files }, fs);
+
+/* xrd-rv.js's wiring of each step, in short (settingChanged, settingClicked, commitFit,
+   phaseClicked, phaseChanged, the buttons, host.step, restore and refresh); what its draw
+   changes of the state (the phase on show, the size chart's choice) and what it shows. */
+function cardOf(c, fs){
+  const S = card(c.std, { setKey: '', lab6: { id: M.LAB6_ID, cif: LAB6, file: '', color: '#4cc9a0', ...M.stdSettings(), prep: LAB6_PREP(), off: {} } });
+  const C = { c, S, fs, cur: 0, rows: M.rowsFor(c.std), body: '' };
+  C.curFile = ()=> fs[C.cur];
+  C.irf = ()=> c.std ? M.irfOf(fs[0], S.results) : c.irf;
+  return C;
+}
+function putState(C, s){
+  try { M.restoreInto(U, C.S, s, false); } catch(e){ return 'threw ' + e.message; }
+  M.keepLoaded(C.S.results, C.fs);
+  return 'ok';
+}
+function curvesOf(C, f, r){
+  const list = M.resultPhases(r, M.allPhases(C.S), M.phasesFor(C.S, f));
+  return { c: M.curvesFrom(f, r, list, C.S.std), list };
+}
+function stepOf(C, [op, a, b, d]){
+  const S = C.S, list = M.allPhases(S), f = C.curFile(), q = list.length ? list[a % list.length] : null, F = M.FIT;
+  const fsNow = fitSettings(S.fit), shown = m => M.fitTxt(m.pct ? fsNow[m.k]*100 : fsNow[m.k]);
+  // (the settings' fields as their body was last built: none where it never was)
+  const has = t => C.body.includes(t), row = k => q && has(`data-sec="${q.id}"`) && C.rows.modes.some(m=> m.k === k);
+  const take = (m, e)=>{ const t = M.fitEntry(S.fit, m, e, ()=> M.autoInvOf(f).on); if (t && t.fit){ S.fit = t.fit; S.fitNote = null; } else if (t && t.refused) S.fitNote = t.refused; else if (t && t.same) S.fitNote = null; };
+  if (op === 'mode'){ if (row(b)) q.on[b] = d; }
+  else if (op === 'depth'){ if (row(b) && M.listOf(q, M.MODE[b]).some(([v])=> v === d)) q.dep[b] = d; }
+  else if (op === 'hold'){ if (has(`data-hold="${a}"`)) S.hold = M.holdWith(S.hold, a, b); }
+  else if (op === 'start'){ if (has('data-start=') && a !== S.startFrom) S.startFrom = a === 'last' ? 'last' : 'cif'; }
+  else if (op === 'fit'){ if (has(`data-fit="${a}"`)) take(F[a], { auto: false, checked: false, value: b, shown: shown(F[a]) }); }
+  else if (op === 'auto'){ if (has('data-fit-auto=')) take(F.bgInv, { auto: true, checked: a, value: 'on', shown: undefined }); }
+  else if (op === 'bginv'){ if (has('data-fit="bgInv"')) take(F.bgInv, { auto: false, checked: a, value: 'on', shown: undefined }); }
+  else if (op === 'choice'){ if (has('data-fit="shapeLine"')) take(F.shapeLine, { auto: false, checked: false, value: a, shown: undefined }); }
+  else if (op === 'def'){ if (has('data-fit-def') && M.fitShown(S.fit, S.std, C.rows.fits)){ S.fit = {}; S.fitNote = null; } }
+  else if (op === 'tick'){ const p = S.phases.length ? S.phases[a % S.phases.length] : null; if (p && f){ if (p.off[f.name]) delete p.off[f.name]; else p.off[f.name] = true; } }
+  else if (op === 'pick'){ if (q) S.pick = q.id; }
+  else if (op === 'del'){ if (q && q !== S.lab6) M.dropPhase(S, q.id); }
+  else if (op === 'sel'){ if (q && q.id !== S.sel) S.sel = q.id; }
+  else if (op === 'norm'){ if (has('data-res-norm')) S.resNorm = PAGE.normOf(a); }
+  else if (op === 'clear'){ if (f && S.results[f.name]) delete S.results[f.name]; }
+  else if (op === 'step') C.cur = Math.max(0, Math.min(C.fs.length - 1, C.cur + a));
+  else if (op === 'restore') return putState(C, otherState(C.c, C.fs, a));
+  return 'ok';
+}
+function outputs(C, said){
+  const S = C.S, fs = C.fs, f = fs[C.cur], r = S.results[f.name], all = M.allPhases(S);
+  // (draw: the phase on show one of the list's; the size chart by peak only with peak widths)
+  if (!all.some(q=> q.id === S.sel)) S.sel = all.length ? (S.std ? S.pick : all[0].id) : null;
+  if (!S.std && S.sizeBy === 'peak' && !fs.some(g=> S.results[g.name] && S.results[g.name].params && S.results[g.name].widths)) S.sizeBy = 'sample';
+  const o = { said, state: M.snapshotOf(S) };
+  o.rows = H.phaseRowsHtml(all, { p: C.p, std: S.std, pick: S.pick, sel: S.sel, f, lab6: S.lab6, dlIcon: PAGE.DL_SVG, xIcon: PAGE.X_SVG });
+  let cv = null;
+  if (r && r.params){ try { cv = curvesOf(C, f, r); } catch(e){ cv = null; } }
+  const shown = r && r.params ? (cv ? cv.list : M.phasesFor(S, f)) : M.phasesFor(S, f), done = !!(r && r.params);
+  o.fitSet = [H.fitLineHtml(shown, r, done, done ? M.fitUsed(r, S.std) : [], S.std), M.fitSetTitle(done, shown.length)];
+  o.results = H.resultsHtml({ r, std: S.std, shown, n: M.phasesFor(S, f).length, any: S.phases.length, irf: C.irf, stale: ()=> !S.std && !!r.irf && !M.sameIrf(r.irf, C.irf()) });
+  // (the settings' body built again only when the phases on show change: with none at all, a
+  // window opened on them was never built, as since v460)
+  const key = M.settingsKeyOf(all);
+  if (key !== S.setKey){ S.setKey = key; C.body = H.settingsBodyHtml(all, { p: C.p, std: S.std, lab6: S.lab6, ...C.rows, normOptions: PAGE.NORM_OPTIONS }); }
+  o.settings = C.body;
+  const groups = cv ? M.groupTicks(cv.c.ticks, cv.list) : M.tickRows(f, M.phasesFor(S, f));
+  o.frame = M.patternFrame(f.y, groups.length, cv ? f.y.map((v, i)=> v - cv.c.yc[i]) : null, M.scanRange(f)).range;
+  o.legend = H.patternLegendHtml(!!cv, groups);
+  o.csv = M.csvTables('', fs, S.results, { curves: (g, x)=> curvesOf(C, g, x), stale: (g, x)=> !S.std && !!x.irf && !M.sameIrf(x.irf, C.irf()), std: S.std },
+    { data: PAGE.fmtData, line: PAGE.csvLine, decimal: '.' }).map(e=> [e.name, sha(e.text)]);
+  return o;
+}
+export function runCase(c){
+  const fs = patternsOf(c), C = cardOf(c, fs), out = [];
+  C.p = c.std ? 'xrdStdR' : 'xrdR2';
+  out.push(outputs(C, putState(C, stateOf(c, fs))));
+  for (const s of c.steps) out.push(outputs(C, stepOf(C, s)));
+  return canon(out);
+}
+
+test('60 cases as v558\'s xrd-rv.js gave them: the state, the list, the results, the settings, the pattern\'s frame, the CSVs (golden digests)', ()=>{
+  const got = { cases: Array.from({ length: 60 }, (_, n)=> sha(runCase(caseOf(n)))) };
+  if (UPDATE){ fs.writeFileSync(GOLDEN, JSON.stringify(got, null, 1) + '\n'); return; }
+  const want = JSON.parse(fs.readFileSync(GOLDEN, 'utf8'));
+  const off = got.cases.map((h, i)=> h === want.cases[i] ? null : i).filter(i=> i !== null);
+  assert.deepEqual(off, [], 'cases whose digest differs');
+  assert.equal(got.cases.length, want.cases.length);
 });

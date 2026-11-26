@@ -3,7 +3,10 @@
    the card): the names from CIFs escaped, what a phase is refined with in a line, Miller
    indices with their bars, formulae, the instrument's line, the solids' captions, and the
    markup of the phases' list, the structure's details, the settings window's body, the
-   peak widths' table and the tests on them, each from plain values.
+   peak widths' table and the tests on them, each from plain values; and (v559, out of
+   createRietveld) the card's instructions, its frame, its section of the Results and its
+   settings window, the legends, the size chart's chips, the solids' boxes and the results
+   under the pattern.
 ========================================================= */
 import { MODE, formulaOf, hklRuns, hklShow, engineOf, START_RULE, listOf } from './xrd-rv-model.js';
 import { metric } from './xrd-cryst.js';
@@ -245,5 +248,203 @@ function testsHtml(phs){
   return html;
 }
 
+/* ---- The card's own markup (xrd-rv.js puts it in the page): its instructions, its frame,
+   its section of the Results and its settings window; the legends, the size chart's chips,
+   the crystallites' shape's boxes, the results under the pattern. Up to v558 xrd-rv.js's,
+   inside createRietveld. u: the page's helpers (xrd-rv.js HU: snav.js snavHtml, modcharts.js
+   PLOT_DL_ICON and CSV_ICON). ---- */
+// A legend, its keys as [colour, name] (the pattern's phases, the stacked patterns, the sizes).
+const legendHtml = items => items.map(([color, name])=> `<span><i style="background:${esc(color)}"></i>${esc(name)}</span>`).join('');
+// The pattern's legend (drawPattern): the observed, the fit's curves where there is one, a row
+// of ticks a phase.
+const patternLegendHtml = (fitted, groups) => `<span><i style="background:var(--plot-errbar)"></i>observed</span>`
+  + (fitted ? `<span><i style="background:#ff5050"></i>calculated</span><span><i style="background:#ff9933"></i>background</span><span><i style="background:#3aa0ff"></i>difference</span>` : '')
+  + legendHtml(groups.map(g=> [g.color, g.name]));
+// The size chart's chips (drawSizes): by sample, by peak (none to show without peak widths).
+const sizeChipsHtml = (sizeBy, anyW) => [['sample', 'by sample'], ['peak', 'by peak']].map(([k, t])=>
+  `<button type="button" class="mode-chip plot-chip${sizeBy === k ? ' is-on' : ''}" data-size-by="${k}"`
+  + `${k === 'peak' && !anyW ? ' disabled title="No peak widths: they are measured on a sample refined with its phases"' : ` title="Crystallite size ${t}"`}>${t}</button>`).join('');
+// No solid kept (renderSolids): the box says so, in its place (the free shape is a setting; a
+// solid searched and not kept, the results say why).
+const solidsNoneHtml = r => `<div class="peak-box-head"><span class="txt-mini">Crystallite shape</span></div><div class="rv-empty">${r && r.params && Object.values(r.models || {}).some(m=> m && m.shape)
+  ? 'No free shape kept: none was supported by the data (the warnings say why).' : 'Isotropic size: no free shape refined. <b>Settings…</b> sets one (Crystallite size, free shape).'}</div>`;
+// A solid's box (renderSolids): its head, named when there are several, its PNG's button (icon:
+// modcharts.js PLOT_DL_ICON), and the place of its 3D view.
+const solidHeadHtml = (s, n, icon) => `<div class="peak-box-head"><span class="txt-mini">Crystallite shape${n > 1 ? ' · ' + esc(s.name) : ''}</span><button class="btn table-csv-btn" title="Download PNG">${icon}</button></div><div class="rv-solid-view"></div>`;
+// The Williamson–Hall plot's legend (drawWH): each phase measured, the models' points drawn.
+const whLegendHtml = (phs, colorOf, iso, shp) => phs.map(ph=> `<span><i style="background:${esc(colorOf(ph.id))}"></i>${esc(ph.name)}, measured</span>`).join('')
+  + (iso ? `<span><i style="background:#9aa3ad"></i>isotropic model</span>` : '')
+  + (shp ? `<span><i style="background:#ff5050"></i>free-shape model</span>` : '');
+// The structure's box with no phase (renderCell).
+const CELL_NONE = '<div class="rv-empty">No phase yet: a CIF added in Phases shows its structure here.</div>';
+// The results' box with no pattern (renderResults).
+const noPatternHtml = std => `<div class="rv-note rv-wide">${std ? 'No standard loaded: drop its file above.' : 'No pattern.'}</div>`;
+/* The results across the card under the pattern (renderResults): the statistics, then each
+   group the worker made of the result (the specimen or the instrument, each phase's values);
+   under them all, the notes and every warning: the refinement's (a cell search without a
+   minimum, a phase not detected, a parameter on a bound), the CIFs' (their composition
+   against the formula) and the standard's. Not refined yet, what Refine will do. r: the
+   pattern's result; shown: its phases; n: the phases refined on it now, any: the card's;
+   irf(): the standard's profile now, stale(): the result's not the one now (each asked only
+   where the words need it, as up to v558). */
+function resultsHtml({ r, std, shown, n, any, irf, stale }){
+  const cifWarn = shown.flatMap(q=> q.prep.warnings.map(w=> warnNote(`${esc(q.prep.name)}: ${esc(w)}`))).join('');
+  if (!r || !r.params) return (n ? `<div class="rv-note rv-wide">Not refined yet. <b>Refine</b> starts from the CIF's cell${std ? ' (the certified one, held fixed)' : ''}, finds where the pattern's peaks are, and refines step by step.</div>`
+    : `<div class="rv-note rv-wide">${any ? 'No phase ticked for this pattern: tick one in the list.' : 'No phase: add one from a CIF, dropped on Phases beside the pattern or selected with a click there.'}</div>`) + cifWarn;
+  const s = r.stats || {};
+  let html = group('Fit', `<div class="pg-stat" title="R_wp: the weighted residual; R_exp: what the counting statistics alone would give">R<sub>wp</sub>: <b>${(s.Rwp*100).toFixed(2)}%</b></div>`
+    + `<div class="pg-stat">R<sub>exp</sub>: <b>${(s.Rexp*100).toFixed(2)}%</b></div>`
+    + `<div class="pg-stat" title="χ² = Σw(y − y_c)²/(N − P), the reduced χ²: (R_wp/R_exp)²">χ²: <b>${(s.chi2).toFixed(2)}</b></div>`);
+  (r.phaseResults || []).forEach(q=>{
+    html += group(esc(q.name), q.lines.map(l=> `<div class="pg-stat"${l.title ? ` title="${esc(l.title)}"` : ''}>${barIdx(esc(l.label))}: <b>${barIdx(esc(l.value))}</b></div>`).join(''), q.phase);
+  });
+  if (std) html += `<div class="rv-note rv-wide">The samples take this profile, its axial divergence, zero and sin 2θ shift as their instrument's.</div>`;
+  else if (!r.irf && !r.irfRefused) html += irf() ? `<div class="rv-note rv-wide">No instrumental profile: this pattern was refined before the standard was. Refine it again to correct its widths, and the sizes from them, for the instrument's.</div>`
+    : `<div class="rv-note rv-wide">No instrumental profile (refine the standard first: <b>Instrumental standard…</b>): the widths, and the sizes from them, include the instrument's.</div>`;
+  html += (r.warnings || []).map(w=> warnNote(barIdx(esc(w)))).join('') + cifWarn;
+  if (!std && r.irf && stale()) html += warnNote(`${irf() ? 'The standard has been refined again since this result' : 'The standard\'s refinement this result used is gone (cleared, or another standard loaded)'}: its profile, zero and asymmetry are not the ones these numbers rest on. Refine this pattern again, or <b>Refine all</b>.`);
+  return html;
+}
+
+// The card's instructions (cards.js shows them under its title), the standard's window's.
+const RV_INFO = `Whole-pattern Rietveld refinement. Each phase comes from a CIF, dropped on <b>Phases</b> beside the pattern or selected with a click there (its drop zone while there is no phase, then <b>+ CIF</b> at the list's foot; several at once), the list giving each its formula and space group: its cell, its atoms and the symmetry the structure has. A file in P1, as Materials Project gives them, has its symmetry found from the atoms, so that a cubic cell is refined by <i>a</i> alone (a primitive cell of a centred lattice through its conventional cell, whose <i>a</i> and <i>V</i> are the ones reported), and its space group read off those operations; a file with its own operations is checked against its formula and Z (an origin-choice mix-up shows there). A phase's tick in the list says whether it is refined on the pattern on show: every pattern has them all at first, and each its own. The download button left of a phase's × (which removes it) saves its CIF under the file's name: its text as read, in UTF-8 whatever the file's encoding; it changes nothing, and works while a refinement runs, when the × and the tick are disabled until it ends (the run refines the phases it started with). A click on a phase shows its unit cell beside the list, in 3D (drag it to turn it, a double click puts it back), with its details under it; with no phase that box is empty. The instrumental standard (<b>Instrumental standard…</b>) is a file of its own, refined in its own window against the built-in LaB₆ (NIST SRM 660c, <i>a</i> = 4.156826 Å, held fixed) or a CIF of the standard's: its zero and its peak shape — the Thompson–Cox–Hastings pseudo-Voigt, Gaussian width² = U·tan²θ + V·tanθ + W and Lorentzian width = X·tanθ + Y/cosθ, made asymmetric by the axial divergence (through the Soller slits the file gives, Cheary–Coelho's full axial model, with the sample's and receiver's axial length L refined; without Sollers, Finger–Cox–Jephcoat's one parameter (S+H)/L: the tail of the low-angle peaks towards lower angles) — and a shift of 2θ as sin 2θ, the form of the sample's transparency, beside the zero and the displacement, become the instrument's, and each sample refines only its own broadening on top of them: a Lorentzian Y<sub>s</sub>/cosθ, which gives the crystallite size (D = Kλ/Y<sub>s</sub>, Y<sub>s</sub> in radians, K = 0.9 as in the Scherrer analysis), and X<sub>s</sub>·tanθ = 4ε·tanθ, the microstrain. The pattern is computed from Kα₁ and Kα₂ at the file's wavelengths and ratio, the Bragg–Brentano Lorentz–polarisation factor (with a monochromator only when the file has one), |F|² from the atoms (Waasmaier–Kirfel form factors with Chantler's anomalous terms), a Chebyshev background and a specimen displacement per sample; each point weighs by its counts (1/σ², σ² the counts times the attenuation). <b>Refine</b> starts from the CIF's cell, finds where the pattern's peaks are by scaling that cell, then frees the parameters stage by stage; <b>Refine all</b> does every pattern. With no refined standard they ask first, in a window over the page: refine the standard first (as its window's <b>Settings…</b> are) and then the samples, refine without it, or neither; with none loaded, load one. While the standard refines no sample does, and the other way round, so that a batch takes one instrumental profile throughout; its run shows on every card's <b>Instrumental standard…</b> (a spinner, and its progress along the button's foot), its window closed or open. <b>Settings…</b> (read only while a refinement runs) decides what Refine refines: for each phase each of the models below switched on or off and, when on, how deep (the size and the microstrain can be off too). It also sets where Refine starts: from the CIF, as above, or from each pattern's last result, with the groups of parameters ticked held at its values (whatever is new or changed since is refined) — a shape fitted, say, then held while B per site is refined. Its <b>Refinement</b> section sets, for every pattern, the least squares and the searches: the iterations allowed, the shift tolerance and the starting damping, the background's Chebyshev degree and its 1/2θ term (automatic: on when the scan starts below 20°), the cell search's range, how many of the free shape's trial starts are refined fully, how many more sets of them it runs, each tilted in another fixed direction (about one more search each), and the free shape's size line (below), each result saying which it was refined with when they are not the defaults. Its <b>Results</b> section sets how the patterns stacked in the card's section of the Results are normalised: to the largest (global), each to its own maximum (local), or as they are (none). <b>Clear</b> removes this pattern's result, <b>Clear all</b> every pattern's. With several phases each gets its weight fraction (Hill–Howard, of the crystalline part). A phase is reported <i>not detected</i>, and left out of the refinement, when its scale is not above 3 esd, or when it is significant only through intensity under another phase's peaks with no part of the pattern its own (a candidate impurity whose lines fall on the main phase's would otherwise take up whatever misfit those peaks leave). The same CIF added twice gives two size populations of one phase. <b>Size profile</b> (with a refined standard): <i>Lorentzian</i>, a Lorentzian of the right breadth read with Scherrer's K (a free shape, below, too, unless the Refinement settings ask for its exact line); or <i>WPPM</i> (Whole Powder Pattern Modelling, Scardi &amp; Leoni), each line synthesised as the Fourier transform of the product of the instrument's, the size's, the strain's and the faults' coefficients — the size's being the crystallites' own common-volume function (a sphere's, or a free solid's along each member of the family), so the dimensions are the true ones and the profile's shape counts too. With <i>log-normal sizes</i> the coefficients are averaged over a distribution of width σ (of ln D): the size read is the volume-weighted mean (what the breadth measures), with the median and the number-weighted mean beside. <b>Microstrain</b>: isotropic, or <i>anisotropic</i> (Stephens: ε² a quartic form of the reflection's direction that the Laue group leaves unchanged; given as its rms and along the low-index planes' normals). <b>Planar faults</b> (after Warren): faults on a family of planes, each displacing the crystal by a vector of a family (those in the plane), the probability per plane refined: reflections whose h·R is not an integer broaden, by parity rather than by order. <b>Displacement parameters</b>: the CIF's held (0.5 Å² where it has none); one ΔB added to all of a phase's B; one B per crystallographic site (the sites from the symmetry found); or the anisotropic U<sup>ij</sup> per site, only those the site's symmetry leaves free, with B<sub>eq</sub>. Each is strongly correlated with the scale, and so with the weight fractions, with the background and, on broad peaks, with the widths: they want data to high angle. <b>Site occupancy</b>: the occupancy of one of the phase's sites refined — how strongly the site scatters against its species at full occupancy, alike at every angle (a B lowers it more the higher the angle): under 1, atoms missing (vacancies, a depleted surface) or a lighter species beside them; over 1, a heavier one. The weight fractions use the cell's mass at the refined occupancy. Every site at once would be the scale again, so a phase of one site has none to refine; the standard's structure is certified. <b>Preferred orientation</b>: March–Dollase, each reflection's members weighed by (r²·cos²α + sin²α/r)<sup>−3/2</sup>, α their angle to the normal of the chosen planes (hkl) — r under 1 when such planes lie preferentially parallel to the sample's surface (plates), over 1 when they do not (needles); <i>best axis</i> tries the low-index planes and keeps the lowest χ². For a cubic phase r has no first-order effect at 1, so it is refined from 0.8 and from 1.25 and the better kept. It changes the intensities, not the widths: an intensity misfit left in is otherwise taken up by a free shape, which widens or narrows peaks to fit it (on a SrTiO<sub>3</sub> whose Sr site scatters 0.7 of a full one, with that site held full the plates came out ⟂ ⟨310⟩; with its occupancy refined, ⟂ ⟨110⟩, as the crystals are). <b>Crystallite shape</b> (with a refined standard): the isotropic size, or a free solid — an <i>ellipsoid</i> of any proportions, a <i>spheroid</i> (two axes equal), a <i>cylinder</i>, an <i>elliptic cylinder</i> (an ellipse translated along its axis), a <i>box</i> or a <i>square-based box</i> (two edges equal: a square plate or rod) —, in any orientation. A shape that breaks the crystal's symmetry (a disc normal to one ⟨110⟩ of a cubic phase) gives the reflections of one family different widths, so each is drawn with its own and the peak is their sum; its width follows the solid's volume-weighted column length along it (Stokes &amp; Wilson), in closed form for each solid (the faces rounded off over 1° of direction during the search only: the result is the exact solid's). The fit starts from several shapes (the sphere, plates and needles along the low-index directions and along the normals of the lines the isotropic fit leaves most and least broadened, each tilted 6° in a fixed direction, and in as many more as the Refinement settings ask: no random number, so the same data give the same result), refines every minimum it falls into to the same level, and keeps the lowest if its gain in χ² over the isotropic size (χ² divided by the isotropic fit's χ²<sub>ν</sub>, so that a misfit is not taken for evidence) is over what noise gives a sphere in the phase's Laue class (13 to 25), with ΔBIC under −10 as well where the fit misses some lines (checked line by line); else the isotropic size stays. Each solid is also refined with its axes held exactly on their nearest lattice directions — its faces lattice planes —, and kept so when that gives the lower ΔBIC and the free orientation is not better by more than its χ² allows (95 %); the free fit's angle from them is given beside. The ΔBIC of each solid against the same isotropic fit also compares the solids: between two of as many parameters, a difference under 14 is within what noise gives (35 where the fit misses some lines: the bootstrap of the free-shape research's family comparison); and the sizes depend on the solid chosen. The result gives the solid's dimensions with their esds — true ones (diameter, height, edges, full axes), the solid's own, when it is drawn by its exact line (WPPM, each member's line the transform of the solid's own; the Refinement setting <i>Shape size line</i>, or the WPPM size profile); by default, under the Lorentzian profile, each member's line is a Lorentzian of its width, Scherrer's reading, which reads the extents 13–25 % long and pulls the solid toward equant (the search's thresholds were tuned on the exact line, the more accurate one) —, each axis with the simplest lattice direction within 10°, its angle from it and its angular esd (the turn of the solid that raises χ² by χ²<sub>ν</sub>, its sizes and its turns about the other axes refined again: it measures the valley of χ² the fit ends in, and of 7 free fits of synthetic boxes 2 ended 3–4 esd off, in another valley nearly as deep); two dimensions not told apart within 2 esd have no direction of their own, nor has an axis whose angular esd is over 30°. The sizes across a thin solid's faces assume ideally flat faces: a 2° spread of their orientation would shorten them by 10–30 %. The solid is drawn beside the tests with the crystal's directions on it and their uncertainty as cones (an axis the data do not fix dashed, <i>not determined</i>), and the cell's <i>a</i>, <i>b</i>, <i>c</i> in a corner for reference: drag it to turn it. Under the pattern: the difference, and a row of ticks per phase at its reflections; under them, the refinement's results across the card, by its title what it was refined with (each phase's models, the Refinement settings not the defaults), at its foot every warning. <b>Peak widths</b> (the table at the card's foot: a click keeps a peak marked on the pattern and on the Williamson–Hall plot): each reflection of a sample fitted alone (the pattern less the isotropic refinement's background and every other reflection, with a straight line for what is left, Kα₁ and Kα₂ and the instrument's asymmetry) by its own Lorentzian and Gaussian widths, to which the instrument's at that angle are added as the refinement adds them: their FWHM is the sample's alone, and the size from it is as in the Scherrer analysis. Three tests read them with no model of the shape, in their box beside the Williamson–Hall plot: <i>Williamson–Hall</i>, β·cosθ against 4·sinθ, where an isotropic size and strain put the points on one line (χ²<sub>ν</sub> about it and its probability); <i>orders</i>, Δd* = β·cosθ/λ of (h k l) and (n·h n·k n·l), equal for a size, in the ratio n for a strain, below 1 for faults that broaden by parity; and <i>prediction</i>, the same measurement on each model's own curve, which a model of the shape should match. Overlapped, weak or end-of-pattern peaks, and those no broader than the instrument within 2 esd, are listed but not used. R<sub>wp</sub>, R<sub>exp</sub> and χ² judge the fit; the values in brackets are the standard errors in the last digits, which the serially correlated residuals of a powder pattern make smaller than the real uncertainty. A refinement that stopped before converging, parameters on a bound (to be read as limits) and parameters the data do not determine are said under the results. How it all works in detail: RIETVELD.md in the repository.`;
+const RV_STD_INFO = `The instrumental standard's own Rietveld refinement: one file (a file dropped replaces the one there), refined against the phase chosen in the list (the round button) — the built-in LaB₆ (NIST SRM 660c), or a CIF of the standard's, dropped on <b>Phases</b> or selected with <b>+ CIF</b> at the list's foot. Each phase's download button, left of its ×, saves its CIF: the built-in LaB₆'s as the app holds it (LaB6_NIST-SRM-660c.cif, written in P1), a CIF's as read (in UTF-8). Its zero, its peak shape (U, V, W, X, Y and the axial divergence) and its sin 2θ shift become the instrument's, which every sample's refinement then takes: refine it before the samples (a sample's Refine offers to), and refine them again after refining it again. It cannot be refined while a sample refines, nor the samples while it does. Its cell is held at the CIF's (a certified standard's), and its own widths are the instrument's: no size, strain, faults or free shape of its own, nor an occupancy refined. Its <b>Settings…</b>, its own, hold only what applies to it: its displacement parameters (one ΔB by default) and its texture; where its refinement starts, with the groups it can hold (the scales and background, its zero and displacement, the profile, B, the texture); and the Refinement settings, the zero scan's range among them. Closed while it refines, this window leaves the run going: every Rietveld card's <b>Instrumental standard…</b> shows it, with its progress, until it ends.`;
+
+/* The card's section of the Results: the refined patterns stacked, and the crystallite
+   sizes (by sample or by peak, the chips in the plot's corner), as the Scherrer card's. */
+function resHtml(p, u){
+  return `
+        <h4 class="res-an-title"></h4>
+        <p class="txt-meta" id="${p}ResNone">No pattern refined yet: <b>Refine</b> in the card above.</p>
+        <div class="row res-row" style="gap:16px">
+          <div class="col mw320" style="flex:1">
+            <p class="txt-caption">Refinement: observed less the background</p>
+            <div class="plot-wrap">
+              <svg class="plot" id="${p}ResSvg"></svg>
+              <button class="btn plot-dl-btn" data-dl-svg="${p}ResSvg" data-csv-mod="xrd" data-csv-base="rietveld_pattern.csv" data-csv-names="rietveld_pattern.csv" data-dl-base="XRPD_results_rietveld.svg" data-dl-name="XRPD_results_rietveld.svg" data-dl-legend="${p}ResLegend">${u.PLOT_DL_ICON}</button>
+            </div>
+            <div id="${p}ResLegend" class="legend"></div>
+          </div>
+          <div class="col mw320" style="flex:1">
+            <p class="txt-caption">Crystallite size</p>
+            <div class="plot-wrap">
+              <svg class="plot" id="${p}SizeSvg"></svg>
+              <span class="plot-chips" id="${p}SizeBy"></span>
+              <button class="btn plot-dl-btn" data-size-dl data-dl-svg="${p}SizeSvg" data-csv-mod="xrd" data-csv-names="rietveld_results.csv,rietveld_peaks.csv" data-dl-name="XRPD_rietveld_size.svg" data-dl-legend="${p}SizeLegend">${u.PLOT_DL_ICON}</button>
+            </div>
+            <div id="${p}SizeLegend" class="legend"></div>
+            <div id="${p}SizeNote" class="txt-meta"></div>
+          </div>
+        </div>`;
+}
+
+/* The card's markup (and the standard's window's: the same, with one pattern and one
+   phase chosen): the pattern with the phases and the structure beside it, the buttons
+   under them ending with the plot; the results across under it; then the Williamson–Hall
+   plot, the tests on the widths and the crystallites' shape in one row; the peak widths'
+   table at the foot. */
+function cardHtml(p, std, u){
+  return `
+        <div class="pside">
+          <div class="plot-nav-row pside-nav">
+            <div class="plot-nav-left">${std ? '' : `
+              ${u.snavHtml({ prev: p + 'Prev', idx: p + 'Idx', next: p + 'Next', name: p + 'Label', prevCls: 'an-prev', nextCls: 'an-next' })}`}
+            </div>
+          </div>
+          <div class="pside-plot">
+            <div class="plot-wrap">
+              <svg class="plot" id="${p}Svg"></svg>
+              <button class="btn plot-dl-btn" data-dl-svg="${p}Svg" data-csv-mod="xrd" data-csv-base="rietveld_pattern.csv" data-csv-names="rietveld_pattern.csv" data-dl-base="XRPD_rietveld.svg" data-dl-name="XRPD_rietveld.svg" data-dl-legend="${p}Legend">${u.PLOT_DL_ICON}</button>
+            </div>
+          </div>
+          <div class="pside-under">
+            <div id="${p}Legend" class="legend"></div>
+            <p class="txt-meta" id="${p}Instr"></p>
+          </div>
+          <div class="pside-col rv-side">
+            <div class="rv-boxes">
+              <div class="peak-box rv-cifs" id="${p}Cifs">
+                <div class="peak-box-head">
+                  <span class="txt-mini">Phases</span>
+                  <input type="file" id="${p}CifInput" accept=".cif,.CIF" multiple style="display:none">
+                </div>
+                <div class="rv-ciflist" id="${p}PhaseList"></div>
+                <div class="dropzone rv-cifdz" id="${p}CifDz" role="button" tabindex="0" hidden>
+                  <div class="dz-icon" aria-hidden="true">⤒</div>
+                  <div class="dz-title">Drag here CIF files, or click to select them.</div>
+                  <div class="txt-meta">.cif</div>
+                </div>
+                <div class="dropzone rv-cifdz rv-cifdz-mini" id="${p}AddCif" role="button" tabindex="0" aria-label="+ CIF: add phases from CIF files" title="Add phases from CIF files: a click selects them, or drop them anywhere on Phases"><span class="rv-cifdz-plus" aria-hidden="true">+</span> CIF: drop or click</div>
+              </div>
+              <div class="peak-box rv-cellbox">
+                <div class="peak-box-head"><span class="txt-mini">Structure</span><span class="rv-cell-name" id="${p}CellName"></span></div>
+                <div class="rv-cell" id="${p}Cell"></div>
+                <div class="rv-cell-info" id="${p}CellInfo"></div>
+              </div>
+            </div>
+            <div id="${p}Status" class="txt-meta rv-status"></div>
+            <div id="${p}ProgWrap" class="rv-prog" style="display:none"><div id="${p}ProgBar"></div></div>
+${std ? `
+            <div class="rv-btns">
+              <button class="btn primary" id="${p}Refine">Refine</button>
+              <button class="btn" id="${p}Settings" aria-haspopup="dialog" title="What Refine refines, on the standard's phase, and where it starts">Settings…</button>
+              <button class="btn" id="${p}Clear" title="The standard's result">Clear</button>
+            </div>` : `
+            <div class="rv-btns">
+              <button class="btn primary" id="${p}Refine">Refine</button>
+              <button class="btn primary" id="${p}RefineAll">Refine all</button>
+            </div>
+            <div class="rv-btns">
+              <button class="btn" id="${p}Settings" aria-haspopup="dialog" title="What Refine refines, for each phase, and where it starts">Settings…</button>
+              <button class="btn" id="${p}Std" aria-haspopup="dialog" title="The instrumental standard: its file, its phase and its refinement, whose profile every sample takes">Instrumental standard…</button>
+            </div>
+            <div class="rv-btns">
+              <button class="btn" id="${p}Clear" title="This pattern's result">Clear</button>
+              <button class="btn" id="${p}ClearAll" title="Every pattern's result">Clear all</button>
+            </div>`}
+          </div>
+        </div>
+        <div class="peak-box rv-fit">
+          <div class="peak-box-head rv-fit-head"><span class="txt-mini">Refinement</span><span class="rv-fit-set" id="${p}FitSet"></span></div>
+          <div class="rv-fit-grid" id="${p}Results"></div>
+        </div>
+        <!-- The peaks' own widths, each reflection fitted alone: the Williamson-Hall plot, the
+             tests on them and the crystallites' shape in a row, as tall as the plot; their
+             table at the card's foot -->
+        <div id="${p}Widths" class="rv-widths" style="display:none">
+          <div class="rv-wrow">
+            <p class="txt-caption">Williamson–Hall</p>
+            <div class="plot-wrap">
+              <svg class="plot" id="${p}WhSvg"></svg>
+              <button class="btn plot-dl-btn" data-dl-svg="${p}WhSvg" data-csv-mod="xrd" data-csv-base="rietveld_peaks.csv" data-csv-names="rietveld_peaks.csv" data-dl-base="XRPD_williamson_hall.svg" data-dl-name="XRPD_williamson_hall.svg" data-dl-legend="${p}WhLegend">${u.PLOT_DL_ICON}</button>
+            </div>
+            <div id="${p}WhLegend" class="legend"></div>
+            <div class="peak-box rv-tests">
+              <div class="peak-box-head"><span class="txt-mini">Tests on the widths</span></div>
+              <div class="rv-tests-body" id="${p}Tests"></div>
+            </div>
+            <div class="peak-box rv-solids" id="${p}Solids"></div>
+          </div>
+          <div class="peak-box rv-wtable">
+            <div class="peak-box-head">
+              <span class="txt-mini">Peak widths</span>
+              <button class="btn table-csv-btn" data-csv-mod="xrd" data-csv-base="rietveld_peaks.csv" data-csv-names="rietveld_peaks.csv" title="Download CSV">${u.CSV_ICON}</button>
+            </div>
+            <div id="${p}PkWrap"></div>
+          </div>
+        </div>`;
+}
+
+// The settings window (settingsBodyHtml its body), the card's own, in the instance's layer.
+const settingsModalHtml = (p, std) => `<div class="modal-box rvs-box" role="dialog" aria-modal="true" aria-labelledby="${p}SetTitle" tabindex="-1">
+      <h3 class="txt-head" id="${p}SetTitle" style="margin:0 0 4px">Fitting settings${std ? ': instrumental standard' : ''}</h3>
+      <p class="txt-meta" style="margin:0 0 6px">What <b>Refine</b> refines, on each phase${std ? ' of the standard' : ''}. A change applies to the next refinement.</p>
+      <p class="rvs-busy" hidden>Refining: these are the settings it runs with, to be changed when it ends.</p>
+      <div class="rvs-body"></div>
+      <button class="btn primary" type="button" data-done style="width:100%;margin-top:16px">Done</button>
+    </div>`;
+
 export { esc, modelsLine, summaryOf, refinedOf, hklHtml, barIdx, optBars, formulaPretty,
-  f3, fmtP, solidCaption, instrLine, group, warnNote, fitLineHtml, phaseRowsHtml, cellDetailsHtml, settingsBodyHtml, widthsTableHtml, testsHtml };
+  f3, fmtP, solidCaption, instrLine, group, warnNote, fitLineHtml, phaseRowsHtml, cellDetailsHtml, settingsBodyHtml, widthsTableHtml, testsHtml,
+  RV_INFO, RV_STD_INFO, legendHtml, patternLegendHtml, sizeChipsHtml, solidsNoneHtml, solidHeadHtml, whLegendHtml, CELL_NONE, noPatternHtml, resultsHtml,
+  resHtml, cardHtml, settingsModalHtml };
