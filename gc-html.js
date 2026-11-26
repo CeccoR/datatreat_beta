@@ -1,0 +1,326 @@
+/* =========================================================
+   GC — the Production Rate cards' words and markup that need no page (gc.js puts them in
+   the cards, the Results and the alerts; tests/gcmodel.test.mjs reads them in Node): the
+   instructions (with "From the reading to the rates", its example worked out with the
+   module's own numbers), a card's body and its section of the Results, the parameter
+   table, a sample's legend entries, the file list's Sample column, the alerts under the
+   drop zone (the empty cells, the dates, the alternative export, the pairs) and at a card's
+   top (where its values came from). Taken out of v556's gc.js as they were: the same
+   markup to the byte.
+   What they need from the page is handed in, u = { esc, num, plotWrap, CSV_ICON, alertHtml,
+   buildAlertsHtml } (utils.js's esc and alerts, modkit.js's num, modcharts.js's plot box and
+   CSV icon: gc.js HU), and the cards' own instructions (cards.js cardInfo) where they end
+   with them.
+========================================================= */
+import { NORM, NORMS, P_ATM, P_UNITS, INJ_DELAY_AUTO, GASES, molarVolume, inUnit, injDelay, mOf, aOf, qOf, tOf, pOf, startOf, endOf,
+  lightOnWarn, seriesName, gasTxt, blankCounts, byName, headOf, isHead, isTable, isTcd, rowFiles, pairMarks } from './gc-model.js';
+
+/* ---- The instructions ---- */
+// What T and p are (their columns' titles, and the card's instructions).
+export const T_TITLE = 'the temperature the flow Q refers to — for a mass-flow controller (sccm, slpm), the reference temperature of its standard units (Alicat: 25 °C), not that of the gas in the lines or the reactor; for a flow measured as a volume, the gas temperature where it is measured';
+export const P_TITLE = 'the absolute pressure the flow Q refers to — for a mass-flow controller, the reference pressure of its standard units (Alicat: 14.696 psia = 1 atm), not that of the gas in the lines or the reactor; for a flow measured as a volume, the absolute pressure of the gas where it is measured (ambient ≈ 1 atm)';
+/* "From the reading to the rates" (v542), a box of its own in the card's instructions: the
+   steps tablesOf, cumAt and computeRates take for each gas, from an injection's reading to
+   its rate, its production and the mean rate, each with a short title, what it means, its
+   formula typeset in MathML and the units of its symbols; then those steps worked through
+   for an example. The browser draws MathML Core itself, with no script (the CSP stands),
+   and cards.js puts the instructions in by innerHTML, which parses MathML as it does SVG.
+   As in print: a letter standing for a quantity in italics (mi), the label of a subscript
+   (V_m, t_s), a word and Δ upright. The example's numbers are worked out here with the
+   module's own molar volume and units, so they are the rates the app gives. */
+const RATES_HTML = (()=>{
+  const mi = s => `<mi>${s}</mi>`, up = s => `<mi mathvariant="normal">${s}</mi>`, mn = s => `<mn>${s}</mn>`;
+  const mo = (s, a = '')=> `<mo${a}>${s}</mo>`, mtext = s => `<mtext>${s}</mtext>`;
+  const mrow = (...xs)=> `<mrow>${xs.join('')}</mrow>`, mfrac = (a, b)=> `<mfrac>${a}${b}</mfrac>`;
+  const msub = (a, b)=> `<msub>${a}${b}</msub>`, msup = (a, b)=> `<msup>${a}${b}</msup>`;
+  const paren = (...xs)=> mrow(mo('('), ...xs, mo(')')), of = a => mrow(mo('(', ' stretchy="false"'), a, mo(')', ' stretchy="false"'));
+  const accent = (s, mark)=> `<mover accent="true">${s}<mo>${mark}</mo></mover>`;
+  const slash = mo('/', ' lspace="0" rspace="0"'), dot = mo('⋅'), times = mo('×'), eq = mo('='), thin = '<mspace width="0.17em"/>';
+  const nb = '\u00a0';   // (a space mtext keeps at the start of its text)
+  const display = (...xs)=> `<math display="block">${xs.join('')}</math>`, im = (...xs)=> `<math>${xs.join('')}</math>`;
+  // One of two forms, as LaTeX's cases: a brace, each form with when it applies.
+  const cases = rows => mrow(mo('{'), `<mtable class="instr-cases" displaystyle="true">${rows.map(([f, when])=> `<mtr><mtd>${f}${mo(',')}</mtd><mtd>${when}</mtd></mtr>`).join('')}</mtable>`);
+  const pow10 = e => msup(mn('10'), mn(e)), sci = (a, e)=> mrow(mn(a), times, pow10(e));
+  // A unit after a number, upright, a power as a superscript: unit('L', ['mol', '−1']).
+  const unit = (...us)=> '<mspace width="0.3em"/>' + us.map(u=> Array.isArray(u) ? msup(mtext(u[0]), mn(u[1])) : mtext(u)).join(thin);
+  const x = mi('x'), c = mi('c'), R = mi('R'), T = mi('T'), p = mi('p'), Q = mi('Q'), F = mi('F'), m = mi('m'), A = mi('A'), r = mi('r'), t = mi('t'), P = mi('P');
+  const Vm = msub(mi('V'), up('m')), nd = accent(mi('n'), '˙'), rbar = accent(mi('r'), '¯');
+  const ts = msub(t, up('s')), te = msub(t, up('e')), tinj = msub(t, mi('inj')), delay = mrow(up('Δ'), msub(t, mi('delay'))), ton = msub(t, mi('on'));
+  const i = mi('i'), n = mi('n'), i1 = mrow(i, mo('+'), mn('1')), tp = msup(t, mo('′'));
+  const step = (title, what, eqs, ...lines)=>
+    `<li><b>${title}.</b> ${what}<div class="instr-eqbox">${eqs.join('')}</div>${lines.map(l=> `<div class="instr-units">${l}</div>`).join('')}</li>`;
+  // The example as the module works it out (tablesOf): 0.05 %mol in 2 mL/min at 25 °C and 1 atm.
+  const vm = molarVolume(25, P_ATM), ndot = 2/1000*60/vm, flow = 0.05/100*ndot*1e6;
+  const ex = { vm: vm.toFixed(3), nd: (ndot*1e3).toFixed(4), F: flow.toFixed(4),
+    rm: (flow/15*NORM.mass.per).toFixed(2), ra: (flow/2.5*NORM.area.per).toFixed(5) };
+  return '<div class="instr-math"><h4 class="instr-math-head">From the reading to the rates</h4>'
+  + `<p class="instr-math-lead">As they are worked out for each gas, from each injection's reading ${im(c)}:</p><ol class="instr-steps">`
+  + step('Mole fraction from the reading', 'The part of the gas leaving the reactor that is this gas.',
+    [display(x, eq, cases([[mfrac(c, mn('100')), mrow(c, mtext(nb + 'in %mol'))], [mrow(c, dot, pow10('−6')), mrow(c, mtext(nb + 'in ppm'))]]))],
+    `${im(x)}: no unit; ${im(c)}: %mol in the default layout, ppm in the alternative export.`)
+  + step('Molar flow of the carrier', `The carrier's flow ${im(Q)} in moles per hour, through the molar volume ${im(Vm)} of an ideal gas at ${im(T)} and ${im(p)}: for a mass-flow controller, its reference ${im(T)} and ${im(p)} (see <b>mass-flow controller</b> above).`,
+    [display(Vm, eq, mfrac(mrow(R, paren(T, mo('+'), mn('273.15'))), mrow(p, slash, mn('101325')))),
+     display(nd, eq, mfrac(Q, mn('1000')), dot, mfrac(mn('60'), Vm))],
+    `${im(Vm)}: L mol⁻¹; ${im(R)} = 0.0820573661 L atm mol⁻¹ K⁻¹; ${im(T)}: °C; ${im(p)}: Pa (101325 Pa atm⁻¹); ${im(Q)}: mL min⁻¹, at the controller's reference ${im(T)} and ${im(p)} (1000 mL L⁻¹, 60 min h⁻¹); ${im(nd)}: mol h⁻¹.`,
+    `At 1 atm, ${im(Vm)} is 22.414 L mol⁻¹ at 0 °C and 24.465 L mol⁻¹ at 25 °C.`)
+  + step('Flow of the gas produced', "This gas's share of that flow, in micromoles per hour.",
+    [display(F, eq, x, dot, nd, dot, pow10('6'))],
+    `${im(F)}: µmol h⁻¹ (10⁶ µmol mol⁻¹).`,
+    `Assumed: the carrier's flow ${im(nd)} is the total flow leaving the reactor, which holds when the products are a small part of it (ppm to a few %mol).`)
+  + step('Rate', "The gas's flow over the photocatalyst's mass or, for a film, its area, as <b>Normalize by</b> chooses.",
+    [display(r, eq, cases([[mfrac(F, mrow(m, slash, mn('1000'))), mtext('by mass')], [mfrac(F, A), mtext('by area')]]))],
+    `${im(r)}: µmol g⁻¹ h⁻¹ with ${im(m)} in mg (1000 mg g⁻¹), or µmol cm⁻² h⁻¹ with ${im(A)} in cm².`)
+  + step('Time', "Each injection's time from light-on, in hours.",
+    [display(t, eq, mfrac(mrow(tinj, mo('+'), delay, mo('−'), ton), mn('3600')))],
+    `${im(t)}: h; ${im(tinj)}, the injection date, ${im(delay)}, the injection delay, and ${im(ton)}, the light-on time: s (3600 s h⁻¹).`,
+    `At light-on, ${im(t, eq, mn('0'))}: a point with the last reading before it (${im(r, eq, mn('0'))} if there is none).`)
+  + step('Production', `What was made from the interval's start ${im(ts)} to ${im(t)}: the area under ${im(r)}, by trapezoids, ${im(r)} a straight line from one point to the next.`,
+    [display(P, of(t), eq, `<msubsup>${mo('∫')}${ts}${t}</msubsup>`, r, thin, up('d'), tp),
+     display(P, of(t), eq, `<munderover>${mo('∑')}${mrow(i, eq, mn('0'))}${mrow(n, mo('−'), mn('1'))}</munderover>`,
+       mfrac(mrow(msub(r, i), mo('+'), msub(r, i1)), mn('2')), dot, paren(msub(t, i1), mo('−'), msub(t, i)))],
+    `${im(P)}: µmol g⁻¹ or µmol cm⁻²; ${im(t)}: h.`,
+    `${im(msub(t, mn('0')), eq, ts)} and ${im(msub(t, n), eq, t)}, with the injections and light-on in between; ${im(msub(r, i))} is ${im(r)} at ${im(msub(t, i))}, ${im(msub(r, mn('0')))} and ${im(msub(r, n))} read on the straight line at ${im(ts)} and at ${im(t)}; ${im(P, of(ts), eq, mn('0'))}.`)
+  + step('Mean rate', 'The production over the interval divided by its length: the bar and mean_rates.csv.',
+    [display(rbar, eq, mfrac(mrow(P, of(te)), mrow(te, mo('−'), ts)))],
+    `${im(rbar)}: as ${im(r)}; ${im(ts)}, ${im(te)}: h, the interval taken within the gas's first and last points.`)
+  + '</ol><h5 class="instr-math-head">Worked example</h5>'
+  + `<p class="instr-math-lead">0.05 %mol in ${im(Q, eq, mn('2'), unit('mL', ['min', '−1']))} at ${im(T, eq, mn('25'), unit('°C'))} and ${im(p, eq, mn('1'), unit('atm'))}, over ${im(m, eq, mn('15'), unit('mg'))} or ${im(A, eq, mn('2.5'), unit(['cm', '2']))}; each value goes on unrounded into the next step.</p><ol class="instr-steps instr-example">`
+  + `<li><b>Mole fraction.</b><div class="instr-eqbox">${display(x, eq, mfrac(mn('0.05'), mn('100')), eq, sci('5', '−4'))}</div></li>`
+  + `<li><b>Molar flow.</b><div class="instr-eqbox">${display(Vm, eq, mfrac(mrow(mn('0.0820573661'), times, paren(mn('25'), mo('+'), mn('273.15'))), mrow(mn('101325'), slash, mn('101325'))), eq, mn(ex.vm), unit('L', ['mol', '−1']))}`
+  + `${display(nd, eq, mfrac(mn('2'), mn('1000')), dot, mfrac(mn('60'), mn(ex.vm)), eq, sci(ex.nd, '−3'), unit('mol', ['h', '−1']))}</div></li>`
+  + `<li><b>Flow of the gas.</b><div class="instr-eqbox">${display(F, eq, paren(sci('5', '−4')), times, paren(sci(ex.nd, '−3')), times, pow10('6'), eq, mn(ex.F), unit('µmol', ['h', '−1']))}</div></li>`
+  + `<li><b>Rate.</b> By mass, then by area.<div class="instr-eqbox">${display(r, eq, mfrac(mn(ex.F), mrow(mn('15'), slash, mn('1000'))), eq, mn(ex.rm), unit('µmol', ['g', '−1'], ['h', '−1']))}`
+  + `${display(r, eq, mfrac(mn(ex.F), mn('2.5')), eq, mn(ex.ra), unit('µmol', ['cm', '−2'], ['h', '−1']))}</div></li>`
+  + '</ol></div>';
+})();
+export const gcInfo = cardInfo => `Set catalyst mass (m) or, for a film, its area (A), carrier gas flow rate (Q), its temperature (T) and pressure (p), the light-on time and the integration interval for each sample to compute mean H₂ and O₂ production rates; <b>Normalize by</b>, on the injection delay's row, chooses for the whole card what the rates are divided by: the photocatalyst's <b>mass</b> m in mg (rates in µmol g⁻¹ h⁻¹, production in µmol g⁻¹; the default, and how a project saved before v540 opens; to v540 in mmol g⁻¹ h⁻¹ and mmol g⁻¹, so a project saved before shows the same results, their numbers 1000 times what they were) or its <b>area</b> A in cm² (µmol cm⁻² h⁻¹ and µmol cm⁻², the usual units for films); with area the m column becomes A, with its own all / one, the masses and the areas both kept, so that switching back loses neither; the plots, the bar chart, the CSVs and their headers follow the choice. the <b>H₂ / O₂</b> chips on each plot choose the gases drawn, for Analysis and for Results; the CSVs have every gas, whichever is drawn. Two layouts are read. The <b>default</b>: a header naming the Injection Date and each gas's %mol column (H₂, O₂). The <b>alternative</b>, the instrument's tab-separated .txt export: a header naming Inject Time and its Area and Amount columns, over a line naming each column's gas (Hydrogen, Nitrogen, Oxygen); H₂ and O₂ are read from the Amount columns, in ppm, and worked out as %mol (ppm / 10⁴), gc_raw.csv writing them in ppm (its column headed so), the Area columns and N₂ left out, and an info alert under the drop zone names each file read so. An empty H₂ or O₂ cell, or one reading n.a., leaves that injection out of that gas only, and the alert under the drop zone says how many were skipped; a blank line, a line of separators alone and a row with no date (n.a.) are passed over. An injection date is the day, the month and the year between slashes, the month a number or an English name (Nov, November), the year of 4 digits or 2 (26 is 2026), then the time, h:mm or h:mm:ss, with AM/PM or in 24 hours (14:13). Numeric dates are read month/day, as the instrument writes them, or day/month in a file where some do not exist so and every one does that way, its times going on as the rows do; a month named is read where it stands (13/Nov/26 is 13 November). A row whose date does not exist (2/30, 13/13, 31/Nov, 13:00 PM) is left out, and the alert says either. Use the <b>all / one</b> toggles to share a value across samples or set it per sample. <b>T</b> is ${T_TITLE}. <b>p</b> is ${P_TITLE}; its unit (atm, bar, kPa, mbar, Torr = mmHg, psi) is chosen in its column's header, which converts the values shown, not the pressure. A <b>mass-flow controller</b> (an Alicat MC, say) gives a mass flow as the volume it would take at its reference conditions (sccm, slpm), so the molar flow is n/t = p<sub>ref</sub>·Q/(R·T<sub>ref</sub>) with the controller's reference T and p: the real temperature and pressure of the gas, in the lines or in the reactor, do not enter. Set T and p to its standard conditions: Alicat's default is 25 °C and 14.696 psia (1 atm) for its standard units, 0 °C and 1 atm for its normal ones (NCCM, NLPM), and the device's STP/NTP menu can change them. Its reading is right for the gas it is set to: another gas or a mixture needs that gas chosen on the device, or its correction factor. ${RATES_HTML}A new analysis starts at 25 °C and 1 atm; a project saved before T existed keeps the 0 °C its rates were worked out at, and one saved before p, the 1 atm. The <b>injection delay</b> moves every injection on from its logged date to the moment the sample is actually injected; <b>Auto</b> uses 60.6 s. In per-sample interval mode the vertical lines are coloured by sample — hover or select a table row to highlight its interval on the plot (and vice-versa). <b>Replicates</b>: the <b>Sample</b> column of the file list says which sample each file is — its own (as it starts), or another file's, named by that file's label (a label renamed shows at once and changes no link); a file that heads a group, set to another, takes its group along, and a head removed leaves its group to its next file. The time plots stay one per file; the mean-rate bar chart has one bar per sample, named after its head's label (the first included file's, the head left out), its height the mean of its included files' mean rates, each worked out with its own parameters, and its error bar the files' standard deviation (n − 1 under it; none for a single file); a file left out is out of the mean and of n. With replicates (a sample of more than one included file), mean_rates.csv has a row per sample (each gas's mean, ± and n) and mean_rates_by_file.csv a row per file, as mean_rates.csv has without them. <b>Raw chromatograms</b> (v544): a table paired with its raw chromatograms (they share a row of the file list) takes its H₂ and O₂ from the nearest <b>Integration</b> card above this one, re-integrated, the table still giving the injection times, when the table has as many injections (its rows with a date and a value) as there are chromatograms and the gas has a calibration (the standards, or the GC software's scale taken over); everything after is as above. Where it cannot, the table's own values are used, and an alert at the top of this card says why (the counts differ, no calibration and too few injections to take the software's scale, the integration not done yet). A card with no Integration card above it uses the tables, as before. gc_raw.csv then says, at each injection, which value was used (the <i>source</i> column), with the table's, the re-integrated one and the fitted area beside it. ${cardInfo}`;
+
+/* ---- The parameter table's cells ---- */
+// A numeric text cell; `state` = 'on' (editable), 'ro' (read-only) or 'off' (disabled).
+function numCell(cls, attrs, value, state, u){
+  const dis = state==='off' ? 'disabled' : (state==='ro' ? 'readonly' : '');
+  return `<input class="${cls}" ${attrs} type="text" inputmode="decimal" value="${u.esc(value)}" ${dis} style="width:100%">`;
+}
+const modeChip = (pair, mode, u)=> `<button type="button" class="mode-chip gc-toggle" data-pair="${pair}" title="Switch all / one">${u.esc(mode)}</button>`;
+// A header over a field: its name on the field's left edge, its all/one pill on the
+// field's right edge.
+const thHead = (label, chip)=> `<div class="gc-th"><span>${label}</span>${chip}</div>`;
+
+/* ---- A card's markup ---- */
+const pre = a => 'gc' + a.id;
+// A plot of a card's, with the gas chips of its section (`sec`: 'a' Analysis, 'r' Results) over it.
+const gasPlot = (u, id, sec, o)=> u.plotWrap(id, { mod: 'gc', extra: `\n              <span class="gc-gas-sel" data-gas-sec="${sec}"></span>`, ...o });
+export const cardBody = (a, u)=> `
+      <div class="gc-src" id="${pre(a)}Src"></div>
+      <div class="peak-box" style="margin-top:0;margin-bottom:14px">
+        <div class="peak-box-head">
+          <span class="txt-mini">Parameters</span>
+          <button class="btn table-csv-btn" data-csv-mod="gc" data-csv-names="gc_info.csv" title="Download CSV">${u.CSV_ICON}</button>
+        </div>
+        <div class="gc-param-wrap" id="${pre(a)}ParamTableWrap"></div>
+      </div>
+      <div class="row" style="align-items:flex-start">
+        <div class="col">
+          <p class="txt-caption">Production Rate</p>${gasPlot(u, pre(a) + 'Svg1', 'a', { cls: 'plot-strip', csv: 'gc_raw.csv', name: 'GC_rate.svg', legend: pre(a) + 'Legend' })}
+        </div>
+      </div>
+      <div id="${pre(a)}Legend" class="legend" style="margin-top:8px"></div>`;
+export const resHtml = (a, u)=> `
+      <h4 class="res-an-title"></h4>
+      <div class="row res-row">
+        <div class="col">
+          <p class="txt-caption">Production Rate</p>${gasPlot(u, pre(a) + 'SvgRate', 'r', { csv: 'gc_results.csv', name: 'GC_results_rate.svg', legend: pre(a) + 'ResLegend' })}
+        </div>
+        <div class="col">
+          <p class="txt-caption">Production</p>${gasPlot(u, pre(a) + 'SvgCum', 'r', { csv: 'gc_results.csv', name: 'GC_results_cumulative.svg', legend: pre(a) + 'ResLegend' })}
+        </div>
+      </div>
+      <div id="${pre(a)}ResLegend" class="legend" style="margin-top:8px"></div>
+      <p class="txt-caption" style="margin-top:14px">Mean Production Rate</p>${gasPlot(u, pre(a) + 'SvgBar', 'r', { cls: 'plot-wide', csv: 'mean_rates.csv', name: 'GC_results.svg', legend: pre(a) + 'BarLegend' })}
+      <div id="${pre(a)}BarLegend" class="legend" style="margin-top:8px"></div>`;
+
+/* ---- The parameter table ----
+   The card's parameters (P), a row a sample of `files` (the included), the delay's row
+   above; none with no sample. Its fields' wiring is gc.js's (wireParamTable). */
+export function paramTableHtml(P, files, u){
+  if (!files.length) return '';
+  // Sample 9 | m 9 | Q 11.5 | T 9 | p 12 | Light-on 20.5 | start 9 | end 9 | warnings 11 (%):
+  // at the table's least width, 1000 px (style.css's .gc-param-table min-width), each
+  // header's pill beside its name (the name on two lines where it must) and the date
+  // field whole. At 860 px, the least width to v500, Q's pill already ran over its
+  // cell, and the date field by a few px; with p's column, every pill would.
+  const cg = `<colgroup><col style="width:9%"><col style="width:9%"><col style="width:11.5%"><col style="width:9%"><col style="width:12%"><col style="width:20.5%"><col style="width:9%"><col style="width:9%"><col style="width:11%"></colgroup>`;
+  const shareState = mode => mode==='all' ? 'on'  : 'off';   // shared "All" row cell
+  const cellState  = mode => mode==='all' ? 'ro'  : 'on';    // per-sample row cell
+  // Column order: Sample | m | Q | T | p | Light-on | [Interval: start end] | warnings.
+  // The delay, one for every sample, on a row of its own above the table and on its
+  // columns: its name under Sample, its value under m, the Auto switch under Q.
+  // p's unit is chosen in its header, where the other columns name theirs: in the
+  // header's own type, its box let out of the line's height as the pill's is (-3 px),
+  // so that p's name and pill sit level with the others' and the box with the pill.
+  /* The m column is the area A where the card normalises by it (NORM, v540): its own
+     values, all/one and field (data-f "a"), the masses kept as they were. The choice
+     on the delay's row, under T and p. */
+  const isA = P.norm === 'area', nf = isA ? 'a' : 'm', nMode = isA ? P.aMode : P.mMode, nShared = isA ? P.aShared : P.mShared, nOf = isA ? aOf : mOf;
+  const nTitle = isA ? ' title="A: the area of the photocatalyst (a film\'s), in cm²: the rates are per cm²"' : '';
+  const normSel = `<label class="pp-check gc-norm-lab" title="What the rates are divided by, for every sample of this card: the photocatalyst's mass (µmol g⁻¹ h⁻¹) or, for a film, its area (µmol cm⁻² h⁻¹)">Normalize by <select class="gc-norm" aria-label="Normalize by" style="width:auto;margin:-3px 0;padding:0 2px;border-radius:5px;font:inherit;color:var(--text)">${
+    NORMS.map(v=> `<option value="${v}"${v === P.norm ? ' selected' : ''}>${v}</option>`).join('')}</select></label>`;
+  const unitSel = `<select class="gc-unit" aria-label="Unit of p" title="The unit p is shown and written in: switching it converts the values, not the pressure (Torr: mmHg)" style="width:auto;margin:-3px 0;padding:0 2px;border-radius:5px;font:inherit;color:inherit">${
+    Object.keys(P_UNITS).map(un=> `<option value="${un}"${un === P.pUnit ? ' selected' : ''}>${un}</option>`).join('')}</select>`;
+  let html = `<div style="overflow-x:auto"><table class="gc-param-table gc-delay" style="width:100%;table-layout:fixed">${cg}<tbody>
+        <tr><td class="fname">Injection delay (s)</td>
+          <td>${numCell('gcDelay', 'title="From the logged injection date to the actual injection, in seconds"', injDelay(P), P.delayAuto ? 'off' : 'on', u)}</td>
+          <td><label class="pp-check" title="Use the method's delay, ${INJ_DELAY_AUTO} s"><input type="checkbox" class="gcDelayAuto"${P.delayAuto ? ' checked' : ''}> Auto</label></td>
+          <td colspan="2">${normSel}</td><td colspan="4"></td></tr></tbody></table>
+        <table class="gc-param-table" style="width:100%;table-layout:fixed">${cg}<thead>
+        <tr><th rowspan="2">${thHead('Sample', '')}</th>
+          <th rowspan="2"${nTitle}>${thHead(NORM[P.norm].col, modeChip(nf,nMode,u))}</th>
+          <th rowspan="2">${thHead('Q (mL/min)', modeChip('q',P.qMode,u))}</th>
+          <th rowspan="2" title="T: ${T_TITLE}">${thHead('T (°C)', modeChip('t',P.tMode,u))}</th>
+          <th rowspan="2" title="p: ${P_TITLE}">${thHead('p ' + unitSel, modeChip('p',P.pMode,u))}</th>
+          <th rowspan="2">${thHead('Light-on date/time', '')}</th>
+          <th colspan="2" class="gc-grp"><div class="gc-grp-in">Interval (h)</div></th>
+          <th rowspan="2"></th></tr>
+        <tr><th>${thHead('start', modeChip('start',P.startMode,u))}</th><th>${thHead('end', modeChip('end',P.endMode,u))}</th></tr></thead><tbody>`;
+  // Shared "all" row
+  html += `<tr class="gc-all-row"><td class="fname">All</td>
+        <td>${numCell('gcShared',`data-f="${nf}"`,nShared,shareState(nMode),u)}</td>
+        <td>${numCell('gcShared','data-f="q"',P.qShared,shareState(P.qMode),u)}</td>
+        <td>${numCell('gcShared','data-f="t"',P.tShared,shareState(P.tMode),u)}</td>
+        <td>${numCell('gcShared','data-f="p"',inUnit(P.pShared, P.pUnit),shareState(P.pMode),u)}</td>
+        <td></td>
+        <td>${numCell('gcShared','data-f="start"',P.startShared,shareState(P.startMode),u)}</td>
+        <td>${numCell('gcShared','data-f="end"',P.endShared,shareState(P.endMode),u)}</td>
+        <td></td></tr>`;
+  // Per-sample rows
+  files.forEach((f,i)=>{
+    html += `<tr class="gc-row" data-i="${i}">
+          <td class="fname" title="${u.esc(f.label)}">${u.esc(f.label)}</td>
+          <td>${numCell('gcCell','data-i="'+i+'" data-f="'+nf+'"',nOf(P, i),cellState(nMode),u)}</td>
+          <td>${numCell('gcCell','data-i="'+i+'" data-f="q"',qOf(P, i),cellState(P.qMode),u)}</td>
+          <td>${numCell('gcCell','data-i="'+i+'" data-f="t"',tOf(P, i),cellState(P.tMode),u)}</td>
+          <td>${numCell('gcCell','data-i="'+i+'" data-f="p"',inUnit(pOf(P, i), P.pUnit),cellState(P.pMode),u)}</td>
+          <td class="gc-date-cell" data-i="${i}"></td>
+          <td>${numCell('gcCell','data-i="'+i+'" data-f="start"',startOf(P, i),cellState(P.startMode),u)}</td>
+          <td>${numCell('gcCell','data-i="'+i+'" data-f="end"',endOf(P, i),cellState(P.endMode),u)}</td>
+          <td class="gc-warn-cell">${lightOnWarnHtml(P, files, i)}</td>
+        </tr>`;
+  });
+  html += `</tbody></table></div>`;
+  return html;
+}
+
+// The warning beside a sample's row when its light-on time is before (or at) its first
+// injection (gc-model.js lightOnWarn).
+export function lightOnWarnHtml(P, files, i){
+  return lightOnWarn(P, files, i)
+    ? '<div class="alert warn" style="margin:0;padding:6px 8px;font-size:11px">⚠ Light-on time is before first injection</div>'
+    : '';
+}
+
+/* One line per sample per gas, the sample's colour throughout and the gas told by the
+   dash pattern (gc.js drawGasLines); the legend's entries follow the same rule, with a
+   dashed key for a dashed gas. */
+export function gasLegendHtml(d, shown, u){
+  return shown.filter(g=>d.gas[g.key]).map(g=>{
+    const key = g.dash
+      ? `<i class="mk-dash" style="color:${u.esc(d.color)}"></i>`
+      : `<i style="background:${u.esc(d.color)}"></i>`;
+    return `<span>${key}${u.esc(seriesName(d.label, g, shown))}</span>`;
+  }).join('');
+}
+
+/* The file list's Sample column (REPLICATES, gc-model.js): a select of the file itself and
+   the heads, in list order (`all`), on its head's; each option the file's name as its
+   value (the link) and its label as its text (to v534 its name), the name in its title;
+   dimmed with the row when the file is left out, as its label is. A label renamed is shown
+   at once (gc.js sampleNames). */
+// (by name: a pair's row is a copy of its record, gc.js traceRows)
+const sampleOpt = (g, h, u)=> `<option value="${u.esc(g.name)}" title="${u.esc(g.name)}"${g.name === h.name ? ' selected' : ''}>${u.esc(g.label)}</option>`;
+export function sampleCell(all, f, i, u){
+  // Raw chromatograms with no table are no sample: no choice (v544).
+  if (!isTable(f)) return '';
+  const h = headOf(f, byName(all).by);
+  return `<select class="file-sample" data-i="${i}" aria-label="Sample" title="The sample this trace is: its own, or the one another trace heads (its replicates), by its label">${
+    all.filter(g=> g.name === f.name || (isHead(g) && isTable(g))).map(g=> sampleOpt(g, h, u)).join('')}</select>`;
+}
+
+/* ---- The alerts under the drop zone ----
+   Each read off the loaded files (`tables`: the tables of the list) each time, not kept
+   from the drop, so it is there again when the project is reopened (or its tab brought
+   back) and goes with a file removed; dismissed, a file's mark (`seen`, gc.js) keeps it
+   away for the files on show through undo and redo. */
+/* The empty cells skipped, per file and gas: the blank cells of a row kept, and the
+   rows with none of the file's gases (dropped at parse, `emptyRows`, an empty cell for
+   each gas it has). Dismissed, it stays away for the files on show through undo and redo:
+   the mark is on the file's data as this load holds them, which the undo steps share,
+   so a file dropped anew (a same-named one too), a reopened project, a tab brought back
+   are named again, and a dismissal in one tab leaves the others' files named. */
+export function blankAlertsHtml(tables, seen, u){
+  const lines = [];
+  tables.forEach(f=>{
+    const n = blankCounts(f);
+    if (!n.some(Boolean) || seen.has(f.gas)) return;
+    lines.push(u.esc(f.name) + ': ' + GASES.map((g, j)=> n[j] ? `${n[j]} empty ${g.label} cell${n[j] > 1 ? 's' : ''}` : '').filter(Boolean).join(', '));
+  });
+  return lines.length ? u.buildAlertsHtml([], lines, 'Empty cells skipped: each injection is left out of that gas only (its rate, production and mean come from the injections with a value):', '', 'gc-dismiss-blank') : '';
+}
+/* The injection dates, said per file: a file read as day/month, the rows left out with
+   a date that does not exist (gc-model.js readGc). Dismissed as the empty cells are, on a
+   mark of its own. */
+export function dateAlertsHtml(tables, seen, u){
+  const lines = [];
+  let order = false;
+  tables.forEach(f=>{
+    // (a project's .json may hold anything: only true and a whole count go into markup)
+    // A file whose dates name their month (monthNames) has no order: none is named.
+    const dm = f.dayMonth === true, named = f.monthNames === true && !dm, n = u.num(f.badDates, 0, v=> Number.isInteger(v) && v > 0), say = [];
+    if (dm) say.push('dates read as day/month (as month/day, some do not exist)');
+    if (n) say.push(`${n} row${n > 1 ? 's' : ''} left out: ${n > 1 ? 'their' : 'its'} injection date does not exist${named ? '' : ` (as ${dm ? 'day/month' : 'month/day'})`}`);
+    if (say.length && !seen.has(f.gas)){ lines.push(u.esc(f.name) + ': ' + say.join('; ')); if (!named) order = true; }
+  });
+  return lines.length ? u.buildAlertsHtml([], lines, `Injection dates${order ? ' (the instrument writes them month/day)' : ''}:`, '', 'gc-dismiss-dates') : '';
+}
+/* The files read as the alternative export (gc-model.js readGc, `altExport`), said in an
+   info alert (v539): a file name a line, dismissed as the empty cells are, on a mark of
+   its own. */
+export function altAlertsHtml(tables, seen, u){
+  const lines = tables.filter(f=> f.altExport === true && !seen.has(f.gas)).map(f=> u.esc(f.name));
+  return lines.length ? u.alertHtml('info', 'Read as the alternative export (Inject Time, Amount in ppm), not the default format:', lines, 'gc-dismiss-alt') : '';
+}
+/* The files that cannot be what their pairs need (PAIRS, gc-model.js), said under the drop
+   zone: two tables (the first used), two files of raw chromatograms, and raw chromatograms
+   with no table, which Analysis leaves out (`all`, every record). Dismissed as the others
+   are, on a mark of its own: a file's bytes (pairMarks). */
+export function pairAlertsHtml(all, seen, u){
+  const lines = [];
+  all.forEach(r=>{
+    if (pairMarks(r).some(b=> seen.has(b))) return;
+    const [a, b] = rowFiles(r);
+    if (b && isTable(a) && isTable(b)) lines.push(`${u.esc(r.label)}: two tables paired (${u.esc(a.name)}, ${u.esc(b.name)}): the first is used, as it is alone; ${u.esc(b.name)} is ignored.`);
+    else if (b && isTcd(a) && isTcd(b)) lines.push(`${u.esc(r.label)}: two files of raw chromatograms paired (${u.esc(a.name)}, ${u.esc(b.name)}): shown in Integration, left out of Analysis (no injection times).`);
+    else if (!b && isTcd(a)) lines.push(`${u.esc(a.name)}: raw chromatograms with no table: shown in Integration, left out of Analysis (no injection times).`);
+  });
+  return lines.length ? u.buildAlertsHtml([], lines, 'Pairs to check (a table and its raw chromatograms share a row; drag a file by its own grip to pair it):', '', 'gc-dismiss-pairs') : '';
+}
+
+/* Where a card's values came from, said at its top (v544): the samples re-integrated, and
+   how each gas is made a concentration (the standards, or the GC software's scale, an info
+   alert); the samples paired with raw chromatograms that keep their table, and why (a
+   warning). Nothing while no sample is paired or no Integration card is above (`name`,
+   that card's). */
+export function srcAlertsHtml(dataTables, name, u){
+  const used = [], kept = [], txt = Object.fromEntries(GASES.map(g=> [g.key, gasTxt(g)]));
+  const k5 = v => Number.isFinite(v) ? String(+v.toPrecision(5)) : '?';
+  const how = (s, g)=> s.how[g] === 'cal' ? 'calibrated by the standards' : `calibration taken from the GC software's table (k = ${k5(s.k[g] && s.k[g].k)})`;
+  dataTables.forEach(d=>{
+    const s = d.src;
+    if (!s) return;
+    if (!s.gas){ kept.push(`${u.esc(d.label)}: ${u.esc(s.why)}`); return; }
+    const re = Object.keys(s.how).filter(g=> s.how[g] !== 'table'), tb = Object.keys(s.how).filter(g=> s.how[g] === 'table');
+    if (re.length) used.push(`${u.esc(d.label)}: ${re.map(g=> `${txt[g] || u.esc(g)} ${u.esc(how(s, g))}`).join('; ')}`);
+    tb.forEach(g=> kept.push(`${u.esc(d.label)}, ${txt[g] || u.esc(g)}: ${u.esc(s.why[g] || 'the table')}`));
+  });
+  return (used.length ? u.alertHtml('info', `H₂ and O₂ re-integrated from the raw chromatograms (${u.esc(name)}), the times from the tables:`, used) : '')
+    + (kept.length ? u.alertHtml('warn', `The GC software's table used instead of the re-integration (${u.esc(name)}):`, kept) : '');
+}

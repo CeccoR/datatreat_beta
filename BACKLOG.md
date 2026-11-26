@@ -194,7 +194,7 @@ was proposed; nothing here is in the code yet.
 - **Long functions.** A handful of functions run to hundreds of lines: `createRietveld`
   (xrd-rv.js, ~1300), `createPeakAnalysis` (xrd-peaks.js, ~1100), `autoRefine`
   (xrd-rietveld.js, ~800), `shapeView` (xrd-shape3d.js, ~750), `drawFigure` (figure.js,
-  ~560), and the modules that are one closure each (tauc.js to v555, gc.js, sem.js). Not a bug:
+  ~560), and the modules that are one closure each (tauc.js to v555, gc.js to v556, sem.js). Not a bug:
   in them a change acts far from where it is made, the parts cannot be tested one by
   one, and a closure holds on to whatever it once referenced (up to v473 a closed
   Scherrer card stayed in memory through its keyboard listener). Proposed: no rewrite;
@@ -286,7 +286,48 @@ was proposed; nothing here is in the code yet.
   its source against the model on random spectra, states, lines and files, 13213
   comparisons, none different. tests/taucmodel.test.mjs keeps the calculations' tests, the
   fixtures' CSVs as v555's page wrote them and 36 cases as v555's tauc.js gave them (golden
-  digests). Still one closure each: gc.js and sem.js.
+  digests). Done for gc.js in v557, the same way: what a Production Rate card works out in
+  `gc-model.js` (the gases, the molar volume and the pressure's units; a file read, its
+  injection dates in every form both exports write, day/month found and the dates that do
+  not exist left out, the default layout and the alternative .txt export, raw chromatograms
+  told by what they hold; a file as a project holds it, a table, raw chromatograms or a
+  pair; the replicates' links and samples, the pairs' rows regrouped; a card's parameters
+  in all and one mode and the toggle's refusal, its tables, the mean rates over the interval
+  and by sample, the Results' series cut to the interval, the plots' ranges, interval lines
+  and bars, the CSVs, the state saved and read back from every version) and its markup in
+  `gc-html.js` (the instructions with their worked example, a card's body and its section
+  of the Results, the parameter table, the legends, the Sample column, the alerts under the
+  drop zone and at a card's top), plain functions tested in Node, handed utils.js's and
+  modkit.js's helpers; the page left in `gc.js`, no longer one closure: the instance a state
+  object (S), each Production Rate card a state object (C) over its parameters (P), its
+  table's fields wired by named functions (`wireDelay`, `wireUnit`, `wireNorm`, `wireNums`,
+  `wireBounds`, `wireDates`, `wireRows`), its redraw in stages (`compute`: `computeTables`,
+  `renderGasSel`, `renderPlots`, `updateRegression` with `drawData`, `drawIntervals`,
+  `drawResultPlots`, `drawBarChart`); the Integration cards (gc-integ.js) as they were. The
+  file 1780 lines to 786 (createGc 1312 to 41, gcCard 860 to makeCard's 41, its parameter
+  table 179 to 15 and its wiring, the longest function 41); the model 927, the markup 326. A
+  walk through a Sample select (setSample) no longer keeps the files it named, a file removed
+  too, until the next choice: it is let go as the list is drawn anew by any other change.
+  The same operations in the same order: in the browser, a session of 389 steps (the
+  fixtures, a UTF-16 table with blank and n.a. cells and an Analysis column, the alternative
+  export, a day/month file, dates that do not exist, month names, a file refused and one
+  dropped twice; the alerts dismissed; m, A, Q, T and p shared and per sample, the units,
+  mass and area, a value refused, the delay, light-on moved; the intervals per sample, a
+  bound refused and an all/one chip refused, rows and lines hovered and picked; the gas
+  chips; replicates chosen, walked and regrouped, a head left out and removed, a label;
+  undo and redo; a second card folded through a file left out, a label and a resize, closed
+  and brought back, moved; raw chromatograms paired with their tables through an
+  Integration card, a count that differs and too few injections, calibrated by standards,
+  the cards moved, a pair undone and two tables paired; image, table and plot exports,
+  saved, reloaded, a second GC tab, a saved project's CSVs; 20 old projects and 220 states
+  malformed) gave v556's DOM, field values, state, history, results made, banners, focus,
+  downloads and CSVs at every step; in Node, v556's gc.js and this one, each run from its
+  source on a page of stubs, through 3000 random sessions (files of every form, pairs,
+  states old and malformed, files removed, left out, moved, regrouped and relabelled, Sample
+  walks, cards added, folded, closed and moved, results coming in, the tab hidden): 2.2
+  million entries each, none different. tests/gcmodel.test.mjs keeps the calculations'
+  tests, the fixtures' CSVs as v556's page wrote them and 60 cases as v556's gc.js gave them
+  (golden digests). Still one closure: sem.js.
   The others when work takes us into them.
 - **The browser storage is shared with every page of the same origin.** On GitHub Pages
   the app lives at `ceccor.github.io/datatreat_beta/`, and every project published under
