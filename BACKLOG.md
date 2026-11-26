@@ -194,7 +194,7 @@ was proposed; nothing here is in the code yet.
 - **Long functions.** A handful of functions run to hundreds of lines: `createRietveld`
   (xrd-rv.js, ~1300), `createPeakAnalysis` (xrd-peaks.js, ~1100), `autoRefine`
   (xrd-rietveld.js, ~800), `shapeView` (xrd-shape3d.js, ~750), `drawFigure` (figure.js,
-  ~560), and the modules that are one closure each (tauc.js, gc.js, sem.js). Not a bug:
+  ~560), and the modules that are one closure each (tauc.js to v555, gc.js, sem.js). Not a bug:
   in them a change acts far from where it is made, the parts cannot be tested one by
   one, and a closure holds on to whatever it once referenced (up to v473 a closed
   Scherrer card stayed in memory through its keyboard listener). Proposed: no rewrite;
@@ -256,6 +256,37 @@ was proposed; nothing here is in the code yet.
   elements, none different. 24 figures kept in tests/figlayout.test.mjs (golden digests of
   `drawFigure`'s markup on a recording page, figure.js run from its source) beside tests of
   the calculations. Still long in figure.js: `wireControls` (~370), the controls' wiring.
+  Done for tauc.js in v556, the first of the modules that were one closure: what DRS works
+  out in `tauc-model.js` (the energies, a file read and its points and notes, the
+  reflectance, the curves over the points with a value, the window scan and its fit, E_g,
+  E_U and the Tauc baseline's part of the subtracted one's error, the suggestion's edge, a
+  card's parameters and lines in all and one mode, a project's to v514 and v515 to v519's
+  widths in eV, a file taken back in, the panel's state saved and read back, the
+  references, the cards of a project from before them, the Results' words, series and
+  ranges, the CSVs) and its markup in `tauc-html.js` (the instructions, the cards' bodies,
+  a card's section of the Results, the file list's note, the alerts), plain functions tested
+  in Node, handed utils.js's and modkit.js's helpers; the page left in `tauc.js`, no longer
+  one closure: the instance is a state object (S) the functions at module level take, each
+  card's panel a small object over the model with its plot's state (V), its redraw in named
+  stages (`drawPanel`: `drawCurve`, `drawFits`, `drawLines`), the Results' and the
+  references' functions each of S. The file 2027 lines to 995 (createTauc 1388 to 33,
+  makePanel 384 to 36, the longest function 47); the model 1104, the markup 178. Two
+  closures that held what was dead let go: a line's drag handlers held the redraw that
+  made them (that sample's curves and fits) until the next, and the list of Urbach cards
+  a change of the cards had moved stayed after it (closed cards' records with it). The same
+  operations in the same order: in the browser, a session of 100 steps (four spectra, the
+  Cary's %R export and a file of no standard format among them; every analysis card, its
+  exponent, windows, lines dragged, Suggest, all and one, the sample stepped and picked,
+  the reference chosen, none and moved to another card, a card moved, switched, folded,
+  closed, a label, a file left out and removed, seven undos and four redos, the tab hidden
+  and shown, the window resized, saved, reloaded, exported and imported; projects of v514
+  in all and one mode, from before the cards, of v515 to v519 in eV, malformed in 270 ways,
+  with points of F(R) ≤ 0) gave v555's DOM, field values, state, saved state, history,
+  results made and CSVs at every step, and its plots' image exports at eight; in Node, v555's tauc.js run from
+  its source against the model on random spectra, states, lines and files, 13213
+  comparisons, none different. tests/taucmodel.test.mjs keeps the calculations' tests, the
+  fixtures' CSVs as v555's page wrote them and 36 cases as v555's tauc.js gave them (golden
+  digests). Still one closure each: gc.js and sem.js.
   The others when work takes us into them.
 - **The browser storage is shared with every page of the same origin.** On GitHub Pages
   the app lives at `ceccor.github.io/datatreat_beta/`, and every project published under
