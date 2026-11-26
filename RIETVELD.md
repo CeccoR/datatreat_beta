@@ -80,10 +80,11 @@ The document follows the code as of v425. Functions are named with their file, e
 | `xrd-rv-pool.js` | 170 | The Rietveld workers' pool: a run's patterns on several workers at once, written in the patterns' order; one cap of jobs at once for every run of the browser, through Web Locks (v518). |
 | `xrd-rv-model.js` | 691 | The card's calculations, with no DOM: phases from CIFs, the settings made valid, the worker's payload, the result written, curves, ticks, sizes, CSVs, the state saved and read back (v513: taken out of `xrd-rv.js`). |
 | `xrd-rv-html.js` | 246 | The card's words and markup that need no page (v513: taken out of `xrd-rv.js`). |
-| `xrd-shape3d.js` | 1385 | The rotatable 3D view of a crystallite solid (2D canvas, no WebGL). |
-| `xrd-cell3d.js` | 265 | The rotatable 3D view of a phase's unit cell and its atoms, beside the phase list. |
+| `xrd-shape3d.js` | 622 | The rotatable 3D view of a crystallite solid (2D canvas, no WebGL): its canvases, events and paint. |
+| `xrd-shape3d-model.js` | 955 | What the 3D view draws and where, with no DOM: the solid's model and mesh, the ray test, the projection, the lines and cones cut where the solid hides them, the labels' places, the colours, the camera kept (v554: taken out of `xrd-shape3d.js`). |
+| `xrd-cell3d.js` | 266 | The rotatable 3D view of a phase's unit cell and its atoms, beside the phase list. |
 
-The engine modules (`xrd-data`, `xrd-cryst`, `xrd-sg`, `xrd-instr`, `xrd-math`, `xrd-broad`, `xrd-rietveld`, `xrd-widths`) and the card's `xrd-rv-model` and `xrd-rv-html` are pure functions, with no DOM. The page, the worker and Node all import them, so they can be tested under Node (§14).
+The engine modules (`xrd-data`, `xrd-cryst`, `xrd-sg`, `xrd-instr`, `xrd-math`, `xrd-broad`, `xrd-rietveld`, `xrd-widths`) and the card's `xrd-rv-model` and `xrd-rv-html` are pure functions, with no DOM, as is the 3D view's `xrd-shape3d-model`. The page, the worker and Node all import them, so they can be tested under Node (§14).
 
 ### 1.3 What happens on Refine
 
@@ -1955,6 +1956,8 @@ The solid is drawn under the results by a small software renderer on a 2D canvas
 - **Theme.** It follows the app's theme.
 
 **PNG download.** It always has a transparent background, in the light theme's colours, whatever the app's theme.
+
+**Code.** What is drawn, and where, is worked out by plain functions in `xrd-shape3d-model.js` (v554: taken out of `shapeView`, the same operations in the same order); `xrd-shape3d.js` keeps the canvases, the events and the paint's stages. `tests/shape3d.test.mjs` tests the calculations in Node and holds the view's canvas calls on 13 solids to v553's (golden digests).
 
 ### 10.13 The per-line check and the jackknife (`lineCheck`, `lineJack`)
 

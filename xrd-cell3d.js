@@ -8,7 +8,8 @@
    drag (mouse, pen or touch) or the arrow keys turn it about the cell's centre, a
    double click or tap (or Home) puts it back. Nothing runs while it is idle.
 ========================================================= */
-import { matMul, axisAngle, reortho, viewAt, readTheme, drawTriad } from './xrd-shape3d.js';
+import { matMul, axisAngle, reortho, viewAt } from './xrd-shape3d-model.js';
+import { readTheme, drawTriad } from './xrd-shape3d.js';
 
 const DEG = Math.PI / 180;
 const HOME_AZ = -62 * DEG, HOME_EL = 18 * DEG;

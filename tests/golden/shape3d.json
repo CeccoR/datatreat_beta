@@ -1,0 +1,54 @@
+{
+ "ellipsoid": {
+  "digest": "058a066b2fcbbe5e0c6dc05c8936ec69b4a80a7a7442d11e5faf707cb42fadbf",
+  "calls": 100885
+ },
+ "plate": {
+  "digest": "b1608b146936e29001a859c3d7d3f5365534917bef709efe2f41a248dac1bba1",
+  "calls": 52243
+ },
+ "disc": {
+  "digest": "3318e331e8a130c6e0fbbc9d8fa06efc58db19aee5922ec160ff2646b175d472",
+  "calls": 52365
+ },
+ "needle": {
+  "digest": "f8fb2c0950f685694e9c72661bb9912dd8970a854254e374c561ed799b5af063",
+  "calls": 50641
+ },
+ "sheet": {
+  "digest": "c1d0e01ed65cc53cfce2ed42fa6edee8f1a24bdb7069bc397d65bb6fcd0e7c41",
+  "calls": 51542
+ },
+ "rod": {
+  "digest": "085093118d24a79603298c87be6274a0d2de0132942f776388876119e3d108f5",
+  "calls": 56441
+ },
+ "box": {
+  "digest": "010c7224b75b6d3af14af0eefc01401238414cd53d1decdb5e96d83d65eb77ad",
+  "calls": 76979
+ },
+ "ellcyl": {
+  "digest": "d78fb0dfe8c90c6d142287331bd2987e4270b5ad046a5be9afb9c600170f0380",
+  "calls": 86003
+ },
+ "boxsheet": {
+  "digest": "66adc3a60950de222ec4927004112914e2a31d582805aea4ec5e6122812a5cd0",
+  "calls": 35363
+ },
+ "boxrod": {
+  "digest": "2bb9c48a2173038712eab2416282237b720e05612765c8173329dd2c14d8d7ff",
+  "calls": 79937
+ },
+ "degenerate": {
+  "digest": "263138a140042e39ff98aec798629308a6029c887ad4aa95c2ece02f18c79ebe",
+  "calls": 47948
+ },
+ "five": {
+  "digest": "4d44e49b5ee0386b9e021543a01e35d544ed32fc93ec37980866965aea0cdae7",
+  "calls": 166187
+ },
+ "noframe": {
+  "digest": "9f771d96468f467bda73f6fc541c4067b0ce0ed04fbc17d6ee9490e84b6fee5f",
+  "calls": 41778
+ }
+}

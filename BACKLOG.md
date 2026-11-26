@@ -220,7 +220,22 @@ was proposed; nothing here is in the code yet.
   operations in the same order: on 49 synthetic cases through its branches the result, the
   model after it, the progress, the clock's readings and Math.random's calls are v552's bit
   for bit, 26 of them kept in tests/autorefine.test.mjs (golden digests) beside tests of the
-  stages alone. The others when work takes us into them.
+  stages alone. Done for `shapeView` in v554, as for the cards: what it draws, and where, in
+  `xrd-shape3d-model.js` (the solid's model and mesh, the ray test, the home view, the
+  projection, the shading, the fade mask, the lines and cones cut where the solid hides
+  them, the edges, the labels' words and places, the scale bar, the colours and the theme,
+  a turn by drag or key, the camera saved and read back, the canvas's size, the words for a
+  screen reader), plain functions tested in Node; the canvases and events left in
+  `xrd-shape3d.js`, its paint in named stages (`paintSolid`, `paintCones`, `paintEdges`,
+  `paintLines`, `paintMarks`) outside the closure, the layers an object of their own: the file
+  1385 lines to 622, the function 754 to 262, paint 442 to 23. The same operations in the
+  same order: in the browser, 15 solids (plates, needles, sheets, rods, blocks, every
+  direction's case) set, dragged, turned by keys, reset, put back, exported, in both themes,
+  resized, each again at four other sizes and colours, and two unit cells (whose view shares
+  the theme and the triad), 918 steps at each of the pixel ratios 1, 2 and 3, gave v553's
+  canvas calls (11.5 million, every number by its shortest round-trip string), pixels, PNGs
+  and state; 13 cases kept in tests/shape3d.test.mjs (golden digests of the view's calls on
+  a recording page) beside tests of the calculations. The others when work takes us into them.
 - **The browser storage is shared with every page of the same origin.** On GitHub Pages
   the app lives at `ceccor.github.io/datatreat_beta/`, and every project published under
   `ceccor.github.io` is the same origin: any of them can read and write DataTreat's
