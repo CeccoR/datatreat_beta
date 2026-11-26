@@ -1,6 +1,9 @@
 import { svgEl, niceTicks, fmtTick, SUB_DROP, TILT_DY } from './plot.js';
 import { colorPickerUI, palettePickerUI, CP_PALETTES, X_SVG, tiltFits, flashFieldInvalid, dropGap, esc, saveBlob } from './utils.js';
 import { tabOf, TABS } from './tabs.js';
+import * as FL from './figure-layout.js';
+import { PX_MM, PT_PX, SIDES, SUP_K, newAxes, markerShape, lightShade, contrastInk,
+  divsOf, divName, divColor, divTexture, divInv, divOfBar } from './figure-layout.js';
 
 
 /* =========================================================
@@ -17,8 +20,8 @@ import { tabOf, TABS } from './tabs.js';
 
    Ranges: share on -> one range for the whole figure; share off -> every panel gets
    its own, auto from its own data or set by hand. Panels touch, so tick numbers can
-   only be drawn on an edge with free space beside it (see sideFree): with sharing
-   off, the numbers along a shared border belong to the panel that owns that edge and
+   only be drawn on an edge with free space beside it (figure-layout.js sideFree): with
+   sharing off, the numbers along a shared border belong to the panel that owns that edge and
    describe that panel alone. Leave a gap in the grid, or turn the numbers on for the
    side you want, when each panel needs its own scale spelled out.
 
@@ -27,10 +30,14 @@ import { tabOf, TABS } from './tabs.js';
    footer with the exports and a status line, the field kit and the rows dragged by
    their handles; a kind gives the model, its drawing and its controls (openComposer).
    One composer is open at a time, of either kind.
+
+   The plots' figure: what it draws, and where (the ranges, the ticks, the margins and
+   the tilt of the X names, each panel's scales and marks, the axes' numbers and titles,
+   the legends), is worked out in figure-layout.js, plain functions the tests run in
+   Node; drawFigure, below, paints it into the svg in named stages.
 ========================================================= */
 
-const PX_MM = 96 / 25.4;      // CSS px per mm at the nominal 96 dpi
-const PT_PX = 96 / 72;        // CSS px per typographic point
+// (PX_MM, CSS px per mm at the nominal 96 dpi, and PT_PX, per typographic point: figure-layout.js)
 /* One font for the whole figure. The stack is what both the preview and the export
    use, so what you see is what you get; Inter is the app's own face and is embedded
    in the exported file, the rest are faces every system already has. */
@@ -61,7 +68,7 @@ const TEXTURES = {
   vert:    'vertical lines',
 };
 // Point symbols. `-o` is an outline, `-f` is filled; the label carries the glyph so
-// the dropdown reads as the shape it draws.
+// the dropdown reads as the shape it draws (figure-layout.js markerShape draws them).
 const MARKERS = {
   'none': 'none',
   'circle-o': '○ circle', 'circle-f': '● circle',
@@ -69,28 +76,6 @@ const MARKERS = {
   'triangle-o': '△ triangle', 'triangle-f': '▲ triangle',
   'star-o': '☆ star', 'star-f': '★ star',
 };
-
-// One point symbol centred on (cx, cy), sized so every shape reads at the same
-// weight. Returns the tag and attributes for the caller to add().
-function markerShape(kind, cx, cy, r, color, width){
-  const [shape, fillMode] = String(kind).split('-');
-  const filled = fillMode === 'f';
-  const paint = filled ? { fill: color, stroke: color, 'stroke-width': width * 0.5 }
-                       : { fill: 'none', stroke: color, 'stroke-width': width * 0.9 };
-  if (shape === 'circle') return ['circle', { cx, cy, r, ...paint }];
-  if (shape === 'square') return ['rect', { x: cx - r, y: cy - r, width: r * 2, height: r * 2, ...paint }];
-  if (shape === 'triangle'){
-    const h = r * 1.15;
-    return ['polygon', { points: `${cx},${cy-h} ${cx-h*0.95},${cy+h*0.72} ${cx+h*0.95},${cy+h*0.72}`, ...paint }];
-  }
-  // Five-pointed star: alternate outer and inner radii every 36 degrees.
-  const pts = [];
-  for (let i = 0; i < 10; i++){
-    const a = -Math.PI / 2 + i * Math.PI / 5, rr = (i % 2 ? r * 0.45 : r * 1.25);
-    pts.push((cx + rr * Math.cos(a)).toFixed(2) + ',' + (cy + rr * Math.sin(a)).toFixed(2));
-  }
-  return ['polygon', { points: pts.join(' '), ...paint }];
-}
 
 let F = null;                 // the figure model (the plots')
 let K = null;                 // the kind of figure the composer is open on (openComposer)
@@ -200,8 +185,6 @@ function seriesFromPlot(plot, legendEl){
    still exporting real tspans. A source plot states its label as SVG, so it is
    translated into this notation on the way in rather than having its tags stripped,
    which is what used to flatten a Tauc exponent onto the baseline. */
-const RICH_RE = /([\^_])\{([^}]*)\}/g;
-
 function svgLabelToRich(html){
   return String(html || '')
     .replace(/<tspan[^>]*baseline-shift\s*=\s*["']?super[^>]*>([\s\S]*?)<\/tspan>/gi, '^{$1}')
@@ -210,31 +193,16 @@ function svgLabelToRich(html){
     .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
 }
 
-// The pieces of a rich string, in order: {t: text, r: 'super'|'sub'|null}.
-function richParts(str){
-  const out = [];
-  let last = 0;
-  String(str || '').replace(RICH_RE, (m, mark, body, i)=>{
-    if (i > last) out.push({ t: str.slice(last, i), r: null });
-    out.push({ t: body, r: mark === '^' ? 'super' : 'sub' });
-    last = i + m.length;
-    return m;
-  });
-  if (last < String(str || '').length) out.push({ t: String(str).slice(last), r: null });
-  return out;
-}
-
-const RICH_SCALE = 0.72;   // size of a raised/lowered run, relative to the body
-
-// Draws `str` as one <text> with a tspan per run. `at` carries x/y/anchor/transform.
+// Draws `str` as one <text> with a tspan per run (figure-layout.js richParts). `at`
+// carries x/y/anchor/transform.
 // A lowered run drops by a set fraction of `px`, as the page's plots do: "sub" would
 // leave it hanging as far below the line as "super" raises the other above it.
 function richText(add, str, at, px, ink){
   const el = add('text', { ...at, 'font-size': px, fill: ink });
-  for (const p of richParts(str)){
+  for (const p of FL.richParts(str)){
     if (!p.t) continue;
     const sp = svgEl('tspan', p.r
-      ? { 'baseline-shift': p.r === 'sub' ? (-SUB_DROP * px).toFixed(2) : p.r, 'font-size': (px * RICH_SCALE).toFixed(2) }
+      ? { 'baseline-shift': p.r === 'sub' ? (-SUB_DROP * px).toFixed(2) : p.r, 'font-size': (px * FL.RICH_SCALE).toFixed(2) }
       : {});
     sp.textContent = p.t;
     el.appendChild(sp);
@@ -242,19 +210,9 @@ function richText(add, str, at, px, ink){
   return el;
 }
 
-/* Per-panel axis configuration. Each of the four sides is independent:
-     on     — draw the axis line itself
-     major  — major tick marks
-     minor  — minor tick marks (count set per axis, see minorX / minorY)
-     dir    — 'out' | 'in' | 'both'
-     labels — tick numbers
-     title  — the figure's X (bottom/top) or Y (left/right) title next to this side
-   Defaults follow the usual convention: a full left+bottom pair, bare right+top. */
-const SIDES = ['left', 'bottom', 'right', 'top'];
-const newSide = full => ({ on:true, major:true, minor:false, dir:'out', labels:full, title:full });
-const newAxes = () => ({ left:newSide(true), bottom:newSide(true), right:newSide(false), top:newSide(false) });
-
-/* `shareXWith` / `shareYWith` point at the panel this one takes its range from, or
+/* A panel: its cell and span in the grid, its title, its four sides (figure-layout.js
+   newAxes, which says what each holds).
+   `shareXWith` / `shareYWith` point at the panel this one takes its range from, or
    at itself when it stands alone. They only matter while figure-wide sharing is off:
    that is what lets eight panels be scaled in pairs rather than all together or each
    on its own. */
@@ -263,20 +221,6 @@ function newPanel(r, c){ return { r, c, rs: 1, cs: 1, title: '', axes: newAxes()
                                   // Off figure-wide sharing, each panel is on its own
                                   // automatic range until told otherwise.
                                   xAuto: true, yAuto: true }; }
-
-// The panel whose range a panel follows, chasing the links and stopping at a cycle.
-function rangeRoot(i, key){
-  let k = i;
-  for (let guard = 0; guard < F.panels.length + 1; guard++){
-    const p = F.panels[k];
-    const nxt = p && p[key];
-    if (nxt == null || nxt === k || !F.panels[nxt]) return k;
-    k = nxt;
-  }
-  return i;
-}
-// Every panel that ends up on the same root — the ones scaled together.
-const rangeGroup = (i, key)=> F.panels.map((_, k)=> k).filter(k=> rangeRoot(k, key) === rangeRoot(i, key));
 
 function buildModel(plot, opts){
   const strip = svgLabelToRich;
@@ -376,190 +320,33 @@ function buildModel(plot, opts){
   };
 }
 
-/* What the axes actually use: the automatic switch wins over whatever number the
-   field is showing, so nothing has to be zeroed to mean "pick one for me". */
-const stepX = ()=> F.xStepAuto ? 0 : F.xStep;
-const stepY = ()=> F.yStepAuto ? 0 : F.yStep;
-
-// Major ticks for a range: a fixed step when the user set one, else a nice default.
-function majorTicks(lo, hi, step){
-  if (!(step > 0)) return niceTicks(lo, hi, 4).filter(t=> t >= lo && t <= hi);
-  const out = [], first = Math.ceil(lo / step) * step;
-  // Snap to the step grid so 0.30000000000000004 never reaches a tick label.
-  for (let k = 0; out.length < 400; k++){
-    const v = first + k * step;
-    if (v > hi + step * 1e-9) break;
-    out.push(Math.abs(v) < step * 1e-9 ? 0 : +v.toPrecision(12));
-  }
-  return out;
-}
-
-/* ---- Log scales -------------------------------------------------------------
-   On a log axis the figure works in the log10 of the data: ranges, ticks and the
-   placing of everything are linear there, and only the series are carried over
-   (TX/TY). A category axis has no scale to change, so a bar chart's X stays linear. */
-const xLog = ()=> !!F.xLog && !(F.cats && F.cats.length);
-const yLog = ()=> !!F.yLog;
-const isLog = ax => ax === 'x' ? xLog() : yLog();
-const lg = v => v > 0 ? Math.log10(v) : NaN;
-const TX = v => xLog() ? lg(v) : v;
-const TY = v => yLog() ? lg(v) : v;
-const pow10 = t => +Math.pow(10, t).toPrecision(12);
-
-/* The major ticks of an axis. On a log one they are the whole decades in view, every
-   step-th one when a step is set (in decades). Under two decades in view there are
-   too few of those, and the ticks fall on the 1, 2 and 5 of each decade instead, or
-   failing three of those on nice values of the data, as a linear axis would pick
-   them. `dec` marks the decade kind, whose labels are powers of ten, not numbers. */
-function axisTicks(ax, lo, hi){
-  const step = ax === 'x' ? stepX() : stepY();
-  if (!isLog(ax)) return majorTicks(lo, hi, step);
-  const k = Math.max(1, Math.round(step) || 1), dec = [];
-  for (let n = Math.ceil(lo - 1e-9); n <= hi + 1e-9; n++) if (n % k === 0) dec.push(n);
-  if (dec.length >= 2){ dec.dec = true; return dec; }
-  const out = [];
-  for (let n = Math.floor(lo); n <= Math.ceil(hi); n++)
-    for (const m of [1, 2, 5]){ const t = Math.log10(m) + n; if (t >= lo - 1e-9 && t <= hi + 1e-9) out.push(t); }
-  if (out.length >= 3) return out;
-  return niceTicks(Math.pow(10, lo), Math.pow(10, hi), 4).map(lg).filter(t=> t >= lo && t <= hi);
-}
-// How many minor ticks each major interval gets. Automatic on a log axis: a decade
-// apart, the 2…9 of the decade; several decades apart, the decades in between.
-function minorsOf(ax, majors){
-  const auto = ax === 'x' ? F.minorXAuto : F.minorYAuto;
-  if (!auto) return ax === 'x' ? F.minorX : F.minorY;
-  if (!isLog(ax) || !majors.dec) return 4;
-  const k = majors.length > 1 ? majors[1] - majors[0] : 1;
-  return k > 1 ? k - 1 : 8;
-}
-/* The minor ticks of an axis. On a log one, the n minors of an interval stand where
-   they would on a linear scale — at equal steps of the value from one major to the
-   next — and so crowd towards its top end: with n = 8 over a decade they are 2…9. */
-function axisMinors(ax, majors, lo, hi){
-  const n = Math.max(0, Math.round(minorsOf(ax, majors)));
-  if (!isLog(ax)) return minorTicks(majors, lo, hi, n);
-  if (majors.length < 2 || !n) return [];
-  // Automatic over several decades: the decades themselves.
-  const auto = ax === 'x' ? F.minorXAuto : F.minorYAuto;
-  const at = (a, b, j)=> majors.dec && auto && b - a > 1 ? a + j
-    : Math.log10(Math.pow(10, a) + j * (Math.pow(10, b) - Math.pow(10, a)) / (n + 1));
-  const ends = [majors[0] - (majors[1] - majors[0]), ...majors,
-                majors[majors.length-1] + (majors[majors.length-1] - majors[majors.length-2])];
-  const out = [];
-  for (let i = 0; i + 1 < ends.length; i++)
-    for (let j = 1; j <= n; j++){ const t = at(ends[i], ends[i+1], j); if (t >= lo && t <= hi) out.push(t); }
-  return out;
-}
-// A tick's label: its number, or on a log axis's decades a 10 and its raised exponent.
-const SUP_K = 0.72;
-function tickParts(ax, t, majors){
-  if (!isLog(ax)) return { base: fmtTick(t) };
-  if (majors && majors.dec) return { base: '10', sup: t < 0 ? '\u2212' + (-t) : String(t) };
-  return { base: fmtTick(pow10(t)) };
-}
-const tickW = (ax, t, majors, f)=>{ const p = tickParts(ax, t, majors); return textW(p.base, f) + (p.sup ? textW(p.sup, f * SUP_K) : 0); };
+/* ---- Ticks, scales, ranges --------------------------------------------------
+   The ticks (linear, or a log axis's decades), the scales (on a log axis the figure
+   works in the log10 of the data) and each panel's range are worked out in
+   figure-layout.js, as the rest of what the figure draws is. It is handed a context:
+   the open figure's model, and what it cannot load in Node (the text measured in the
+   figure's font, plot.js's ticks and numbers, utils.js's tilt test). The model is read
+   when asked, so the one context serves every figure the composer opens. */
+const C = { get F(){ return F; }, textW, niceTicks, fmtTick, tiltFits };
+// What the controls ask of them, on the open figure.
+const majorTicks = (lo, hi, step)=> FL.majorTicks(C, lo, hi, step);
+const axisTicks = (ax, lo, hi)=> FL.axisTicks(C, ax, lo, hi);
+const minorsOf = (ax, majors)=> FL.minorsOf(C, ax, majors);
+const xLog = ()=> FL.xLog(C), yLog = ()=> FL.yLog(C), isLog = ax => FL.isLog(C, ax);
 // The bounds as the Range fields show and take them: on a log axis, the data's own
 // values rather than their logarithms (a bound ≤ 0 has none).
-const shownOf = (ax, v)=> isLog(ax) ? Math.pow(10, v) : v;
-const takenOf = (ax, v)=> isLog(ax) ? (v > 0 ? Math.log10(v) : null) : v;
+const shownOf = (ax, v)=> FL.shownOf(C, ax, v), takenOf = (ax, v)=> FL.takenOf(C, ax, v);
+// The X/Y range of every panel, indexed by panel; the panel whose range one follows.
+const computeRanges = ()=> FL.computeRanges(C);
+const rangeRoot = (i, key)=> FL.rangeRoot(C, i, key);
+// A category's name: the one typed into the composer, else the one the plot came with.
+const catText = x => FL.catText(C, x);
 
-/* ---- Geometry -------------------------------------------------------------- */
-
-// Data extent of the series drawn in `panelIdxs`, or null when there's no data. On a
-// log axis it is the extent of the logarithms, which is what that axis is ranged in.
-function extentOf(panelIdxs){
-  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity, any = false;
-  for (const s of F.series){
-    if (!s.show || !panelIdxs.includes(s.panel)) continue;
-    for (let i = 0; i < s.xs.length; i++){
-      const x = TX(s.xs[i]), y = TY(s.ys[i]);
-      if (!isFinite(x) || !isFinite(y)) continue;
-      // Error bars are part of the mark, so they must fit inside the range too — but a
-      // whisker running down to a value a log axis cannot show cannot stretch it.
-      const e = (s.errs && isFinite(s.errs[i]) && s.errs[i] > 0) ? s.errs[i] : 0;
-      let lo = TY(s.ys[i] - e), hi = TY(s.ys[i] + e);
-      // A box reaches from its lowest to its highest value shown, outliers included.
-      const b = s.boxes && s.boxes[i];
-      if (b){ lo = TY(Math.min(b.lo, ...b.out)); hi = TY(Math.max(b.hi, ...b.out)); }
-      any = true;
-      if (x < x0) x0 = x; if (x > x1) x1 = x;
-      if (isFinite(lo) && lo < y0) y0 = lo; if (y < y0) y0 = y;
-      if (isFinite(hi) && hi > y1) y1 = hi; if (y > y1) y1 = y;
-    }
-  }
-  if (!any) return null;
-  // Bars stand on a zero baseline and need half a category slot of air either side.
-  // A log axis has no zero: its bars rise from the foot of whatever range is shown.
-  const bars = F.series.some(s=> s.show && s.kind === 'bar' && panelIdxs.includes(s.panel));
-  if (bars){ x0 -= 0.7; x1 += 0.7; if (!yLog()) y0 = Math.min(0, y0); }
-  if (x1 === x0){ x0 -= 0.5; x1 += 0.5; }
-  if (y1 === y0){ y0 -= 0.5; y1 += 0.5; }
-  const pad = (y1 - y0) * 0.05;
-  // (So there the shortest bar keeps the padding under it, or it would have no height.)
-  return { x0, x1, y0: bars && !yLog() ? y0 : y0 - pad, y1: y1 + pad };
-}
-
-// True when nothing sits immediately beyond `side` of panel `i` — i.e. there is
-// room outside that edge for tick numbers and an axis title. Panels touch, so a
-// side facing a neighbour can only carry tick marks.
-function sideFree(i){
-  const p = F.panels[i];
-  const occupied = (r, c) => F.panels.some((q, k)=> k !== i && r >= q.r && r < q.r + q.rs && c >= q.c && c < q.c + q.cs);
-  const span = (from, n, fn) => { for (let k = from; k < from + n; k++) if (occupied(...fn(k))) return false; return true; };
-  return {
-    left:   p.c === 0                 || span(p.r, p.rs, r => [r, p.c - 1]),
-    right:  p.c + p.cs >= F.cols      || span(p.r, p.rs, r => [r, p.c + p.cs]),
-    top:    p.r === 0                 || span(p.c, p.cs, c => [p.r - 1, c]),
-    bottom: p.r + p.rs >= F.rows      || span(p.c, p.cs, c => [p.r + p.rs, c]),
-  };
-}
-
-// `n` minor ticks between each pair of majors, extended one interval past both ends.
-// Positions that land on a major are dropped — a minor tick under a major one is
-// invisible except for the shorter mark poking out of it.
-function minorTicks(majors, lo, hi, n){
-  n = Math.max(0, Math.round(n));
-  if (majors.length < 2 || !n) return [];
-  const div = n + 1, step = (majors[1] - majors[0]) / div, out = [];
-  const first = majors[0];
-  for (let k = -div; ; k++){
-    const v = first + k * step;
-    if (v > hi + step / 2) break;
-    if (v > majors[majors.length-1] + div * step) break;
-    if (v < lo) continue;
-    if (v > hi) continue;
-    if (((k % div) + div) % div === 0) continue;   // sits on a major
-    out.push(v);
-  }
-  return out;
-}
-
-// The X/Y range of every panel, indexed by panel. Shared means they all get the
-// figure-wide one; otherwise each panel resolves its own, manual if it has one set.
-function computeRanges(){
-  const globalExt = extentOf(F.panels.map((_, i)=> i)) || { x0:0, x1:1, y0:0, y1:1 };
-  const xOf = [], yOf = [];
-  F.panels.forEach((p, i)=>{
-    // Off the figure-wide switch, a panel is scaled with whatever group it shares
-    // with — itself alone, unless it was pointed at another panel.
-    const exX = F.shareX ? globalExt : (extentOf(rangeGroup(i, 'shareXWith')) || globalExt);
-    const exY = F.shareY ? globalExt : (extentOf(rangeGroup(i, 'shareYWith')) || globalExt);
-    const ex = exX, ey = exY;
-    const manX = F.shareX ? [F.xmin, F.xmax] : F.xMan[rangeRoot(i, 'shareXWith')];
-    const manY = F.shareY ? [F.ymin, F.ymax] : F.yMan[rangeRoot(i, 'shareYWith')];
-    // Whose automatic switch applies: the figure's while sharing, else the panel
-    // the group is rooted on, so panels sharing a range also share that choice.
-    const rx = F.panels[rangeRoot(i, 'shareXWith')] || p;
-    const ry = F.panels[rangeRoot(i, 'shareYWith')] || p;
-    const autoX = F.shareX ? F.xAuto : rx.xAuto !== false;
-    const autoY = F.shareY ? F.yAuto : ry.yAuto !== false;
-    xOf[i] = (autoX || !manX) ? [ex.x0, ex.x1] : manX.slice();
-    yOf[i] = (autoY || !manY) ? [ey.y0, ey.y1] : manY.slice();
-  });
-  return { xOf, yOf, globalExt };
-}
-
-/* ---- Renderer -------------------------------------------------------------- */
+/* ---- Renderer ----------------------------------------------------------------
+   What the figure draws, and where, is worked out in figure-layout.js; here it is
+   painted into the svg, in stages: the page (startFigure), each panel (paintPanel: its
+   clip, its grid, its series, its axes, its title, its legend), the shared titles and
+   the figure's legend (paintLegend). */
 
 // Legend key: a filled box for bars, a stroked line for curves.
 function legendMark(add, s, xa, xb, y){
@@ -587,44 +374,6 @@ function textW(txt, px){
   return measCtx.measureText(String(txt)).width;
 }
 
-function rgbOf(c){
-  const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(c || '').trim());
-  if (m){
-    const h = m[1].length === 3 ? m[1].replace(/./g, ch=> ch + ch) : m[1];
-    return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
-  }
-  const rgb = /rgba?\(([^)]+)\)/i.exec(String(c || ''));
-  if (rgb){ const p = rgb[1].split(',').map(Number); return [p[0]||0, p[1]||0, p[2]||0]; }
-  return [136, 136, 136];
-}
-/* The pale companion of a colour: the same hue mixed towards white, which is what a
-   texture is drawn on — or in, the other way round. Being a colour rather than a thin
-   veil, it holds up over a grid line or a neighbouring bar. */
-function lightShade(color){
-  const k = 0.68;
-  const [r, g, b] = rgbOf(color);
-  const mix = v => Math.round(v + (255 - v) * k);
-  return '#' + [mix(r), mix(g), mix(b)].map(v=> v.toString(16).padStart(2, '0')).join('');
-}
-
-/* Black or white, whichever a reader can see against `bg` — the usual relative
-   luminance, with the threshold where the two contrast ratios cross. The SEM figure's
-   outline takes it too. */
-export function contrastInk(bg){
-  const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(bg || '').trim());
-  let r = 255, g = 255, b = 255;
-  if (m){
-    const h = m[1].length === 3 ? m[1].replace(/./g, c=> c + c) : m[1];
-    r = parseInt(h.slice(0,2), 16); g = parseInt(h.slice(2,4), 16); b = parseInt(h.slice(4,6), 16);
-  } else {
-    const rgb = /rgba?\(([^)]+)\)/i.exec(String(bg || ''));
-    if (rgb){ const p = rgb[1].split(',').map(Number); r = p[0]; g = p[1]; b = p[2]; }
-  }
-  const lin = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
-  const L = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
-  return L > 0.179 ? '#000000' : '#ffffff';
-}
-
 // Draw the whole figure into `svg` at its real size in px. `ink`/`paper` let the
 // export force a light, print-ready palette regardless of the app theme.
 // One drawing pass. `extra` widens the computed margins — renderInto() uses it to
@@ -632,6 +381,23 @@ export function contrastInk(bg){
 function drawFigure(svg, ink, paper, extra){
   // One chosen colour for every line and letter the figure draws around the data.
   if (F.inkColor) ink = F.inkColor;
+  const { add, W, H } = startFigure(svg, paper);
+  const fonts = FL.fontsOf(F);
+  const ranges = computeRanges();
+  const lay = FL.figureLayout(C, W, H, fonts, ranges, extra);
+  lastCatRot = lay.xRot;
+  lastInner = { w: +(lay.innerW / PX_MM).toFixed(2), h: +(lay.innerH / PX_MM).toFixed(2) };
+  F.panels.forEach((p, pi)=> paintPanel(add, FL.panelFrame(C, lay, ranges, fonts, p, pi), ink, paper));
+  for (const t of FL.sharedTitles(C, lay, fonts)) richText(add, t.text, t.at, fonts.fAxis, ink);
+  paintLegend(add, FL.globalLegend(C, lay, fonts), fonts.fLeg, ink, paper);
+}
+
+/* The page: the svg emptied and sized, its font stated on the root rather than
+   inherited, so the preview and the exported file render in the same face instead of
+   each falling back to its own default; the patterns' defs at the head of the figure,
+   before anything that might reference them; the paper. Gives add(tag, attrs, parent)
+   and the page's size in px. */
+function startFigure(svg, paper){
   patSeen = new Map();
   patDefs = null;
   const W = F.wmm * PX_MM, H = F.hmm * PX_MM;
@@ -639,552 +405,148 @@ function drawFigure(svg, ink, paper, extra){
   svg.setAttribute('width', W); svg.setAttribute('height', H);
   svg.innerHTML = '';
   const add = (tag, at, parent)=>{ const e = svgEl(tag, at); (parent||svg).appendChild(e); return e; };
-  // Stated on the root rather than inherited, so the preview and the exported file
-  // render in the same face instead of each falling back to its own default.
   svg.setAttribute('font-family', fontStack());
-  // Patterns live in one defs block at the head of the figure, before anything that
-  // might reference them.
   patDefs = add('defs', {});
   add('rect', { x:0, y:0, width:W, height:H, fill: paper });
+  return { add, W, H };
+}
 
-  const fTick = F.font.tick * PT_PX, fAxis = F.font.axis * PT_PX;
-  const fLeg = F.font.legend * PT_PX, fTitle = F.font.title * PT_PX;
-  const { xOf, yOf } = computeRanges();
-
-  // Outer margins: room for the Y numbers + title on the left, X numbers + title
-  // below, and (for a global legend) a strip under that.
-  let maxYNum = 0;
-  F.panels.forEach((p, i)=>{
-    const ts = axisTicks('y', yOf[i][0], yOf[i][1]);
-    for (const t of ts) maxYNum = Math.max(maxYNum, tickW('y', t, ts, fTick));
-  });
-  // The category names, measured once: whole, as the figure always draws them.
-  const catWs = (F.cats || []).map(cat=> catW(cat.x, fTick));
-  // Margins and placing for a given tilt of the X labels. `lean` reserves room for
-  // names that hang past their panel's left side.
-  const layoutFor = (xRot, lean)=>{
-    // How far the X labels stick out sideways and downwards. A number is centred on
-    // its tick, so the outermost ones overhang the frame by half their width; tilted
-    // category names hang below the axis and lean past its left end.
-    let halfX = 0, catDrop = 0, catLean = 0;
-    const xRad = xRot * Math.PI / 180;
-    // A category axis draws its names, never numbers: those take no room of their own.
-    if (!catWs.length) F.panels.forEach((p, i)=>{
-      const ts = axisTicks('x', xOf[i][0], xOf[i][1]);
-      for (const t of ts){
-        const w = tickW('x', t, ts, fTick);
-        halfX = Math.max(halfX, xRot ? w * Math.cos(xRad) : w / 2);
-        if (xRot) catDrop = Math.max(catDrop, w * Math.sin(xRad) + fTick * Math.cos(xRad));
-      }
-    });
-    if (F.cats && F.cats.length){
-      F.cats.forEach((cat, k)=>{
-        const w = catWs[k], rad = xRad;
-        catDrop = Math.max(catDrop, w * Math.sin(rad) + fTick * Math.cos(rad));
-        catLean = Math.max(catLean, xRot ? w * Math.cos(rad) : w / 2);
-      });
-      // Names tilted to stay inside their panel need no margin to lean into.
-      if (lean) halfX = Math.max(halfX, catLean);
-    }
-    const xDrop = (F.cats && F.cats.length) || xRot
-      ? Math.max(fTick * 1.7, catDrop + fTick * 0.6) : fTick * 1.7;
-
-    // Only reserve room on a side that some panel actually decorates.
-    const anySide = (side, what) => F.panels.some(p => (p.axes || (p.axes = newAxes()))[side][what]);
-    const room = (side, vert) =>
-      (anySide(side, 'labels') ? (vert ? maxYNum + 8 : xDrop) : 0) +
-      (anySide(side, 'title') && (vert ? (F.ylabel || F.panels.some(p=> p.ylabel)) : F.xlabel) ? fAxis * 1.5 : 0);
-    // Whatever the sides ask for, never less than the overhang of the outermost X
-    // label — that is what used to spill outside the figure.
-    const sideX = (anySide('bottom', 'labels') || anySide('top', 'labels')) ? halfX + 2 : 0;
-    const legendItems = legendEntries(F.series.filter(s=> s.show && s.inLegend !== false)).length;
-    const legendRows = (F.legendMode === 'global' && legendItems)
-      ? Math.ceil(legendItems / Math.max(1, Math.min(Math.round(F.legendCols) || 1e9, legendItems))) : 0;
-    const legendH = legendRows ? legendRows * fLeg * 1.35 + F.legendGap + 4 : 0;
-    let mL = Math.max(10 + room('left', true), sideX) + extra.L;
-    let mR = Math.max(10 + room('right', true), sideX) + extra.R;
-    let mT = 10 + room('top', false) + (F.legendPlace === 'top' ? legendH : 0) + extra.T;
-    let mB = 10 + room('bottom', false) + (F.legendPlace === 'top' ? 0 : legendH) + extra.B;
-    // Margins never eat more than this much of the page. Without the cap, a request
-    // that cannot fit (a title longer than the figure) would grow them past the page
-    // and push the panels off it; with it, the figure stays sane and the text clips.
-    const capW = W * 0.62, capH = H * 0.62;
-    if (mL + mR > capW){ const k = capW / (mL + mR); mL *= k; mR *= k; }
-    if (mT + mB > capH){ const k = capH / (mT + mB); mT *= k; mB *= k; }
-
-    let innerW = Math.max(20, W - mL - mR), innerH = Math.max(20, H - mT - mB);
-    // Set by hand, the plot area is the size asked, whatever the page: one larger than
-    // the page runs off it, which is seen at once (no limit hides the mistake).
-    if (!F.plotAuto){
-      innerW = Math.max(20, F.plotW * PX_MM);
-      innerH = Math.max(20, F.plotH * PX_MM);
-    }
-    /* A plot area other than the space the margins leave is placed in it by `align`,
-       centred unless asked otherwise: to spare where it is smaller, over the edges
-       where it is larger. */
-    const AL = { t:0, l:0, c:0.5, b:1, r:1 };
-    const av = String(F.align || 'cc');
-    const fy = AL[av[0]] !== undefined ? AL[av[0]] : 0.5;
-    const fx = AL[av[1]] !== undefined ? AL[av[1]] : 0.5;
-    const oX = mL + ((W - mL - mR) - innerW) * fx;
-    const oY = mT + ((H - mT - mB) - innerH) * fy;
-    const cw = innerW / F.cols, ch = innerH / F.rows;
-    return { xRot, xDrop, legendH, mL, mR, mT, mB, innerW, innerH, oX, oY, cw, ch };
-  };
-  // Tilt chosen automatically: the least, from 30° to 90° in 5° steps, at which every
-  // panel's names stay between its sides and clear of one another; failing that 90°.
-  // It is chosen on the X axis as it stands: kept inside, the names ask nothing of the
-  // side margins, so no angle tried moves the panels it is tried against, and only a
-  // change of range or layout changes the tilt.
-  const namesIn = (L, rot) => F.panels.every((p, pi)=>{
-    const ax = p.axes || (p.axes = newAxes()), fr = sideFree(pi);
-    const drawn = ['bottom', 'top'].some(sd => ax[sd].labels && (fr[sd] || !F.innerClean));
-    if (!drawn) return true;
-    const px0 = L.oX + p.c * L.cw, pw = Math.max(4, p.cs * L.cw), [x0, x1] = xOf[pi] || [0, 1];
-    const inRange = F.cats.map(c=> c.x >= x0 && c.x <= x1);
-    const qs = F.cats.map(c=> px0 + (c.x - x0) / (x1 - x0 || 1) * pw);
-    return tiltFits(catWs.map((w, k)=> inRange[k] ? w : 0), qs, px0, px0 + pw, fTick * 1.2, rot);
-  });
-  let lay;
-  if (F.catRotAuto && catWs.length){
-    const here = layoutFor(30, false);
-    let rot = 90;
-    for (let r = 30; r <= 90; r += 5) if (namesIn(here, r)){ rot = r; break; }
-    lay = layoutFor(rot, false);
-  } else lay = layoutFor(Math.max(0, Math.min(90, F.catRot || 0)), true);
-  lastCatRot = lay.xRot;
-  const { xRot, xDrop, legendH, mL, mR, mT, mB, innerW, innerH, oX, oY, cw, ch } = lay;
-  lastInner = { w: +(innerW / PX_MM).toFixed(2), h: +(innerH / PX_MM).toFixed(2) };
-
-  F.panels.forEach((p, pi)=>{
-    const px0 = oX + p.c * cw, py0 = oY + p.r * ch;
-    const pw = Math.max(4, p.cs * cw), ph = Math.max(4, p.rs * ch);
-    const [x0, x1] = xOf[pi] || [0, 1];
-    const [y0, y1] = yOf[pi] || [0, 1];
-    // XT/YT place a value of the axis itself — a tick, a bound — and X/Y a value of
-    // the data, which on a log axis is first taken to its logarithm.
-    const XT = v => px0 + (v - x0) / (x1 - x0 || 1) * pw;
-    const YT = v => py0 + ph - (v - y0) / (y1 - y0 || 1) * ph;
-    const X = v => XT(TX(v)), Y = v => YT(TY(v));
-    // A data value a log axis has no place for (≤ 0) is drawn past the panel's foot,
-    // where the clip cuts it: a whisker or a bar running down to it ends there.
-    const Yc = v =>{ const q = Y(v); return isFinite(q) ? q : py0 + ph + 2; };
-
-    const clipId = 'fclip' + pi;
-    const defs = add('defs', {});
-    const cp = svgEl('clipPath', { id: clipId });
-    cp.appendChild(svgEl('rect', { x:px0, y:py0, width:pw, height:ph }));
-    defs.appendChild(cp);
-
-    // Grid, under everything. Built from the same ticks the axes use, so it always
-    // lines up with the numbers whatever the tick step is.
-    const gx = axisTicks('x', x0, x1), gy = axisTicks('y', y0, y1);
-    if (F.grid.x || F.grid.y){
-      const gg = add('g', { 'clip-path': `url(#${clipId})` });
-      const rule = (a, minor)=> add('line', { ...a, stroke:ink, 'stroke-width': minor ? 0.3 : 0.5,
-                                              'stroke-dasharray':F.grid.dash, opacity: minor ? 0.28 : 0.45 }, gg);
-      if (F.grid.x){
-        for (const t of gx) rule({ x1:XT(t), x2:XT(t), y1:py0, y2:py0+ph });
-        if (F.grid.minor) for (const t of axisMinors('x', gx, x0, x1)) rule({ x1:XT(t), x2:XT(t), y1:py0, y2:py0+ph }, true);
-      }
-      if (F.grid.y){
-        for (const t of gy) rule({ x1:px0, x2:px0+pw, y1:YT(t), y2:YT(t) });
-        if (F.grid.minor) for (const t of axisMinors('y', gy, y0, y1)) rule({ x1:px0, x2:px0+pw, y1:YT(t), y2:YT(t) }, true);
-      }
-    }
-
-    // Series
-    const g = add('g', { 'clip-path': `url(#${clipId})` });
-    const DL = F.dataLabels;
-    const wantsLabels = () => DL.on;
-    // One value label. `pos` is relative to the mark; the text rotates about its own
-    // anchor so a tilted label still starts where it points.
-    const valueLabel = (s, j, cx, yMark, yTop, yBot, box)=>{
-      // Always formatted here, so the decimals setting means something; a series
-      // that carries an uncertainty keeps it, at the same number of decimals.
-      // A figure always reads with a decimal point, whatever separator the CSV
-      // export is set to, so this formats directly instead of going through fmtNum.
-      const dec = v => v.toFixed(Math.max(0, Math.min(6, DL.dec | 0)));
-      const e = s.errs && s.errs[j];
-      const txt = dec(s.ys[j]) + (isFinite(e) && e > 0 ? ' \u00b1 ' + dec(e) : '');
-      if (!isFinite(s.ys[j])) return;
-      const size = DL.size * PT_PX, o = DL.off;
-      let y = yMark, anchor = 'middle', baseline = 'auto';
-      // `off` is a plain signed distance from where the position puts the label, so a
-      // negative one walks it back the other way — into the bar, typically.
-      if (DL.pos === 'above'){ y = yTop - o; }
-      else if (DL.pos === 'below'){ y = yBot + o + size * 0.8; }
-      else if (DL.pos === 'inside'){ y = yTop + o + size * 0.9; }
-      /* Centred sits in the middle of the mark — for a bar, the middle of the bar as
-         it is actually drawn: from its top down to wherever it ends on screen, which
-         is the baseline, or the bottom of the panel when the range cuts it off. The
-         whiskers are no part of the bar, so they do not move its centre. */
-      else if (DL.pos === 'center'){
-        y = (box ? (box.top + box.bottom) / 2 : (yTop + yBot) / 2) + o;
-        baseline = 'central';
-      }
-      /* With auto contrast on, the label takes black or white against whatever it
-         actually lands on: the bar when the text falls inside it, the page otherwise.
-         The text box is the cap height around the baseline (or centred on it), which
-         is close enough to tell "on the bar" from "off it". */
-      let fill = ink;
-      if (DL.autoInk){
-        const top = baseline === 'central' ? y - size * 0.5 : y - size * 0.72;
-        const bot = baseline === 'central' ? y + size * 0.5 : y + size * 0.1;
-        const over = box && top < box.bottom && bot > box.top;
-        fill = contrastInk(over ? box.color : paper);
-      }
-      const at = { x:cx, y, 'font-size':size, fill, 'text-anchor':anchor };
-      if (baseline !== 'auto') at['dominant-baseline'] = baseline;
-      if (DL.rot){
-        // Rotating about the anchor sends the text away from the mark, so the anchor
-        // becomes the near end (the far end for a label below), and the glyph box is
-        // centred on the baseline so the label straddles the mark instead of sitting
-        // half a cap-height to one side. At an angle the text still runs off
-        // sideways, so the anchor slides back by half the width it projects onto the
-        // X axis — which is nothing at 90 degrees and a full half-width at 0, exactly
-        // matching the unrotated centred case.
-        const rad = DL.rot * Math.PI / 180;
-        const back = textW(txt, size) * Math.cos(rad) / 2;
-        const ax = cx + (DL.pos === 'below' ? back : -back);
-        at.x = ax;
-        at['text-anchor'] = DL.pos === 'below' ? 'end' : 'start';
-        at['dominant-baseline'] = 'central';
-        at.transform = `rotate(-${DL.rot} ${ax} ${y})`;
-      }
-      add('text', at, g).textContent = txt;
-    };
-    /* One box of a box plot, in its bar's slot and fill: the box from the first to the
-       third quartile, the median across it, whiskers to the furthest values within
-       1.5 IQR with caps, each value beyond a circle, the mean a cross. Its value label
-       is the mean ± what the plot gave, above whatever of it reaches highest. */
-    const drawBox = (s, j, b, cx, wPx)=>{
-      const st = { stroke:ink, 'stroke-width':0.8 }, hw = wPx/2, cap = Math.min(4, hw/2);
-      const yq1 = Yc(b.q1), yq3 = Yc(b.q3), ylo = Yc(b.lo), yhi = Yc(b.hi), ym = Yc(b.med);
-      add('line', { x1:cx, x2:cx, y1:ylo, y2:yq1, ...st }, g);
-      add('line', { x1:cx, x2:cx, y1:yq3, y2:yhi, ...st }, g);
-      add('line', { x1:cx-cap, x2:cx+cap, y1:ylo, y2:ylo, ...st }, g);
-      add('line', { x1:cx-cap, x2:cx+cap, y1:yhi, y2:yhi, ...st }, g);
-      const d = divOfBar(s, j), color = divColor(s, d);
-      add('rect', { x:(cx - hw).toFixed(2), y:Math.min(yq1, yq3).toFixed(2), width:wPx.toFixed(2), height:Math.abs(yq1 - yq3).toFixed(2),
-                    fill:barFill(add, color, divTexture(s, d), divInv(s, d)), ...st }, g);
-      add('line', { x1:cx-hw, x2:cx+hw, y1:ym, y2:ym, stroke:ink, 'stroke-width':1.4 }, g);
-      if (isFinite(b.mean)){
-        const r = Math.min(2.5, hw*0.4), yv = Yc(b.mean);
-        add('line', { x1:cx-r, x2:cx+r, y1:yv-r, y2:yv+r, ...st }, g);
-        add('line', { x1:cx-r, x2:cx+r, y1:yv+r, y2:yv-r, ...st }, g);
-      }
-      for (const v of b.out) add('circle', { cx, cy:Yc(v), r:Math.max(1, Math.min(2, hw/3)), fill:'none', ...st }, g);
-      if (wantsLabels()){
-        const top = Math.min(yhi, ...b.out.map(Yc)), bot = Math.max(ylo, ...b.out.map(Yc));
-        valueLabel(s, j, cx, Yc(b.mean), top, bot,
-                   { color, top: Math.min(Math.max(Math.min(yq1, yq3), py0), py0 + ph), bottom: Math.min(Math.max(Math.max(yq1, yq3), py0), py0 + ph) });
-      }
-    };
-    // Bars of different series sharing a category sit side by side inside the slot.
-    const barSeries = F.series.filter(s=> s.show && s.kind === 'bar' && s.panel === pi);
-    for (const s of F.series){
-      if (!s.show || s.panel !== pi) continue;
-      if (s.kind === 'bar'){
-        const nb = barSeries.length, bi = barSeries.indexOf(s);
-        const slot = Math.abs(XT(1) - XT(0));         // one category, in px
-        const wPx = Math.max(1, slot * s.width / nb);
-        const off = (bi - (nb - 1) / 2) * wPx;
-        // On a log axis there is no zero to stand on: bars rise from the panel's foot.
-        const zero = YT(yLog() ? y0 : Math.max(y0, Math.min(y1, 0)));
-        s.xs.forEach((xv, j)=>{
-          const yv = s.ys[j];
-          if (!isFinite(xv) || !isFinite(yv)) return;
-          const cx = X(xv) + off, yy = Y(yv);
-          if (!isFinite(yy)) return;
-          const bx = s.boxes && s.boxes[j];
-          if (bx){ drawBox(s, j, bx, cx, wPx); return; }
-          add('rect', { x:(cx - wPx/2).toFixed(2), y:Math.min(yy, zero).toFixed(2),
-                        width:wPx.toFixed(2), height:Math.abs(zero - yy).toFixed(2),
-                        fill:barFill(add, divColor(s, divOfBar(s, j)),
-                                     divTexture(s, divOfBar(s, j)), divInv(s, divOfBar(s, j))) }, g);
-          const err = s.errs && s.errs[j];
-          if (isFinite(err) && err > 0){
-            const yA = Yc(yv - err), yB = Yc(yv + err), cap = Math.min(4, wPx / 3);
-            const st = { stroke:ink, 'stroke-width':0.8 };
-            add('line', { x1:cx, x2:cx, y1:yA, y2:yB, ...st }, g);
-            add('line', { x1:cx-cap, x2:cx+cap, y1:yA, y2:yA, ...st }, g);
-            add('line', { x1:cx-cap, x2:cx+cap, y1:yB, y2:yB, ...st }, g);
-          }
-          if (wantsLabels()){
-            // Measure from the whisker when there is one, so a label never sits on it.
-            const e = (isFinite(err) && err > 0) ? err : 0;
-            // The bar as the reader sees it: clipped to the panel, so a bar running
-            // past the top of the range is centred on the part that shows.
-            const bTop = Math.min(Math.max(Math.min(yy, zero), py0), py0 + ph);
-            const bBot = Math.min(Math.max(Math.max(yy, zero), py0), py0 + ph);
-            valueLabel(s, j, cx, yy, Math.min(Yc(yv + e), zero), Math.max(Yc(yv - e), zero),
-                       { color: divColor(s, divOfBar(s, j)), top: bTop, bottom: bBot });
-          }
-        });
-        continue;
-      }
-      if (s.marker !== 'none'){
-        const r = Math.max(0.9, s.width * 1.3);
-        for (let i = 0; i < s.xs.length; i++){
-          const qx = X(s.xs[i]), qy = Y(s.ys[i]);
-          if (!isFinite(qx) || !isFinite(qy)) continue;
-          const [tag, at] = markerShape(s.marker, +qx.toFixed(2), +qy.toFixed(2), r, s.color, s.width);
-          add(tag, at, g);
-        }
-      }
-      if (s.dash !== 'none'){
-        let d = '';
-        for (let i = 0; i < s.xs.length; i++){
-          const qx = X(s.xs[i]), qy = Y(s.ys[i]);
-          if (!isFinite(qx) || !isFinite(qy)) continue;
-          d += (d === '' ? 'M' : 'L') + qx.toFixed(2) + ',' + qy.toFixed(2) + ' ';
-        }
-        const path = add('path', { d, fill:'none', stroke:s.color, 'stroke-width':s.width }, g);
-        if (s.dash) path.setAttribute('stroke-dasharray', s.dash);
-      }
-      if (wantsLabels()){
-        for (let i = 0; i < s.xs.length; i++){
-          const qx = X(s.xs[i]), yy = Y(s.ys[i]);
-          if (!isFinite(qx) || !isFinite(yy)) continue;
-          valueLabel(s, i, qx, yy, yy, yy);
-        }
-      }
-    }
-
-    /* Where another panel actually puts its numbers on the same side. A number at a
-       shared edge only has to give way when the neighbour draws one within a line of
-       it — checking merely "is the edge shared" dropped perfectly clear numbers, e.g.
-       the 0 at the foot of every stacked panel but the last. */
-    const neighbourMarks = (side, edge, vert)=>{
-      const marks = [];
-      F.panels.forEach((q, k)=>{
-        if (k === pi) return;
-        const touches =
-          edge === 'top'    ? (q.r + q.rs === p.r && q.c < p.c + p.cs && p.c < q.c + q.cs) :
-          edge === 'bottom' ? (q.r === p.r + p.rs && q.c < p.c + p.cs && p.c < q.c + q.cs) :
-          edge === 'left'   ? (q.c + q.cs === p.c && q.r < p.r + p.rs && p.r < q.r + q.rs) :
-                              (q.c === p.c + p.cs && q.r < p.r + p.rs && p.r < q.r + q.rs);
-        if (!touches) return;
-        const qa = q.axes || (q.axes = newAxes());
-        if (!qa[side].labels) return;
-        const qx0 = oX + q.c * cw, qy0 = oY + q.r * ch;
-        const qw = Math.max(4, q.cs * cw), qh = Math.max(4, q.rs * ch);
-        if (vert){
-          const [a, z] = yOf[k] || [0, 1];
-          for (const t of axisTicks('y', a, z)) marks.push(qy0 + qh - (t - a) / (z - a || 1) * qh);
-        } else {
-          const [a, z] = xOf[k] || [0, 1];
-          const ts = axisTicks('x', a, z);
-          for (const t of ts) marks.push({ q: qx0 + (t - a) / (z - a || 1) * qw, w: tickW('x', t, ts, fTick) / 2 });
-        }
-      });
-      return marks;
-    };
-
-    // ---- Axes: four independent sides ------------------------------------
-    const A = p.axes || (p.axes = newAxes());
-    const free = sideFree(pi);
-    const xMaj = gx, yMaj = gy;
-    // A bar chart's X axis is categorical: the tick labels carried over from the
-    // source plot replace the numbers, one per category inside the panel's range.
-    const cats = F.cats && F.cats.length ? F.cats.filter(c=> c.x >= x0 && c.x <= x1) : null;
-    // Base coordinate of each side, and the outward normal direction along the axis
-    // that ticks/labels/titles grow into.
-    const GEO = {
-      left:   { vert:true,  base:px0,    out:-1 },
-      right:  { vert:true,  base:px0+pw, out:+1 },
-      top:    { vert:false, base:py0,    out:-1 },
-      bottom: { vert:false, base:py0+ph, out:+1 },
-    };
-    const TICK_MAJ = 4, TICK_MIN = 2.2;
-
-    for (const side of SIDES){
-      const a = A[side], g0 = GEO[side];
-      if (!a.on && !a.major && !a.minor && !a.labels && !a.title) continue;
-      if (a.on){
-        const e = g0.vert ? { x1:g0.base, x2:g0.base, y1:py0, y2:py0+ph }
-                          : { x1:px0, x2:px0+pw, y1:g0.base, y2:g0.base };
-        // Square caps: a stroke is centred on its path, so two lines meeting at a
-        // corner with the default butt cap each stop half a width short of filling
-        // it, leaving a small notch. A square cap runs the stroke on by exactly that
-        // half width, so the corner closes.
-        add('line', { ...e, stroke:ink, 'stroke-width':0.8, 'stroke-linecap':'square' });
-      }
-
-      // Tick marks. `dir` decides which side of the axis line they stick out of.
-      const mark = (pos, len)=>{
-        const o = g0.out * len;
-        const from = a.dir === 'in' ? 0 : (a.dir === 'both' ? -o : 0);
-        const to   = a.dir === 'in' ? -o : o;
-        const e = g0.vert ? { x1:g0.base+from, x2:g0.base+to, y1:pos, y2:pos }
-                          : { x1:pos, x2:pos, y1:g0.base+from, y2:g0.base+to };
-        add('line', { ...e, stroke:ink, 'stroke-width':0.8 });
-      };
-      const proj = g0.vert ? YT : XT;
-      const majors = g0.vert ? yMaj : xMaj;
-      if (a.major) majors.forEach(t=> mark(proj(t), TICK_MAJ));
-      if (a.minor) (g0.vert ? axisMinors('y', majors, y0, y1) : axisMinors('x', majors, x0, x1)).forEach(t=> mark(proj(t), TICK_MIN));
-
-      // Numbers and title only where there is room outside the panel; a side that
-      // touches a neighbour can carry tick marks but nothing that would overlap it —
-      // unless the figure has been told to label every edge regardless.
-      if (!free[side] && F.innerClean) continue;
-
-      if (a.labels && cats && !g0.vert){
-        for (const c of cats){
-          const q = XT(c.x), rot = xRot;
-          const at = side === 'bottom' ? { x:q, y:g0.base + fTick*1.15 } : { x:q, y:g0.base - fTick*0.5 };
-          const el = add('text', { ...at, 'font-size':fTick, fill:ink,
-                                   'text-anchor': rot ? 'end' : 'middle' });
-          // Tilted, it turns about the middle of its last character, as on the page.
-          if (rot){ el.setAttribute('transform', `rotate(-${rot} ${at.x} ${at.y})`); el.setAttribute('dy', TILT_DY); }
-          const runs = catRuns(c.x);
-          if (runs) catLabel(el, c.x, runs, fTick); else el.textContent = catText(c.x);
-        }
-        continue;
-      }
-      if (a.labels){
-        for (const t of majors){
-          const parts = tickParts(g0.vert ? 'y' : 'x', t, majors);
-          const q = proj(t), txt = parts.base;
-          let at;
-          if (g0.vert){
-            const hh = fTick * 0.55;
-            const near = e => Math.abs(e - q) < fTick * 1.1;
-            if (q - hh < py0 + 1 && !free.top && neighbourMarks(side, 'top', true).some(near)) continue;
-            if (q + hh > py0 + ph - 1 && !free.bottom && neighbourMarks(side, 'bottom', true).some(near)) continue;
-            at = side === 'left'
-              ? { x:g0.base-5, y:q+fTick*0.36, 'text-anchor':'end' }
-              : { x:g0.base+5, y:q+fTick*0.36, 'text-anchor':'start' };
-          } else {
-            const hw = tickW('x', t, majors, fTick) / 2;
-            const clash = m => Math.abs(m.q - q) < m.w + hw + 2;
-            if (q - hw < px0 + 1 && !free.left && neighbourMarks(side, 'left', false).some(clash)) continue;
-            if (q + hw > px0 + pw - 1 && !free.right && neighbourMarks(side, 'right', false).some(clash)) continue;
-            at = { x:q, y: side === 'bottom' ? g0.base+fTick*1.25 : g0.base-fTick*0.5, 'text-anchor':'middle' };
-          }
-          const el = add('text', { ...at, 'font-size':fTick, fill:ink });
-          // Numbers tilt with the category names, around the point they label.
-          const rot = g0.vert ? 0 : xRot;
-          if (rot){
-            el.setAttribute('text-anchor', 'end');
-            el.setAttribute('transform', `rotate(-${rot} ${at.x} ${at.y})`);
-            el.setAttribute('dy', TILT_DY);
-          }
-          el.textContent = txt;
-          if (parts.sup){
-            const sp = svgEl('tspan', { 'baseline-shift':'super', 'font-size': +(fTick * SUP_K).toFixed(2) });
-            sp.textContent = parts.sup;
-            el.appendChild(sp);
-          }
-        }
-      }
-
-      // Axis title, pushed clear of the numbers when they are present. In shared
-      // mode the four figure-level titles below replace these.
-      // (a panel's own Y title, linked panels': buildModel)
-      const label = g0.vert ? (p.ylabel != null ? p.ylabel : F.ylabel) : F.xlabel;
-      if (a.title && label && (g0.vert ? F.titleModeY : F.titleModeX) !== 'shared'){
-        const clear = a.labels ? (g0.vert ? maxYNum + 8 : xDrop) : 6;
-        if (g0.vert){
-          const yc = py0 + ph/2, x = g0.base + g0.out * (clear + fAxis*0.9);
-          richText(add, label, { x, y:yc, 'text-anchor':'middle',
-                                 transform:`rotate(${side === 'left' ? -90 : 90} ${x} ${yc})` }, fAxis, ink);
-        } else {
-          const y = g0.base + g0.out * (clear + fAxis * (side === 'bottom' ? 1.0 : 0.4));
-          richText(add, label, { x:px0+pw/2, y, 'text-anchor':'middle' }, fAxis, ink);
-        }
-      }
-    }
-
-    // Panel title (top-left, inside)
-    if (p.title){
-      const el = add('text', { x:px0+6, y:py0+fTitle*1.25, 'font-size':fTitle, fill:ink, 'font-weight':'600' });
-      el.textContent = p.title;
-    }
-
-    // Per-panel legend, in the chosen corner
-    if (F.legendMode === 'per-panel'){
-      const mine = legendEntries(F.series.filter(s=> s.show && s.inLegend !== false && s.panel === pi));
-      if (mine.length){
-        const gap = F.legendGap, lw = 14, pad = 4;
-        const rowH = fLeg * 1.35;
-        const wide = Math.max(...mine.map(s=> textW(s.label, fLeg))) + lw + 6;
-        const right = F.legendCorner.endsWith('r'), top = F.legendCorner.startsWith('t');
-        const titleDrop = (top && p.title) ? fTitle * 1.2 : 0;
-        const boxX = right ? px0 + pw - gap - wide : px0 + gap;
-        const boxY = top ? py0 + gap + titleDrop : py0 + ph - gap - mine.length * rowH;
-        if (F.legendFrame)
-          legendFrameRect(add, boxX-pad, boxY-pad, wide+pad*2, mine.length*rowH+pad*2, ink, paper);
-        mine.forEach((s, k)=>{
-          const cy = boxY + rowH * (k + 0.5);
-          legendMark(add, s, boxX, boxX + lw, cy);
-          add('text', { x:boxX + lw + 6, y:cy, 'font-size':fLeg, fill:ink,
-                        'dominant-baseline':'central' }).textContent = s.label;
-        });
-      }
-    }
-  });
-
-  // Shared titles: one per side for the whole grid, centred on the inner area and
-  // sitting in the outer margin. A side gets one when any panel asked for it. The
-  // margin is measured from the plot, not the page: with the plot set by hand (it may
-  // run off the page) the titles go with it, as the tick numbers do; with auto margins
-  // the two are the same.
-  {
-    const want = side => F.panels.some(p=> (p.axes || (p.axes = newAxes()))[side].title);
-    const shX = F.titleModeX === 'shared', shY = F.titleModeY === 'shared';
-    const cx = oX + innerW / 2, cy = oY + innerH / 2;
-    const outL = oX - mL, outR = oX + innerW + mR, outT = oY - mT, outB = oY + innerH + mB;
-    if (shX && F.xlabel && want('bottom'))
-      richText(add, F.xlabel, { x:cx, y:outB - (F.legendPlace === 'top' ? 0 : legendH) - 4, 'text-anchor':'middle' }, fAxis, ink);
-    if (shX && F.xlabel && want('top'))
-      richText(add, F.xlabel, { x:cx, y:outT + fAxis, 'text-anchor':'middle' }, fAxis, ink);
-    if (shY && F.ylabel && want('left'))
-      richText(add, F.ylabel, { x:outL + fAxis*1.1, y:cy, 'text-anchor':'middle',
-                                transform:`rotate(-90 ${outL + fAxis*1.1} ${cy})` }, fAxis, ink);
-    if (shY && F.ylabel && want('right'))
-      richText(add, F.ylabel, { x:outR - fAxis*1.1, y:cy, 'text-anchor':'middle',
-                                transform:`rotate(90 ${outR - fAxis*1.1} ${cy})` }, fAxis, ink);
+/* One panel, on its frame (figure-layout.js panelFrame): its clip, the grid under
+   everything, the series cut to the panel, the axes, its title (top-left, inside) and
+   its legend in the chosen corner. */
+function paintPanel(add, fr, ink, paper){
+  const clipId = 'fclip' + fr.pi;
+  const defs = add('defs', {});
+  const cp = svgEl('clipPath', { id: clipId });
+  cp.appendChild(svgEl('rect', { x:fr.px0, y:fr.py0, width:fr.pw, height:fr.ph }));
+  defs.appendChild(cp);
+  if (F.grid.x || F.grid.y){
+    const gg = add('g', { 'clip-path': `url(#${clipId})` });
+    for (const { at, minor } of FL.gridRules(C, fr))
+      add('line', { ...at, stroke:ink, 'stroke-width': minor ? 0.3 : 0.5,
+                    'stroke-dasharray':F.grid.dash, opacity: minor ? 0.28 : 0.45 }, gg);
   }
+  paintSeries(add, add('g', { 'clip-path': `url(#${clipId})` }), fr, ink, paper);
+  paintAxes(add, fr, ink);
+  if (fr.p.title){
+    const el = add('text', { ...FL.panelTitleAt(fr), 'font-size':fr.fonts.fTitle, fill:ink, 'font-weight':'600' });
+    el.textContent = fr.p.title;
+  }
+  paintLegend(add, FL.panelLegend(C, fr), fr.fonts.fLeg, ink, paper);
+}
 
-  // Global legend: a strip above or below the panels, in one row or N columns.
-  if (F.legendMode === 'global'){
-    const items = legendEntries(F.series.filter(s=> s.show && s.inLegend !== false));
-    if (items.length){
-      const gap = 14, lw = 16, rowH = fLeg * 1.35;
-      const cols = Math.max(1, Math.min(Math.round(F.legendCols) || items.length, items.length));
-      const rows = Math.ceil(items.length / cols);
-      // Column widths follow the widest label in each column, so entries line up.
-      const colW = [];
-      for (let c = 0; c < cols; c++){
-        let w = 0;
-        for (let r = 0; r < rows; r++){
-          const s = items[r * cols + c];
-          if (s) w = Math.max(w, lw + 4 + textW(s.label, fLeg));
-        }
-        colW[c] = w;
+// A value label (figure-layout.js valueLabel), where there is one.
+function putLabel(add, g, v){ if (v) add('text', v.at, g).textContent = v.txt; }
+
+// The panel's series, into `g` (its clipped group): bars side by side in their slots,
+// curves as their symbols, their line and their value labels.
+function paintSeries(add, g, fr, ink, paper){
+  const barSeries = F.series.filter(s=> s.show && s.kind === 'bar' && s.panel === fr.pi);
+  for (const s of F.series){
+    if (!s.show || s.panel !== fr.pi) continue;
+    if (s.kind === 'bar') paintBars(add, g, fr, s, barSeries, ink, paper);
+    else paintCurve(add, g, fr, s, ink, paper);
+  }
+}
+
+// A bar series: each bar in its division's fill (a box where the plot gave one), its
+// error bar and its value label.
+function paintBars(add, g, fr, s, barSeries, ink, paper){
+  const { wPx, off, zero } = FL.barSlot(C, fr, s, barSeries);
+  s.xs.forEach((xv, j)=>{
+    const yv = s.ys[j];
+    if (!isFinite(xv) || !isFinite(yv)) return;
+    const cx = fr.X(xv) + off, yy = fr.Y(yv);
+    if (!isFinite(yy)) return;
+    const bx = s.boxes && s.boxes[j];
+    if (bx){ paintBox(add, g, fr, s, j, bx, cx, wPx, ink, paper); return; }
+    const d = divOfBar(s, j);
+    add('rect', { ...FL.barRect(cx, yy, zero, wPx), fill:barFill(add, divColor(s, d), divTexture(s, d), divInv(s, d)) }, g);
+    const err = s.errs && s.errs[j];
+    for (const e of FL.errorBar(fr, cx, yv, err, wPx) || []) add('line', { ...e, stroke:ink, 'stroke-width':0.8 }, g);
+    if (F.dataLabels.on) putLabel(add, g, FL.barLabel(C, fr, s, j, cx, yy, yv, zero, err, ink, paper));
+  });
+}
+
+// One box of a box plot (figure-layout.js boxMarks), in its bar's slot and fill.
+function paintBox(add, g, fr, s, j, b, cx, wPx, ink, paper){
+  const st = { stroke:ink, 'stroke-width':0.8 };
+  const k = FL.boxMarks(fr, s, j, b, cx, wPx);
+  for (const e of k.whiskers) add('line', { ...e, ...st }, g);
+  add('rect', { ...k.rect, fill:barFill(add, k.color, divTexture(s, k.d), divInv(s, k.d)), ...st }, g);
+  add('line', { ...k.median, stroke:ink, 'stroke-width':1.4 }, g);
+  for (const e of k.mean) add('line', { ...e, ...st }, g);
+  for (const o of k.outliers) add('circle', { ...o, fill:'none', ...st }, g);
+  if (F.dataLabels.on) putLabel(add, g, FL.boxLabel(C, fr, s, j, b, cx, k, ink, paper));
+}
+
+// A curve: its symbols, its line, its value labels.
+function paintCurve(add, g, fr, s, ink, paper){
+  if (s.marker !== 'none') for (const [tag, at] of FL.curveMarkers(fr, s)) add(tag, at, g);
+  if (s.dash !== 'none'){
+    const path = add('path', { d:FL.curvePath(fr, s), fill:'none', stroke:s.color, 'stroke-width':s.width }, g);
+    if (s.dash) path.setAttribute('stroke-dasharray', s.dash);
+  }
+  if (F.dataLabels.on) for (const v of FL.curveLabels(C, fr, s, ink, paper)) putLabel(add, g, v);
+}
+
+/* The panel's axes: four independent sides, each its line, its tick marks, and only
+   where there is room outside the panel its numbers (or a bar chart's category names)
+   and its title. A side that touches a neighbour can carry tick marks but nothing that
+   would overlap it — unless the figure has been told to label every edge regardless. */
+function paintAxes(add, fr, ink){
+  const A = FL.axesOf(fr.p), fTick = fr.fonts.fTick;
+  for (const side of SIDES){
+    const a = A[side];
+    if (!a.on && !a.major && !a.minor && !a.labels && !a.title) continue;
+    // Square caps: a stroke is centred on its path, so two lines meeting at a
+    // corner with the default butt cap each stop half a width short of filling
+    // it, leaving a small notch. A square cap runs the stroke on by exactly that
+    // half width, so the corner closes.
+    if (a.on) add('line', { ...FL.axisLine(fr, side), stroke:ink, 'stroke-width':0.8, 'stroke-linecap':'square' });
+    for (const e of FL.tickMarks(C, fr, side)) add('line', { ...e, stroke:ink, 'stroke-width':0.8 });
+    if (!fr.free[side] && F.innerClean) continue;
+    if (a.labels && fr.cats && !fr.geo[side].vert){
+      for (const { x, at, rot } of FL.catNames(fr, side)){
+        const el = add('text', { ...at, 'font-size':fTick, fill:ink,
+                                 'text-anchor': rot ? 'end' : 'middle' });
+        // Tilted, it turns about the middle of its last character, as on the page.
+        if (rot){ el.setAttribute('transform', `rotate(-${rot} ${at.x} ${at.y})`); el.setAttribute('dy', TILT_DY); }
+        const runs = FL.catRuns(C, x);
+        if (runs) catLabel(el, x, runs, fTick); else el.textContent = catText(x);
       }
-      const total = colW.reduce((a, b)=> a + b, 0) + gap * (cols - 1);
-      const x0 = F.legendAlign === 'left' ? oX
-               : F.legendAlign === 'right' ? oX + innerW - total
-               : oX + Math.max(0, (innerW - total) / 2);
-      const yTop = F.legendPlace === 'top' ? oY - F.legendGap - rows * rowH
-                                           : oY + innerH + (mB - rows * rowH) / 2;
-      if (F.legendFrame){
-        const pad = 4;
-        legendFrameRect(add, x0-pad, yTop-pad, total+pad*2, rows*rowH+pad*2, ink, paper);
-      }
-      items.forEach((s, i)=>{
-        const c = i % cols, r = (i / cols) | 0;
-        let x = x0; for (let k = 0; k < c; k++) x += colW[k] + gap;
-        const cy = yTop + rowH * (r + 0.5);
-        legendMark(add, s, x, x + lw, cy);
-        add('text', { x:x + lw + 4, y:cy, 'font-size':fLeg, fill:ink,
-                      'dominant-baseline':'central' }).textContent = s.label;
-      });
+      continue;
     }
+    if (a.labels) for (const { at, parts, rot } of FL.tickNumbers(C, fr, side)){
+      const el = add('text', { ...at, 'font-size':fTick, fill:ink });
+      // Numbers tilt with the category names, around the point they label.
+      if (rot){
+        el.setAttribute('text-anchor', 'end');
+        el.setAttribute('transform', `rotate(-${rot} ${at.x} ${at.y})`);
+        el.setAttribute('dy', TILT_DY);
+      }
+      el.textContent = parts.base;
+      if (parts.sup){
+        const sp = svgEl('tspan', { 'baseline-shift':'super', 'font-size': +(fTick * SUP_K).toFixed(2) });
+        sp.textContent = parts.sup;
+        el.appendChild(sp);
+      }
+    }
+    const t = FL.axisTitle(C, fr, side);
+    if (t) richText(add, t.text, t.at, fr.fonts.fAxis, ink);
+  }
+}
+
+/* A legend, a panel's or the figure's (figure-layout.js panelLegend, globalLegend), or
+   none: its box, behind (figure-layout.js legendFrameAttrs), then each entry's key and
+   its words. */
+function paintLegend(add, leg, fLeg, ink, paper){
+  if (!leg) return;
+  if (leg.frame) add('rect', FL.legendFrameAttrs(F, ...leg.frame, ink, paper));
+  for (const { s, xa, xb, cy, tx } of leg.rows){
+    legendMark(add, s, xa, xb, cy);
+    add('text', { x:tx, y:cy, 'font-size':fLeg, fill:ink,
+                  'dominant-baseline':'central' }).textContent = s.label;
   }
 }
 
@@ -1203,37 +565,12 @@ function barFill(add, color, texture, inv){
   if (!patSeen.has(key)){
     const id = 'ftex' + patSeen.size;
     patSeen.set(key, id);
-    const P = 6;                               // pattern tile, in figure px
-    const pat = svgEl('pattern', { id, width:P, height:P, patternUnits:'userSpaceOnUse' });
-    const put = (tag, at)=> pat.appendChild(svgEl(tag, at));
-    // The tile is painted on the bar's own colour, so the texture reads as that colour
-    // lightened rather than as a second hue laid over white.
-    /* Two ways round, both in the one colour: the marks in it over its pale shade, or
-       its pale shade over the colour. Which reads better depends on the colour, so it
-       is a choice rather than a rule. */
-    const pale = lightShade(color);
-    const ground = inv ? color : pale;
-    const markCol = inv ? pale : color;
-    put('rect', { x:0, y:0, width:P, height:P, fill:ground });
-    const line = (x1,y1,x2,y2)=> put('line', { x1, y1, x2, y2, stroke:markCol, 'stroke-width':1.4, 'stroke-linecap':'square' });
-    if (texture === 'dots') put('circle', { cx:P/2, cy:P/2, r:1.5, fill:markCol });
-    if (texture === 'fwd'  || texture === 'cross'){ line(-1,P+1,P+1,-1); line(P-1,P+1,P+1,P-1); line(-1,1,1,-1); }
-    if (texture === 'back' || texture === 'cross'){ line(-1,-1,P+1,P+1); line(-1,P-1,1,P+1); line(P-1,-1,P+1,1); }
-    if (texture === 'horiz' || texture === 'grid') line(0,P/2,P,P/2);
-    if (texture === 'vert'  || texture === 'grid') line(P/2,0,P/2,P);
+    // The tile (figure-layout.js textureTile): its ground and its marks.
+    const pat = svgEl('pattern', { id, width:FL.TILE, height:FL.TILE, patternUnits:'userSpaceOnUse' });
+    for (const [tag, at] of FL.textureTile(texture, color, inv)) pat.appendChild(svgEl(tag, at));
     if (patDefs) patDefs.appendChild(pat);
   }
   return `url(#${patSeen.get(key)})`;
-}
-
-/* The box behind a legend. Its outline and how much of the page it hides are set
-   separately: a frame can be a plain outline over the figure, a solid block that
-   covers whatever it sits on, or anything between. */
-function legendFrameRect(add, x, y, w, h, ink, paper){
-  const at = { x, y, width:w, height:h, rx:2, fill:paper,
-               'fill-opacity': Math.max(0, Math.min(1, F.legendFrameAlpha)) };
-  if (F.legendFrameLine){ at.stroke = ink; at['stroke-width'] = 0.5; }
-  add('rect', at);
 }
 
 /* How far the drawn ink pokes out of the figure box, per side, in figure units.
@@ -2680,30 +2017,7 @@ function samePositionSeries(i){
   return F.series.filter((_, k)=> posOf[k] === posOf[i]);
 }
 
-// A category's name: the one typed into the composer, else the one the plot came with.
-function catText(x){
-  const own = F.catNames && F.catNames[x];
-  if (own != null && own !== '') return own;
-  const cat = F.cats && F.cats.find(c=> c.x === x);
-  return cat ? cat.text : '';
-}
-/* The plot's name of a category in runs, [[text, over], …], where some are overlined (a
-   negative Miller index's bar: the size by peak, xrd-rv.js), or null: a name typed into
-   the composer, plain text there, and any other is drawn as text. Up to v493 the bar was
-   lost here, the minus drawn. */
-function catRuns(x){
-  const own = F.catNames && F.catNames[x];
-  if (own != null && own !== '') return null;
-  const cat = F.cats && F.cats.find(c=> c.x === x);
-  return cat && Array.isArray(cat.runs) && cat.runs.some(r=> r[1]) ? cat.runs : null;
-}
-// Two overlined runs side by side kept a tenth of the font apart, each its own bar.
-const barGap = (runs, i, px)=> i && runs[i - 1][1] ? px / 10 : 0;
-// A category's width as drawn: its runs' text (each minus hidden) and the gaps between bars.
-function catW(x, px){
-  const r = catRuns(x);
-  return r ? textW(r.map(q=> q[0]).join(''), px) + r.reduce((s, q, i)=> s + (q[1] ? barGap(r, i, px) : 0), 0) : textW(catText(x), px);
-}
+// (a category's name, its runs and its width: figure-layout.js catText, catRuns, catW)
 /* A category drawn in runs, as plot.js labelText draws a tick label: each overlined run a
    tspan after its minus in one not displayed (no glyph, no advance), the name whole as the
    text's aria-label, so the file's text still reads 1-11. */
@@ -2711,7 +2025,7 @@ function catLabel(el, x, runs, px){
   el.setAttribute('aria-label', catText(x));
   runs.forEach(([s, over], i)=>{
     if (over){ const m = svgEl('tspan', { display: 'none' }); m.textContent = '-'; el.appendChild(m); }
-    const g = barGap(runs, i, px);
+    const g = FL.barGap(runs, i, px);
     const t = svgEl('tspan', over ? { 'text-decoration': 'overline', ...(g ? { dx: g } : {}) } : {});
     t.textContent = s; el.appendChild(t);
   });
@@ -2732,15 +2046,7 @@ function catLabel(el, x, runs, px){
    start: the one the page gives the series, the way a new division starts from the
    series' name when it is made. Renaming the series afterwards leaves it alone, and
    renaming it leaves the series alone. */
-const divsOf = s => (s.divs && s.divs.length) ? s.divs : [{}];
-const divName = (s, k)=> (divsOf(s)[k] && divsOf(s)[k].name) || (k === 0 && s.given) || s.label;
-const divColor = (s, k)=> (divsOf(s)[k] && divsOf(s)[k].color) || s.color;
-const divTexture = (s, k)=> (divsOf(s)[k] && divsOf(s)[k].texture) || s.texture || 'solid';
-const divInv = (s, k)=>{
-  const d = divsOf(s)[k];
-  return (d && d.texInv != null) ? d.texInv : !!s.texInv;
-};
-const divOfBar = (s, j)=> Math.min(Math.max((s.divOf && s.divOf[j]) || 0, 0), divsOf(s).length - 1);
+// (divsOf, divName, divColor, divTexture, divInv and divOfBar, a bar's division: figure-layout.js)
 
 // A new division takes an even share of the bars, the way a new panel takes an even
 // share of the series; from there each bar can be moved by hand.
@@ -2788,20 +2094,6 @@ function delDiv(i, k){
   });
   s.divs = keep;
   return true;
-}
-
-/* A series is one legend entry — a bar series is one per division, since the legend
-   speaks of divisions. With a single division that comes to the same thing, because
-   it carries the series' own name and colour. */
-function legendEntries(list){
-  const out = [];
-  for (const s of list){
-    if (s.kind === 'bar')
-      divsOf(s).forEach((_, k)=> out.push({ ...s, color: divColor(s, k), label: divName(s, k),
-                                            texture: divTexture(s, k), texInv: divInv(s, k) }));
-    else out.push(s);
-  }
-  return out;
 }
 
 /* Hand a set out over a list of series, one item each: 'series' scope walks them all
@@ -3591,7 +2883,7 @@ function wireControls(){
 
 // For the SEM figure (sem-figure.js), the composer's other kind: the page, the fonts,
 // the composer itself and its parts.
-export { FONTS, PX_MM, PT_PX, alignPicker, ALIGN_ICON, GRIP, controlsEl, rebuilding, renderPreview, rebuildControls,
+export { FONTS, PX_MM, PT_PX, contrastInk, alignPicker, ALIGN_ICON, GRIP, controlsEl, rebuilding, renderPreview, rebuildControls,
   numField, num, chk, sel, autoNum, readNum, wireRowDrag };
 
 /* The composer, on one kind of figure. A kind is a plain object of hooks:

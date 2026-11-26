@@ -1,0 +1,98 @@
+{
+ "lines": {
+  "digest": "a5c8ffbb75427f1d482350d130cedcb02fb6c0ebd583a09bceb02643a01e2871",
+  "elements": 309
+ },
+ "lines-corner-framed": {
+  "digest": "a4d6c992c6ce135246424d3c89c5a62e0a8bb09d08c915ee1832ddecca3b905c",
+  "elements": 315
+ },
+ "lines-global-top": {
+  "digest": "645e87e286ee4830a83c2f7e0821552d9718b2640711ae29bb952e0fefe2591d",
+  "elements": 312
+ },
+ "lines-grid-minors": {
+  "digest": "df58d597194145e2ef491e315e25a27a94cc7038edded652437772106becff9d",
+  "elements": 639
+ },
+ "lines-steps-range": {
+  "digest": "a3aa76be8d590482406547a49fe406df05b26b159a90dba0ebb809e9b49cff89",
+  "elements": 372
+ },
+ "lines-plot-by-hand": {
+  "digest": "3daf58d2a4051040a2ec62205ec92ce1c86d9edc0b5d2d007172cfdedfd8ad3f",
+  "elements": 309
+ },
+ "lines-shared-titles": {
+  "digest": "dc10e622f4af4107f5c12a3ff41177bde522dabf6e5085c6c953bd68454984fe",
+  "elements": 321
+ },
+ "lines-spilled": {
+  "digest": "53154475369d17304c0cae0e2f04a6b4d320cb9817909381e49549eaade612e9",
+  "elements": 309
+ },
+ "lines-xrot": {
+  "digest": "2c50224e695d0135a00e8ca258da70f1eb670c7c6a1ce0a1224d97b224103fa0",
+  "elements": 309
+ },
+ "lines-labels": {
+  "digest": "d72bf55b6892972440a3b92786c5d0615e8e4b591c52a7b706ce64ff6cf13690",
+  "elements": 1080
+ },
+ "scatter-loglog": {
+  "digest": "9616b596bab6c5e78916393c84d15daae97dc524210cd8dfcd4b939fffc3aa28",
+  "elements": 225
+ },
+ "log-125": {
+  "digest": "314ef074f1753d74459ff91170a949b4660b730cb0458a5a984a09da83e7e1ac",
+  "elements": 276
+ },
+ "log-nonpositive": {
+  "digest": "942a4a9990e9c61d6b56a58a90d8348d09b73947a5bc195476298f646833630b",
+  "elements": 237
+ },
+ "bars": {
+  "digest": "a1248f4cd04704e042b2e9bd71bf5f63f69fc424eefd61428a4728f18945a914",
+  "elements": 231
+ },
+ "bars-labels": {
+  "digest": "c00f1c5e15aad76f597e85a26a11fa45c1ac49b7438f8062dd475fa86aff1b5a",
+  "elements": 267
+ },
+ "bars-tilt-by-hand": {
+  "digest": "fe789caa3049d5b866637f4f07d4ba7d33eca1c4fc3e17f7697d1544f204380b",
+  "elements": 231
+ },
+ "bars-runs": {
+  "digest": "a8373c49ac90abd1d5bd392f80675d56cb0092138e13b60cd2f44d4acda15b4b",
+  "elements": 144
+ },
+ "boxes": {
+  "digest": "3b46d4aab940e6b9f1bceafdc12e6df99aa653a2f3bd033e19f68453bb7a3fb1",
+  "elements": 222
+ },
+ "grid2x2": {
+  "digest": "8e0167a9f119229630ea1ee07f0b1042835c628ba439cb8f3df18fd6363d5d56",
+  "elements": 582
+ },
+ "grid-groups": {
+  "digest": "254be60362a2808f6d7547aee26c80291aaff2e56b3d2febc95060267384015c",
+  "elements": 666
+ },
+ "grid-span-gap": {
+  "digest": "59f7f8a2cf0c56bee1aa9154577fbea783e21b3b2fd87223d29f8e42dec5291f",
+  "elements": 513
+ },
+ "linked": {
+  "digest": "4e1dcc0d446180153f5cf62f69fd247c6815aff3822dc192bd01644db0105873",
+  "elements": 411
+ },
+ "bars-textures": {
+  "digest": "1295d8c23f0127d91bd6ca1d8194d3728648f387075a5cf9d5ef6378767c4504",
+  "elements": 423
+ },
+ "rich-bare": {
+  "digest": "325aec0b86db2a23cec416dddf3a5502a2fc373850b17b373af606ce1c4ce573",
+  "elements": 306
+ }
+}

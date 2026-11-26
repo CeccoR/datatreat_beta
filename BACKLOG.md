@@ -235,7 +235,28 @@ was proposed; nothing here is in the code yet.
   the theme and the triad), 918 steps at each of the pixel ratios 1, 2 and 3, gave v553's
   canvas calls (11.5 million, every number by its shortest round-trip string), pixels, PNGs
   and state; 13 cases kept in tests/shape3d.test.mjs (golden digests of the view's calls on
-  a recording page) beside tests of the calculations. The others when work takes us into them.
+  a recording page) beside tests of the calculations. Done for `drawFigure` in v555, the same
+  way: what the plots' figure draws, and where, in `figure-layout.js` (the ranges and their
+  sharing groups, the ticks, linear and log, their minors and words, the sides with room
+  beyond them, the margins and the plot area, the tilt of the X names, each panel's frame and
+  scales, the grid, the bars, boxes and error bars, a curve's path and symbols, the value
+  labels and their ink, the tick marks, the numbers that give way to a neighbour's, the
+  category names, the axis titles, the legends, the shared titles, the texture tiles, the
+  colours), plain functions tested in Node, handed the model and what they cannot load there
+  (the text measured in the figure's font, plot.js's ticks and numbers, utils.js's tilt
+  test); the svg left in `figure.js`, painted in named stages (`startFigure`, `paintPanel`,
+  `paintSeries`, `paintBars`, `paintBox`, `paintCurve`, `paintAxes`, `paintLegend`): the file
+  3797 lines to 3089, the function 558 to 13, the longest stage 42; the model 984. The same
+  operations in the same order: in the browser, 162 figures (102 made up: lines, scatters,
+  bars, boxes, categories in runs, logs, grids with spans, gaps and sharing groups, every
+  legend's place, data labels, textures and divisions, plot areas set by hand; and the plots
+  of four modules, from their toolbars and under three sets of settings) at the pixel ratios
+  1, 2 and 3 in both themes gave v554's preview, SVG, PNG, footer, controls and kept state to
+  the byte; in Node, v554's figure.js against this one on 1500 random figures, 3.7 million
+  elements, none different. 24 figures kept in tests/figlayout.test.mjs (golden digests of
+  `drawFigure`'s markup on a recording page, figure.js run from its source) beside tests of
+  the calculations. Still long in figure.js: `wireControls` (~370), the controls' wiring.
+  The others when work takes us into them.
 - **The browser storage is shared with every page of the same origin.** On GitHub Pages
   the app lives at `ceccor.github.io/datatreat_beta/`, and every project published under
   `ceccor.github.io` is the same origin: any of them can read and write DataTreat's
