@@ -201,8 +201,14 @@ was proposed; nothing here is in the code yet.
   split a function when work takes us into it, its calculations moved out into
   functions the tests can call. Done for `createRietveld` in v513: its calculations in
   `xrd-rv-model.js` and its markup in `xrd-rv-html.js`, both tested in Node, the card's
-  wiring left in `xrd-rv.js` (2221 lines to 1412), behaviour byte for byte the same; the
-  others when work takes us into them.
+  wiring left in `xrd-rv.js` (2221 lines to 1412), behaviour byte for byte the same. Done
+  for `createPeakAnalysis` in v552, the same way: its calculations (the peak search, the
+  widths and their uncertainty, the Caglioti fit, the sizes, the settings and the saved
+  state read back, the CSVs) in `xrd-peaks-model.js` and its words and markup that need no
+  page (the peak table, the Caglioti box, the notes) in `xrd-peaks-html.js`, both tested in
+  Node (tests/peaksmodel.test.mjs, against what v551's page wrote), the card's wiring and its
+  own markup left in `xrd-peaks.js` (1740 lines to 1120, the function 1368 to 908),
+  behaviour byte for byte the same. The others when work takes us into them.
 - **The browser storage is shared with every page of the same origin.** On GitHub Pages
   the app lives at `ceccor.github.io/datatreat_beta/`, and every project published under
   `ceccor.github.io` is the same origin: any of them can read and write DataTreat's

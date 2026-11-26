@@ -5,15 +5,16 @@
    running down, points at one x; w = 0 the data as they are; the weights the FWHM's
    uncertainty is carried through (boxWeights) as the box's, and as the moving average's for
    an even N; the field's texts; a value that is no number left out of the line, the others
-   smoothed as without it. And XRPD's SNIP by its half-width (xrd-peaks.js computeBaseline, read from
-   its source): on an uneven grid the line at x ± k·step, as the definition reads it, point
-   for point, the 2θ read once, at the cost of the even grid's passes. */
+   smoothed as without it. And XRPD's SNIP by its half-width (xrd-peaks-model.js computeBaseline; to
+   v551 read from xrd-peaks.js's source): on an uneven grid the line at x ± k·step, as the definition
+   reads it, point for point, the 2θ read once, at the cost of the even grid's passes. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { boxSmooth, boxWeights, meanStep, widthText, ptsNum, ptsText } from '../smooth.js';
+import { computeBaseline } from '../xrd-peaks-model.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const UTILS = fs.readFileSync(path.join(ROOT, 'utils.js'), 'utf8');
@@ -24,14 +25,6 @@ const fromUtils = name =>{
   return new Function(`return ${m[0]}`)();
 };
 const movingAverage = fromUtils('movingAverage');
-// XRPD's SNIP as xrd-peaks.js has it (a module of a page: its function cut out by its braces).
-const computeBaseline = (()=>{
-  const src = fs.readFileSync(path.join(ROOT, 'xrd-peaks.js'), 'utf8'), i = src.indexOf('function computeBaseline(');
-  assert.ok(i >= 0, 'computeBaseline in xrd-peaks.js');
-  let k = src.indexOf('{', i), d = 0;
-  for (; k < src.length; k++){ if (src[k] === '{') d++; else if (src[k] === '}' && !--d) break; }
-  return new Function('meanStep', `${src.slice(i, k + 1)}\nreturn computeBaseline;`)(meanStep);
-})();
 
 // Seeded noise, a peak on a slope: 2000 points at 0.013°, as an XRPD scan.
 function rng(seed){ let x = seed; return ()=> (x = (x*1103515245 + 12345) % 2147483648)/2147483648; }
