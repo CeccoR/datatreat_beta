@@ -5,13 +5,11 @@
    The Rietveld model takes λ, the ratio, the radius and the monochromator from here;
    the warnings say when a value had to be assumed, or when the file describes a
    geometry the model does not handle (transmission, an uncoupled scan, an automatic
-   slit). Two entry points, one field logic:
-   - readXrdmlInstrument(doc, k): a parsed Document (the page has DOMParser);
-   - readXrdmlInstrumentText(text, k): the raw file (Node, a Worker), through a small
-     tolerant XML reader.
-   k: the file's <xrdMeasurement> whose header is read (0, the first, by default).
-   The logic sees the tree only through a five-function accessor, so the two cannot
-   drift apart. No DOM required. Not an .xrdml → null.
+   slit). readXrdmlInstrumentText(text, k) reads the raw file (the page, Node, a Worker)
+   through a small tolerant XML reader; k: the file's <xrdMeasurement> whose header is
+   read (0, the first, by default). The logic sees the tree only through a five-function
+   accessor, a parsed DOM Document's or the small reader's (the scans are read from either),
+   so the two cannot drift apart. No DOM required. Not an .xrdml → null.
    Numbers the file does not give are left undefined (not null, not NaN), so isFinite,
    `??` and `||` all read them as missing.
 ========================================================= */
@@ -549,12 +547,7 @@ function readScans(A, doc){
 /* =========================================================
    ENTRY POINTS
 ========================================================= */
-// A parsed DOM Document (DOMParser, 'text/xml'), its root, or the <xrdMeasurement> element.
 const measIdx = k => Number.isInteger(k) && k > 0 ? k : 0;
-function readXrdmlInstrument(xmlDoc, k){
-  if (!xmlDoc) return null;
-  return readInstrument(DOM_ACCESS, xmlDoc, measIdx(k));
-}
 
 /* The text of an XML file from its bytes, its encoding found as the XML specification's
    appendix F says: a byte-order mark (UTF-8, UTF-16 LE or BE), else UTF-16 by the zero
@@ -594,4 +587,4 @@ function readXrdmlScanText(text){
   return isXrdml(text) ? readScans(LITE_ACCESS, parseXmlLite(text))[0] : { error: 'not an .xrdml file' };
 }
 
-export { readXrdmlInstrument, readXrdmlInstrumentText, readXrdmlScans, readXrdmlScanText, decodeXml, noiseCountScale };
+export { readXrdmlInstrumentText, readXrdmlScans, readXrdmlScanText, decodeXml, noiseCountScale };

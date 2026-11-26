@@ -694,4 +694,4 @@ function lnGamma(x){
   return -tmp + Math.log(2.5066282746310007*ser/x);
 }
 
-export { measureWidths, williamsonHall, orderTests, chi2Survival, hklText, fitPeak };
+export { measureWidths, williamsonHall };

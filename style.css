@@ -17,7 +17,6 @@
   --muted: #7f97a0;
   --white: #ffffff;          /* the single source of "white" across the UI */
   --accent: #ffb454;
-  --accent2: #d98fd1;
   --good: #7fd17f;
   --warn: var(--accent);     /* warnings reuse the accent (were a near-identical orange) */
   --bad: #ff6b6b;
@@ -47,7 +46,6 @@
   --alert-good-bg: #0f3a26;  --alert-good-line: #1c5a3c;
   --alert-bad-bg:  #3a1212;  --alert-bad-line:  #5a1c1c;
   --alert-info-bg: #0f2a38;  --alert-info-line: #1c4a62;
-  --pending-line: #6b4d1a;
   /* Plot chrome (axes/grid/labels/crosshair) — themed via .plot-* classes below */
   --plot-border: #3a414c;
   --plot-grid: #262c35;
@@ -85,7 +83,6 @@
   --text: #1a2327;
   --muted: #56676f;
   --accent: #b96a10;
-  --accent2: #9c4b93;
   --good: #2e8b4e;
   --bad: #cc3b3b;
   --info: #1d6896;
@@ -101,7 +98,6 @@
   --alert-good-bg: #e2f4ea;  --alert-good-line: #9dd3b3;
   --alert-bad-bg:  #fbe6e6;  --alert-bad-line:  #eaa9a9;
   --alert-info-bg: #e8f3fa;  --alert-info-line: #a6cde6;
-  --pending-line: #e4c583;
   --plot-border: #c2ccd2;
   --plot-grid: #e5eaed;
   --plot-tick: #56676f;
@@ -2656,11 +2652,9 @@ html:has(.modal-backdrop:not([style*="none"])) { overflow: hidden; scrollbar-gut
     currentColor 0 5px, transparent 5px 9px);
   background-color: transparent !important;
 }
-/* Long dashes and dots, for series drawn '10,4' and '2,3' (Urbach's subtracted curves
-   and fits). */
-.legend i.mk-ldash, .legend i.mk-dots { background-color: transparent !important; width: 20px; }
-.legend i.mk-ldash { background-image: repeating-linear-gradient(to right, currentColor 0 9px, transparent 9px 13px); }
-.legend i.mk-dots { background-image: repeating-linear-gradient(to right, currentColor 0 2px, transparent 2px 5px); }
+/* Dots, for a series drawn dotted (GC's chromatogram legend). */
+.legend i.mk-dots { background-color: transparent !important; width: 20px;
+  background-image: repeating-linear-gradient(to right, currentColor 0 2px, transparent 2px 5px); }
 
 /* ===== Dropzone loading state ===== */
 .dropzone { position: relative; }

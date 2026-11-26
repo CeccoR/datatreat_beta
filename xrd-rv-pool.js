@@ -89,7 +89,7 @@ let ids = 0;
    done resolves to the worker's result, or null once cancelled (cancel: the worker
    terminated, nothing of its answer after; a job still waiting for a slot withdrawn), and
    rejects with the worker's error. onProgress(frac, stage) as the worker says. */
-export function job(payload, onProgress){
+function job(payload, onProgress){
   const ac = new AbortController();
   let w = null, free = null, over = false, onMsg = null, onErr = null, ok, ko;
   const done = new Promise((a, b)=>{ ok = a; ko = b; });

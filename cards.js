@@ -87,7 +87,7 @@ function kindMenu(kinds, layer){
    which slid to the height it had before the redraw (to v485). */
 // Long enough, at ~600 px of body, to read as a slide rather than a jump; the curve
 // starts briskly and settles gently, and the content fades as it goes.
-export const FOLD_MS = 320;
+const FOLD_MS = 320;
 const FOLD_EASE = 'cubic-bezier(0.4, 0, 0.2, 1)';
 function foldTo(card, fold){
   const body = card.querySelector(':scope > .an-body');

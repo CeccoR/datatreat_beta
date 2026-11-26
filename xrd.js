@@ -1,11 +1,9 @@
-import { setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, buildAlertsHtml, nextColor, colorOf, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, registerBusy, busyChanged, registerModule, fixed, X_SVG } from './utils.js';
+import { esc, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, buildAlertsHtml, nextColor, colorOf, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, registerBusy, busyChanged, registerModule, fixed, X_SVG } from './utils.js';
 import { createRietveld, RV_INFO, RV_STD_INFO } from './xrd-rv.js';
 import { createPeakAnalysis, PEAKS_INFO, STD_INFO } from './xrd-peaks.js';
 import { readXrdmlScans, decodeXml } from './xrd-instr.js';
 import { createDeck, cardInfo, fileSafe } from './cards.js';
-
-// File names and what a file says about itself go into the alerts as text, never as markup.
-const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+import { isObj } from './modkit.js';
 
 /* =========================================================
    XRD MODULE
@@ -143,7 +141,6 @@ function readAgain(f){
    and anything else as its default (up to v484 a curIdx that was no number made the index
    NaN, and the cards read files[NaN].label; a file not an object, or with no arrays,
    threw before anything was drawn). */
-const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
 const isArr = v => Array.isArray(v) || ArrayBuffer.isView(v);
 // (a kind of KINDS' own: 'constructor', 'toString' and the like are none)
 const isKind = k => Object.prototype.hasOwnProperty.call(KINDS, k);

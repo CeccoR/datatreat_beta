@@ -154,7 +154,7 @@ export function moduleKit(mod, o){
       if (names.has(f.name)){ dup.push(f.name); continue; }
       names.add(f.name);
       const rawBytes = new Uint8Array(await f.arrayBuffer());
-      let data = null;
+      let data;
       try { data = read(decodeText(rawBytes), rawBytes); } catch(e){ data = null; }
       if (!data || data.error){ bad.push(data ? `${f.name} (${data.error})` : f.name); continue; }
       const rec = { name: f.name, label: f.name.replace(/\.[^.]+$/, ''), ...data, color: nextColor([...all, ...got]), rawBytes };

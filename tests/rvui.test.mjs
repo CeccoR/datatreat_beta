@@ -139,12 +139,12 @@ test('B: the standard\'s Settings show only what applies to it; the samples\' ev
   try {
     await setup(page);
     await loadStd(page);
-    const box = sel => page.evaluate(sel=>{
+    const box = ()=> page.evaluate(()=>{
       const b = [...document.querySelectorAll('.rvs-box')].find(x=> x.closest('.modal-backdrop').style.display === 'flex');
       const keys = a => [...b.querySelectorAll(`[${a}]`)].map(e=> e.getAttribute(a));
       return { rows: keys('data-row'), holds: keys('data-hold'), fits: keys('data-fit-row'), na: b.querySelectorAll('.is-na').length,
         disabled: [...b.querySelectorAll('input, select, button')].filter(c=> c.disabled).map(c=> c.dataset.on || c.dataset.depth || c.dataset.hold || c.dataset.fit || c.dataset.fitAuto || c.dataset.start || c.textContent) };
-    }, sel);
+    });
     await page.click(P + 'Std');
     await page.waitForSelector('#xrdStdRv', { state: 'visible' });
     await page.click('#xrdStdRSettings');

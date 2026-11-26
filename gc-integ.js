@@ -375,7 +375,7 @@ export function createInteg(ctx){
     }
     function calFit(g){
       const pts = calRows().filter(x=> x.lv.on && fin(x.lv[g]) && x.r && x.r.gases && x.r.gases[g] && fin(x.r.gases[g].area)).map(x=> ({ conc: x.lv[g], area: x.r.gases[g].area }));
-      let fit = null;
+      let fit;
       try { fit = pts.length ? fitCalibration(pts, { zeroIntercept: cal.zero[g] }) : null; } catch(e){ fit = null; }
       return fit && fin(fit.slope) && fit.slope ? { ...fit, pts } : null;
     }
@@ -534,7 +534,7 @@ export function createInteg(ctx){
         prop[g] = null;
         if (!tv) return;
         const areas = res.map(x=> x && x.gases && x.gases[g] && fin(x.gases[g].area) ? x.gases[g].area : NaN);
-        let T = null;
+        let T;
         try { T = transferK(areas, Array.from(tv, v=> fin(v) ? v : NaN), { minValue: 0, minCount: 1 }); } catch(err){ T = null; }
         if (T && fin(T.k) && T.k > 0) prop[g] = { k: T.k, n: T.n, areas, tv };
       });
@@ -929,7 +929,7 @@ export function createInteg(ctx){
       const st = status(), box = $('Status'), mine = new Set(tcdRecs().map(r=> keyOf(r, method)));
       const left = wanted().filter(g=> mine.has(g.key)).reduce((s, g)=> s + g.miss.length, 0);
       const total = entries().reduce((s, e)=> s + e.n, 0);
-      let html = '', state = '';
+      let html = '', state;
       if (st.job){
         const pct = st.job.total ? Math.round(100*st.job.done/st.job.total) : 0;
         state = 'running';
@@ -1040,13 +1040,13 @@ export function createInteg(ctx){
           stepStd(e.key === 'ArrowLeft' ? -1 : 1);
         }
       };
-      function open(){ if (isOpen) return; isOpen = true; from = document.activeElement; m.style.display = 'flex'; document.addEventListener('keydown', onKey); paint(); ensure(); q('.gci-cal-box').focus({ preventScroll: true }); }
+      function open(){ if (isOpen) return; isOpen = true; from = document.activeElement; m.style.display = 'flex'; document.addEventListener('keydown', onKey); paintWindow(); ensure(); q('.gci-cal-box').focus({ preventScroll: true }); }
       // (the files waiting for their partner, and what was said of them, let go)
       function close(){ if (!isOpen) return; isOpen = false; held = []; q('.gci-cal-alerts').innerHTML = ''; stdNav.close(); m.style.display = 'none'; document.removeEventListener('keydown', onKey); if (from && from.isConnected) from.focus({ preventScroll: true }); from = null; }
       m.addEventListener('click', e=>{ if (e.target === m || e.target.closest('.xrd-std-x')) close(); });
       // A change: the card's, a step; the cards below follow.
       // (`levels`: a level typed or ticked, its field kept as it is: the fits drawn again, not the table)
-      const changed = levels =>{ valuesKept.clear(); draw(true); if (levels) paintFits(); else paint(); kit.commit(); ctx.changed(); };
+      const changed = levels =>{ valuesKept.clear(); draw(true); if (levels) paintFits(); else paintWindow(); kit.commit(); ctx.changed(); };
 
       /* The files dropped (v549): each told by what it holds, raw chromatograms (gc-pair.js
          looksTcd) or a GC table (gc.js's reader); a table and raw chromatograms of one name
@@ -1198,7 +1198,7 @@ export function createInteg(ctx){
         return `<svg class="gci-thumb" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="1"/></svg>`;
       }
       // (drawn anew while the standards are integrated: the field typed in keeps the focus)
-      function paint(){
+      function paintWindow(){
         if (!isOpen) return;
         const act = document.activeElement, was = act && m.contains(act) && act.matches('input[data-fi]') ? { k: `[data-fi="${act.dataset.fi}"][data-j="${act.dataset.j}"][data-g="${act.dataset.g}"]`, v: act.value, s: act.type === 'text' ? act.selectionStart : null } : null;
         const box = q('.gci-cal-table'), top = box.scrollTop;
@@ -1258,7 +1258,7 @@ export function createInteg(ctx){
             const mA = rs.reduce((s, r)=> s + r.area, 0)/rs.length, fit = rs[0].fitted, dev = fit ? 100*(mA - fit)/fit : NaN;
             return `<tr><td>${sig(+c, 5)}</td><td>${rs.length}</td><td>${sig(mA, 5)}</td><td>${sig(fit, 5)}</td><td class="${fin(dev) && Math.abs(dev) > 3 ? 'gci-bad' : ''}">${fin(dev) ? (dev > 0 ? '+' : '') + dev.toFixed(2) + ' %' : '—'}</td></tr>`; }).join('')}</tbody></table>`;
       }
-      return { open, paint, isOpen: ()=> isOpen, destroy(){ close(); stdNav.close(); m.remove(); } };
+      return { open, paint: paintWindow, isOpen: ()=> isOpen, destroy(){ close(); stdNav.close(); m.remove(); } };
     }
 
     /* ---- Its CSVs: every chromatogram's values (integration.csv, the run overview's); the

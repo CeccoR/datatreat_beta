@@ -576,7 +576,7 @@ function sollerCells(th, g){
   // 2φ − 2θ (deg) at a corner or a centre of the grid. Below 2θ = β1 + β2 (4.6° for two
   // Sollers of 0.04 rad) a ray can miss the cone: it is put at its edge.
   const at = (A, B, i, j) => { const v = (c2 - A.sn[i]*B.sn[j])/(A.cs[i]*B.cs[j]); return (Math.acos(v > 1 ? 1 : v < -1 ? -1 : v) - tt)*R2D; };
-  const corner = new Float64Array((N + 1)*(N + 1)).fill(NaN), cAt = (i, j) => { const k = i*(N + 1) + j; let e = corner[k]; if (e !== e){ e = at(G.c1, G.c2, i, j); corner[k] = e; } return e; };
+  const corner = new Float64Array((N + 1)*(N + 1)).fill(NaN), cAt = (i, j) => { const k = i*(N + 1) + j; let e = corner[k]; if (Number.isNaN(e)){ e = at(G.c1, G.c2, i, j); corner[k] = e; } return e; };
   // A centre's shift: the corners' mean, less the curvature the second order gives the cell
   // (two Sollers of 0.04 rad: within 5·10⁻⁵° of the exact centre from 10°, 3·10⁻³° at 5°;
   // an arccosine a cell fewer).
@@ -905,7 +905,7 @@ function memberVectors(q, p, cell, list){
 function textureOf(po){
   if (po == null || po === false || String(po).trim() === '') return null;
   if (String(po).trim().toLowerCase() === 'auto') return 'auto';
-  let t = null;
+  let t;
   if (Array.isArray(po)) t = po.map(Number);
   else {
     // in brackets or not; separated (by spaces or commas) or one digit each
@@ -2099,7 +2099,7 @@ function latticeStretch(constraint, cell, names, lat0, r){
      factor, 1/counting time for rates), default 1. Points with a y that is not a number
      get no weight. Throws on a 2θ that is not a number and on fewer than MIN_POINTS
      weighted points, which no refinement can use.
-   - instr: readXrdmlInstrument's object, or null (Cu Kα1/Kα2, ratio 0.5, R 240 mm, no
+   - instr: readXrdmlInstrumentText's object, or null (Cu Kα1/Kα2, ratio 0.5, R 240 mm, no
      monochromator).
    - phases: [{ id, name, cell, constraint, ops, atoms (the whole cell), mass? }].
    - prof: starting { zero, disp, U, V, W, X, Y, Xs, Ys } (Xs, Ys: every phase's start).
@@ -2373,7 +2373,7 @@ function profileOf(model, v, k){
    move, so for each scattering type (species, occupancy, B: one amplitude) the geometric
    sum G_t(h) = Σ exp(2πi h·x) over its atoms is made once per listed reflection; then
    F(h) = Σ_t A_t(s)·G_t(h) and F(−h) = Σ_t A_t(s)·conj(G_t(h)), with A_t = occ·exp(−B s²)
-   ·(f0 + f′ + i f″) — the same sums as xrd-cryst's F2, grouped by type. A new cell then
+   ·(f0 + f′ + i f″): the sums over the atoms, grouped by type. A new cell then
    costs the form factors at the new s alone: no trigonometry, which on a 48-atom
    monoclinic cell was most of the time of a cell-search step. */
 function phaseGeometry(model, q){
@@ -2551,7 +2551,7 @@ function wppmLineOf(model, k, r, j, th, tt, I, inst, ext, out, ticks, S, f2, d, 
      median instead, σ and the size traded one for the other along the breadth. The
      largest crystallites (+3σ over the volume) are e^{3σ − σ²/2} times as large. */
   const toMedian = Math.exp(3.5*sigma*sigma), grow = Math.exp(-3*sigma + 0.5*sigma*sigma);
-  let sizeMean = 0, sizeMin = Infinity, members = null;
+  let sizeMean = 0, sizeMin = Infinity, members;
   if (ts){
     const m = ts.length/3; members = [];
     let wsum = 0;
@@ -2655,12 +2655,12 @@ function phasePattern(model, v, k, out, ticks){
     let s = 0; for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) s += h[i]*Gs[3*i + j]*h[j];
     fScale = Math.sqrt(s)/q.faultTab.gB;
   }
-  const sk = model.skip, skip = sk && sk.k === k ? sk.rs : null;
-  if (sk && sk.only && sk.k !== k) return out;
+  const on = model.only, only = on && on.k === k ? on.rs : null;
+  if (on && on.k !== k) return out;
   // A reflection's two lines drawn together (wppmPair), but for the ticks' calc
   const pend = wppm && !ticks && model.lines.length === 2 ? [] : null;
   for (let r = 0; r < q.nRefl; r++){
-    if (skip && (sk.only ? !skip.has(r) : skip.has(r))) continue;
+    if (only && !only.has(r)) continue;
     const gf = r < q.nFull ? 1 : growFade(d[r], q.dFull);
     if (!gf) continue;
     const s2 = 0.25/(d[r]*d[r]);
@@ -2764,17 +2764,17 @@ function calc(model, params, opts = {}){
   const v = vectorOf(model, params), n = model.n;
   const ticks = [], perPhase = [];
   const bg = background(model, v, new Float64Array(n)), yc = Float64Array.from(bg);
-  // opts.skip = { k, rs: Set of reflection indices }: those reflections of phase k left
-  // out; opts.only = { k, rs }: those alone, with the background (xrd-widths: one peak);
-  // opts.internal: the curves in the model's own (ascending) order.
-  model.skip = opts.only ? { ...opts.only, only: true } : opts.skip || null;
+  // opts.only = { k, rs: Set of reflection indices }: those reflections of phase k alone,
+  // with the background (xrd-widths: one peak); opts.internal: the curves in the model's
+  // own (ascending) order.
+  model.only = opts.only || null;
   try {
     model.phases.forEach((q, k)=>{
       const P = phasePattern(model, v, k, new Float64Array(n), ticks), S = v[q.iScale];
       for (let i = 0; i < n; i++){ P[i] *= S; yc[i] += P[i]; }
       perPhase.push(P);
     });
-  } finally { model.skip = null; }
+  } finally { model.only = null; }
   ticks.sort((a, b)=> a.tt - b.tt);
   if (model.rev && !opts.internal){ yc.reverse(); bg.reverse(); perPhase.forEach(P=> P.reverse()); }
   return { yc, bg, perPhase, ticks };
@@ -3095,7 +3095,7 @@ function refineHeld(model, opts){
     const { As, gs, D, k } = scaled(A, g, m, act);
     // esds at this point, for the shift/esd test
     const chInv = cholInverse(cholesky(As, k), k), cr = chiRed(st.chi2);
-    let accepted = false, maxRatio = 0;
+    let accepted = false, maxRatio;
     /* 12 tries, and on until λ reaches 10k: a correlation-scaled matrix of k parameters
        has no eigenvalue above k, so from there the step is a short one down the gradient,
        which lowers χ² unless the gradient is rounding. (From LAM_MIN, 12 tries alone
@@ -3338,7 +3338,7 @@ function cellSearchAt(model, opts){
   const df = H*D2R/(3*2*tM);                       // f step: a third of the last peak's width
   const scale = (v, f) => lens.forEach(i=> { v[i] = v0[i]*f; });
   const only = opts.index != null || opts.phase != null ? ks : null;   // the other phases do not move
-  let steps = opts.steps || 2*Math.ceil(range/df) + 1, curve, fine = null, f = 1, found = false;
+  let steps = opts.steps || 2*Math.ceil(range/df) + 1, curve, fine = null, f = 1, found;
   if (opts.steps || steps <= 161){
     steps = Math.max(41, steps);
     curve = scan(model, scale, beyond(grid(1 - range, 1 + range, steps)), only).curve;
@@ -3586,7 +3586,7 @@ function ownEvidence(model, v, chi2){
     const runs = [];
     for (let i = 0; i < n; i++){
       if (!mark[i] || !(w[i] > 0)) continue;
-      if (runs.length && runs[runs.length - 1].end === i - 1) runs[runs.length - 1].end = i, runs[runs.length - 1].idx.push(i);
+      if (runs.length && runs[runs.length - 1].end === i - 1){ runs[runs.length - 1].end = i; runs[runs.length - 1].idx.push(i); }
       else runs.push({ end: i, idx: [i] });
     }
     const pts = runs.reduce((a, r)=> a + r.idx.length, 0);
@@ -4051,7 +4051,7 @@ function autoRefine(model, opts = {}){
     if (!irf && irfSame) ['U', 'V', 'W', 'X', 'Y', ...asFree].forEach(take);
     model.phases.forEach((q, k)=> {
       const c = chg[k], pf = q.pfx;
-      if (out.has(k)){ model.par.forEach((p, i)=> { if (p.phase === k) take(p.name); }); vv[q.iScale] = 0; return; }
+      if (out.has(k)){ model.par.forEach(p=> { if (p.phase === k) take(p.name); }); vv[q.iScale] = 0; return; }
       take(pf + 'scale'); q.iLat.forEach(i=> take(model.par[i].name));
       // Size and strain: with the standard's profile only (without, they stay 0: the
       // profile is the whole width).
@@ -4133,7 +4133,7 @@ function autoRefine(model, opts = {}){
     stageStats('from the last result', res);
     let kT = 1;
     if (lsNew.length){ tS = Date.now(); prog(kT++/nT, 'size distribution'); ({ res, free } = sizeDistTrials(lsNew, free, res)); stageStats('size distribution', res); }
-    if (poNew.length){ tS = Date.now(); prog(kT++/nT, 'preferred orientation'); ({ res, free } = textureTrials(poNew, free, res)); stageStats('preferred orientation', res); }
+    if (poNew.length){ tS = Date.now(); prog(kT/nT, 'preferred orientation'); ({ res, free } = textureTrials(poNew, free, res)); stageStats('preferred orientation', res); }
 
     // What was held, refined from the last values, and new.
     out.forEach(k=> warnings.push(`${nm(k)}: not detected in the last result, so left out here too (scale 0); a refinement from the CIF tests it again.`));
@@ -4293,7 +4293,7 @@ function autoRefine(model, opts = {}){
   const chiTot = r => r.stats.chi2*Math.max(1, r.stats.N - r.stats.P);
   // (2.99 esd reads 2.9, not 3.0: "not above 3")
   const weakWhy = (z, after) => `its scale is not above 3 esd${after ? ' once the cells and widths are refined' : ''}${z > 0 ? ` (${(Math.floor(z*10)/10).toFixed(1)} esd)` : ''}`;
-  let res, nIn, lastFree = [], weakOut = null, ownOut = null;
+  let res, nIn, lastFree, weakOut = null, ownOut = null;
   const keptBIC = new Map(), keptOwn = new Map();
   for (;;){
     let free = [...scales.filter((_, k)=> !out.has(k)), ...lin];
@@ -4304,9 +4304,9 @@ function autoRefine(model, opts = {}){
     free = free.filter(name=> !out.has(scales.indexOf(name)));
     const keep = list => list.filter(name=> !model.phases.some((_, k)=> out.has(k) && name.startsWith(pfxOf(k))));
     free = free.concat(std ? ['zero', 'disp', 'transp'] : [...keep(lattice).filter(name=> !latHeld(name)), 'disp']);
-    res = run(2, std ? 'zero and displacement' : 'lattice and displacement', free);
+    run(2, std ? 'zero and displacement' : 'lattice and displacement', free);
     free = free.concat(irf ? keep(model.phases.filter(q=> !q.sizeOff).map(q=> q.pfx + 'Ys')) : ['W', 'Y']);
-    res = run(3, 'widths', free);
+    run(3, 'widths', free);
     nIn = reflectionsInRange(model);
     /* Without the standard's profile the whole profile is refined, on a sample as on the
        standard (a sample's is then the instrument's and its own in one; up to v426 its U,
@@ -4889,7 +4889,7 @@ function shapeFamily(model, k, res, free, opts, r, vIso){
   for (const t of others){
     const m = siblingModel(model, k, t, vIso);
     if (!m) return null;
-    let rr = null;
+    let rr;
     try { rr = freeShape(m, k, res, free, { ...opts, onShape: null, family: null }); } catch(e){ rr = null; }
     fits.push(one(t, rr));
   }
@@ -5100,7 +5100,7 @@ function freeShapeRun(model, k, res, free, opts){
   // ΔBIC against the isotropic fit, with χ² divided by its χ²_ν (so that the model's own
   // misfit is not taken for evidence).
   const bic = r => (chiTot(r) - chiTot(res))/Math.max(1, res.stats.chi2) + (r.stats.P - res.stats.P)*Math.log(N);
-  let held = false, dBICfree = NaN, dBICheld = NaN, freeOff = null, freeW = null, bestFree = null;
+  let held = false, dBICfree, dBICheld = NaN, freeOff = null, freeW = null, bestFree = null;
   /* Refined again with its exact faces (the rounded ones only steered the search; an
      ellipsoid's or a spheroid's ball has none, and is never rounded), its axes free; then set
      on the lattice, its orientation held — a crystallite's faces are lattice planes more often
@@ -5174,7 +5174,7 @@ function freeShapeRun(model, k, res, free, opts){
           freeW = q.iW.map(i=> mf.v[i]);
         } else { best = mf; held = false; freeOff = null; freeW = null; }
       } else best = mf;
-      cb = chiTot(best.res); dBIC = bic(best.res);
+      cb = chiTot(best.res);
     }
     const c0 = chiTot(m0.res);
     minima = st.minima.filter(m=> (m.chi - c0)/nu <= SHAPE_MINIMA.keep).map(m=> ({ chi2: m.chi, delta: (m.chi - c0)/nu, W: m.f.W, R: m.f.R, s: m.f.s, n: m.n, from: m.from }));
@@ -5253,7 +5253,6 @@ function weightFractions(phases, scales, cov){
 // Sample displacement in mm from the refined `disp` (deg): Δ2θ = −(2s/R)·cosθ.
 function displacementMm(model, disp){ return -disp*D2R*model.radius/2; }
 
-export { buildModel, calc, refine, cellSearch, autoRefine, fitSettings, sizeStrain, weightFractions, shapeOf, columnLengthV, SHAPE_TYPES, shapeTypeOf,
-         solveLinear, getParams, setParams, rStats, tch, profileAtTheta, displacementMm,
-         fcjNodes, addPeak, addPeakFCJ, addLine, shapeActive, HG2_FLOOR, K_SCHERRER, cellOf, siteU, lowIndexPlanes, strainFormsAt, PROFILES, faultOf, lpFactor,
-         phaseSites, phaseMass, OCC_MAX, axialNodes, axialOf, axialOn, axialReach, bgInvOn, KIND_GROUP, shapeNamed };
+export { buildModel, calc, autoRefine, fitSettings, shapeOf, getParams, tch, displacementMm,
+         addLine, HG2_FLOOR, K_SCHERRER, siteU, lowIndexPlanes, strainFormsAt, lpFactor,
+         phaseSites, OCC_MAX, axialNodes, axialOf, axialOn, bgInvOn, KIND_GROUP, shapeNamed };

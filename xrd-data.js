@@ -523,4 +523,4 @@ function atomicMass(element){
   return el ? ELEMENTS[el][1] : NaN;
 }
 
-export { F0, FP, ELEMENTS, LINES, speciesKey, labelSpecies, f0, fprime, lineForWavelength, atomicMass };
+export { speciesKey, labelSpecies, f0, fprime, lineForWavelength, atomicMass };

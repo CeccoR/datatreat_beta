@@ -45,7 +45,7 @@ export function spaceGroupName(hm){
   if (!s || /^p\s*1$/i.test(s)) return null;
   const parts = s.split(/\s+/);
   // The full monoclinic symbol (P 1 21/c 1) is short without its 1s.
-  if (parts.length === 4 && parts[1] === '1' && parts[3] === '1') parts.splice(3, 1), parts.splice(1, 1);
+  if (parts.length === 4 && parts[1] === '1' && parts[3] === '1'){ parts.splice(3, 1); parts.splice(1, 1); }
   else if (parts.length === 4 && parts[1] === '1' && parts[2] === '1') parts.splice(1, 2);
   else if (parts.length === 4 && parts[2] === '1' && parts[3] === '1') parts.splice(2, 2);
   return parts.map((p, i)=> i ? p.replace(/(\d)(\d)/g, (m, a, b)=> a + '_' + b) : p).join('');

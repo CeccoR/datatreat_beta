@@ -187,7 +187,7 @@ function scanW(hv, Ys, W, x1, x2){
    crosses the baseline. Each error is the fit's own (co)variances carried through
    the formula, every term scaled by the t factor of the fit it comes from. */
 function taucEg(regs, regs2, M, M2){
-  let Eg=NaN, EgErr=NaN, EgInt=NaN, EgIntErr=NaN;
+  let EgInt=NaN, EgIntErr=NaN;
   if ([regs.slope,regs.intercept,regs2.slope,regs2.intercept].every(isFinite)){
     const xInt = (regs2.intercept - regs.intercept)/(regs.slope - regs2.slope);
     const dxdb1 = -1/(regs.slope-regs2.slope), dxdb2 = 1/(regs.slope-regs2.slope);
@@ -203,7 +203,7 @@ function taucEg(regs, regs2, M, M2){
     EgInt = xInt;
     EgIntErr = varX>0 ? Math.sqrt(varX) : NaN;
   }
-  ({ x: Eg, err: EgErr } = xCross(regs, M));
+  const { x: Eg, err: EgErr } = xCross(regs, M);
   return {Eg,EgErr,EgInt,EgIntErr};
 }
 // Where a fitted line crosses y = 0, −b/m, and its error: the slope and intercept
@@ -353,9 +353,8 @@ const suggestBtn = (p, title)=> `
 // A plot's box (modcharts.js). The download names follow the analysis name (named); a
 // CSV is offered only where there is one to give.
 const box = (id, legend, csv, extra, cls)=> plotWrap(id, { legend, mod: 'tauc', csv: csv ? '-' : '', extra, cls });
-// An item [colour, text, attributes, key class]: 'mk-ldash' (long dashes) or 'mk-dots'
-// draws its key in that pattern.
-const legend = (id, items)=> `<div class="legend" id="${id}">${items.map(([c, t, x, d])=> `<span${x || ''}>${d ? `<i class="${d}" style="color:${c}"></i>` : `<i style="background:${c}"></i>`}${t}</span>`).join('')}</div>`;
+// An item [colour, text, attributes].
+const legend = (id, items)=> `<div class="legend" id="${id}">${items.map(([c, t, x])=> `<span${x || ''}><i style="background:${c}"></i>${t}</span>`).join('')}</div>`;
 
 function taucBody(p){
   return `
@@ -483,7 +482,7 @@ const STD_WL = /^wavelength\s*\(\s*nm\s*\)$/i, STD_R = /^%\s*r$/i, STD_F = /^f\s
 const STD_LINE = /^wavelength\s*\(\s*nm\s*\)\s+(\S.*)$/i;
 function drsStandard(lines, t){
   if (t.rows.findIndex(r=> isFinite(parseNum(r[0])) && isFinite(parseNum(r[1]))) !== 2) return null;
-  let h = null;
+  let h;
   if (t.sep[0] === ' '){ const m = STD_LINE.exec(lines[1].replace(/"/g, '').trim()); h = m && m[1].trim(); }
   else { const f = splitFields(lines[1], t.sep); while (f.length && f[f.length - 1] === '') f.pop(); h = f.length === 2 && STD_WL.test(f[0]) ? f[1] : null; }
   return h && (STD_R.test(h) || STD_F.test(h)) ? { R: STD_R.test(h), t } : null;
@@ -1649,7 +1648,7 @@ function createTauc({ key, root, layer, shown }){
     const plot0 = resPlot0; plot0.clearData();
     $('taucResLegend0').innerHTML = swatchLegend(files);
     let ymax0=-Infinity;
-    files.forEach((f,k)=>{ ymax0=Math.max(ymax0,maxArr(f.FR)); });
+    files.forEach(f=>{ ymax0=Math.max(ymax0,maxArr(f.FR)); });
     const [wl0, wl1] = unionWl();
     plot0.setRange(wl0, wl1, 0, ymax0);
     plot0.drawAxes();
@@ -1788,7 +1787,7 @@ function createTauc({ key, root, layer, shown }){
        whole span. The plain curves are ranged in full; a subtracted curve runs down
        without end where F(R) − F_b goes to zero, below the tail, so those are ranged
        from each one's Urbach region up, the bottom at their 5th percentile there. */
-    const drawOne = (which, key, ylabelSvg, fitOf, tag, legend)=>{
+    const drawOne = (which, key, ylabelSvg, fitOf, tag, legendId)=>{
       const plot = resPlotOf(a, {xlabel:'Energy (eV)', ylabelSvg, xTickStep:0.5, noYTickLabels:true}, which);
       plot.clearData();
       let yLo = Infinity, yHi = -Infinity;
@@ -1813,7 +1812,7 @@ function createTauc({ key, root, layer, shown }){
           plot.line(xExt, xExt.map(x=>r.slope*x+r.intercept), f.color, 1, '5,4',
                     { label: `${f.label} Urbach`, key: `${f.name}${tag}/regs line` });
       });
-      $(legend).innerHTML = swatchLegend(files);
+      $(legendId).innerHTML = swatchLegend(files);
     };
     drawOne('R1', 'p', 'ln[F(R)] (a. u.)', k=> fits[k].regs, '', 'RL1');
     drawOne('R3', 's', 'ln[F(R) − F<tspan baseline-shift="sub" font-size="8">b</tspan>] (a. u.)', k=> fits[k].sub && fits[k].sub.regs, '/sub', 'RL3');

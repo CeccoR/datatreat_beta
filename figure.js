@@ -1,17 +1,7 @@
 import { svgEl, niceTicks, fmtTick, SUB_DROP, TILT_DY } from './plot.js';
-import { colorPickerUI, palettePickerUI, CP_PALETTES, X_SVG, tiltFits, flashFieldInvalid, dropGap, esc } from './utils.js';
+import { colorPickerUI, palettePickerUI, CP_PALETTES, X_SVG, tiltFits, flashFieldInvalid, dropGap, esc, saveBlob } from './utils.js';
 import { tabOf, TABS } from './tabs.js';
 
-// Local saver: downloadBlob() in utils is hard-wired to text/csv, and we need
-// image mime types (and to save an already-built Blob for PNG).
-function saveBlob(filename, data, mime){
-  const blob = (data instanceof Blob) ? data : new Blob([data], { type: mime || 'application/octet-stream' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = filename;
-  document.body.appendChild(a); a.click();
-  setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
-}
 
 /* =========================================================
    ADVANCED FIGURE COMPOSER  (export-only)
@@ -22,7 +12,7 @@ function saveBlob(filename, data, mime){
    real millimetres, so what you see is what gets exported.
 
    Layout model: a rows x cols table of panels. Panels are all the same cell size
-   and always touch; a panel may span several cells (rowSpan/colSpan) and cells may
+   and always touch; a panel may span several cells (its rs × cs) and cells may
    be left empty.
 
    Ranges: share on -> one range for the whole figure; share off -> every panel gets
@@ -590,16 +580,13 @@ function legendMark(add, s, xa, xb, y){
 }
 
 const measCtx = document.createElement('canvas').getContext('2d');
-function textW(txt, px, weight){
+function textW(txt, px){
   // Measured in the very font the figure will be drawn in, so the margins the
   // measurement feeds are right for the chosen face and not just for Inter.
-  measCtx.font = `${weight||''} ${px}px ${fontStack()}`;
+  measCtx.font = `${px}px ${fontStack()}`;
   return measCtx.measureText(String(txt)).width;
 }
 
-/* The pale companion of a colour: the same hue mixed towards white, which is what a
-   texture is drawn on — or in, the other way round. Being a colour rather than a thin
-   veil, it holds up over a grid line or a neighbouring bar. */
 function rgbOf(c){
   const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(c || '').trim());
   if (m){
@@ -610,8 +597,11 @@ function rgbOf(c){
   if (rgb){ const p = rgb[1].split(',').map(Number); return [p[0]||0, p[1]||0, p[2]||0]; }
   return [136, 136, 136];
 }
-function lightShade(color, amount){
-  const k = amount == null ? 0.68 : amount;
+/* The pale companion of a colour: the same hue mixed towards white, which is what a
+   texture is drawn on — or in, the other way round. Being a colour rather than a thin
+   veil, it holds up over a grid line or a neighbouring bar. */
+function lightShade(color){
+  const k = 0.68;
   const [r, g, b] = rgbOf(color);
   const mix = v => Math.round(v + (255 - v) * k);
   return '#' + [mix(r), mix(g), mix(b)].map(v=> v.toString(16).padStart(2, '0')).join('');
@@ -1520,7 +1510,7 @@ async function pngBlob(job){
   if (pngLim && pngLim.W === job.W && pngLim.H === job.H && job.dpi > pngLim.dpi){ pngLim = null; if (K === job.k) updateDim(); }
   const str = await svgString(job, job.draw());
   const url = URL.createObjectURL(new Blob([str], { type: 'image/svg+xml' }));
-  let blob = null;
+  let blob;
   try {
     const img = new Image();
     await new Promise((res, rej)=>{ img.onload = res; img.onerror = ()=> rej(failure('The figure could not be drawn into a PNG.')); img.src = url; });

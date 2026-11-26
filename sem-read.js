@@ -350,4 +350,4 @@ function readFile(bytes, name){
   return { id, r, small: reducedCopy(r), st: cropStats(r.pixels, r.width, c), card: cardLevels(r, c, r.width, r.imageH), bytes };
 }
 
-export { readTescanTiff, SemReadError, hashBytes, fromB64, reducedCopy, cropStats, resample, cardKey, cardLevels, readFile, squarePixels };
+export { readTescanTiff, SemReadError, hashBytes, fromB64, reducedCopy, cropStats, resample, cardKey, cardLevels, readFile };

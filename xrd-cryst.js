@@ -1,13 +1,13 @@
 /* =========================================================
    XRD CRYSTALLOGRAPHY (Rietveld)
-   CIF reading, symmetry, reflection lists and structure factors.
+   CIF reading, symmetry and reflection lists.
    Pure functions: no DOM, importable by the page, a Worker and Node.
 ========================================================= */
 // Conventions shared with xrd-rietveld.js:
 // - fractional coordinates; a symmetry operation is {R, t}, R a row-major 3×3 array of
 //   numbers, acting as x' = R·x + t. A reflection is a row vector and goes as h' = h·R.
 // - a cell is {a, b, c, alpha, beta, gamma} in Å and degrees; s = sinθ/λ = 1/(2d).
-import { speciesKey, labelSpecies, f0, fprime, atomicMass } from './xrd-data.js';
+import { speciesKey, labelSpecies, atomicMass } from './xrd-data.js';
 import { det3, inv3 } from './xrd-math.js';
 
 const IDENT = [1,0,0, 0,1,0, 0,0,1];
@@ -89,9 +89,6 @@ function metricRounding(cell, eLen, eAng){
     out.push({ D, e: eAng[i]*Math.PI/180 });
   }
   return out.length ? out : null;
-}
-function dSpacing(Gs, h, k, l){
-  return 1/Math.sqrt(h*h*Gs[0] + k*k*Gs[4] + l*l*Gs[8] + 2*(h*k*Gs[1] + h*l*Gs[2] + k*l*Gs[5]));
 }
 const qform = (G, d) => G[0]*d[0]*d[0] + G[4]*d[1]*d[1] + G[8]*d[2]*d[2] + 2*(G[1]*d[0]*d[1] + G[2]*d[0]*d[2] + G[5]*d[1]*d[2]);
 
@@ -179,7 +176,6 @@ function boxRadius(G, e){
 // that is no such multiple keeps its value and its rounding, w (per axis: one unit of the last
 // decimal), which closure and expansion allow. Exact values (fractions, integers, one decimal)
 // snap within 1.5e-3, as before. parseCif decides for the whole list (symopsOf).
-function parseSymop(str){ return snapOp(readSymop(str)); }
 // The operation as written: t unsnapped, with the range [lo, hi] (per axis) in which the value
 // it stands for lies, from the digits of its decimal terms: a term written v with d ≥ 2 decimals
 // (unit u) stands for v − u/2 … v + u in magnitude (rounded, or cut). Zero for exact terms.
@@ -268,7 +264,7 @@ function symopString(op){
 }
 
 /* Two operations with one R are one (modulo lattice translations) when their translations agree
-   within the rounding of their written digits (w, parseSymop; 1e-6 for exact ones). Up to v426
+   within the rounding of their written digits (w, snapOp; 1e-6 for exact ones). Up to v426
    keys rounded to 1e-3 were compared, which split a translation and its rounded copy whenever
    the two fell on either side of a rounding step: 137 of the 530 groups at shifted origins,
    written with four decimals, were called "not a group" (52 with six). */
@@ -285,15 +281,15 @@ function uniqueOps(ops){
 
 // Products of operations that are not in the list: an empty array for a group. A list that
 // is not closed is usually missing its centring translations (or a line of the loop). A
-// product carries the rounding of its factors, wa + |Ra|·wb.
-function closureMisses(ops, max = 3){
+// product carries the rounding of its factors, wa + |Ra|·wb. Three are enough to tell.
+function closureMisses(ops){
   const byR = new Map(), out = [], Z = [0, 0, 0];
   for (const o of ops){ const k = o.R.join(); if (!byR.has(k)) byR.set(k, []); byR.get(k).push(o); }
   for (const a of ops) for (const b of ops){
     const R = mul3(a.R, b.R), Rt = apply3(a.R, b.t);
     const t = [Rt[0]+a.t[0], Rt[1]+a.t[1], Rt[2]+a.t[2]];
     const w = a.w || b.w ? allowance(a.R, b.w || Z, a.w || Z) : null;
-    if (!(byR.get(R.join()) || []).some(c => sameT(c.t, t, c.w, w))){ out.push({ R, t }); if (out.length >= max) return out; }
+    if (!(byR.get(R.join()) || []).some(c => sameT(c.t, t, c.w, w))){ out.push({ R, t }); if (out.length >= 3) return out; }
   }
   return out;
 }
@@ -1852,50 +1848,6 @@ function reflections(cell, ops, dmin){
   return out;
 }
 
-/* ---------- structure factors ---------- */
-// Scattering amplitudes of every atom at s, each species and element looked up once.
-function amplitudes(atoms, s, line){
-  const f0c = new Map(), fpc = new Map(), s2 = s*s;
-  const n = atoms.length, fr = new Float64Array(n), fi = new Float64Array(n);
-  for (let j = 0; j < n; j++){
-    const a = atoms[j], key = a.key || a.element || a.label, el = a.element || key;
-    let f = f0c.get(key);
-    if (f === undefined){ f = f0(key, s); f0c.set(key, f); }
-    let fp = fpc.get(el);
-    if (fp === undefined){ fp = line ? fprime(el, line) : [0, 0]; fpc.set(el, fp); }
-    const w = (a.occ ?? 1)*Math.exp(-(a.Biso ?? 0)*s2);
-    fr[j] = w*(f + fp[0]); fi[j] = w*fp[1];
-  }
-  return { fr, fi };
-}
-const hklOf = r => Array.isArray(r) ? r : [r.h, r.k, r.l];
-
-// F(h) = Σ occ·exp(−B s²)·(f0 + f′ + i f″)·exp(2πi h·x) over the atoms of the cell.
-// `line` is a characteristic line name ('CuKa1', …) for f′, f″; null for none.
-function structureFactor(hkl, atoms, s, line){
-  const [h, k, l] = hklOf(hkl);
-  const { fr, fi } = amplitudes(atoms, s, line);
-  let re = 0, im = 0;
-  for (let j = 0; j < atoms.length; j++){
-    const a = atoms[j], ph = 2*Math.PI*(h*a.x + k*a.y + l*a.z), c = Math.cos(ph), sn = Math.sin(ph);
-    re += fr[j]*c - fi[j]*sn; im += fr[j]*sn + fi[j]*c;
-  }
-  return { re, im };
-}
-// (|F(h)|² + |F(−h)|²)/2: a powder line holds h and −h, which f″ makes unequal in a
-// non-centrosymmetric structure. Both from one pass over the atoms.
-function F2(hkl, atoms, s, line){
-  const [h, k, l] = hklOf(hkl);
-  const { fr, fi } = amplitudes(atoms, s, line);
-  let r1 = 0, i1 = 0, r2 = 0, i2 = 0;
-  for (let j = 0; j < atoms.length; j++){
-    const a = atoms[j], ph = 2*Math.PI*(h*a.x + k*a.y + l*a.z), c = Math.cos(ph), sn = Math.sin(ph);
-    r1 += fr[j]*c - fi[j]*sn; i1 += fr[j]*sn + fi[j]*c;   // F(h)
-    r2 += fr[j]*c + fi[j]*sn; i2 += fi[j]*c - fr[j]*sn;   // F(−h): phase −ph
-  }
-  return 0.5*(r1*r1 + i1*i1 + r2*r2 + i2*i2);
-}
-
 /* ---------- lattice parameters under a constraint ---------- */
 const kindOf = c => typeof c === 'string' ? { kind: c } : (c || { kind:'triclinic' });
 // Names of the free lattice values, in the order latticeParams returns them.
@@ -1941,6 +1893,6 @@ function cellFrom(constraint, values, template){
   return cell;
 }
 
-export { parseCif, parseSymop, symopString, parseFormula, metric, dSpacing, expandAtoms, cellContents, cellMass,
-         checkComposition, findSymmetry, structureCell, holohedry, reflections, structureFactor, F2, latticeNames, latticeParams, cellFrom,
-         atomOrbits, siteAdpBasis, adpU, betaOf, uEquiv, U_NAMES };
+export { parseCif, metric, expandAtoms, cellMass,
+         checkComposition, structureCell, reflections, latticeNames, latticeParams, cellFrom,
+         atomOrbits, siteAdpBasis, adpU, betaOf, uEquiv };

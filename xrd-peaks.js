@@ -1424,12 +1424,11 @@ export function createPeakAnalysis(host, root, o){
       // Readout follows the drawn vertical guide (flips to the left near the right
       // edge), two lines using the plot's axis names + units:
       // "2θ = 45.123 °" / "Intensity = 0.520 a. u.".
-      const fmt=v=>{ const a=Math.abs(v); return a>=1000?v.toFixed(0):a>=1?v.toFixed(3):v.toPrecision(3); };
       const flip = px > w - m.r - 130;
       const tx = px + (flip ? -8 : 8);
       const t = svgEl('text',{x:tx,y:m.t+14,'font-size':12,fill:'#ffd24a',stroke:'#0b0f12','stroke-width':3.5,'paint-order':'stroke','font-family':'monospace','text-anchor':flip?'end':'start','pointer-events':'none','class':'add-guide'});
-      const l1=svgEl('tspan',{x:tx}); l1.textContent=axisReadout(plot.xlabel||'2θ', xv, fmt);
-      const l2=svgEl('tspan',{x:tx,dy:16}); l2.textContent=axisReadout(plot.ylabel||'Intensity', yval, fmt);
+      const l1=svgEl('tspan',{x:tx}); l1.textContent=axisReadout(plot.xlabel||'2θ', xv);
+      const l2=svgEl('tspan',{x:tx,dy:16}); l2.textContent=axisReadout(plot.ylabel||'Intensity', yval);
       t.appendChild(l1); t.appendChild(l2);
       plot.svg.appendChild(t);
     }

@@ -1,4 +1,4 @@
-import { esc, registerModule, keeper, fixed, objId, exactKey, settings, flashFieldInvalid, barNames, X_SVG, setupDropzone, nextColor, fitLinear, csvLine } from './utils.js';
+import { esc, registerModule, keeper, fixed, objId, exactKey, csvNum, flashFieldInvalid, barNames, X_SVG, setupDropzone, nextColor, fitLinear, csvLine } from './utils.js';
 import { Plot, svgEl, axisReadout } from './plot.js';
 import { moduleKit, wideCsv, isObj, num } from './modkit.js';
 import { viewOf, setView, viewKey, swatchLegend } from './modcharts.js';
@@ -65,7 +65,7 @@ const toSec = unit => /^min/i.test(unit) ? 60 : /^ms(ec)?$/i.test(unit) ? 1e-3 :
    "Collection Time: …", "Wavelength (nm)  350.0" (or "<Current Wavelength> , 350.0").
    → { traces: [{ name, t, A (fixed), wl (nm, NaN when not said), collected }] (by pair,
    null for a pair not read), n (pairs) } or { error }. */
-export function readKinetics(text){
+function readKinetics(text){
   const lines = textLines(text);
   let best = null;
   for (const sep of SEPS){
@@ -78,7 +78,7 @@ export function readKinetics(text){
   if (!best) return { error: 'no columns of time and absorbance found' };
   const { sep, rows, a, b, n } = best;
   const text0 = r => r && r.some(c=> c !== '' && !isNum(c));
-  let cols = a > 0 && text0(rows[a - 1]) ? rows[a - 1] : null, titles = null;
+  let cols = a > 0 && text0(rows[a - 1]) ? rows[a - 1] : null, titles;
   if (cols && /time/i.test(cols[0] || '')) titles = a > 1 && text0(rows[a - 2]) ? rows[a - 2] : null;
   else { titles = cols; cols = null; }
   const pairs = Math.floor(n / 2), traces = [];
@@ -120,7 +120,7 @@ const tables = new WeakMap();
 function tableOf(f){
   const b = f && f.rawBytes;
   if (!(b instanceof Uint8Array)) return null;
-  if (!tables.has(b)){ let t = null; try { t = readKinetics(decodeText(b)); } catch(e){ t = null; } tables.set(b, t && !t.error ? t : null); }
+  if (!tables.has(b)){ let t; try { t = readKinetics(decodeText(b)); } catch(e){ t = null; } tables.set(b, t && !t.error ? t : null); }
   return tables.get(b);
 }
 const traceOf = f =>{ const t = tableOf(f); return t && Number.isInteger(f.k) && t.traces[f.k] || null; };
@@ -204,10 +204,9 @@ function calLine(c){
 }
 const concName = c => c.unit.trim() ? `Concentration (${c.unit.trim()})` : 'Concentration';
 
-/* ---- Numbers as the page writes them, and as a CSV does (12 digits, the Settings' decimal mark) ---- */
+/* ---- Numbers as the page writes them (a CSV's: csvNum) ---- */
 const sig = (v, d = 4)=> Number.isFinite(v) ? String(+v.toPrecision(d)) : 'n/a';
 const fix = (v, d)=> Number.isFinite(v) ? v.toFixed(d) : 'n/a';
-const csvNum = v => Number.isFinite(v) ? String(+v.toPrecision(12)).replace('.', settings.decimal) : '';
 // A field's number, either decimal mark; '' none (null); anything else not one (undefined).
 const NUM_RE = /^[+-]?(\d+([.,]\d*)?|[.,]\d+)([eE][+-]?\d+)?$/;
 const fieldNum = s =>{ s = String(s).trim(); return !s ? null : NUM_RE.test(s) && Number.isFinite(parseNum(s)) ? parseNum(s) : undefined; };
@@ -408,11 +407,10 @@ function createIodo({ key, root, layer, shown }){
     const at = { 'pointer-events': 'none', class: 'iodo-guide' };
     svgA.appendChild(svgEl('line', { x1: x, x2: x, y1: m.t, y2: h - m.b, stroke: INJ_COLOR, 'stroke-width': 1.2, 'stroke-dasharray': '4,3', ...at }));
     svgA.appendChild(svgEl('circle', { cx: x, cy: y, r: 3.5, fill: INJ_COLOR, ...at }));
-    const fmt = v =>{ const a = Math.abs(v); return a >= 1000 ? v.toFixed(0) : a >= 1 ? v.toFixed(3) : v.toPrecision(3); };
     const flip = x > w - m.r - 150, tx = x + (flip ? -8 : 8);
     const t = svgEl('text', { x: tx, y: m.t + 14, 'font-size': 12, fill: INJ_COLOR, stroke: '#0b0f12', 'stroke-width': 3.5, 'paint-order': 'stroke', 'font-family': 'monospace', 'text-anchor': flip ? 'end' : 'start', ...at });
     const l1 = svgEl('tspan', { x: tx }), l2 = svgEl('tspan', { x: tx, dy: 16 });
-    l1.textContent = axisReadout('Time (s)', tr.t[i], fmt); l2.textContent = axisReadout('Absorbance', tr.A[i], fmt);
+    l1.textContent = axisReadout('Time (s)', tr.t[i]); l2.textContent = axisReadout('Absorbance', tr.A[i]);
     t.append(l1, l2);
     svgA.appendChild(t);
   });

@@ -1,4 +1,4 @@
-import { esc, registerModule, keeper, fixed, objId, exactKey, colorOf, isColor, settings, flashFieldInvalid, boxStats, meanArr, stdArr, barNames, X_SVG, removeFileAt } from './utils.js';
+import { esc, registerModule, keeper, fixed, objId, exactKey, colorOf, isColor, csvNum, flashFieldInvalid, boxStats, meanArr, stdArr, barNames, X_SVG, removeFileAt } from './utils.js';
 import { Plot } from './plot.js';
 import { cardInfo, fileSafe, nameDownloads } from './cards.js';
 import { moduleKit, wideCsv, isObj, ownKey, cardList } from './modkit.js';
@@ -174,10 +174,8 @@ function axisTitle(parts){
   const name = names.length === 1 ? names[0] : '', unit = units.length === 1 ? units[0] : '';
   return name && unit ? `${name} (${unit})` : name || (unit ? `(${unit})` : '');
 }
-// A value as a plot's label writes it (3 significant digits), and as a CSV does (12, and
-// the decimal mark of the Settings).
+// A value as a plot's label writes it (3 significant digits; a CSV's: csvNum).
 const sig = v => String(+v.toPrecision(3));
-const num = v => Number.isFinite(v) ? String(+v.toPrecision(12)).replace('.', settings.decimal) : '';
 const headOf = (t, c)=> c < 0 ? { name: 'Row', unit: '' } : t.heads && t.heads[c] ? t.heads[c] : { name: '', unit: '' };
 
 /* ---- A card's kinds, instructions and markup ---- */
@@ -694,8 +692,8 @@ function createFig({ key, root, layer, shown }){
       // (the error bars, segments in the series' colour: x ± its error, y ± its own)
       d.xs.forEach((x, i)=>{
         const y = d.ys[i];
-        if (d.eys[i] > 0) sx.push(x, x), sy.push(y - d.eys[i], y + d.eys[i]);
-        if (d.exs[i] > 0) sx.push(x - d.exs[i], x + d.exs[i]), sy.push(y, y);
+        if (d.eys[i] > 0){ sx.push(x, x); sy.push(y - d.eys[i], y + d.eys[i]); }
+        if (d.exs[i] > 0){ sx.push(x - d.exs[i], x + d.exs[i]); sy.push(y, y); }
       });
       if (sx.length) plot.segments(sx, sy, e.color, 1, { label: e.name + ' (errors)', key: e.s.key + '\nerr' });
       plot.line(d.xs, d.ys, e.color, 1.5, undefined, { label: e.name, key: e.s.key });
@@ -754,13 +752,13 @@ function createFig({ key, root, layer, shown }){
     list.forEach((e, k)=>{
       const d = dataOf(a.type, e.s.t, e.s, e.r, divs[k]), t = e.s.t;
       if (a.type === 'xy'){
-        cols.push({ h: `${e.name} - ${axisTitle([headOf(t, e.s.x)]) || 'x'}`, v: d.xs.map(num) }, { h: e.name, v: d.ys.map(num) });
-        if (e.s.ex >= 0) cols.push({ h: `${e.name} - err x`, v: d.exs.map(num) });
-        if (e.s.ey >= 0) cols.push({ h: `${e.name} - err y`, v: d.eys.map(num) });
+        cols.push({ h: `${e.name} - ${axisTitle([headOf(t, e.s.x)]) || 'x'}`, v: d.xs.map(csvNum) }, { h: e.name, v: d.ys.map(csvNum) });
+        if (e.s.ex >= 0) cols.push({ h: `${e.name} - err x`, v: d.exs.map(csvNum) });
+        if (e.s.ey >= 0) cols.push({ h: `${e.name} - err y`, v: d.eys.map(csvNum) });
       } else if (a.type === 'bar'){
-        cols.push({ h: `${e.name} - category`, v: d.cats }, { h: e.name, v: d.ys.map(num) });
-        if (e.s.ey >= 0) cols.push({ h: `${e.name} - err y`, v: d.eys.map(num) });
-      } else cols.push({ h: e.name, v: d.ys.map(num) });
+        cols.push({ h: `${e.name} - category`, v: d.cats }, { h: e.name, v: d.ys.map(csvNum) });
+        if (e.s.ey >= 0) cols.push({ h: `${e.name} - err y`, v: d.eys.map(csvNum) });
+      } else cols.push({ h: e.name, v: d.ys.map(csvNum) });
     });
     return wideCsv(cols);
   }

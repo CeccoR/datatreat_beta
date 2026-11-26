@@ -828,7 +828,7 @@ async function initTabs(){
   // (a tab of SEM not on show comes back asleep holding its files' references, not their
   // bytes: read as it wakes, lighten; its files not stored are said then)
   try { ({ recs, states, missing } = await allTabStates(r=> dropsBytes(r.module) && !r.active)); }
-  catch(e){ recs = []; notice('Your open tabs could not be read from this browser\'s storage: they are kept as they are for the next load.'); }
+  catch(e){ notice('Your open tabs could not be read from this browser\'s storage: they are kept as they are for the next load.'); }
   if (missing) notice(missing + (missing > 1 ? ' files' : ' file') + ' of your open tabs ' + (missing > 1 ? 'are' : 'is')
     + ' not stored in this browser any more: ' + (missing > 1 ? 'they come' : 'it comes') + ' back without the original bytes.');
   // (each its order and what it showed as its record holds them, or as this window kept it as

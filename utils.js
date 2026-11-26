@@ -351,7 +351,7 @@ class ColorPickerUI {
      window, level with its bottom instead, so that it keeps moving with the swatch as
      the page or a panel scrolls (pinned to the window's bottom, it stood still while
      a swatch low in a panel scrolled away under it). It stays open while scrolling.
-     In a figure composer it follows placeInComposer instead. */
+     In a figure composer its top is composerTop's instead. */
   _reposition(){
     if (!this._anchorBtn) return;
     const rect = this._anchorBtn.getBoundingClientRect();
@@ -595,6 +595,8 @@ function fmtData(v, decimals){
   const t = v !== 0 && Math.abs(v) < Math.pow(10, 2 - d) ? String(parseFloat(v.toPrecision(Math.max(3, d)))) : v.toFixed(d);
   return t.replace('.', settings.decimal);
 }
+// A number as a CSV writes it whole: 12 significant digits, the Settings' decimal mark; '' for none.
+const csvNum = v => Number.isFinite(v) ? String(+v.toPrecision(12)).replace('.', settings.decimal) : '';
 /* A field holding the separator, a quote or a line break goes in quotes, its quotes
    doubled (RFC 4180): a label with a comma or a semicolon in it shifted every column
    after it, up to v471. */
@@ -631,13 +633,16 @@ function csvLine(vals){ return csvJoin(vals) + '\n'; }
   fmtSel.addEventListener('change', ()=>{ settings.plotFmt = fmtSel.value; saveSettings(); });
 })();
 
-function downloadBlob(filename, text){
-  const blob = new Blob([text], {type:'text/csv'});
+// A file saved: `data` a Blob, or text or bytes made one of type `mime`; a link to it
+// clicked, then let go.
+function saveBlob(filename, data, mime){
+  const blob = (data instanceof Blob) ? data : new Blob([data], { type: mime || 'application/octet-stream' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = filename; document.body.appendChild(a); a.click();
   setTimeout(()=>{document.body.removeChild(a); URL.revokeObjectURL(url);}, 200);
 }
+function downloadBlob(filename, text){ saveBlob(filename, text, 'text/csv'); }
 // --- Minimal ZIP writer (store / no compression) -------------------------
 // Bundles a list of {name, text} entries into a single .zip Blob. Pure client
 // side, no dependencies. Uses the "stored" method so no deflate is needed.
@@ -715,21 +720,10 @@ function zipBlob(entries){
   ];
   return new Blob([...chunks, ...centralParts, ...end], {type:'application/zip'});
 }
-function downloadZip(filename, entries){
-  const url = URL.createObjectURL(zipBlob(entries));
-  const a = document.createElement('a');
-  a.href = url; a.download = filename; document.body.appendChild(a); a.click();
-  setTimeout(()=>{document.body.removeChild(a); URL.revokeObjectURL(url);}, 200);
-}
+function downloadZip(filename, entries){ saveBlob(filename, zipBlob(entries)); }
 
 // Download raw bytes verbatim (byte-for-byte identical to the original upload).
-function downloadBytes(filename, bytes){
-  const arr = bytes instanceof Uint8Array ? bytes : Uint8Array.from(bytes);
-  const url = URL.createObjectURL(new Blob([arr], {type:'application/octet-stream'}));
-  const a = document.createElement('a');
-  a.href = url; a.download = filename; document.body.appendChild(a); a.click();
-  setTimeout(()=>{document.body.removeChild(a); URL.revokeObjectURL(url);}, 200);
-}
+function downloadBytes(filename, bytes){ saveBlob(filename, bytes instanceof Uint8Array ? bytes : Uint8Array.from(bytes), 'application/octet-stream'); }
 
 /* =========================================================
    SHARED FILE DROPZONE
@@ -892,7 +886,7 @@ function renderUnifiedFileList(container, files, callbacks, note, noteHead){
   const colgroup = `<colgroup><col style="width:26px"><col style="width:26px"><col style="width:37.5%"><col style="width:37.5%"><col style="width:25%"><col style="width:58px"></colgroup>`;
   const grip = `<svg class="grip-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><line x1="2.5" y1="5" x2="13.5" y2="5"/><line x1="2.5" y1="8" x2="13.5" y2="8"/><line x1="2.5" y1="11" x2="13.5" y2="11"/></svg>`;
   const nIn = files.filter(isIncluded).length;
-  const colorOf = f => f.color || '', anyColor = files.some(colorOf);
+  const fileColor = f => f.color || '', anyColor = files.some(fileColor);
 
   let html = `<div class="table-wrap-box"><table class="file-table">${colgroup}<thead><tr><th></th><th class="incl-cell"><input type="checkbox" class="incl-all"${nIn ? ' checked' : ''} title="Include all traces in the analysis, or none"></th><th><div class="file-head">${anyColor ? '<button class="palette-pick-btn" title="Apply color palette"></button>' : '<span class="palette-pick-btn swatch-gap" aria-hidden="true"></span>'}<span>LABEL</span></div></th>`;
   html += `<th>FILE</th><th class="note-cell"${noteHead ? ` title="${esc(noteHead)}"` : ''}>${noteHead ? esc(noteHead) : ''}</th>`;
@@ -901,7 +895,7 @@ function renderUnifiedFileList(container, files, callbacks, note, noteHead){
   html += `<th class="row-acts" style="text-align:right;white-space:nowrap"><button class="download-all del-bare dl-bare" title="Download all files (zip)">${dlIcon}</button><button class="remove-all del-bare is-danger" title="Remove all">${xIcon}</button></th></tr></thead><tbody>`;
 
   files.forEach((f, i)=>{
-    const swatch = colorOf(f) ? `<button class="color-swatch" data-i="${i}" data-color="${esc(f.color)}" style="background:${esc(f.color)}" title="Pick color"></button>` : '<span class="color-swatch swatch-gap" aria-hidden="true"></span>';
+    const swatch = fileColor(f) ? `<button class="color-swatch" data-i="${i}" data-color="${esc(f.color)}" style="background:${esc(f.color)}" title="Pick color"></button>` : '<span class="color-swatch swatch-gap" aria-hidden="true"></span>';
     const on = isIncluded(f), file = fileOf(f);
     html += `<tr class="file-row${on ? '' : ' is-excluded'}" data-i="${i}">`;
     html += `<td class="drag-cell"><span class="drag-handle" title="Drag to reorder">${grip}</span></td>`;
@@ -2454,7 +2448,7 @@ function openDateModal(baseDate, onPick, onClose){
       else sel.setMinutes((sel.getMinutes()+d+60)%60);
       build(); return; }
     if (e.target.closest('.dt-cancel')){ close(); return; }
-    if (e.target.closest('.dt-ok')){ onPick(new Date(sel)); close(); return; }
+    if (e.target.closest('.dt-ok')){ onPick(new Date(sel)); close(); }
   });
   backdrop.addEventListener('click', e=>{ if (e.target===backdrop) close(); });
   document.addEventListener('keydown', onKey);
@@ -2662,9 +2656,9 @@ function tiltFits(ws, qs, lo, hi, h, rot, sides = true){
   }
   return true;
 }
-// The least tilt from `from` to `to` degrees, in 5° steps, that tiltFits; null if none.
-function tiltFor(ws, qs, lo, hi, h, sides = true, from = TILT_MIN, to = TILT_MAX){
-  for (let rot = from; rot <= to; rot += TILT_STEP) if (tiltFits(ws, qs, lo, hi, h, rot, sides)) return rot;
+// The least tilt from TILT_MIN to TILT_MAX degrees, in 5° steps, that tiltFits; null if none.
+function tiltFor(ws, qs, lo, hi, h){
+  for (let rot = TILT_MIN; rot <= TILT_MAX; rot += TILT_STEP) if (tiltFits(ws, qs, lo, hi, h, rot)) return rot;
   return null;
 }
 
@@ -2766,7 +2760,7 @@ normalizeNavIcons();
 window.addEventListener('load', normalizeNavIcons);
 
 export {
-  COLORS, colorOf, esc, stateKey, bytesKey, moduleStateKey, viewOnlyChange, registerBusy, moduleBusy, stopModule, colorPickerUI, CP_PALETTES, palettePickerUI, settings, fmtNum, fmtData, csvLine, downloadBlob, downloadBytes,
+  colorOf, esc, stateKey, bytesKey, moduleStateKey, viewOnlyChange, registerBusy, moduleBusy, stopModule, colorPickerUI, CP_PALETTES, palettePickerUI, settings, fmtNum, fmtData, csvNum, csvLine, saveBlob, downloadBytes,
   X_SVG, DL_SVG, setupDropzone, renderUnifiedFileList, dropGap, includedOf, setIncluded, removeFileAt, moveFileTo, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, boxStats,
   maxArr, minArr, NORM_OPTIONS, normOf, fitLinear, tinv, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, alertHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState,
   getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, guardNumericInput,

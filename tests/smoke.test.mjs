@@ -52,7 +52,7 @@ test('under the CSP: theme before paint, the Rietveld worker, an alert dismissed
     const w = await page.evaluate(()=> new Promise(res=>{
       const wk = new Worker(new URL('./xrd-rietveld.worker.js', location.href), { type: 'module' });
       wk.onerror = e=> res('error: ' + (e.message || 'load failed'));
-      wk.onmessage = m=>{ res('reply'); wk.terminate(); };
+      wk.onmessage = ()=>{ res('reply'); wk.terminate(); };
       wk.postMessage({ id: 1, x: [1, 2], y: [1, 2], phases: [], opts: {} });
       setTimeout(()=> res('alive, no reply in 5 s'), 5000);
     }));

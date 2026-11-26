@@ -30,14 +30,16 @@ function fixedTicks(min, max, step){
   for (let v = start; v <= max + step * 1e-9; v += step) ticks.push(Math.round(v / step) * step);
   return ticks;
 }
+// A read-out's number: no decimals from 1000 up, three from 1, three significant digits below.
+const readoutNum = v =>{ const a = Math.abs(v); return a >= 1000 ? v.toFixed(0) : a >= 1 ? v.toFixed(3) : v.toPrecision(3); };
 // "Wavelength (nm)" + 512.3  ->  "Wavelength = 512.3 nm". The unit is whatever sits
 // in the label's trailing parentheses; absent parentheses, just "<label> = <value>".
-function axisReadout(label, val, fmt){
+function axisReadout(label, val){
   const s = String(label||'');
   const m = s.match(/^(.*?)\s*\(([^)]*)\)\s*$/);
   const name = (m ? m[1] : s).trim();
   const unit = m ? m[2].trim() : '';
-  return `${name} = ${fmt(val)}${unit ? ' '+unit : ''}`;
+  return `${name} = ${readoutNum(val)}${unit ? ' '+unit : ''}`;
 }
 function fmtTick(v){
   if (Math.abs(v) < 1e-10) return '0';
@@ -811,7 +813,6 @@ class Plot{
      colour and kept to the plot's area, a dot on the trace where the two cross. */
   _crossAt(cx, cy, xv, yv, lock){
     const {w,h}=this.size(); const m=this.margin;
-    const fmt=v=>{ const a=Math.abs(v); return a>=1000?v.toFixed(0):a>=1?v.toFixed(3):v.toPrecision(3); };
     const add=(tag,at)=>{ const el = svgEl(tag,at); this.gCross.appendChild(el); return el; };
     const ln = lock ? {stroke:'#ff3ea5','stroke-width':1.2,'stroke-dasharray':'4,3','class':'plot-lockcross','clip-path':`url(#${this._clipId})`}
                     : {stroke:'#c4ccd6','stroke-width':1,'stroke-dasharray':'4,3','opacity':0.75,'class':'plot-crosshair'};
@@ -826,10 +827,10 @@ class Plot{
     const isBar = this._stored && this._stored.some(e=>e.type==='barpx' || e.type==='box');
     const tx = m.l+8;
     const t=svgEl('text',{x:tx,y:m.t+14,'font-size':12,'text-anchor':'start',fill:'#f0f4f6',stroke:'#0b0f12','stroke-width':3.5,'paint-order':'stroke','font-family':'monospace','class':'plot-readout'});
-    if (!isBar){ const l1=svgEl('tspan',{x:tx}); l1.textContent=axisReadout(this.xlabel||'x', xv, fmt); t.appendChild(l1); }
+    if (!isBar){ const l1=svgEl('tspan',{x:tx}); l1.textContent=axisReadout(this.xlabel||'x', xv); t.appendChild(l1); }
     const ta = this._opts.topAxis;
-    if (!isBar && ta){ const l3=svgEl('tspan',{x:tx,dy:16}); l3.textContent=`${ta.label||'x₂'} = ${(ta.fmt||fmt)(ta.of(xv))}`; t.appendChild(l3); }
-    const l2=svgEl('tspan',{x:tx,dy:isBar?0:16}); l2.textContent=axisReadout(ylabTxt, this._opts.yLog ? Math.pow(10, yv) : yv, fmt);
+    if (!isBar && ta){ const l3=svgEl('tspan',{x:tx,dy:16}); l3.textContent=`${ta.label||'x₂'} = ${(ta.fmt||readoutNum)(ta.of(xv))}`; t.appendChild(l3); }
+    const l2=svgEl('tspan',{x:tx,dy:isBar?0:16}); l2.textContent=axisReadout(ylabTxt, this._opts.yLog ? Math.pow(10, yv) : yv);
     t.appendChild(l2);
     this.gCross.appendChild(t);
   }
@@ -862,7 +863,7 @@ class Plot{
         const bx = px(xs[i]), by = py(ys[i]);
         let d = Infinity;
         if (e.type === 'points') d = Math.hypot(bx - cx, by - cy);
-        else if (ax === ax && !((ax < cx - tol && bx < cx - tol) || (ax > cx + tol && bx > cx + tol))) d = segDist(cx, cy, ax, ay, bx, by);
+        else if (!Number.isNaN(ax) && !((ax < cx - tol && bx < cx - tol) || (ax > cx + tol && bx > cx + tol))) d = segDist(cx, cy, ax, ay, bx, by);
         if (d <= tol && d <= bd){ bd = d; best = t; }
         ax = bx; ay = by;
       }

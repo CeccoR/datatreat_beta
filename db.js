@@ -677,4 +677,4 @@ const unread = v => refsIn(v).size > 0;
 
 export { allProjects, putProject, deleteProject, retitleProject, readProject, exportedProject,
          allTabStates, putTabRec, deleteTabRec, uid, encode, decode, park, stored,
-         hydrate, sweep, sweepSoon, dbBlocked, onDbBlocked, onDbClosing, onDbClosed, unload, load, unread, refsIn, fixed, isFixed };
+         hydrate, sweep, sweepSoon, dbBlocked, onDbBlocked, onDbClosing, onDbClosed, unload, load, unread, refsIn, fixed, isFixed, isObj };

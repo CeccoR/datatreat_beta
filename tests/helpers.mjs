@@ -18,19 +18,19 @@ import { writeFixtures } from './fixtures.mjs';
 let pw;
 try { pw = await import('playwright'); }
 catch(e){ pw = await import('/opt/node22/lib/node_modules/playwright/index.mjs'); }
-export const { chromium } = pw;
+const { chromium } = pw;
 
 // (fileURLToPath, not the URL's pathname: that one keeps a space as %20 and gives /C:/… on Windows)
-export const TESTS = path.dirname(fileURLToPath(import.meta.url));
+const TESTS = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.resolve(process.env.DT_ROOT || path.join(TESTS, '..'));
-export const OUT = path.join(TESTS, 'out');
+const OUT = path.join(TESTS, 'out');
 // (npm run test:update: npm names the script it runs in the environment, on every OS)
 export const UPDATE = !!process.env.UPDATE_GOLDEN || process.env.npm_lifecycle_event === 'test:update';
 
 /* ---- The static server ---- */
 const TYPES = { html: 'text/html; charset=utf-8', js: 'text/javascript; charset=utf-8', mjs: 'text/javascript; charset=utf-8', css: 'text/css; charset=utf-8',
   json: 'application/json', webmanifest: 'application/manifest+json', svg: 'image/svg+xml', png: 'image/png', woff2: 'font/woff2', ico: 'image/x-icon', md: 'text/plain; charset=utf-8' };
-export function serve(root = ROOT){
+function serve(root = ROOT){
   const server = http.createServer((req, res)=>{
     let p;
     try { p = decodeURIComponent(new URL(req.url, 'http://x').pathname); } catch(e){ res.writeHead(400).end(); return; }
@@ -62,7 +62,7 @@ export async function start(){
   };
 }
 
-export async function openApp(browser, base, { viewport = { width: 1400, height: 900 }, clipboard = false } = {}){
+async function openApp(browser, base, { viewport = { width: 1400, height: 900 }, clipboard = false } = {}){
   const ctx = await browser.newContext({ viewport, timezoneId: 'UTC', locale: 'en-US', colorScheme: 'dark',
     serviceWorkers: 'block', acceptDownloads: true });
   if (clipboard) await ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: base });
@@ -327,7 +327,7 @@ export const injected = page => page.evaluate(()=>{
 /* ---- Plot golden hashes ----
    Each plot's SVG markup, made comparable: the clip ids (random when the svg has no id)
    dropped, numbers rounded to 0.01, embedded images by their hash. */
-export function normSvg(s){
+function normSvg(s){
   return s.replace(/\bpc-[A-Za-z0-9]+/g, 'pc')
     .replace(/data:image\/[a-z]+;base64,[A-Za-z0-9+/=]+/g, m=> 'img:' + sha(m))
     .replace(/-?\d+\.\d{3,}(e-?\d+)?/g, m=>{ const v = +m; const r = Math.round(v*100)/100; return String(Object.is(r, -0) ? 0 : r); });

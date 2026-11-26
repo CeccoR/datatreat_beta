@@ -782,7 +782,7 @@ export function shapeView(container, opts = {}){
         const x = ((i0 + i + 0.5) * cs - cx) / k, y = (cy - (j0 + j + 0.5) * cs) / k;
         const p0 = x*r00 + y*r10, p1 = x*r01 + y*r11, p2 = x*r02 + y*r12;
         const s = rayExit(m, p0, p1, p2, r20, r21, r22);
-        if (!(s === s)) continue;          // NaN: off the solid
+        if (Number.isNaN(s)) continue;     // off the solid
         fa[j*Mw + i] = fadeOf(m, p0 + s*r20, p1 + s*r21, p2 + s*r22);
       }
       // A cell just off the solid takes its neighbours' fade: the smoothing blends it

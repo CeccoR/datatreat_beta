@@ -1,6 +1,7 @@
-import { csvLine, fmtNum, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, buildAlertsHtml, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, registerBusy, busyChanged, registerModule, onSectionChange, flashFieldInvalid, kept, getModuleHistory } from './utils.js';
+import { esc, csvLine, fmtNum, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, buildAlertsHtml, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, registerBusy, busyChanged, registerModule, onSectionChange, flashFieldInvalid, kept, getModuleHistory } from './utils.js';
 import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy, cropStats, resample, cardKey, cardLevels } from './sem-read.js';
 import { snavHtml, snav } from './snav.js';
+import { isObj } from './modkit.js';
 
 /* =========================================================
    SEM MODULE
@@ -135,7 +136,7 @@ function imgOf(f){
   const id = f.raw.id;
   let e = imgs.get(id);
   if (e === undefined){
-    let r = null;
+    let r;
     try { r = f.raw.bytes ? readTescanTiff(f.raw.bytes, f.name, { head: true }) : null; } catch(err){ r = null; }
     e = r && { r, small: null, cards: new Map() };
     imgs.set(id, e);
@@ -266,8 +267,6 @@ async function readOne(file, job, owner){
 const nameCtx = document.createElement('canvas').getContext('2d');
 
 /* ---- What every instance draws and checks with: pure, the module's ---- */
-// File names and what a file says about itself go into the page as text, never as markup.
-const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 // On the page: d significant digits, the point as a point (fmtNum, with the CSV's
 // decimal separator and fixed decimals, is for the export).
 const sig = (v, d) => Number.isFinite(v) ? String(+v.toPrecision(d)) : '—';
@@ -428,7 +427,6 @@ const ID_RE = /^[0-9a-f]{8}-\d+$/;
 const isNum = v => typeof v === 'number' && Number.isFinite(v);
 const inRange = (v, lo, hi, d) => isNum(v) && v >= lo && v <= hi ? v : d;
 const isKey = k => typeof k === 'string' && k !== '' && !(k in Object.prototype);
-const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
 // Settings: those saved before the Default boxes (v442) are default where their
 // values are; a Default ticked over other values is unticked.
 function intensityOf(v){

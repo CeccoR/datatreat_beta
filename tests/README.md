@@ -25,7 +25,11 @@ node --test --test-name-pattern="Rietveld" "tests/*.test.mjs"   # the tests whos
 npm run lint                       # ESLint over the app and the tests (eslint.config.mjs)
 ```
 
-The lint needs ESLint 9 or later, installed apart (`npm i -g eslint`): it is no dependency.
+The lint needs ESLint 9 or later, installed apart (`npm i -g eslint`): it is no dependency. Its
+rules catch what is wrong or dead, not style, and every one is an error (v551): a name, an
+argument after the last one used or a value written and never read is one (`_` marks one kept on
+purpose), as is an expression that does nothing; the app's files also may not make code from a
+string (the page's Content-Security-Policy would refuse it).
 
 A full run takes about 17 min (289 tests, on the machine they were written on). Each
 file opens its own server and browser; each test its own browser context, so IndexedDB,

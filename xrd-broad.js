@@ -262,7 +262,7 @@ function wppmLine(o){
   // The common factor (instrument, Lorentzian terms), to where it no longer counts.
   const H = o.Hi*c1, eta = o.etai, W = o.WL || 0, gq = Math.PI*Math.PI*H*H/(4*LN2);
   let nL = N >> 1;
-  const com = o._com && o._com.length >= nL + 1 ? o._com : new Float64Array(nL + 1);
+  const com = new Float64Array(nL + 1);
   nL = commonFactor(com, nL, H, eta, W, gq, dL);
   const size = new Float64Array(nL + 1);
   if (o.size) o.size(size, nL + 1, dL); else size.fill(1);
@@ -555,4 +555,4 @@ function faultKappa(table, r, alpha){
   return s/table.dLayer;
 }
 
-export { wppmLine, wppmPair, wppmPoints, N_MAX as WPPM_N_MAX, lineFwhm, addMemberCoef, covBase, supportOf, quarticInvariants, evalQuartic, faultTable, faultKappa, gaussLegendre as glNodes };
+export { wppmLine, wppmPair, wppmPoints, N_MAX as WPPM_N_MAX, lineFwhm, addMemberCoef, quarticInvariants, evalQuartic, faultTable, faultKappa };

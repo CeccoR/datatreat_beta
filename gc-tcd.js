@@ -609,11 +609,11 @@ export function leastSquaresTrf(fun, jac, x0, lbIn, ubIn, { xScale = null, loss 
   };
   let [v, dv] = CL(x, g);
   for (let i = 0; i < n; i++) if (dv[i] !== 0) v[i] *= scaleInv[i];
-  let Delta = 0;
+  let Delta;
   { let s = 0; for (let i = 0; i < n; i++){ const q = xStart[i]*scaleInv[i]/Math.sqrt(v[i]); s += q*q; } Delta = Math.sqrt(s); }
   if (Delta === 0) Delta = 1.0;
-  let gNorm = 0;
-  let alpha = 0.0, status = null, actualReduction = null, iteration = 0;
+  let gNorm;
+  let alpha = 0.0, status = null, actualReduction, iteration = 0;
   const M = m + n;
   const Jaug = new Float64Array(M*n), fAug = new Float64Array(M), Jh = new Float64Array(m*n);
   const d = new Float64Array(n), diagH = new Float64Array(n), gH = new Float64Array(n);
@@ -630,7 +630,7 @@ export function leastSquaresTrf(fun, jac, x0, lbIn, ubIn, { xScale = null, loss 
     const { s, V, ub: uf } = svdThin(Jaug, M, n, fAug);
     const theta = Math.max(0.995, 1 - gNorm);
     actualReduction = -1;
-    let xNew = null, fNew = null, costNew = 0, stepNorm = 0;
+    let xNew = null, fNew = null, costNew = 0, stepNorm;
     while (actualReduction <= 0 && nfev < maxNfev){
       const [pH0, al] = solveLsqTrustRegion(n, m, uf, s, V, Delta, alpha);
       alpha = al;
@@ -657,7 +657,7 @@ export function leastSquaresTrf(fun, jac, x0, lbIn, ubIn, { xScale = null, loss 
       J = jac(x); njev++;
       if (lossF) lossF.scale(J, f, n);
       g = grad(J, f);
-    } else actualReduction = 0;
+    }
     iteration++;
   }
   if (status === null) status = 0;

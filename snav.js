@@ -114,7 +114,7 @@ export function snav(el, o){
   // closes; ← → do nothing here (they would step the samples under the list).
   function onKey(e){
     const items = [...menu.querySelectorAll('[data-i]')], at = items.indexOf(document.activeElement);
-    let to = -1;
+    let to;
     if (e.key === 'ArrowDown') to = at < 0 ? 0 : Math.min(items.length - 1, at + 1);
     else if (e.key === 'ArrowUp') to = at < 0 ? items.length - 1 : Math.max(0, at - 1);
     else if (e.key === 'Home') to = 0;

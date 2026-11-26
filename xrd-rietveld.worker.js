@@ -81,7 +81,7 @@ function summarise(model, res, phases, opts){
         continue;
       }
       const names = st.iU.map(i=> model.par[i].name);
-      const vAt = p => Float64Array.from(model.par, (pp, i)=> p[pp.name]);
+      const vAt = p => Float64Array.from(model.par, pp=> p[pp.name]);
       const Nof = cell => { const { Gs } = metric(cell); return [Math.sqrt(Gs[0]), Math.sqrt(Gs[4]), Math.sqrt(Gs[8])]; };
       const Ueq = p => { const cell = cellAt(p); return uEquiv(siteU(st, vAt(p), Nof(cell)), cell); }, Beq = p => 8*Math.PI*Math.PI*Ueq(p);
       const b = Beq(P), bE = propagate(res, names, Beq);

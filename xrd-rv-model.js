@@ -9,7 +9,7 @@ import { parseCif, expandAtoms, structureCell, checkComposition, cellMass, metri
 import { readXrdmlInstrumentText } from './xrd-instr.js';
 import { buildModel, calc, fitSettings, phaseSites, bgInvOn, shapeNamed } from './xrd-rietveld.js';
 import { spaceGroupName, spaceGroupSymbol } from './xrd-sg.js';
-import { fixed, isFixed } from './db.js';
+import { fixed, isFixed, isObj } from './db.js';
 
 const PHASE_COLORS = ['#d4a72c', '#c77dff', '#ff8a65', '#7cc4ff', '#e05f8a', '#9ccc65'];
 
@@ -85,7 +85,6 @@ const cellKey = c => [c.a, c.b, c.c, c.alpha, c.beta, c.gamma].map(v=> +(+v).toF
    by the undo states it is in and by the curves drawn from it; its lists of numbers or
    names fixed instead (db.js: shared by a state parked; a double frozen takes twice the
    memory). (A typed array cannot be frozen; a result holds none.) */
-const isObj = x => x !== null && typeof x === 'object';
 function frozen(v){
   if (Array.isArray(v) && (isFixed(v) || !v.some(isObj))) return fixed(v);
   if (v && typeof v === 'object' && !ArrayBuffer.isView(v) && !Object.isFrozen(v)){ Object.freeze(v); for (const k in v) frozen(v[k]); }
@@ -339,7 +338,7 @@ function instrOf(f){
   // (one read before v426, saved with a session, lacks the monochromators' crystals; one
   // read to v493 for a later measurement's pattern, the first's header: read again)
   if (f.instr && Array.isArray(f.instr.monochromators) && (f.instr.meas || 0) === k) return f.instr;
-  let ins = null;
+  let ins;
   try {
     // (the bytes come back from a saved state, or a tab switch, as a plain array)
     const b = f.rawBytes, u8 = b == null ? null : b instanceof Uint8Array ? b : ArrayBuffer.isView(b) ? new Uint8Array(b.buffer, b.byteOffset, b.byteLength) : Array.isArray(b) ? Uint8Array.from(b) : null;
@@ -508,7 +507,7 @@ const sizeKinds = (fs, results, name) => { const on = new Set(fs.flatMap(f=> [..
    (colorOf, by its name). */
 function sizeMarks(fs, results, sizeBy, colorOf){
   const cols = [], marks = [];     // marks: { x, v, e, color, dx, label }
-  let series = [];
+  let series;
   if (sizeBy === 'peak'){
     // The reflections the tests use, in any pattern: a column each, by phase and 2θ.
     const refl = new Map();
@@ -698,8 +697,8 @@ function resultsOf(s){
   return results;
 }
 
-export { PHASE_COLORS, prepPhase, textKey, prepOf, cellKey, frozen, MODES, MODE, siteList, listOf, depOf, defSettings, stdSettings, cleanSettings, migrateSettings, engineOf,
-  HOLDS, HOLD_KEYS, HOLD_DEFAULT, START_RULE, FIT_DEF, FITS, FIT, fitTxt, readFit, cleanFit, formulaOf,
+export { PHASE_COLORS, prepPhase, textKey, prepOf, cellKey, MODES, MODE, siteList, listOf, depOf, defSettings, stdSettings, cleanSettings, migrateSettings, engineOf,
+  HOLD_KEYS, HOLD_DEFAULT, START_RULE, FIT_DEF, FITS, FIT, fitTxt, readFit, cleanFit, formulaOf,
   SIZE_KINDS, hklShow, hklPlain, hklRuns, plotRuns,
   instrOf, LAB6_ID, irfOf, sameIrf, lastUnusable, payloadFor, resultRecord,
   resultPhases, curvesFrom, exactJson, scanRange, tickRows, groupTicks,

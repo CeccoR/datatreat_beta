@@ -95,7 +95,7 @@ function altTable(name, rows){
 }
 /* A run: 12 injections, H₂ rising (0.05 + 0.01 k %mol) and O₂ (0.03 + 0.002 k %mol), their
    areas on a known scale (S_H2, S_O2 area per %mol); the table's values those concentrations
-   times `swScale` (a software calibration off by that much). */
+   times `sw` (tableRows: a software calibration off by that much). */
 const S_H2 = 40000, S_O2 = 12000, N = 12;
 const truth = Array.from({ length: N }, (_, k)=> [0.05 + 0.01*k, 0.03 + 0.002*k]);
 const areas = (rows = truth)=> rows.map(([h, o])=> [h*S_H2, o*S_O2]);
