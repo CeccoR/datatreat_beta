@@ -208,7 +208,19 @@ was proposed; nothing here is in the code yet.
   page (the peak table, the Caglioti box, the notes) in `xrd-peaks-html.js`, both tested in
   Node (tests/peaksmodel.test.mjs, against what v551's page wrote), the card's wiring and its
   own markup left in `xrd-peaks.js` (1740 lines to 1120, the function 1368 to 908),
-  behaviour byte for byte the same. The others when work takes us into them.
+  behaviour byte for byte the same. Done for `autoRefine` in v553, in xrd-rietveld.js itself
+  (its stages need some forty of the engine's own functions, and the worker loads the one
+  module as before): the function, 796 lines of closures, is now 19 lines of stages, each a
+  function of the run's state and of what the stages before it gave (`autoSetup`,
+  `startingProfile`, `placePeaks` with `cellStage` and `zeroStage`, `stagePass` with
+  `optionalStages`, the detection's `putBackWeak`, `putBackOwn` and `leaveOutNext`,
+  `fromLast` with `lastChanges`, `lastValues`, `lastFreeList`, `lastRefine` and
+  `lastReport`, and `autoFinish` with `shapeStage` and `autoResult`), the longest 64 lines;
+  the file 5258 lines to 5463, the comments on each stage's inputs and outputs. The same
+  operations in the same order: on 49 synthetic cases through its branches the result, the
+  model after it, the progress, the clock's readings and Math.random's calls are v552's bit
+  for bit, 26 of them kept in tests/autorefine.test.mjs (golden digests) beside tests of the
+  stages alone. The others when work takes us into them.
 - **The browser storage is shared with every page of the same origin.** On GitHub Pages
   the app lives at `ceccor.github.io/datatreat_beta/`, and every project published under
   `ceccor.github.io` is the same origin: any of them can read and write DataTreat's

@@ -896,6 +896,8 @@ C = (J^\top W J)^{-1}\,\chi^2_\nu,\qquad \sigma_j = \sqrt{C_{jj}},\qquad \rho_{j
 
 `autoRefine` takes a pattern from the CIF's cell to a converged fit in stages. Each stage frees more parameters than the last, and each starts from where the previous one ended.
 
+From v553 each part of it is a function of its own in `xrd-rietveld.js`, of the run's state (`autoSetup`: the settings, the stages' records, the warnings, the progress) and of what the parts before it gave: the starting values (`startingProfile`, §6.1); where the peaks are (`placePeaks`: `zeroStage`, §6.2, or `cellStage`, §6.3); the stages, run again while the detection's tests leave a phase out or put one back (`stagePass` and `optionalStages`; `leaveOutNext`, `putBackWeak`, `putBackOwn`, §6.4–6.5); from the last result instead (`fromLast`: `lastChanges`, `lastValues`, `lastFreeList`, `lastRefine`, `lastReport`, §6.8); and what both end with (`autoFinish`: the free shape, `shapeStage`, §10, and the result, `autoResult`, §6.6). Up to v552 they were one function's closures; the operations and their order are the same, and so are the results, bit for bit (tests/autorefine.test.mjs).
+
 ### 6.1 Starting values
 
 **Width estimate** (`widthEstimate`). The Kα₁ FWHM of the most prominent peak:

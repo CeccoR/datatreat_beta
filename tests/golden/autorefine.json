@@ -1,0 +1,106 @@
+{
+ "noirf": {
+  "digest": "c492346b9c03943726776719f9b2f3b38c16423f5360418e9ee272a0c6e505b8",
+  "chi2": "0.9431272692657574"
+ },
+ "noirf-last-held": {
+  "digest": "0a1b4be4d0e84b07ca627126e47fe7b90faf75a4647306c81bee2094f8f32eac",
+  "chi2": "0.9388682901270935"
+ },
+ "noirf-last-bg": {
+  "digest": "f024383ff48f0ce7d0659e23d420b410fc6cfe34a984d52fef373a9ce34eece7",
+  "chi2": "0.9422311335841232"
+ },
+ "needirf-noinstr-countscale": {
+  "digest": "2f78b40dce7dc82642a650381426a0dca166a65913028444fd3b6fbb366e26f0",
+  "chi2": "0.8391056872401824"
+ },
+ "irf-faults-aniso": {
+  "digest": "5803a957fd695678f1cf7ecf6a6155267a07493a813a1bba59831cedebf2d096",
+  "chi2": "0.9452115364626382"
+ },
+ "irf-texture-occ": {
+  "digest": "6278fbf9542543bcd0a67368bb33545a4d8089cda89bea61aa3c28f81a8cdcb0",
+  "chi2": "17.51932305363546"
+ },
+ "std-soller": {
+  "digest": "1109453110b5e2ae71f0923159aac4b9816668602f3f9ac5c88f97dc95c3cad6",
+  "chi2": "0.9473490633203272"
+ },
+ "std-soller-last": {
+  "digest": "51256d4dfc1c16b41a59bc5888a229ce1a28f3e374cc4926bce78154098048e9",
+  "chi2": "0.9393006205035128"
+ },
+ "std-fcj": {
+  "digest": "1d3b69ca19207e250966008ca740a1bdc441667c8ac9b90981f0a96e077b0cb7",
+  "chi2": "0.9465041101648929"
+ },
+ "std-fcj-to-soller": {
+  "digest": "65cd88136ef48b619c8525cfabd722d5f992cb30a0e375273b41f84dbc31e59d",
+  "chi2": "2.3675136117994664"
+ },
+ "std-zero-far": {
+  "digest": "f9fad6bd559fa125ff30aa9281575946dafd617e46d96e4e2ef70376434e6350",
+  "chi2": "110.39654064868566"
+ },
+ "sample-soller-irf": {
+  "digest": "b76a95e28839f1156999c6eb850e88097ab57e63d6dafb2df3de2a9f0ff0c8eb",
+  "chi2": "0.9743066149587906"
+ },
+ "two-phase": {
+  "digest": "83c2f7723785f6f73cf45e295d39e7021e609a6c42398a8aa52ec5ec8cd8fec1",
+  "chi2": "0.9405629543222703"
+ },
+ "two-phase-last-new": {
+  "digest": "e2f283201cc0e01fdd5d75fa50b994dacfade55e59e1efe497baa5b6940dfea1",
+  "chi2": "5.243448221284193"
+ },
+ "absent-rutile": {
+  "digest": "82fc20adab65876732942c586bbec78c6121fa369819be367127ef51c682d304",
+  "chi2": "0.9449246035644134"
+ },
+ "absent-nacl": {
+  "digest": "662b7e89f2b0325a17a9da9fd4769aa7e83291028e0c022ff8d01a9530d47152",
+  "chi2": "0.9449246035644232"
+ },
+ "absent-nacl-last": {
+  "digest": "274bc29dd00a86029d93979d9d4f3d9548dea92ade3ef967e45bc20e9189cafb",
+  "chi2": "0.9439754075790455"
+ },
+ "kept-bic": {
+  "digest": "f81c30b12691f8b28c383dfc00890c377fbfb83ab6f555f860bc96da0cccc07f",
+  "chi2": "1.0197644875657548"
+ },
+ "kept-own": {
+  "digest": "4e51f76e611f852ed4ac71d34fb725d57ce774c3eeb28a0fe4be0ba46c7e2fd8",
+  "chi2": "8.183805175627228"
+ },
+ "implausible": {
+  "digest": "b8d89a3f6d5f7dcff63d76af2a062b9f404d8fbe046987a099b05fcf46a18fd2",
+  "chi2": "1.6393812514493524"
+ },
+ "cell-wide": {
+  "digest": "3ac84a0ded3d7e4ad201e196f9564b6b8a3ad7d7e5ece10053709a3f5173da7d",
+  "chi2": "0.9454809689812762"
+ },
+ "no-phase": {
+  "digest": "8f024e3bb4857ea80179dbda8b4745859e85a1f3cf675ddc41cab98822bca69f",
+  "chi2": "100.169582819791"
+ },
+ "few-points": {
+  "digest": "5ce4ec6f7478b0692829c44356c9eeafb431206d915f7a5075787aefa8c28ac7",
+  "chi2": "17657.429340247712"
+ },
+ "shape-ellipsoidL": {
+  "digest": "4f5a1bfaef3c1d8b5848cba03dd6c47c04b9f7cf179a51fdf94adfc9e0f73fb2",
+  "chi2": "17.79275845067848"
+ },
+ "shape-sphere": {
+  "digest": "380bda6c2636653df2bcf11382700e49f8373b27caa39ee549f8e7e3763887b2",
+  "chi2": "0.9418542425838192"
+ },
+ "shape-sphere-last": {
+  "digest": "1c6e499c8f20d209d6ed1c47f9f98089bdf698ced35e0ecaf1ad0201a463c546",
+  "chi2": "0.9409081308383721"
+ }
+}

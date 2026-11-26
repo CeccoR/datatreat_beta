@@ -3550,7 +3550,7 @@ const twins = (a, b) => a.constraint.kind === b.constraint.kind && a.atoms.lengt
   && Math.abs(a.mass - b.mass) <= 1e-3*a.mass && ['a','b','c'].every(l=> Math.abs(a.cell[l] - b.cell[l]) <= 0.02*a.cell[l]);
 const CLEAR_FWHM = 1.5, CLEAR_HEIGHT = 0.1;
 // A phase ownEvidence left out goes back when χ² without it is over OWN_KEEP times χ² with
-// it and the rise over OWN_SHARE of its Σ w·y_p² (autoRefine, where the numbers are).
+// it and the rise over OWN_SHARE of its Σ w·y_p² (putBackOwn, where the numbers are).
 const OWN_KEEP = 2, OWN_SHARE = 0.25;
 function ownEvidence(model, v, chi2){
   const st = evaluate(model, v), n = model.n, y = model.y, w = model.w, x = model.x;
@@ -3666,8 +3666,48 @@ function ownEvidence(model, v, chi2){
    (what each phase was refined with: without the standard's profile, WPPM, the
    anisotropic strain, the faults and the shape are not), irf (the one used, or null), reflectionsInRange, linePositions
    (reflectionsInRange's n and positions after the widths stage), converged, fit (the
-   settings used, defaults filled in, bgDegree the model's), ms }. */
+   settings used, defaults filled in, bgDegree the model's), ms }.
+   The stages are the functions below, each of the run's state A (autoSetup) and what the
+   stages before it gave: the setup and the starting profile, then from the last result
+   (fromLast) or from the CIF: where the peaks are (placePeaks), the stages run (stagePass)
+   until the detection tests (putBackWeak, putBackOwn, leaveOutNext) leave no phase out and
+   put none back, and what both starts end with (autoFinish). Up to v552 they were one
+   function's closures; the operations and their order are the same. */
 function autoRefine(model, opts = {}){
+  const A = autoSetup(model, opts);
+  startingProfile(A);
+  A.tS = Date.now();
+  /* From the last result instead of the CIF (opts.start: a previous autoRefine's output;
+     opts.hold: the groups held at it). A result refined with other phases is not one to
+     start from: the CIF then, said in the warnings. */
+  const S0 = opts.start && opts.start.params ? opts.start : null;
+  if (S0 && refinedWithOthers(model, S0)) A.warnings.push('The last result was refined with other phases: this pattern is refined from the CIF.');
+  else if (S0) return fromLast(A, S0);
+  // 1. where the peaks are; then the stages, run again for as long as the detection's
+  // tests leave a phase out or put one back
+  const D = detection(A, placePeaks(A));
+  let pass;
+  do pass = stagePass(A, D);
+  while (putBackWeak(A, D, pass.res) || putBackOwn(A, D, pass.res) || leaveOutNext(A, D, pass.res));
+  detectionWarnings(A, D);
+  return autoFinish(A, { res: pass.res, out: D.out, lastFree: pass.free, nIn: pass.nIn, cs: D.cs });
+}
+
+/* autoSetup(model, opts) → A, the run's state that autoRefine's stages share: the model and
+   the options; the fit's settings (F: fitSettings of opts.fit over the older keys maxIter, range, bgInv) and
+   what every refine() made here is given (lm); the standard's profile (irf: opts.irf, null
+   where it does not apply); std (opts.standard); the stages' records (stages), the warnings;
+   the progress (progRaw: opts.onProgress; prog: the stages' share of it, share, the rest the
+   free shape's); t0, and tS, when the stage running started (stageStats); the trials that
+   failed (lsFailed, poFailed: sizeDistTrials, textureTrials); adpOf (a phase's displacement
+   option), the optional stages to run (optStages) and the count of stages (nStages); the
+   background's terms (lin), the scales, the lattice parameters refined (none on a standard)
+   and the linear parameters' indices (linIdx). It sets the model up as the strategy needs:
+   without the standard's profile its phases' WPPM, anisotropic strain and faults off; the
+   1/2θ term as the settings say; the zero's bounds over the scan's range. Warnings: the
+   standard's profile not applied or from another radius, what the model assumed of the
+   instrument, the options it could not use. */
+function autoSetup(model, opts){
   const t0 = Date.now(), stages = [], warnings = [];
   const F = fitSettings({ maxIter: opts.maxIter || undefined, cellRange: opts.range, bgInv: opts.bgInv == null ? undefined : !!opts.bgInv, ...opts.fit });
   // What every refinement here is given (the trials' and the free shape's too).
@@ -3687,8 +3727,9 @@ function autoRefine(model, opts = {}){
   // With a free shape to refine, its trial refinements take most of the time: the
   // stages before it fill the first half of the progress.
   const progRaw = opts.onProgress || (()=>{});
-  let share = irf && model.phases.some(q=> q.shapeType) ? 0.5 : 1;
-  const prog = (f, stage) => progRaw(f*share, stage);
+  const A = { model, opts, F, lm, irf, std, stages, warnings, progRaw, share: irf && model.phases.some(q=> q.shapeType) ? 0.5 : 1, t0, tS: t0,
+    lsFailed: new Set(), poFailed: new Set() };
+  A.prog = (f, stage) => progRaw(f*A.share, stage);
   // Options that need the standard's instrumental profile: without it the instrument's
   // broadening and the sample's are one and the same.
   const needIrf = [];
@@ -3711,7 +3752,6 @@ function autoRefine(model, opts = {}){
     model.phases.some(q=> adpOf(q) !== 'cif') && 'displacement parameters',
     model.phases.some(q=> q.occSites && q.occSites.length) && 'site occupancy',
   ].filter(Boolean);
-  const nStages = 5 + optStages.length;
   const lin = ['bg' + 0];
   for (let k = 1; k <= model.bgDegree; k++) lin.push('bg' + k);
   if (F.bgInv !== 'auto') model.useInv = bgInvOn(model.x0, F.bgInv);
@@ -3723,9 +3763,17 @@ function autoRefine(model, opts = {}){
   // that a sample takes: a zeroRange setting over 1° may place it beyond 2°.
   const zB = Math.max(F.zeroRange + 1, irf && Number.isFinite(irf.zero) ? Math.abs(irf.zero) : 0), pz = model.par[model.iZero];
   if (zB > pz.hi){ pz.lo = -zB; pz.hi = zB; }
-  const v = model.v;
+  return Object.assign(A, { adpOf, optStages, nStages: 5 + optStages.length, lin, scales, lattice, linIdx });
+}
 
-  // Starting profile.
+/* startingProfile(A): the profile the stages start from, in model.v (and model.axialOff);
+   A gains est and thE (widthEstimate's width and its θ, rad), asym0 (the asymmetry a
+   refinement of it starts from), AS (the axial divergence's parameter: 'axL', the Soller
+   model's length, or 'asym', FCJ's) and asFree (what of it a refinement without the
+   standard's profile frees). Warnings: the standard's Soller model not usable here, or
+   its Sollers not this pattern's. */
+function startingProfile(A){
+  const { model, opts, irf, std, warnings } = A, v = model.v;
   const est = widthEstimate(model), thE = est.tt/2*D2R;
   // The asymmetry: the standard's with irf (0 in an irf from before it was modelled);
   // without one, refined (the standard's, or a sample's own), from ASYM_START,
@@ -3774,694 +3822,848 @@ function autoRefine(model, opts = {}){
     model.phases.forEach(q=> { v[q.iYs] = 0; v[q.iXs] = 0; });
   }
   setParams(model, v);
-  const stageStats = (name, r, extra) => {
-    const st = evaluate(model, model.v), s = rStats(model, st.yc, st.bg, r ? r.free.length : linIdx.length);
-    const row = { name, Rwp: s.Rwp, Rexp: s.Rexp, chi2: s.chi2, Rp: s.Rp, cRwp: s.cRwp, free: r ? r.free : [], iterations: r ? r.iterations : 0, passes: r ? r.passes || 1 : 0, converged: r ? r.converged : true, ms: Date.now() - tS, ...extra };
-    stages.push(row);
-    return row;
-  };
-  let tS = Date.now();
-  const run = (k, name, free) => {
-    tS = Date.now();
-    prog(k/nStages, name);
-    const r = refine(model, { free, ...lm, onProgress: (f)=> prog((k + Math.min(1, f))/nStages, name) });
-    stageStats(name, r);
-    return r;
-  };
-  const nm = k => model.phases[k].name || 'Phase ' + model.phases[k].id;
-  const pfxOf = k => model.phases[k].pfx;
-  // Optional stages whose every trial refinement threw (said in the warnings, and the
-  // models report what was used instead).
-  const lsFailed = new Set(), poFailed = new Set();
-  /* The log-normal width of the phases ks: σ enters to second order (a distribution and
-     its mirror in ln size differ only beyond), so from σ = 0 it has no derivative;
-     refined from 0.3 and from 0.6, the lower χ² kept. → { res, free }: LS added to free
-     for each phase refined (res as given when none was). */
-  const sizeDistTrials = (ks, free, res) => {
-    for (const k of ks){
-      const q = model.phases[k], v0 = model.v.slice();
-      let best = null;
-      for (const s0 of [0.3, 0.6]){
-        const vv = v0.slice(); vv[q.iLS] = s0; setParams(model, vv);
-        let r; try { r = refine(model, { free: [...free, q.pfx + 'LS'], ...lm }); } catch(e){ continue; }
-        if (!best || r.stats.chi2 < best.r.stats.chi2) best = { r, v: model.v.slice() };
-      }
-      if (best){ setParams(model, best.v); res = best.r; free = free.concat(q.pfx + 'LS'); lsFailed.delete(k); }
-      else { setParams(model, v0); lsFailed.add(k); }
-    }
-    return { res, free };
-  };
-  /* A preferred orientation (March–Dollase) for the phases ks. For a cubic phase its r has
-     no first-order effect at 1 (the members of a family weigh out evenly to first order),
-     so it is refined from 0.8 and from 1.25 (plates and needles) and the lower χ² kept;
-     for 'auto', on each axis textureCandidates gives (the low-index planes and those of
-     the largest spacings) in turn. → { res, free }, as sizeDistTrials. */
-  const textureTrials = (ks, free, res) => {
-    for (const k of ks){
-      const q = model.phases[k], v0 = model.v.slice(), cands = q.poSpec === 'auto' ? textureCandidates(model, k) : [q.poSpec];
-      let best = null;
-      for (const hkl of cands) for (const r0 of [0.8, 1.25]){
-        q.poHkl = hkl;
-        const vv = v0.slice(); vv[q.iPO] = r0; setParams(model, vv);
-        let r; try { r = refine(model, { free: [...free, q.pfx + 'PO'], ...lm }); } catch(e){ continue; }
-        if (!best || r.stats.chi2 < best.r.stats.chi2) best = { r, v: model.v.slice(), hkl };
-      }
-      if (best){ q.poHkl = best.hkl; setParams(model, best.v); res = best.r; free = free.concat(q.pfx + 'PO'); poFailed.delete(k); }
-      // No trial refined (each threw): no texture, rather than an axis listed at r = 1.
-      else { q.poHkl = null; setParams(model, v0); poFailed.add(k); }
-    }
-    return { res, free };
-  };
-  // What phase k is refined with: what `models` reports, and what a start from the last
-  // result compares with the models there. (A log-normal whose σ could not be refined
-  // was refined at σ = 0: a single size.) shape: the solid asked for and searched (with
-  // the standard's profile), kept or not: a start from this result tells by it a solid
-  // the data rejected from one not asked for, which the parameters (all 0) do not.
-  const modelOf = (q, k) => ({ profile: q.wppm ? (q.iLS != null && !lsFailed.has(k) ? 'lognormal' : 'wppm') : 'lorentz',
-    strain: q.strainOff ? 'off' : q.iS && !q.noIrf ? 'aniso' : 'iso', faults: q.faultSpec && !q.noIrf ? q.faultSpec.text : null, adp: adpOf(q), size: !q.sizeOff,
-    occ: q.occSites && q.occSites.length ? q.occSites.map(s=> s.label) : null, shape: irf && q.shapeType || false });
-  /* What both starts end with, the full refinement and the one from the last result: the
-     warnings on what could not be refined and on overlapping phases, the free shape
-     (searched for the phases that ask for one, but for those in `carried`, kept from
-     opts.start), the sizes, strains, fractions and models, and the result. out: the
-     phases left out; lastFree: the free list the shape search starts from; held: the
-     names held at the last result (none in a full refinement); iso0: the carried
-     shapes' isotropic fit; keptIso: the phases whose solid the last result rejected, held
-     so (not searched again). */
-  const finish = ({ res, out, lastFree, nIn, cs, carried = [], held = [], iso0 = null, keptIso = [] }) => {
-    lsFailed.forEach(k=> { if (!out.has(k)) warnings.push(`${nm(k)}: the size distribution could not be refined (the refinements from σ = 0.3 and 0.6 both failed): a single size is reported (σ = 0).`); });
-    poFailed.forEach(k=> { if (!out.has(k)){ const s = model.phases[k].poSpec; warnings.push(`${nm(k)}: the preferred orientation ${s === 'auto' ? 'on its trial axes' : '(' + hklText(s) + ')'} could not be refined (every trial failed): none is applied.`); } });
-    const live = model.phases.map((_, k)=> k).filter(k=> !out.has(k));
-    if (live.length > 1){
-      const ev = ownEvidence(model, model.v, res.stats.chi2);
-      if (live.every(k=> !ev[k].own)) warnings.push(`${live.map(nm).join(', ')}: their peaks overlap throughout, with no line of any one clear of the others': the pattern tells neither whether each is there nor their fractions (a candidate can take up the others' tails or the background: refine without it to compare).`);
-      else live.forEach(k=> { if (ev[k].own && ev[k].alpha < 0.5) warnings.push(`${nm(k)}: where it is alone it shows ${Math.round(ev[k].alpha*100)} % of the intensity the fit gives it — its fraction rests mostly on peaks it shares.`); });
-    }
-    // The free shape of the phases that ask for it (p.shape), on top of everything else.
-    const shapes = {};
-    let isoParams = null;
-    const shapeKs = model.phases.map((_, k)=> k).filter(k=> model.phases[k].shapeType && !out.has(k));
-    if (shapeKs.length && !irf) warnings.push(`Free shape: needs the standard's instrumental profile (refine the standard first), else the shape's widths and the instrument's are one and the same; ${shapeKs.map(nm).join(', ')} refined with an isotropic size.`);
-    else if (shapeKs.length){
-      /* A shape carried from the last result keeps that search's record and isotropic fit
-         (the peak widths are read with it, xrd-widths): no search, no new ΔBIC. Its
-         isotropic fit's values first, this refinement's for the names it lacks, and for
-         a phase searched here all of its own (its isotropic fit is this one). */
-      const S0 = opts.start, searchKs = shapeKs.filter(k=> !carried.includes(k) && !keptIso.includes(k));
-      isoParams = res.params;
-      if (carried.length){
-        isoParams = { ...res.params, ...iso0 };
-        for (const k of searchKs) for (const n in res.params) if (n.startsWith(model.phases[k].pfx)) isoParams[n] = res.params[n];
-      }
-      for (const k of carried){
-        const q = model.phases[k], info = S0.shapes[q.id];
-        shapes[q.id] = { ...info, carried: true };
-        const dBIC = (info.chi2 - info.chi2Iso)/Math.max(1, info.chi2redIso) + (info.P - info.Piso)*Math.log(info.N);
-        const kept = held.some(n=> n.startsWith(q.pfx) && model.par[model.index[n]].kind === 'shape');
-        warnings.push(`${nm(k)}: the free shape (${q.shapeType}) is the last result's, ${kept ? 'held at its values' : 'refined from there'} and not searched again${Number.isFinite(dBIC) ? `; its ΔBIC against the isotropic size, ${dBIC.toFixed(0)}, is that search's` : ''}.`);
-      }
-      for (const k of keptIso) warnings.push(`${nm(k)}: the free shape (${model.phases[k].shapeType}) was not supported by the data in the last result, which kept the isotropic size: held so (the shape ticked), not searched again.`);
-      for (const k of searchKs){
-        const j = searchKs.indexOf(k), part = (1 - share)/searchKs.length;
-        progRaw(share + j*part, `free shape of ${nm(k)}`);
-        const r = freeShape(model, k, res, lastFree, { ...opts, fit: F, onShape: f=> progRaw(share + (j + f)*part, `free shape of ${nm(k)}`) });
-        if (r && r.res){ res = r.res; shapes[model.phases[k].id] = r.info; lastFree = r.res.free; }
-        else if (r && r.rejected){
-          // (freeShape's keep test: the gain over the isotropic fit against the class's threshold;
-          // with the per-line check fired, ΔBIC < −10 as well)
-          const kp = r.keep, sg = x => (x >= 0 ? '+' : '') + x.toFixed(0);
-          warnings.push(`${nm(k)}: the free shape (${model.phases[k].shapeType}) is not supported by the data (${kp.kept === false && kp.flagged && kp.G > kp.need
-            ? `its gain over the isotropic size, ${kp.G.toFixed(1)} χ²_ν, passes the ${kp.need.toFixed(1)} its Laue class needs, but the fit misses some lines (the per-line check) and its ΔBIC, ${sg(r.dBIC)}, is not under −10`
-            : `its gain over the isotropic size, ${r.early ? 'about ' + kp.gainBrief.toFixed(1) + ' χ²_ν from the trial shapes' : kp.G.toFixed(1) + ' χ²_ν'}, needs over ${kp.need.toFixed(1)} for its Laue class`}): the isotropic size is kept.`);
-        }
-        else warnings.push(`${nm(k)}: the free shape (${model.phases[k].shapeType}) could not be refined; the isotropic size is kept.`);
-      }
-      // No shape kept: nothing to compare the isotropic model with.
-      if (!Object.keys(shapes).length) isoParams = null;
-    }
-    // The covariance the model holds is the last trial's (a texture's or a size
-    // distribution's starts, the shape's trials): set back to the kept result's, which the
-    // weight fractions' esds read.
-    model.cov = { names: res.free, cov: res.cov }; model.esd = res.esd;
-    progRaw(1, 'done');
-    const detected = model.phases.map((_, k)=> !out.has(k));
-    const phasesNow = model.phases.map((q, k)=> ({ id: q.id, name: q.name, cell: cellOf(model, model.v, k), mass: phaseMass(q, model.v) }));
-    const scl = model.phases.map(q=> model.v[q.iScale]);
-    const cov = model.cov && model.cov.cov ? scales.map(a=> scales.map(b=> {
-      const ia = model.cov.names.indexOf(a), ib = model.cov.names.indexOf(b);
-      return ia >= 0 && ib >= 0 ? model.cov.cov[ia][ib] : 0;
-    })) : null;
-    // A phase not detected has no size or strain to report (its widths are its start's).
-    const ss = sizeStrain(model, irf, res).map((s, k)=> detected[k] ? { ...s, detected: true }
-      : { ...s, D: NaN, Desd: NaN, strain: NaN, strainEsd: NaN, detected: false });
-    const wf = weightFractions(phasesNow, scl, cov).map((w, k)=> ({ ...w, detected: detected[k] }));
-    // A line whose axial-divergence tail is longer than FCJ_MAX_NODES draw smoothly, at the
-    // result (lineNodes keeps the shortfall). The ripple of such a tail (over 1000 H long)
-    // against a dense quadrature, by how many times too few nodes it has, is under the
-    // profile's own 0.04 % up to 1.5, then up to FCJ_RIPPLE's (% of the peak, the largest of
-    // six tails at 2θ 3–177°, A 0.058–0.15), linear between.
-    model.fcjShort = 0;
-    model.phases.forEach((q, k)=> { if (detected[k] && model.v[q.iScale]) phasePattern(model, model.v, k, new Float64Array(model.n)); });
-    if (model.fcjShort > 1.5){
-      const FCJ_RIPPLE = [[1.5, 0.04], [2, 0.15], [3, 0.8], [5, 2.7]], s = model.fcjShort;
-      const j = FCJ_RIPPLE.findIndex(([r])=> r >= s), [r0, e0] = FCJ_RIPPLE[Math.max(0, j - 1)], [r1, e1] = FCJ_RIPPLE[j < 0 ? FCJ_RIPPLE.length - 1 : j];
-      const e = j < 0 ? null : e0 + (e1 - e0)*(s - r0)/(r1 - r0 || 1);
-      warnings.push(`Axial divergence: the tails of the sharpest lines (at the lowest or highest angles) would need ${s.toFixed(1)} times the ${FCJ_MAX_NODES} quadrature nodes used, so they ripple, by up to ${e == null ? 'over 3' : 'about ' + e.toPrecision(1)} % of the peak.`);
-    }
-    if (res.stats.N <= res.free.length)
-      warnings.push(`The pattern has ${res.stats.N} points for ${res.free.length} refined parameters: with no more points than parameters nothing is determined (no esd). A refinement needs many more points than parameters.`);
-    if (res.fcjBehind) warnings.push(`Axial divergence: after ${FCJ_PASSES} passes the last refinement still moved some lines' tails past the quadrature nodes counted for them; the result may be slightly off (refine again from it).`);
-    return {
-      params: res.params, esd: res.esd, corr: res.corr, cov: res.cov, free: res.free, atBound: res.atBound, undetermined: res.undetermined, tied: res.tied, esdHeld: res.esdHeld,
-      held, stats: res.stats, stages, cellSearch: cs,
-      sizeStrain: ss, weightFractions: wf, detected: model.phases.filter((_, k)=> detected[k]).map(q=> q.id), warnings,
-      shapes, isoParams,
-      // the preferred orientations: each phase's axis (the conventional cell's hkl), r, and
-      // the option it was refined with ('auto' or that axis: whether a start from this
-      // result has the same texture)
-      textures: Object.fromEntries(model.phases.filter(q=> q.iPO != null && q.poHkl).map(q=> [q.id, { hkl: q.poHkl, r: res.params[q.pfx + 'PO'], esd: (res.esd || {})[q.pfx + 'PO'], spec: q.poSpec }])),
-      // the models each phase was refined with (calc() needs them to draw the result again)
-      models: Object.fromEntries(model.phases.map((q, k)=> [q.id, modelOf(q, k)])),
-      // the standard's profile as used (null: none given, or not applicable)
-      irf,
-      reflectionsInRange: nIn && nIn.n, linePositions: nIn && nIn.positions, converged: res.converged, ms: Date.now() - t0,
-      // the settings used (a model drawn again from the result needs its background terms)
-      fit: { ...F, bgDegree: model.bgDegree },
-    };
-  };
-  /* From the last result instead of the CIF (opts.start: a previous autoRefine's output;
-     opts.hold: the groups held at it). A result refined with other phases is not one to
-     start from: the CIF then, said in the warnings. */
-  const S0 = opts.start && opts.start.params ? opts.start : null;
-  // (a phase of the model missing there, or one of there missing here: removed since)
-  if (S0 && (model.phases.some(q=> !Number.isFinite(S0.params[q.pfx + 'scale']) || q.iLat.some(i=> !Number.isFinite(S0.params[model.par[i].name])))
-    || Object.keys(S0.params).some(n=> /^p[^.]*\.scale$/.test(n) && !(n in model.index))))
-    warnings.push('The last result was refined with other phases: this pattern is refined from the CIF.');
-  else if (S0) return fromLast(S0);
-  /* The refinement from the last result. Each parameter belongs to a group, which
-     opts.hold may hold: 'linear' (scales, background), 'cell' (lattice and displacement;
-     the standard's zero and displacement), 'instrument' (U … Y and the asymmetry, where
-     they are refined: no standard's profile), and per phase 'sizestrain' (Ys, Xs, S_j,
-     σ), 'shape', 'faults', 'adp' (ΔB, B or Uⁱʲ per site), 'occ' (the refined site
-     occupancies), 'texture' (r and its axis).
-     A phase's group is unchanged when its option is the one the last result was refined
-     with (start.models, start.textures, the solid its parameters name, or the one asked
-     for there and rejected: start.models' shape). Values: the last result's, but for a
-     changed group's parameters, which take their usual start (Ys and Xs carry over: Ys
-     ×1.23 or ÷1.23 between the Lorentzian and WPPM readings, from the isotropic fit when
-     a shape is dropped or changed; Xs raised to 0.02 for a new Stephens strain). Free:
-     what a full refinement with these options would end with free, but for the held —
-     group held and unchanged, and refined there (start.free, or start.held: held there
-     at the one before). Then one refinement, and for what is new only, the trials of the
-     log-normal σ and of the texture and the shape search (a solid the last result
-     rejected, ticked, is not searched again). No cell search, zero scan or detection
-     passes: the phases left out there stay out. */
-  function fromLast(S0){
-    const P0 = S0.params, hold = new Set(opts.hold || []);
-    const has = n => Object.prototype.hasOwnProperty.call(P0, n) && Number.isFinite(P0[n]);
-    const wasRef = Array.isArray(S0.free) ? new Set([...S0.free, ...(S0.held || [])]) : null, was = n => !wasRef || wasRef.has(n);
-    const M0 = S0.models || {}, T0 = S0.textures || {}, SH0 = S0.shapes || {};
-    // Out there, out here (a result without `detected`: scale 0 is out).
-    const det = Array.isArray(S0.detected) ? new Set(S0.detected.map(String)) : null;
-    const out = new Set(model.phases.map((_, k)=> k).filter(k=> det ? !det.has(String(model.phases[k].id)) : !(P0[pfxOf(k) + 'scale'] > 0)));
-    const liveK = model.phases.map((_, k)=> k).filter(k=> !out.has(k));
-    // A result with the standard's profile and one without differ in what Ys, Xs and the
-    // profile mean (start.irf, when given, says which it was).
-    const irfSame = !('irf' in S0) || !!S0.irf === !!irf;
-    // Another refinement of the standard since, its profile changed: the sample's
-    // broadening was fitted above another instrumental profile, and is refined from its
-    // values rather than held. (Its zero moved: the cell, below.)
-    const irfMoved = irfSame && !!irf && !!S0.irf && ['U', 'V', 'W', 'X', 'Y', 'asym', 'axL', 'transp'].some(k=> (+irf[k] || 0) !== (+S0.irf[k] || 0));
-    const BROAD = ['sizestrain', 'shape', 'faults'];
-    // The solid of the last result (shapeNamed).
-    const shapeThen = q => shapeNamed(P0, q.pfx);
-    const sameAxis = (a, b) => Array.isArray(a) && Array.isArray(b) && a.length === 3 && a.every((x, i)=> x === +b[i]);
-    const chg = model.phases.map((q, k)=> {
-      const m0 = M0[q.id] || null, m1 = modelOf(q, k), t0 = T0[q.id], sh0 = shapeThen(q), sh1 = irf && q.shapeType || false;
-      const texSame = !!(t0 && t0.hkl) && (t0.spec == null ? q.poSpec === 'auto' || sameAxis(q.poSpec, t0.hkl) : t0.spec === 'auto' ? q.poSpec === 'auto' : sameAxis(q.poSpec, t0.spec));
-      // The size profile there and here: WPPM's reading of a width is 1/1.23 of the
-      // Lorentzian's (Ys, and a body's widths alike).
-      const w0 = !!m0 && (m0.profile || 'lorentz') !== 'lorentz', w1 = m1.profile !== 'lorentz';
-      /* A body's search under the other size profile (Lorentzian ↔ WPPM; the v420
-         ellipsoid is drawn Lorentzian under WPPM too: phasePattern) is not this one's: its
-         solid is searched again. Carried, its widths rescaled ÷1.23 as Ys and refined, a
-         synthetic WPPM disc (30 × 8 nm) whose Lorentzian search had ended on a wrong solid
-         (χ²_ν 4.05) stayed there (χ²_ν 2.61); searched again, χ²_ν 0.997 and the truth
-         within 1 esd, in 26 s (from the CIF, the same in 41 s). A result of v522 or older
-         whose phase asked for a body under the Lorentzian profile is one: a body is drawn by
-         WPPM from v523 (broadeningSetup), so its solid is searched again with the exact line,
-         kept or not by v523's keep test, and its isotropic size, refined again, reads the
-         sphere's diameter where it read a Scherrer size. (A body under WPPM there is carried,
-         or held isotropic where v522's ΔBIC < −10 rejected it, as before.) From v528 the
-         fit setting shapeLine chooses the line under the Lorentzian profile: a result
-         refined with the other one is searched again the same way. */
-      const sameRead = !q.iW || w0 === w1;
-      // The solid asked for there too and rejected by the keep test (no width in use): the same
-      // option, its values the isotropic size's. (A result without models' shape: v428's.)
-      const rej0 = !!sh1 && !sh0 && !!m0 && m0.shape === sh1 && sameRead;
-      // A solid in use there is carried with that search's record and isotropic fit (the
-      // widths' isotropic model): a result without them (v428's) has it searched again.
-      const rec = !!(SH0[q.id] && Number.isFinite(SH0[q.id].chi2) && S0.isoParams);
-      return { m0, m1, sh0, sh1, rej0, w0, w1,
-        sizestrain: !m0 || !irfSame || (m0.size !== false) !== m1.size || (m0.strain || 'iso') !== m1.strain || (m0.profile || 'lorentz') !== m1.profile,
-        shape: rej0 ? false : sh0 !== sh1 || (!!sh1 && !(rec && sameRead)), faults: !m0 || (m0.faults || null) !== m1.faults, adp: !m0 || (m0.adp || 'cif') !== m1.adp,
-        occ: !m0 || occText(m0.occ) !== occText(m1.occ),
-        texture: q.iPO == null ? !!t0 : !texSame };
-    });
-    const groupOf = i => { const p = model.par[i];
-      return p.linear ? 'linear' : p.kind === 'lattice' || p.name === 'zero' || p.name === 'disp' || p.name === 'transp' ? 'cell' : p.group === 'profile' ? 'instrument'
-        : KIND_GROUP[p.kind] || null; };
-    /* The background's terms there and here (the degree and the 1/2θ term, fit settings):
-       held across a change, the terms left had been fitted beside the others (degree 12
-       → 6 on 33A, 'linear' held: χ²_ν 135, the background up to 424 counts off), so the
-       scales and background are refined then. Read from the parameters there: its highest
-       Chebyshev term, and the 1/2θ term refined (or, without free, not 0). */
-    let deg0 = -1; while (has('bg' + (deg0 + 1))) deg0++;
-    const inv0 = wasRef ? wasRef.has('bgInv') : !!P0.bgInv;
-    const bgChanged = deg0 !== model.bgDegree || inv0 !== !!model.useInv;
-    const changed = i => { const p = model.par[i], g = groupOf(i); return g === 'linear' ? bgChanged : g === 'instrument' ? !irfSame : p.phase >= 0 && !!chg[p.phase][g]; };
+  Object.assign(A, { est, thE, asym0, AS, asFree });
+}
 
-    // Values: the usual starts are in model.v (buildModel's, and the starting profile's).
-    const vv = model.v.slice(), take = n => { if (has(n)) vv[model.index[n]] = P0[n]; };
-    [...lin, 'disp'].forEach(take);
-    // A sample's zero is the standard's (set above), or the file's: held, as the last
-    // result's when that was too (no standard's profile then and now).
-    if (std || (!irf && irfSame)) take('zero');
-    if (std) take('transp');
-    if (!irf && irfSame) ['U', 'V', 'W', 'X', 'Y', ...asFree].forEach(take);
-    model.phases.forEach((q, k)=> {
-      const c = chg[k], pf = q.pfx;
-      if (out.has(k)){ model.par.forEach(p=> { if (p.phase === k) take(p.name); }); vv[q.iScale] = 0; return; }
-      take(pf + 'scale'); q.iLat.forEach(i=> take(model.par[i].name));
-      // Size and strain: with the standard's profile only (without, they stay 0: the
-      // profile is the whole width).
-      if (irf && irfSame){
-        const { m0, m1, w0, w1 } = c;
-        const ys0 = c.sh0 && c.shape ? (S0.isoParams || {})[pf + 'Ys'] : P0[pf + 'Ys'];
-        if (m0 && m0.size !== false && !q.sizeOff && Number.isFinite(ys0)) vv[q.iYs] = w0 === w1 ? ys0 : w1 ? ys0/1.23 : ys0*1.23;
-        if (m0 && m0.strain !== 'off' && !q.strainOff) take(pf + 'Xs');
-        if (q.iS && m1.strain === 'aniso'){
-          if (m0 && m0.strain === 'aniso') q.iS.forEach(i=> take(model.par[i].name));
-          else if (vv[q.iXs] < 0.02) vv[q.iXs] = 0.02;
-        }
-        if (q.iLS != null && m1.profile === 'lognormal' && m0 && m0.profile === 'lognormal') take(pf + 'LS');
-      }
-      // The other groups: the last values when unchanged (a solid's reference orientation
-      // with them), else their usual start.
-      model.par.forEach((p, i)=> { const g = groupOf(i); if (p.phase === k && (g === 'shape' || g === 'faults' || g === 'adp' || g === 'occ' || g === 'texture') && !c[g]) take(p.name); });
-      if (q.iPO != null && !c.texture) q.poHkl = T0[q.id].hkl.map(Number);
-    });
-    setParams(model, vv);
-    const nIn = reflectionsInRange(model), uvFree = !irf && nIn.positions >= UV_POSITIONS;
-    // A sample's zero not the one its cell and displacement were fitted at (the standard
-    // refined again, or its profile added or removed since): those are refined, not held.
-    const zeroMoved = !std && has('zero') && P0.zero !== model.v[model.iZero];
-    /* The last result drawn with another model of the axial divergence (FCJ's A there, the
-       Soller model's L here, or the reverse), or a standard's without the sin 2θ shift
-       (both v432's): its profile, zero, displacement and cell were fitted to lines drawn
-       otherwise, and are refined from its values rather than held. Held, the user's LaB6
-       refined from its v431 result kept χ²_ν 3.79 where from the CIF it reaches 2.17 (the
-       shift took −0.003° instead of −0.017°, the zero and displacement held at FCJ's). */
-    const axChanged = has('axL') !== (AS === 'axL') || (std && !has('transp'));
-
-    // Free: a full refinement's final list, in its order. The free shapes: carried from
-    // the last result, kept isotropic (rejected there, the shape ticked), or searched.
-    const keptIso = liveK.filter(k=> chg[k].rej0 && hold.has('shape') && !irfMoved);
-    const carried = liveK.filter(k=> chg[k].sh1 && !chg[k].shape && !chg[k].rej0), search = liveK.filter(k=> chg[k].sh1 && !carried.includes(k) && !keptIso.includes(k));
-    const F = [...liveK.map(k=> scales[k]), ...lin];
-    // (a lattice the last result did not refine: its cell search found no minimum there)
-    if (std) F.push('zero', 'disp', 'transp');
-    else { liveK.forEach(k=> model.phases[k].iLat.forEach(i=> { if (was(model.par[i].name)) F.push(model.par[i].name); })); F.push('disp'); }
-    if (irf) liveK.forEach(k=> { if (!model.phases[k].sizeOff && !carried.includes(k)) F.push(pfxOf(k) + 'Ys'); }); else F.push('W', 'Y');
-    if (irf) liveK.forEach(k=> { if (!model.phases[k].strainOff) F.push(pfxOf(k) + 'Xs'); }); else F.push(...(uvFree ? ['X', 'U', 'V', ...asFree] : ['X']));
-    liveK.forEach(k=> { const q = model.phases[k]; if (q.iS && !q.noIrf) F.push(...q.iS.map(i=> model.par[i].name)); });
-    liveK.forEach(k=> { const q = model.phases[k]; if (q.iFA != null && !q.noIrf) F.push(q.pfx + 'FA'); });
-    liveK.forEach(k=> { const q = model.phases[k]; if (q.iLS != null && q.wppm) F.push(q.pfx + 'LS'); });
-    liveK.forEach(k=> { const q = model.phases[k], a = adpOf(q);
-      F.push(...(a === 'overall' ? [q.pfx + 'B'] : a === 'site' ? q.sites.map(st=> model.par[st.iB].name) : a === 'aniso' ? q.sites.flatMap(st=> st.iU.map(i=> model.par[i].name)) : [])); });
-    liveK.forEach(k=> { F.push(...(model.phases[k].occSites || []).map(s=> model.par[s.iOcc].name)); });
-    liveK.forEach(k=> { const q = model.phases[k]; if (q.iPO != null) F.push(q.pfx + 'PO'); });
-    // A carried solid: its widths and the turns its search refined (none for a body held
-    // on the lattice; never the reference orientation).
-    carried.forEach(k=> { const q = model.phases[k], info = (S0.shapes || {})[q.id];
-      (q.iL || [...q.iW, ...(info && info.held && !wasRef ? [] : q.iR)]).forEach(i=> { if (was(model.par[i].name)) F.push(model.par[i].name); }); });
-    const held = F.filter(n=> { const i = model.index[n], p = model.par[i], g = groupOf(i);
-      // (not a parameter the last result did not have: a new one, as a background term
-      // added; Ys where the solid changed or is searched: a solid's 0 there is no isotropic
-      // size to hold, and a search replaces it — freeShape sets it to 0)
-      return hold.has(g) && !changed(i) && was(n) && has(n) && !(p.phase >= 0 && i === model.phases[p.phase].iYs && (chg[p.phase].shape || search.includes(p.phase)))
-        && !(irfMoved && BROAD.includes(g)) && !(zeroMoved && g === 'cell') && !(axChanged && (g === 'instrument' || g === 'cell')); });
-    // What is new: σ and the texture by their trials, after the refinement.
-    const lsNew = liveK.filter(k=> { const q = model.phases[k], m0 = chg[k].m0; return q.iLS != null && q.wppm && !(m0 && m0.profile === 'lognormal' && irfSame); });
-    const poNew = liveK.filter(k=> model.phases[k].iPO != null && chg[k].texture);
-    const trial = new Set([...lsNew.map(k=> pfxOf(k) + 'LS'), ...poNew.map(k=> pfxOf(k) + 'PO')]);
-    let free = F.filter(n=> !held.includes(n) && !trial.has(n));
-    // The asymmetry freed from a typical value (at 0 it has no derivative), as stage 4 does.
-    if (free.includes('asym') && !(model.v[model.iAsym] > 0)){ const v1 = model.v.slice(); v1[model.iAsym] = asym0; setParams(model, v1); }
-
-    share = search.length ? 0.5 : 1;
-    const nT = 1 + (lsNew.length ? 1 : 0) + (poNew.length ? 1 : 0);
-    tS = Date.now();
-    prog(0, 'from the last result');
-    const linFree = free.filter(n=> model.par[model.index[n]].linear).map(n=> model.index[n]);
-    if (linFree.length){ const v1 = model.v.slice(); solveLinear(model, v1, evaluate(model, v1), linFree); setParams(model, v1); }
-    stageStats('linear start', null);
-    tS = Date.now();
-    let res = refine(model, { free, ...lm, onProgress: f=> prog(Math.min(1, f)/nT, 'from the last result') });
-    // (everything held: nothing to converge, and nothing that failed to)
-    if (!free.length) res = { ...res, converged: true };
-    stageStats('from the last result', res);
-    let kT = 1;
-    if (lsNew.length){ tS = Date.now(); prog(kT++/nT, 'size distribution'); ({ res, free } = sizeDistTrials(lsNew, free, res)); stageStats('size distribution', res); }
-    if (poNew.length){ tS = Date.now(); prog(kT/nT, 'preferred orientation'); ({ res, free } = textureTrials(poNew, free, res)); stageStats('preferred orientation', res); }
-
-    // What was held, refined from the last values, and new.
-    out.forEach(k=> warnings.push(`${nm(k)}: not detected in the last result, so left out here too (scale 0); a refinement from the CIF tests it again.`));
-    /* New faults beside a held size and strain take only the broadening those left: the
-       size had taken the faults' share in the last result. On synthetic Pt (D 40 nm,
-       α 0.03 on {111}) the faults came out at 0.0055(2), χ²_ν 5.1, with the size and
-       strain held; refined with them, 0.0297(2), χ²_ν 0.99. */
-    liveK.forEach(k=> { const q = model.phases[k];
-      if (q.iFA != null && !q.noIrf && chg[k].faults && held.some(n=> n.startsWith(q.pfx) && ['sizestrain', 'shape'].includes(groupOf(model.index[n]))))
-        warnings.push(`${nm(k)}: the planar faults are new, and refined with the size and strain${held.some(n=> n.startsWith(q.pfx) && groupOf(model.index[n]) === 'shape') ? ' and the shape' : ''} held: they take only the broadening those left, which took the faults' share before. Refined together (not held), the faults get their own.`); });
-    /* The occupancies changed (switched on, off or to another site) beside displacements
-       held: those were fitted beside the other occupancies, and both scale the sites'
-       scattering. On 33A (SrTiO3, the Sr site at 0.69) a ΔB held at its 0.63 Å² and the
-       occupancy switched off left χ²_ν at 1.73, where refined together they give 1.70. */
-    liveK.forEach(k=> { const q = model.phases[k];
-      if (chg[k].occ && chg[k].m0 && held.some(n=> n.startsWith(q.pfx) && groupOf(model.index[n]) === 'adp'))
-        warnings.push(`${nm(k)}: the site occupancies changed since, and the displacement parameters are held at values fitted beside the former ones: both scale the sites' scattering. Refined together (not held), each takes its own share.`); });
-    const LABEL = { linear: 'scales and background', cell: std ? 'zero and displacement' : 'cell and displacement', instrument: 'instrumental profile', size: 'size', strain: 'strain',
-      shape: 'free shape', faults: 'planar faults', adp: 'displacement parameters', occ: 'site occupancy', texture: 'preferred orientation' };
-    // (the size and the strain apart: a new solid frees Y_s and leaves X_s held)
-    const labelOf = i => { const g = groupOf(i), p = model.par[i]; return g !== 'sizestrain' ? g : p.kind === 'strain' || i === model.phases[p.phase].iXs ? 'strain' : 'size'; };
-    const lists = { held: new Map(), kept: new Map(), fresh: new Map() };
-    const note = (which, g, k) => { const m = lists[which]; if (!m.has(g)) m.set(g, new Set()); if (k >= 0 && g !== 'linear' && g !== 'cell') m.get(g).add(nm(k)); };
-    held.forEach(n=> { const i = model.index[n]; note('held', labelOf(i), model.par[i].phase); });
-    res.free.forEach(n=> { const i = model.index[n]; note(changed(i) || trial.has(n) || !was(n) || !has(n) ? 'fresh' : 'kept', labelOf(i), model.par[i].phase); });
-    search.forEach(k=> note('fresh', 'shape', k));
-    const axNote = axChanged && (hold.has('instrument') || hold.has('cell')) && `The last result was refined with ${has('axL') ? 'the Soller model of the axial divergence' : 'FCJ\u2019s axial divergence'}${std && !has('transp') ? ' and without the sin 2θ shift' : ''} (before v432, or another standard), this one with ${AS === 'axL' ? 'the Soller model' : 'FCJ\u2019s'}: the profile, zero, displacement and cell, fitted to lines drawn otherwise, are refined from its values rather than held.`;
-    const zeroNote = zeroMoved && hold.has('cell') && `The zero is not the one the last result was refined at (the standard refined again, or its profile added or removed: ${P0.zero.toFixed(4)}° then, ${model.v[model.iZero].toFixed(4)}° now): the cell and displacement, fitted at that zero, are refined rather than held.`;
-    const say = m => {
-      const same = m.has('size') && m.has('strain') && [...m.get('size')].join() === [...m.get('strain')].join();
-      return Object.keys(LABEL).filter(g=> m.has(g) && !(same && g === 'strain')).map(g=> (same && g === 'size' ? 'size and strain' : LABEL[g]) + (m.get(g).size ? ' of ' + [...m.get(g)].join(' and ') : '')).join('; ');
-    };
-    warnings.push(['Refined from the last result.', irfMoved && BROAD.some(g=> hold.has(g)) && 'The standard has been refined again since: the size, strain, shape and faults, fitted above its former profile, are refined rather than held.', axNote, zeroNote, lists.held.size && `Held at its values: ${say(lists.held)} (with no esds here: they are that refinement's; what is refined here is conditional on them, and a last refinement with nothing held gives values and esds free of that).`,
-      lists.kept.size && `Refined from its values: ${say(lists.kept)}.`, lists.fresh.size && `New or changed since, refined from their usual start: ${say(lists.fresh)}.`].filter(Boolean).join(' '));
-    return finish({ res, out, lastFree: free, nIn, cs: null, carried, held, iso0: carried.length ? S0.isoParams : null, keptIso });
+// A stage's record in A.stages: its fit's R factors and χ²_ν, what was free (none: the
+// linear parameters, solved), its iterations and passes, whether it converged, its time
+// (since A.tS), and extra (the stage's own numbers). → the record.
+function stageStats(A, name, r, extra){
+  const { model } = A, st = evaluate(model, model.v), s = rStats(model, st.yc, st.bg, r ? r.free.length : A.linIdx.length);
+  const row = { name, Rwp: s.Rwp, Rexp: s.Rexp, chi2: s.chi2, Rp: s.Rp, cRwp: s.cRwp, free: r ? r.free : [], iterations: r ? r.iterations : 0, passes: r ? r.passes || 1 : 0, converged: r ? r.converged : true, ms: Date.now() - A.tS, ...extra };
+  A.stages.push(row);
+  return row;
+}
+// Stage k of A.nStages: a refinement with `free` free, its progress and its record. → refine's.
+function runStage(A, k, name, free){
+  A.tS = Date.now();
+  A.prog(k/A.nStages, name);
+  const r = refine(A.model, { free, ...A.lm, onProgress: (f)=> A.prog((k + Math.min(1, f))/A.nStages, name) });
+  stageStats(A, name, r);
+  return r;
+}
+const phaseName = (model, k) => model.phases[k].name || 'Phase ' + model.phases[k].id;
+/* sizeDistTrials(A, ks, free, res): the log-normal width of the phases ks: σ enters to
+   second order (a distribution and its mirror in ln size differ only beyond), so from
+   σ = 0 it has no derivative; refined from 0.3 and from 0.6, the lower χ² kept. → { res,
+   free }: LS added to free for each phase refined (res as given when none was); a phase
+   whose every trial threw in A.lsFailed. */
+function sizeDistTrials(A, ks, free, res){
+  const { model, lm, lsFailed } = A;
+  for (const k of ks){
+    const q = model.phases[k], v0 = model.v.slice();
+    let best = null;
+    for (const s0 of [0.3, 0.6]){
+      const vv = v0.slice(); vv[q.iLS] = s0; setParams(model, vv);
+      let r; try { r = refine(model, { free: [...free, q.pfx + 'LS'], ...lm }); } catch(e){ continue; }
+      if (!best || r.stats.chi2 < best.r.stats.chi2) best = { r, v: model.v.slice() };
+    }
+    if (best){ setParams(model, best.v); res = best.r; free = free.concat(q.pfx + 'LS'); lsFailed.delete(k); }
+    else { setParams(model, v0); lsFailed.add(k); }
   }
+  return { res, free };
+}
+/* textureTrials(A, ks, free, res): a preferred orientation (March–Dollase) for the phases
+   ks. For a cubic phase its r has no first-order effect at 1 (the members of a family weigh
+   out evenly to first order), so it is refined from 0.8 and from 1.25 (plates and needles)
+   and the lower χ² kept; for 'auto', on each axis textureCandidates gives (the low-index
+   planes and those of the largest spacings) in turn. → { res, free }, as sizeDistTrials
+   (A.poFailed). */
+function textureTrials(A, ks, free, res){
+  const { model, lm, poFailed } = A;
+  for (const k of ks){
+    const q = model.phases[k], v0 = model.v.slice(), cands = q.poSpec === 'auto' ? textureCandidates(model, k) : [q.poSpec];
+    let best = null;
+    for (const hkl of cands) for (const r0 of [0.8, 1.25]){
+      q.poHkl = hkl;
+      const vv = v0.slice(); vv[q.iPO] = r0; setParams(model, vv);
+      let r; try { r = refine(model, { free: [...free, q.pfx + 'PO'], ...lm }); } catch(e){ continue; }
+      if (!best || r.stats.chi2 < best.r.stats.chi2) best = { r, v: model.v.slice(), hkl };
+    }
+    if (best){ q.poHkl = best.hkl; setParams(model, best.v); res = best.r; free = free.concat(q.pfx + 'PO'); poFailed.delete(k); }
+    // No trial refined (each threw): no texture, rather than an axis listed at r = 1.
+    else { q.poHkl = null; setParams(model, v0); poFailed.add(k); }
+  }
+  return { res, free };
+}
+// What phase k is refined with: what `models` reports, and what a start from the last
+// result compares with the models there. (A log-normal whose σ could not be refined
+// was refined at σ = 0: a single size.) shape: the solid asked for and searched (with
+// the standard's profile), kept or not: a start from this result tells by it a solid
+// the data rejected from one not asked for, which the parameters (all 0) do not.
+const modelOf = (A, q, k) => ({ profile: q.wppm ? (q.iLS != null && !A.lsFailed.has(k) ? 'lognormal' : 'wppm') : 'lorentz',
+  strain: q.strainOff ? 'off' : q.iS && !q.noIrf ? 'aniso' : 'iso', faults: q.faultSpec && !q.noIrf ? q.faultSpec.text : null, adp: A.adpOf(q), size: !q.sizeOff,
+  occ: q.occSites && q.occSites.length ? q.occSites.map(s=> s.label) : null, shape: A.irf && q.shapeType || false });
 
-  // 1. where the peaks are
-  prog(0, std ? 'zero search' : 'cell search');
+/* autoFinish(A, { res, out, lastFree, nIn, cs, carried, held, iso0, keptIso }) → the result:
+   what both starts end with, the full refinement and the one from the last result: the
+   warnings on what could not be refined and on overlapping phases (phaseWarnings), the free
+   shape (shapeStage: searched for the phases that ask for one, but for those in `carried`,
+   kept from opts.start), the sizes, strains, fractions and models, and the result
+   (autoResult). out: the phases left out; lastFree: the free list the shape search starts
+   from; held: the names held at the last result (none in a full refinement); iso0: the
+   carried shapes' isotropic fit; keptIso: the phases whose solid the last result rejected,
+   held so (not searched again). */
+function autoFinish(A, { res, out, lastFree, nIn, cs, carried = [], held = [], iso0 = null, keptIso = [] }){
+  phaseWarnings(A, out, res);
+  const sh = shapeStage(A, { res, out, lastFree, carried, held, iso0, keptIso });
+  return autoResult(A, { res: sh.res, out, nIn, cs, held, shapes: sh.shapes, isoParams: sh.isoParams });
+}
+// The warnings on the trials that failed (sizeDistTrials, textureTrials) and on phases
+// whose peaks overlap (ownEvidence at the result res), but for the phases out.
+function phaseWarnings(A, out, res){
+  const { model, warnings } = A, nm = k => phaseName(model, k);
+  A.lsFailed.forEach(k=> { if (!out.has(k)) warnings.push(`${nm(k)}: the size distribution could not be refined (the refinements from σ = 0.3 and 0.6 both failed): a single size is reported (σ = 0).`); });
+  A.poFailed.forEach(k=> { if (!out.has(k)){ const s = model.phases[k].poSpec; warnings.push(`${nm(k)}: the preferred orientation ${s === 'auto' ? 'on its trial axes' : '(' + hklText(s) + ')'} could not be refined (every trial failed): none is applied.`); } });
+  const live = model.phases.map((_, k)=> k).filter(k=> !out.has(k));
+  if (live.length > 1){
+    const ev = ownEvidence(model, model.v, res.stats.chi2);
+    if (live.every(k=> !ev[k].own)) warnings.push(`${live.map(nm).join(', ')}: their peaks overlap throughout, with no line of any one clear of the others': the pattern tells neither whether each is there nor their fractions (a candidate can take up the others' tails or the background: refine without it to compare).`);
+    else live.forEach(k=> { if (ev[k].own && ev[k].alpha < 0.5) warnings.push(`${nm(k)}: where it is alone it shows ${Math.round(ev[k].alpha*100)} % of the intensity the fit gives it — its fraction rests mostly on peaks it shares.`); });
+  }
+}
+/* shapeStage(A, { res, out, lastFree, carried, held, iso0, keptIso }) → { res, shapes,
+   isoParams }: the free shape of the phases that ask for it (p.shape), on top of everything
+   else, searched from res (freeShape) with the standard's profile, but for the phases
+   carried from the last result (their search's record) or kept isotropic there (keptIso);
+   res the shape's refinement where one is kept; shapes by phase id; isoParams the isotropic
+   fit beside them (null without a shape). The rest of the progress. */
+function shapeStage(A, { res, out, lastFree, carried, held, iso0, keptIso }){
+  const { model, opts, irf, F, warnings, progRaw } = A, nm = k => phaseName(model, k), share = A.share;
+  const shapes = {};
+  let isoParams = null;
+  const shapeKs = model.phases.map((_, k)=> k).filter(k=> model.phases[k].shapeType && !out.has(k));
+  if (shapeKs.length && !irf) warnings.push(`Free shape: needs the standard's instrumental profile (refine the standard first), else the shape's widths and the instrument's are one and the same; ${shapeKs.map(nm).join(', ')} refined with an isotropic size.`);
+  else if (shapeKs.length){
+    /* A shape carried from the last result keeps that search's record and isotropic fit
+       (the peak widths are read with it, xrd-widths): no search, no new ΔBIC. Its
+       isotropic fit's values first, this refinement's for the names it lacks, and for
+       a phase searched here all of its own (its isotropic fit is this one). */
+    const S0 = opts.start, searchKs = shapeKs.filter(k=> !carried.includes(k) && !keptIso.includes(k));
+    isoParams = res.params;
+    if (carried.length){
+      isoParams = { ...res.params, ...iso0 };
+      for (const k of searchKs) for (const n in res.params) if (n.startsWith(model.phases[k].pfx)) isoParams[n] = res.params[n];
+    }
+    for (const k of carried){
+      const q = model.phases[k], info = S0.shapes[q.id];
+      shapes[q.id] = { ...info, carried: true };
+      const dBIC = (info.chi2 - info.chi2Iso)/Math.max(1, info.chi2redIso) + (info.P - info.Piso)*Math.log(info.N);
+      const kept = held.some(n=> n.startsWith(q.pfx) && model.par[model.index[n]].kind === 'shape');
+      warnings.push(`${nm(k)}: the free shape (${q.shapeType}) is the last result's, ${kept ? 'held at its values' : 'refined from there'} and not searched again${Number.isFinite(dBIC) ? `; its ΔBIC against the isotropic size, ${dBIC.toFixed(0)}, is that search's` : ''}.`);
+    }
+    for (const k of keptIso) warnings.push(`${nm(k)}: the free shape (${model.phases[k].shapeType}) was not supported by the data in the last result, which kept the isotropic size: held so (the shape ticked), not searched again.`);
+    for (const k of searchKs){
+      const j = searchKs.indexOf(k), part = (1 - share)/searchKs.length;
+      progRaw(share + j*part, `free shape of ${nm(k)}`);
+      const r = freeShape(model, k, res, lastFree, { ...opts, fit: F, onShape: f=> progRaw(share + (j + f)*part, `free shape of ${nm(k)}`) });
+      if (r && r.res){ res = r.res; shapes[model.phases[k].id] = r.info; lastFree = r.res.free; }
+      else if (r && r.rejected){
+        // (freeShape's keep test: the gain over the isotropic fit against the class's threshold;
+        // with the per-line check fired, ΔBIC < −10 as well)
+        const kp = r.keep, sg = x => (x >= 0 ? '+' : '') + x.toFixed(0);
+        warnings.push(`${nm(k)}: the free shape (${model.phases[k].shapeType}) is not supported by the data (${kp.kept === false && kp.flagged && kp.G > kp.need
+          ? `its gain over the isotropic size, ${kp.G.toFixed(1)} χ²_ν, passes the ${kp.need.toFixed(1)} its Laue class needs, but the fit misses some lines (the per-line check) and its ΔBIC, ${sg(r.dBIC)}, is not under −10`
+          : `its gain over the isotropic size, ${r.early ? 'about ' + kp.gainBrief.toFixed(1) + ' χ²_ν from the trial shapes' : kp.G.toFixed(1) + ' χ²_ν'}, needs over ${kp.need.toFixed(1)} for its Laue class`}): the isotropic size is kept.`);
+      }
+      else warnings.push(`${nm(k)}: the free shape (${model.phases[k].shapeType}) could not be refined; the isotropic size is kept.`);
+    }
+    // No shape kept: nothing to compare the isotropic model with.
+    if (!Object.keys(shapes).length) isoParams = null;
+  }
+  return { res, shapes, isoParams };
+}
+/* autoResult(A, { res, out, nIn, cs, held, shapes, isoParams }) → autoRefine's result (see
+   there) from the refinement kept (res): the model's covariance set back to it, the sizes
+   and strains, the weight fractions and the models, with the warnings on the axial
+   divergence's quadrature and on too few points. */
+function autoResult(A, { res, out, nIn, cs, held, shapes, isoParams }){
+  const { model, irf, F, warnings, scales } = A;
+  // The covariance the model holds is the last trial's (a texture's or a size
+  // distribution's starts, the shape's trials): set back to the kept result's, which the
+  // weight fractions' esds read.
+  model.cov = { names: res.free, cov: res.cov }; model.esd = res.esd;
+  A.progRaw(1, 'done');
+  const detected = model.phases.map((_, k)=> !out.has(k));
+  const phasesNow = model.phases.map((q, k)=> ({ id: q.id, name: q.name, cell: cellOf(model, model.v, k), mass: phaseMass(q, model.v) }));
+  const scl = model.phases.map(q=> model.v[q.iScale]);
+  const cov = model.cov && model.cov.cov ? scales.map(a=> scales.map(b=> {
+    const ia = model.cov.names.indexOf(a), ib = model.cov.names.indexOf(b);
+    return ia >= 0 && ib >= 0 ? model.cov.cov[ia][ib] : 0;
+  })) : null;
+  // A phase not detected has no size or strain to report (its widths are its start's).
+  const ss = sizeStrain(model, irf, res).map((s, k)=> detected[k] ? { ...s, detected: true }
+    : { ...s, D: NaN, Desd: NaN, strain: NaN, strainEsd: NaN, detected: false });
+  const wf = weightFractions(phasesNow, scl, cov).map((w, k)=> ({ ...w, detected: detected[k] }));
+  // A line whose axial-divergence tail is longer than FCJ_MAX_NODES draw smoothly, at the
+  // result (lineNodes keeps the shortfall). The ripple of such a tail (over 1000 H long)
+  // against a dense quadrature, by how many times too few nodes it has, is under the
+  // profile's own 0.04 % up to 1.5, then up to FCJ_RIPPLE's (% of the peak, the largest of
+  // six tails at 2θ 3–177°, A 0.058–0.15), linear between.
+  model.fcjShort = 0;
+  model.phases.forEach((q, k)=> { if (detected[k] && model.v[q.iScale]) phasePattern(model, model.v, k, new Float64Array(model.n)); });
+  if (model.fcjShort > 1.5){
+    const FCJ_RIPPLE = [[1.5, 0.04], [2, 0.15], [3, 0.8], [5, 2.7]], s = model.fcjShort;
+    const j = FCJ_RIPPLE.findIndex(([r])=> r >= s), [r0, e0] = FCJ_RIPPLE[Math.max(0, j - 1)], [r1, e1] = FCJ_RIPPLE[j < 0 ? FCJ_RIPPLE.length - 1 : j];
+    const e = j < 0 ? null : e0 + (e1 - e0)*(s - r0)/(r1 - r0 || 1);
+    warnings.push(`Axial divergence: the tails of the sharpest lines (at the lowest or highest angles) would need ${s.toFixed(1)} times the ${FCJ_MAX_NODES} quadrature nodes used, so they ripple, by up to ${e == null ? 'over 3' : 'about ' + e.toPrecision(1)} % of the peak.`);
+  }
+  if (res.stats.N <= res.free.length)
+    warnings.push(`The pattern has ${res.stats.N} points for ${res.free.length} refined parameters: with no more points than parameters nothing is determined (no esd). A refinement needs many more points than parameters.`);
+  if (res.fcjBehind) warnings.push(`Axial divergence: after ${FCJ_PASSES} passes the last refinement still moved some lines' tails past the quadrature nodes counted for them; the result may be slightly off (refine again from it).`);
+  return {
+    params: res.params, esd: res.esd, corr: res.corr, cov: res.cov, free: res.free, atBound: res.atBound, undetermined: res.undetermined, tied: res.tied, esdHeld: res.esdHeld,
+    held, stats: res.stats, stages: A.stages, cellSearch: cs,
+    sizeStrain: ss, weightFractions: wf, detected: model.phases.filter((_, k)=> detected[k]).map(q=> q.id), warnings,
+    shapes, isoParams,
+    // the preferred orientations: each phase's axis (the conventional cell's hkl), r, and
+    // the option it was refined with ('auto' or that axis: whether a start from this
+    // result has the same texture)
+    textures: Object.fromEntries(model.phases.filter(q=> q.iPO != null && q.poHkl).map(q=> [q.id, { hkl: q.poHkl, r: res.params[q.pfx + 'PO'], esd: (res.esd || {})[q.pfx + 'PO'], spec: q.poSpec }])),
+    // the models each phase was refined with (calc() needs them to draw the result again)
+    models: Object.fromEntries(model.phases.map((q, k)=> [q.id, modelOf(A, q, k)])),
+    // the standard's profile as used (null: none given, or not applicable)
+    irf,
+    reflectionsInRange: nIn && nIn.n, linePositions: nIn && nIn.positions, converged: res.converged, ms: Date.now() - A.t0,
+    // the settings used (a model drawn again from the result needs its background terms)
+    fit: { ...F, bgDegree: model.bgDegree },
+  };
+}
+
+// Whether a last result (opts.start) was refined with other phases than the model's: a
+// phase of the model missing there, or one of there missing here (removed since).
+const refinedWithOthers = (model, S0) => model.phases.some(q=> !Number.isFinite(S0.params[q.pfx + 'scale']) || q.iLat.some(i=> !Number.isFinite(S0.params[model.par[i].name])))
+  || Object.keys(S0.params).some(n=> /^p[^.]*\.scale$/.test(n) && !(n in model.index));
+/* A parameter's group, which opts.hold may hold in a refinement from the last result:
+   'linear' (scales, background), 'cell' (lattice and displacement; the zero and the sin 2θ
+   shift), 'instrument' (U … Y, the asymmetry, the Soller model's length) and per phase
+   KIND_GROUP's ('sizestrain', 'shape', 'faults', 'adp', 'occ', 'texture'); null: none. */
+function paramGroup(model, i){
+  const p = model.par[i];
+  return p.linear ? 'linear' : p.kind === 'lattice' || p.name === 'zero' || p.name === 'disp' || p.name === 'transp' ? 'cell' : p.group === 'profile' ? 'instrument'
+    : KIND_GROUP[p.kind] || null;
+}
+// The groups that model the sample's broadening above the standard's profile.
+const BROAD_GROUPS = ['sizestrain', 'shape', 'faults'];
+/* The refinement from the last result (fromLast(A, S0), S0 = opts.start). Each parameter
+   belongs to a group, which opts.hold may hold: 'linear' (scales, background), 'cell'
+   (lattice and displacement; the standard's zero and displacement), 'instrument' (U … Y and
+   the asymmetry, where they are refined: no standard's profile), and per phase 'sizestrain'
+   (Ys, Xs, S_j, σ), 'shape', 'faults', 'adp' (ΔB, B or Uⁱʲ per site), 'occ' (the refined
+   site occupancies), 'texture' (r and its axis).
+   A phase's group is unchanged when its option is the one the last result was refined
+   with (start.models, start.textures, the solid its parameters name, or the one asked
+   for there and rejected: start.models' shape). Values: the last result's, but for a
+   changed group's parameters, which take their usual start (Ys and Xs carry over: Ys
+   ×1.23 or ÷1.23 between the Lorentzian and WPPM readings, from the isotropic fit when
+   a shape is dropped or changed; Xs raised to 0.02 for a new Stephens strain). Free:
+   what a full refinement with these options would end with free, but for the held —
+   group held and unchanged, and refined there (start.free, or start.held: held there
+   at the one before). Then one refinement, and for what is new only, the trials of the
+   log-normal σ and of the texture and the shape search (a solid the last result
+   rejected, ticked, is not searched again). No cell search, zero scan or detection
+   passes: the phases left out there stay out.
+   Its stages: what changed since (lastChanges), the values (lastValues), what is free and
+   held (lastFreeList), the refinement and the trials (lastRefine), the notes on it
+   (lastReport), and autoFinish. */
+function fromLast(A, S0){
+  const L = lastChanges(A, S0);
+  lastValues(A, L);
+  const P = lastFreeList(A, L);
+  const { res, free } = lastRefine(A, P);
+  lastReport(A, L, P, res);
+  return autoFinish(A, { res, out: L.out, lastFree: free, nIn: P.nIn, cs: null, carried: P.carried, held: P.held, iso0: P.carried.length ? S0.isoParams : null, keptIso: P.keptIso });
+}
+/* lastChanges(A, S0) → L: the last result S0 against this refinement: its values (P0) and
+   has(name) (a number there), was(name) (refined or held there; every name for a result
+   without `free`: wasRef null), the groups held (hold), its textures (T0), the phases out
+   there (out: not detected, or scale 0 in a result without `detected`) and the others
+   (liveK), whether the standard's profile is the same kind (irfSame: both with one or both
+   without) and moved since (irfMoved), per phase what changed (chg: by group, and m0, m1 the
+   models there and here, sh0, sh1 the solids, rej0 the solid asked for there too and
+   rejected, w0, w1 a WPPM reading there and here), paramGroup's groupOf(i), and changed(i):
+   whether parameter i's group changed (the background's terms for 'linear'). */
+function lastChanges(A, S0){
+  const { model, opts, irf } = A;
+  const P0 = S0.params, hold = new Set(opts.hold || []);
+  const has = n => Object.prototype.hasOwnProperty.call(P0, n) && Number.isFinite(P0[n]);
+  const wasRef = Array.isArray(S0.free) ? new Set([...S0.free, ...(S0.held || [])]) : null, was = n => !wasRef || wasRef.has(n);
+  const M0 = S0.models || {}, T0 = S0.textures || {}, SH0 = S0.shapes || {};
+  // Out there, out here (a result without `detected`: scale 0 is out).
+  const det = Array.isArray(S0.detected) ? new Set(S0.detected.map(String)) : null;
+  const out = new Set(model.phases.map((_, k)=> k).filter(k=> det ? !det.has(String(model.phases[k].id)) : !(P0[model.phases[k].pfx + 'scale'] > 0)));
+  const liveK = model.phases.map((_, k)=> k).filter(k=> !out.has(k));
+  // A result with the standard's profile and one without differ in what Ys, Xs and the
+  // profile mean (start.irf, when given, says which it was).
+  const irfSame = !('irf' in S0) || !!S0.irf === !!irf;
+  // Another refinement of the standard since, its profile changed: the sample's
+  // broadening was fitted above another instrumental profile, and is refined from its
+  // values rather than held. (Its zero moved: the cell, below.)
+  const irfMoved = irfSame && !!irf && !!S0.irf && ['U', 'V', 'W', 'X', 'Y', 'asym', 'axL', 'transp'].some(k=> (+irf[k] || 0) !== (+S0.irf[k] || 0));
+  // The solid of the last result (shapeNamed).
+  const shapeThen = q => shapeNamed(P0, q.pfx);
+  const sameAxis = (a, b) => Array.isArray(a) && Array.isArray(b) && a.length === 3 && a.every((x, i)=> x === +b[i]);
+  const chg = model.phases.map((q, k)=> {
+    const m0 = M0[q.id] || null, m1 = modelOf(A, q, k), t0 = T0[q.id], sh0 = shapeThen(q), sh1 = irf && q.shapeType || false;
+    const texSame = !!(t0 && t0.hkl) && (t0.spec == null ? q.poSpec === 'auto' || sameAxis(q.poSpec, t0.hkl) : t0.spec === 'auto' ? q.poSpec === 'auto' : sameAxis(q.poSpec, t0.spec));
+    // The size profile there and here: WPPM's reading of a width is 1/1.23 of the
+    // Lorentzian's (Ys, and a body's widths alike).
+    const w0 = !!m0 && (m0.profile || 'lorentz') !== 'lorentz', w1 = m1.profile !== 'lorentz';
+    /* A body's search under the other size profile (Lorentzian ↔ WPPM; the v420
+       ellipsoid is drawn Lorentzian under WPPM too: phasePattern) is not this one's: its
+       solid is searched again. Carried, its widths rescaled ÷1.23 as Ys and refined, a
+       synthetic WPPM disc (30 × 8 nm) whose Lorentzian search had ended on a wrong solid
+       (χ²_ν 4.05) stayed there (χ²_ν 2.61); searched again, χ²_ν 0.997 and the truth
+       within 1 esd, in 26 s (from the CIF, the same in 41 s). A result of v522 or older
+       whose phase asked for a body under the Lorentzian profile is one: a body is drawn by
+       WPPM from v523 (broadeningSetup), so its solid is searched again with the exact line,
+       kept or not by v523's keep test, and its isotropic size, refined again, reads the
+       sphere's diameter where it read a Scherrer size. (A body under WPPM there is carried,
+       or held isotropic where v522's ΔBIC < −10 rejected it, as before.) From v528 the
+       fit setting shapeLine chooses the line under the Lorentzian profile: a result
+       refined with the other one is searched again the same way. */
+    const sameRead = !q.iW || w0 === w1;
+    // The solid asked for there too and rejected by the keep test (no width in use): the same
+    // option, its values the isotropic size's. (A result without models' shape: v428's.)
+    const rej0 = !!sh1 && !sh0 && !!m0 && m0.shape === sh1 && sameRead;
+    // A solid in use there is carried with that search's record and isotropic fit (the
+    // widths' isotropic model): a result without them (v428's) has it searched again.
+    const rec = !!(SH0[q.id] && Number.isFinite(SH0[q.id].chi2) && S0.isoParams);
+    return { m0, m1, sh0, sh1, rej0, w0, w1,
+      sizestrain: !m0 || !irfSame || (m0.size !== false) !== m1.size || (m0.strain || 'iso') !== m1.strain || (m0.profile || 'lorentz') !== m1.profile,
+      shape: rej0 ? false : sh0 !== sh1 || (!!sh1 && !(rec && sameRead)), faults: !m0 || (m0.faults || null) !== m1.faults, adp: !m0 || (m0.adp || 'cif') !== m1.adp,
+      occ: !m0 || occText(m0.occ) !== occText(m1.occ),
+      texture: q.iPO == null ? !!t0 : !texSame };
+  });
+  const groupOf = i => paramGroup(model, i);
+  /* The background's terms there and here (the degree and the 1/2θ term, fit settings):
+     held across a change, the terms left had been fitted beside the others (degree 12
+     → 6 on 33A, 'linear' held: χ²_ν 135, the background up to 424 counts off), so the
+     scales and background are refined then. Read from the parameters there: its highest
+     Chebyshev term, and the 1/2θ term refined (or, without free, not 0). */
+  let deg0 = -1; while (has('bg' + (deg0 + 1))) deg0++;
+  const inv0 = wasRef ? wasRef.has('bgInv') : !!P0.bgInv;
+  const bgChanged = deg0 !== model.bgDegree || inv0 !== !!model.useInv;
+  const changed = i => { const p = model.par[i], g = groupOf(i); return g === 'linear' ? bgChanged : g === 'instrument' ? !irfSame : p.phase >= 0 && !!chg[p.phase][g]; };
+  return { S0, P0, hold, has, wasRef, was, T0, out, liveK, irfSame, irfMoved, chg, groupOf, changed };
+}
+// lastValues(A, L): the values a refinement from the last result starts from, in model.v
+// (and the textures' axes): the last result's, but for a changed group's parameters, which
+// take their usual start (in model.v: buildModel's, and the starting profile's).
+function lastValues(A, L){
+  const { model, std, irf, lin, asFree } = A, { S0, P0, has, T0, out, irfSame, chg, groupOf } = L;
+  const vv = model.v.slice(), take = n => { if (has(n)) vv[model.index[n]] = P0[n]; };
+  [...lin, 'disp'].forEach(take);
+  // A sample's zero is the standard's (set above), or the file's: held, as the last
+  // result's when that was too (no standard's profile then and now).
+  if (std || (!irf && irfSame)) take('zero');
+  if (std) take('transp');
+  if (!irf && irfSame) ['U', 'V', 'W', 'X', 'Y', ...asFree].forEach(take);
+  model.phases.forEach((q, k)=> {
+    const c = chg[k], pf = q.pfx;
+    if (out.has(k)){ model.par.forEach(p=> { if (p.phase === k) take(p.name); }); vv[q.iScale] = 0; return; }
+    take(pf + 'scale'); q.iLat.forEach(i=> take(model.par[i].name));
+    // Size and strain: with the standard's profile only (without, they stay 0: the
+    // profile is the whole width).
+    if (irf && irfSame){
+      const { m0, m1, w0, w1 } = c;
+      const ys0 = c.sh0 && c.shape ? (S0.isoParams || {})[pf + 'Ys'] : P0[pf + 'Ys'];
+      if (m0 && m0.size !== false && !q.sizeOff && Number.isFinite(ys0)) vv[q.iYs] = w0 === w1 ? ys0 : w1 ? ys0/1.23 : ys0*1.23;
+      if (m0 && m0.strain !== 'off' && !q.strainOff) take(pf + 'Xs');
+      if (q.iS && m1.strain === 'aniso'){
+        if (m0 && m0.strain === 'aniso') q.iS.forEach(i=> take(model.par[i].name));
+        else if (vv[q.iXs] < 0.02) vv[q.iXs] = 0.02;
+      }
+      if (q.iLS != null && m1.profile === 'lognormal' && m0 && m0.profile === 'lognormal') take(pf + 'LS');
+    }
+    // The other groups: the last values when unchanged (a solid's reference orientation
+    // with them), else their usual start.
+    model.par.forEach((p, i)=> { const g = groupOf(i); if (p.phase === k && (g === 'shape' || g === 'faults' || g === 'adp' || g === 'occ' || g === 'texture') && !c[g]) take(p.name); });
+    if (q.iPO != null && !c.texture) q.poHkl = T0[q.id].hkl.map(Number);
+  });
+  setParams(model, vv);
+}
+/* lastFreeList(A, L) → { nIn, zeroMoved, axChanged, keptIso, carried, search, held, lsNew,
+   poNew, trial, free }: what a refinement from the last result frees and holds. nIn: the
+   reflections in range at its start; zeroMoved: a sample's zero not the one its cell was
+   fitted at; axChanged: the axial divergence modelled otherwise there; the free shapes
+   carried, kept isotropic (keptIso) and searched (search); held: the names held at the last
+   result; lsNew, poNew: the phases whose σ and texture are new (their trials after the
+   refinement; their names in trial); free: the rest of a full refinement's final list, in
+   its order. The asymmetry, when free, from a typical value. */
+function lastFreeList(A, L){
+  const { model, std, irf, lin, scales, asFree, AS, asym0, adpOf } = A, { S0, P0, hold, has, wasRef, was, liveK, chg, irfMoved, groupOf, changed } = L;
+  const pfxOf = k => model.phases[k].pfx;
+  const nIn = reflectionsInRange(model), uvFree = !irf && nIn.positions >= UV_POSITIONS;
+  // A sample's zero not the one its cell and displacement were fitted at (the standard
+  // refined again, or its profile added or removed since): those are refined, not held.
+  const zeroMoved = !std && has('zero') && P0.zero !== model.v[model.iZero];
+  /* The last result drawn with another model of the axial divergence (FCJ's A there, the
+     Soller model's L here, or the reverse), or a standard's without the sin 2θ shift
+     (both v432's): its profile, zero, displacement and cell were fitted to lines drawn
+     otherwise, and are refined from its values rather than held. Held, the user's LaB6
+     refined from its v431 result kept χ²_ν 3.79 where from the CIF it reaches 2.17 (the
+     shift took −0.003° instead of −0.017°, the zero and displacement held at FCJ's). */
+  const axChanged = has('axL') !== (AS === 'axL') || (std && !has('transp'));
+
+  // Free: a full refinement's final list, in its order. The free shapes: carried from
+  // the last result, kept isotropic (rejected there, the shape ticked), or searched.
+  const keptIso = liveK.filter(k=> chg[k].rej0 && hold.has('shape') && !irfMoved);
+  const carried = liveK.filter(k=> chg[k].sh1 && !chg[k].shape && !chg[k].rej0), search = liveK.filter(k=> chg[k].sh1 && !carried.includes(k) && !keptIso.includes(k));
+  const full = [...liveK.map(k=> scales[k]), ...lin];
+  // (a lattice the last result did not refine: its cell search found no minimum there)
+  if (std) full.push('zero', 'disp', 'transp');
+  else { liveK.forEach(k=> model.phases[k].iLat.forEach(i=> { if (was(model.par[i].name)) full.push(model.par[i].name); })); full.push('disp'); }
+  if (irf) liveK.forEach(k=> { if (!model.phases[k].sizeOff && !carried.includes(k)) full.push(pfxOf(k) + 'Ys'); }); else full.push('W', 'Y');
+  if (irf) liveK.forEach(k=> { if (!model.phases[k].strainOff) full.push(pfxOf(k) + 'Xs'); }); else full.push(...(uvFree ? ['X', 'U', 'V', ...asFree] : ['X']));
+  liveK.forEach(k=> { const q = model.phases[k]; if (q.iS && !q.noIrf) full.push(...q.iS.map(i=> model.par[i].name)); });
+  liveK.forEach(k=> { const q = model.phases[k]; if (q.iFA != null && !q.noIrf) full.push(q.pfx + 'FA'); });
+  liveK.forEach(k=> { const q = model.phases[k]; if (q.iLS != null && q.wppm) full.push(q.pfx + 'LS'); });
+  liveK.forEach(k=> { const q = model.phases[k], a = adpOf(q);
+    full.push(...(a === 'overall' ? [q.pfx + 'B'] : a === 'site' ? q.sites.map(st=> model.par[st.iB].name) : a === 'aniso' ? q.sites.flatMap(st=> st.iU.map(i=> model.par[i].name)) : [])); });
+  liveK.forEach(k=> { full.push(...(model.phases[k].occSites || []).map(s=> model.par[s.iOcc].name)); });
+  liveK.forEach(k=> { const q = model.phases[k]; if (q.iPO != null) full.push(q.pfx + 'PO'); });
+  // A carried solid: its widths and the turns its search refined (none for a body held
+  // on the lattice; never the reference orientation).
+  carried.forEach(k=> { const q = model.phases[k], info = (S0.shapes || {})[q.id];
+    (q.iL || [...q.iW, ...(info && info.held && !wasRef ? [] : q.iR)]).forEach(i=> { if (was(model.par[i].name)) full.push(model.par[i].name); }); });
+  const held = full.filter(n=> { const i = model.index[n], p = model.par[i], g = groupOf(i);
+    // (not a parameter the last result did not have: a new one, as a background term
+    // added; Ys where the solid changed or is searched: a solid's 0 there is no isotropic
+    // size to hold, and a search replaces it — freeShape sets it to 0)
+    return hold.has(g) && !changed(i) && was(n) && has(n) && !(p.phase >= 0 && i === model.phases[p.phase].iYs && (chg[p.phase].shape || search.includes(p.phase)))
+      && !(irfMoved && BROAD_GROUPS.includes(g)) && !(zeroMoved && g === 'cell') && !(axChanged && (g === 'instrument' || g === 'cell')); });
+  // What is new: σ and the texture by their trials, after the refinement.
+  const lsNew = liveK.filter(k=> { const q = model.phases[k], m0 = chg[k].m0; return q.iLS != null && q.wppm && !(m0 && m0.profile === 'lognormal' && L.irfSame); });
+  const poNew = liveK.filter(k=> model.phases[k].iPO != null && chg[k].texture);
+  const trial = new Set([...lsNew.map(k=> pfxOf(k) + 'LS'), ...poNew.map(k=> pfxOf(k) + 'PO')]);
+  const free = full.filter(n=> !held.includes(n) && !trial.has(n));
+  // The asymmetry freed from a typical value (at 0 it has no derivative), as stage 4 does.
+  if (free.includes('asym') && !(model.v[model.iAsym] > 0)){ const v1 = model.v.slice(); v1[model.iAsym] = asym0; setParams(model, v1); }
+  return { nIn, zeroMoved, axChanged, keptIso, carried, search, held, lsNew, poNew, trial, free };
+}
+// lastRefine(A, P) → { res, free }: from the last result, the linear parameters solved,
+// one refinement of P.free, then the trials of what is new (σ, the texture).
+function lastRefine(A, P){
+  const { model, lm } = A, { lsNew, poNew } = P;
+  let { free } = P;
+  A.share = P.search.length ? 0.5 : 1;
+  const nT = 1 + (lsNew.length ? 1 : 0) + (poNew.length ? 1 : 0);
+  A.tS = Date.now();
+  A.prog(0, 'from the last result');
+  const linFree = free.filter(n=> model.par[model.index[n]].linear).map(n=> model.index[n]);
+  if (linFree.length){ const v1 = model.v.slice(); solveLinear(model, v1, evaluate(model, v1), linFree); setParams(model, v1); }
+  stageStats(A, 'linear start', null);
+  A.tS = Date.now();
+  let res = refine(model, { free, ...lm, onProgress: f=> A.prog(Math.min(1, f)/nT, 'from the last result') });
+  // (everything held: nothing to converge, and nothing that failed to)
+  if (!free.length) res = { ...res, converged: true };
+  stageStats(A, 'from the last result', res);
+  let kT = 1;
+  if (lsNew.length){ A.tS = Date.now(); A.prog(kT++/nT, 'size distribution'); ({ res, free } = sizeDistTrials(A, lsNew, free, res)); stageStats(A, 'size distribution', res); }
+  if (poNew.length){ A.tS = Date.now(); A.prog(kT/nT, 'preferred orientation'); ({ res, free } = textureTrials(A, poNew, free, res)); stageStats(A, 'preferred orientation', res); }
+  return { res, free };
+}
+// lastReport(A, L, P, res): the warnings on a refinement from the last result: the phases
+// left out there, new faults or changed occupancies beside what is held, and what was held,
+// refined from the last values, and new.
+function lastReport(A, L, P, res){
+  const { model, std, AS, warnings } = A, { P0, hold, has, was, out, liveK, chg, irfMoved, groupOf, changed } = L, { held, trial, search, axChanged, zeroMoved } = P;
+  const nm = k => phaseName(model, k);
+  // What was held, refined from the last values, and new.
+  out.forEach(k=> warnings.push(`${nm(k)}: not detected in the last result, so left out here too (scale 0); a refinement from the CIF tests it again.`));
+  /* New faults beside a held size and strain take only the broadening those left: the
+     size had taken the faults' share in the last result. On synthetic Pt (D 40 nm,
+     α 0.03 on {111}) the faults came out at 0.0055(2), χ²_ν 5.1, with the size and
+     strain held; refined with them, 0.0297(2), χ²_ν 0.99. */
+  liveK.forEach(k=> { const q = model.phases[k];
+    if (q.iFA != null && !q.noIrf && chg[k].faults && held.some(n=> n.startsWith(q.pfx) && ['sizestrain', 'shape'].includes(groupOf(model.index[n]))))
+      warnings.push(`${nm(k)}: the planar faults are new, and refined with the size and strain${held.some(n=> n.startsWith(q.pfx) && groupOf(model.index[n]) === 'shape') ? ' and the shape' : ''} held: they take only the broadening those left, which took the faults' share before. Refined together (not held), the faults get their own.`); });
+  /* The occupancies changed (switched on, off or to another site) beside displacements
+     held: those were fitted beside the other occupancies, and both scale the sites'
+     scattering. On 33A (SrTiO3, the Sr site at 0.69) a ΔB held at its 0.63 Å² and the
+     occupancy switched off left χ²_ν at 1.73, where refined together they give 1.70. */
+  liveK.forEach(k=> { const q = model.phases[k];
+    if (chg[k].occ && chg[k].m0 && held.some(n=> n.startsWith(q.pfx) && groupOf(model.index[n]) === 'adp'))
+      warnings.push(`${nm(k)}: the site occupancies changed since, and the displacement parameters are held at values fitted beside the former ones: both scale the sites' scattering. Refined together (not held), each takes its own share.`); });
+  const LABEL = { linear: 'scales and background', cell: std ? 'zero and displacement' : 'cell and displacement', instrument: 'instrumental profile', size: 'size', strain: 'strain',
+    shape: 'free shape', faults: 'planar faults', adp: 'displacement parameters', occ: 'site occupancy', texture: 'preferred orientation' };
+  // (the size and the strain apart: a new solid frees Y_s and leaves X_s held)
+  const labelOf = i => { const g = groupOf(i), p = model.par[i]; return g !== 'sizestrain' ? g : p.kind === 'strain' || i === model.phases[p.phase].iXs ? 'strain' : 'size'; };
+  const lists = { held: new Map(), kept: new Map(), fresh: new Map() };
+  const note = (which, g, k) => { const m = lists[which]; if (!m.has(g)) m.set(g, new Set()); if (k >= 0 && g !== 'linear' && g !== 'cell') m.get(g).add(nm(k)); };
+  held.forEach(n=> { const i = model.index[n]; note('held', labelOf(i), model.par[i].phase); });
+  res.free.forEach(n=> { const i = model.index[n]; note(changed(i) || trial.has(n) || !was(n) || !has(n) ? 'fresh' : 'kept', labelOf(i), model.par[i].phase); });
+  search.forEach(k=> note('fresh', 'shape', k));
+  const axNote = axChanged && (hold.has('instrument') || hold.has('cell')) && `The last result was refined with ${has('axL') ? 'the Soller model of the axial divergence' : 'FCJ’s axial divergence'}${std && !has('transp') ? ' and without the sin 2θ shift' : ''} (before v432, or another standard), this one with ${AS === 'axL' ? 'the Soller model' : 'FCJ’s'}: the profile, zero, displacement and cell, fitted to lines drawn otherwise, are refined from its values rather than held.`;
+  const zeroNote = zeroMoved && hold.has('cell') && `The zero is not the one the last result was refined at (the standard refined again, or its profile added or removed: ${P0.zero.toFixed(4)}° then, ${model.v[model.iZero].toFixed(4)}° now): the cell and displacement, fitted at that zero, are refined rather than held.`;
+  const say = m => {
+    const same = m.has('size') && m.has('strain') && [...m.get('size')].join() === [...m.get('strain')].join();
+    return Object.keys(LABEL).filter(g=> m.has(g) && !(same && g === 'strain')).map(g=> (same && g === 'size' ? 'size and strain' : LABEL[g]) + (m.get(g).size ? ' of ' + [...m.get(g)].join(' and ') : '')).join('; ');
+  };
+  warnings.push(['Refined from the last result.', irfMoved && BROAD_GROUPS.some(g=> hold.has(g)) && 'The standard has been refined again since: the size, strain, shape and faults, fitted above its former profile, are refined rather than held.', axNote, zeroNote, lists.held.size && `Held at its values: ${say(lists.held)} (with no esds here: they are that refinement's; what is refined here is conditional on them, and a last refinement with nothing held gives values and esds free of that).`,
+    lists.kept.size && `Refined from its values: ${say(lists.kept)}.`, lists.fresh.size && `New or changed since, refined from their usual start: ${say(lists.fresh)}.`].filter(Boolean).join(' '));
+}
+
+/* placePeaks(A) → { cs, notFound, len0 }: stage 1, where the peaks are: on a sample the
+   cell search (cellStage: cs its record, notFound the phases it placed nowhere), on the
+   standard the zero scan (zeroStage), on a sample with no lattice to search the linear
+   parameters alone (linearStart). len0: each phase's lattice parameters before it (the
+   file's), which a phase left out takes back. */
+function placePeaks(A){
+  const { model, std, lattice } = A;
+  A.prog(0, std ? 'zero search' : 'cell search');
   let cs = null;
   const notFound = new Set(), len0 = model.phases.map(q=> q.iLat.map(i=> model.v[i]));
-  if (!std && lattice.length){
-    // One factor per phase, each scanned with the others held; with several phases twice
-    // round, since a phase scanned while another still sits at its CIF cell can be drawn
-    // to that one's peaks.
-    // The second round only for the phases the first found: one not found is not
-    // searched again (twice round, an edge minimum compounded to 0.97² = 0.94).
-    // Over ±cellRange (a setting), within the lattice bounds the model was built with
-    // (buildModel's cellRange: twice it, LAT_RANGE at least).
-    const latR = model.latRange || LAT_RANGE, range = Math.min(F.cellRange, latR), per = [];
-    if (F.cellRange > latR) warnings.push(`The cell search covers ±${+(latR*100).toFixed(1)} %, not the ±${+(F.cellRange*100).toFixed(1)} % set: the model's lattice bounds stop there (it was built for a narrower range).`);
-    const rounds = model.phases.length > 1 ? 2 : 1;
-    for (let r = 0; r < rounds; r++) model.phases.forEach((q, k)=> {
-      if (r && !(per[k] && per[k].found)) return;
-      const c = cellSearch(model, { index: k, range });
-      if (c) per[k] = { id: q.id, found: c.found, Rwp: c.Rwp, curve: c.curve, fine: c.fine, steps: (per[k] ? per[k].steps : 0) + c.steps, round: r };
-    });
-    // A single phase not found: no other phase to be confused with, so the search may go
-    // wider at no risk (its file cell may be a few % off: a doped or computed cell).
-    let wide = range;
-    if (model.phases.length === 1 && per[0] && !per[0].found && Math.min(2*range, latR) > range){
-      wide = Math.min(2*range, latR);
-      const c = cellSearch(model, { index: 0, range: wide });
-      per[0] = { ...per[0], found: c.found, Rwp: c.Rwp, curve: c.curve, fine: c.fine, steps: per[0].steps + c.steps };
-    }
-    per.forEach((p, k)=> { if (!p) return; const q = model.phases[k], i = q.iLat.findIndex(j=> /\.(a|b|c)$/.test(model.par[j].name)); p.f = model.v[q.iLat[i]]/len0[k][i]; });
-    // Not found in the second round, the cell stays where the first put it, not the file's.
-    per.forEach((p, k)=> { if (p && !p.found){
-      notFound.add(k);
-      const pct = x => +(x*100).toFixed(1), off = pct(p.f - 1), name = model.phases[k].name || 'Phase ' + p.id;
-      warnings.push(p.round ? `${name}: the cell search's second round (the other phases placed) found no minimum within ±${pct(range)} % of the cell its first round found (${off < 0 ? '−' : '+'}${Math.abs(off)} % from the file's), which is kept.`
-        : `${name}: the cell search found no minimum within ±${pct(model.phases.length === 1 ? wide : range)} % of the file's cell, which is kept.`);
-    } });
-    /* Then each placed phase's own starting width (widthSearch): the estimate is one
-       peak's, so one phase's. A sharp perovskite at 5 wt % beside 8 nm SrTiO3, started at
-       SrTiO3's width, came out of the widths stage at scale 0 in 9 of 24 runs (v425; 16
-       with a start 1 % wider), and was left out. A phase not placed keeps the start. */
-    if (irf && model.phases.length > 1) per.forEach((p, k)=> { if (p && p.found && !model.phases[k].sizeOff){ const w = widthSearch(model, k, irf, thE); p.Ys = w.ys; p.YsFound = w.found; } });
-    const first = per.find(p=> p);
-    const st = evaluate(model, model.v), Rwp = rStats(model, st.yc, st.bg).Rwp;
-    cs = first ? { f: first.f, Rwp, curve: first.curve, fine: first.fine, steps: first.steps, phases: per.filter(p=> p) } : null;
-    stageStats('cell search', null, { f: cs ? cs.f : 1 });
-  } else if (std){
-    // ±zeroRange (a setting, ZERO_RANGE by default) in steps of at most H/4, both ends on
-    // the grid (stepping from −0.3 by H/4 had stopped at +0.2° for H = 0.5°), and a step
-    // beyond each (beyond).
-    const ZR = F.zeroRange, H = Math.max(est.H, 0.02), zs = beyond(grid(-ZR, ZR, 2*Math.ceil(ZR/(H/4)) + 1));
-    // The same rule as the cell search: a minimum on the edge of the range (or none) leaves
-    // the zero where it was.
-    const z0 = model.v[model.iZero];
-    // Peaks at their FCJ centroids, as in the cell search.
-    const prevC = model.fcjCentroid; model.fcjCentroid = true;
-    let sc;
-    try { sc = scan(model, (vv, z)=> { vv[model.iZero] = z; }, zs); } finally { model.fcjCentroid = prevC; }
-    const kmin = bestIndex(sc.curve, z0);
-    let found = kmin >= 0 && !edgeOrFlat(sc.curve, kmin), z = found ? parabolicMin(sc.curve, kmin) : z0;
-    if (found && Math.abs(z) > ZR*(1 + 1e-9)){ found = false; z = z0; }
-    const vv = model.v.slice(); vv[model.iZero] = z;
-    if (!found) warnings.push(`The zero-shift scan found no minimum within ±${ZR}°: the zero is left at its start.`);
-    solveLinear(model, vv, evaluate(model, vv), linIdx);
-    setParams(model, vv);
-    stageStats('zero search', null, { zero: z, found });
-  } else {
-    const vv = model.v.slice(); solveLinear(model, vv, evaluate(model, vv), linIdx); setParams(model, vv);
-    stageStats('linear start', null);
-  }
-  // Detected: a scale above 3 esd (zScale: scale/esd). A scale tied to another (the same
-  // pattern twice: two copies of a CIF at one cell and width) is judged with that one
-  // held, the pair as one: the first listed carries it.
-  const zScale = r => model.phases.map(q=> {
-    const nm = q.pfx + 'scale', e = Number.isFinite(r.esd[nm]) ? r.esd[nm] : (r.esdHeld || {})[nm];
-    return r.params[nm] > 0 ? r.params[nm]/e : 0;
+  if (!std && lattice.length) cs = cellStage(A, len0, notFound);
+  else if (std) zeroStage(A);
+  else linearStart(A);
+  return { cs, notFound, len0 };
+}
+/* cellStage(A, len0, notFound) → the cell search's record (autoRefine's cellSearch, null
+   when no phase was searched): each phase's cell placed in model.v (cellSearch), those
+   placed nowhere added to notFound, with a warning; with the standard's profile and several
+   phases, each placed phase's own starting width (widthSearch). */
+function cellStage(A, len0, notFound){
+  const { model, F, irf, thE, warnings } = A;
+  // One factor per phase, each scanned with the others held; with several phases twice
+  // round, since a phase scanned while another still sits at its CIF cell can be drawn
+  // to that one's peaks.
+  // The second round only for the phases the first found: one not found is not
+  // searched again (twice round, an edge minimum compounded to 0.97² = 0.94).
+  // Over ±cellRange (a setting), within the lattice bounds the model was built with
+  // (buildModel's cellRange: twice it, LAT_RANGE at least).
+  const latR = model.latRange || LAT_RANGE, range = Math.min(F.cellRange, latR), per = [];
+  if (F.cellRange > latR) warnings.push(`The cell search covers ±${+(latR*100).toFixed(1)} %, not the ±${+(F.cellRange*100).toFixed(1)} % set: the model's lattice bounds stop there (it was built for a narrower range).`);
+  const rounds = model.phases.length > 1 ? 2 : 1;
+  for (let r = 0; r < rounds; r++) model.phases.forEach((q, k)=> {
+    if (r && !(per[k] && per[k].found)) return;
+    const c = cellSearch(model, { index: k, range });
+    if (c) per[k] = { id: q.id, found: c.found, Rwp: c.Rwp, curve: c.curve, fine: c.fine, steps: (per[k] ? per[k].steps : 0) + c.steps, round: r };
   });
+  // A single phase not found: no other phase to be confused with, so the search may go
+  // wider at no risk (its file cell may be a few % off: a doped or computed cell).
+  let wide = range;
+  if (model.phases.length === 1 && per[0] && !per[0].found && Math.min(2*range, latR) > range){
+    wide = Math.min(2*range, latR);
+    const c = cellSearch(model, { index: 0, range: wide });
+    per[0] = { ...per[0], found: c.found, Rwp: c.Rwp, curve: c.curve, fine: c.fine, steps: per[0].steps + c.steps };
+  }
+  per.forEach((p, k)=> { if (!p) return; const q = model.phases[k], i = q.iLat.findIndex(j=> /\.(a|b|c)$/.test(model.par[j].name)); p.f = model.v[q.iLat[i]]/len0[k][i]; });
+  // Not found in the second round, the cell stays where the first put it, not the file's.
+  per.forEach((p, k)=> { if (p && !p.found){
+    notFound.add(k);
+    const pct = x => +(x*100).toFixed(1), off = pct(p.f - 1), name = model.phases[k].name || 'Phase ' + p.id;
+    warnings.push(p.round ? `${name}: the cell search's second round (the other phases placed) found no minimum within ±${pct(range)} % of the cell its first round found (${off < 0 ? '−' : '+'}${Math.abs(off)} % from the file's), which is kept.`
+      : `${name}: the cell search found no minimum within ±${pct(model.phases.length === 1 ? wide : range)} % of the file's cell, which is kept.`);
+  } });
+  /* Then each placed phase's own starting width (widthSearch): the estimate is one
+     peak's, so one phase's. A sharp perovskite at 5 wt % beside 8 nm SrTiO3, started at
+     SrTiO3's width, came out of the widths stage at scale 0 in 9 of 24 runs (v425; 16
+     with a start 1 % wider), and was left out. A phase not placed keeps the start. */
+  if (irf && model.phases.length > 1) per.forEach((p, k)=> { if (p && p.found && !model.phases[k].sizeOff){ const w = widthSearch(model, k, irf, thE); p.Ys = w.ys; p.YsFound = w.found; } });
+  const first = per.find(p=> p);
+  const st = evaluate(model, model.v), Rwp = rStats(model, st.yc, st.bg).Rwp;
+  const cs = first ? { f: first.f, Rwp, curve: first.curve, fine: first.fine, steps: first.steps, phases: per.filter(p=> p) } : null;
+  stageStats(A, 'cell search', null, { f: cs ? cs.f : 1 });
+  return cs;
+}
+/* zeroStage(A): the standard's zero scan, the zero placed in model.v (left at its start
+   where the scan finds no minimum, with a warning), and the linear parameters solved. */
+function zeroStage(A){
+  const { model, F, est, linIdx, warnings } = A;
+  // ±zeroRange (a setting, ZERO_RANGE by default) in steps of at most H/4, both ends on
+  // the grid (stepping from −0.3 by H/4 had stopped at +0.2° for H = 0.5°), and a step
+  // beyond each (beyond).
+  const ZR = F.zeroRange, H = Math.max(est.H, 0.02), zs = beyond(grid(-ZR, ZR, 2*Math.ceil(ZR/(H/4)) + 1));
+  // The same rule as the cell search: a minimum on the edge of the range (or none) leaves
+  // the zero where it was.
+  const z0 = model.v[model.iZero];
+  // Peaks at their FCJ centroids, as in the cell search.
+  const prevC = model.fcjCentroid; model.fcjCentroid = true;
+  let sc;
+  try { sc = scan(model, (vv, z)=> { vv[model.iZero] = z; }, zs); } finally { model.fcjCentroid = prevC; }
+  const kmin = bestIndex(sc.curve, z0);
+  let found = kmin >= 0 && !edgeOrFlat(sc.curve, kmin), z = found ? parabolicMin(sc.curve, kmin) : z0;
+  if (found && Math.abs(z) > ZR*(1 + 1e-9)){ found = false; z = z0; }
+  const vv = model.v.slice(); vv[model.iZero] = z;
+  if (!found) warnings.push(`The zero-shift scan found no minimum within ±${ZR}°: the zero is left at its start.`);
+  solveLinear(model, vv, evaluate(model, vv), linIdx);
+  setParams(model, vv);
+  stageStats(A, 'zero search', null, { zero: z, found });
+}
+// linearStart(A): the scales and background solved, nothing searched.
+function linearStart(A){
+  const { model } = A, vv = model.v.slice();
+  solveLinear(model, vv, evaluate(model, vv), A.linIdx); setParams(model, vv);
+  stageStats(A, 'linear start', null);
+}
+
+/* A phase not detected is left out: its scale 0, everything of it held, its cell the
+   file's (for its ticks). With its scale left free it still took what misfit its
+   peaks could reach — an absent LaB6, held at its cell with the starting widths, came
+   out at 2.9 esd yet 35(8) wt % — and bent the others' results. Not detected:
+   - its scale not above 3 esd after the scales and background (stage 1): out at once;
+   - not above 3 esd at the end: the least significant of those out, and the stages run
+     again without it (and with it once more, when that cost χ² beyond a BIC: keptBIC);
+   - significant only through intensity under another phase's peaks, with no part of
+     the pattern its own (ownEvidence): a broad absent NaCl, its strong lines within
+     0.6° of SrTiO3's, took 40 wt % of a SrTiO3 pattern by fitting the tails a single
+     crystallite size leaves. The one with the least of its own goes, the stages run
+     again, and so on; when none of the phases has a part of its own, nothing tells
+     which is there and none goes (a warning says so).
+   detection(A, placed) → D, the detection's state over the passes: placePeaks' record
+   (cs, notFound, len0), the pattern placed to run the stages again from (vSearch, and
+   nSearch, the stages' records up to then), the phases left out (out) and their warnings
+   (outWarn), those put back by what leaving them out cost (keptBIC, keptOwn), and the phase
+   the last pass left out by either test, judged by the next (weakOut, ownOut). */
+function detection(A, placed){
+  return { ...placed, vSearch: A.model.v.slice(), nSearch: A.stages.length, out: new Set(), outWarn: [], keptBIC: new Map(), keptOwn: new Map(), weakOut: null, ownOut: null };
+}
+// Detected: a scale above 3 esd (zScale: scale/esd, per phase, at the result r). A scale
+// tied to another (the same pattern twice: two copies of a CIF at one cell and width) is
+// judged with that one held, the pair as one: the first listed carries it.
+const zScale = (model, r) => model.phases.map(q=> {
+  const nm = q.pfx + 'scale', e = Number.isFinite(r.esd[nm]) ? r.esd[nm] : (r.esdHeld || {})[nm];
+  return r.params[nm] > 0 ? r.params[nm]/e : 0;
+});
+// A result's χ² total (χ²_ν times its degrees of freedom, at least one).
+const chiTotal = r => r.stats.chi2*Math.max(1, r.stats.N - r.stats.P);
+// (2.99 esd reads 2.9, not 3.0: "not above 3")
+const weakWhy = (z, after) => `its scale is not above 3 esd${after ? ' once the cells and widths are refined' : ''}${z > 0 ? ` (${(Math.floor(z*10)/10).toFixed(1)} esd)` : ''}`;
+// Phase k left out (D.out, a warning saying why), in vv: its scale 0, its cell the file's.
+function leaveOut(A, D, k, why, vv){
+  D.out.add(k); D.outWarn.push(`${phaseName(A.model, k)}: not detected — ${why}.`);
+  vv[A.model.phases[k].iScale] = 0; A.model.phases[k].iLat.forEach((i, m)=> { vv[i] = D.len0[k][m]; });
+}
+// The values the stages run again from: the search's, the phases out left out.
+function searchStart(A, D){
+  const { model } = A, v2 = D.vSearch.slice();
+  D.out.forEach(k=> { v2[model.phases[k].iScale] = 0; model.phases[k].iLat.forEach((i, m)=> { v2[i] = D.len0[k][m]; }); });
+  return v2;
+}
+// What makes a significant phase implausible as a crystalline phase (null: nothing).
+function implausibleWhy(A, k){
+  const { model, irf } = A, q = model.phases[k], v = model.v, at = (i, side) => side > 0 ? v[i] >= model.par[i].hi*(1 - 1e-9) : v[i] <= model.par[i].lo*(1 + 1e-9);
+  if (q.iLat.some(i=> /\.(a|b|c)$/.test(model.par[i].name) && (at(i, 1) || at(i, -1)))) return `its cell runs to the ±${+((model.latRange || LAT_RANGE)*100).toFixed(1)} % bound`;
+  if (!irf) return null;
+  if (at(q.iYs, 1) || at(q.iXs, 1)) return `its ${at(q.iYs, 1) ? 'size' : 'strain'} broadening runs to its bound: it takes up a broad hump or the background`;
+  const ys = v[q.iYs], c = cellOf(model, v, k), edge = Math.max(c.a, c.b, c.c);
+  const D = ys > 0 ? K_SCHERRER*model.lines[0].lam/(ys*D2R) : Infinity;
+  return D < Math.max(10, 2*edge) ? `its crystallites come out ${(D/10).toFixed(1)} nm across, under two cells: it takes up a broad hump or the background` : null;
+}
+/* stagePass(A, D) → { res, free, nIn }: the stages 2–5 and the optional ones (stages 1–4 of
+   the count), from the values in model.v, the phases in D.out left out: the scales and
+   background (a phase whose scale is not above 3 esd there left out at once: leaveOut),
+   the lattice and displacement (the standard's zero and displacement; a lattice the cell
+   search placed nowhere held), the widths, the rest of the profile (the size and strain
+   with the standard's profile), then optionalStages. res: the last stage's refinement;
+   free: what it freed; nIn: the reflections in range after the widths stage. */
+function stagePass(A, D){
+  const { model, std, irf, lattice, scales, lin, AS, asFree, asym0 } = A, { out, keptBIC } = D;
   // A phase the cell search placed nowhere keeps the cell it had there (the file's, or the
   // first round's), as the warning says: freed, its lattice walks to wherever a misfit
   // pulls it (an absent LaB6 went 5.7 % off its cell to sit under SrTiO3's peaks).
-  const latHeld = name => [...notFound].some(k=> name.startsWith(pfxOf(k)));
-  /* A phase not detected is left out: its scale 0, everything of it held, its cell the
-     file's (for its ticks). With its scale left free it still took what misfit its
-     peaks could reach — an absent LaB6, held at its cell with the starting widths, came
-     out at 2.9 esd yet 35(8) wt % — and bent the others' results. Not detected:
-     - its scale not above 3 esd after the scales and background (stage 1): out at once;
-     - not above 3 esd at the end: the least significant of those out, and the stages run
-       again without it (and with it once more, when that cost χ² beyond a BIC: keptBIC);
-     - significant only through intensity under another phase's peaks, with no part of
-       the pattern its own (ownEvidence): a broad absent NaCl, its strong lines within
-       0.6° of SrTiO3's, took 40 wt % of a SrTiO3 pattern by fitting the tails a single
-       crystallite size leaves. The one with the least of its own goes, the stages run
-       again, and so on; when none of the phases has a part of its own, nothing tells
-       which is there and none goes (a warning says so). */
-  const vSearch = model.v.slice(), nSearch = stages.length, out = new Set(), outWarn = [];
-  const leaveOut = (k, why, vv)=> {
-    out.add(k); outWarn.push(`${nm(k)}: not detected — ${why}.`);
-    vv[model.phases[k].iScale] = 0; model.phases[k].iLat.forEach((i, m)=> { vv[i] = len0[k][m]; });
-  };
-  // What makes a significant phase implausible as a crystalline phase (null: nothing).
-  const implausible = k => {
-    const q = model.phases[k], v = model.v, at = (i, side) => side > 0 ? v[i] >= model.par[i].hi*(1 - 1e-9) : v[i] <= model.par[i].lo*(1 + 1e-9);
-    if (q.iLat.some(i=> /\.(a|b|c)$/.test(model.par[i].name) && (at(i, 1) || at(i, -1)))) return `its cell runs to the ±${+((model.latRange || LAT_RANGE)*100).toFixed(1)} % bound`;
-    if (!irf) return null;
-    if (at(q.iYs, 1) || at(q.iXs, 1)) return `its ${at(q.iYs, 1) ? 'size' : 'strain'} broadening runs to its bound: it takes up a broad hump or the background`;
-    const ys = v[q.iYs], c = cellOf(model, v, k), edge = Math.max(c.a, c.b, c.c);
-    const D = ys > 0 ? K_SCHERRER*model.lines[0].lam/(ys*D2R) : Infinity;
-    return D < Math.max(10, 2*edge) ? `its crystallites come out ${(D/10).toFixed(1)} nm across, under two cells: it takes up a broad hump or the background` : null;
-  };
-  /* The 3-esd test is weak where a phase's scale correlates with its widths (very broad
-     lines) or with another phase's (two populations of one phase): the scale's esd is
-     large. A phase the last test leaves out is judged again by what leaving it out cost,
-     from the stages run again without it (weakOut): the rise of χ² (over χ²_ν, as the
-     shape's ΔBIC) against its dP parameters. Above dP·ln N + 10 (ΔBIC under −10, as the
-     shape's test) it is put back, its 3-esd tests waived (keptBIC); below, it stays out
-     and the warning gives the rise. Not a bar at what noise gives (dP + 3√(2dP)): the
-     search placed its cell and width where they gain most, so an absent phase gains more
-     than χ²(dP). 2 nm rutile at 8 wt % beside 80 nm SrTiO3 (lines 9 counts high and 4°
-     wide on 150) stood at 1.9–2.9 esd while leaving it out raised χ² by 24–48 for its 5
-     parameters: more than noise gives, short of the BIC's 53. */
-  const chiTot = r => r.stats.chi2*Math.max(1, r.stats.N - r.stats.P);
-  // (2.99 esd reads 2.9, not 3.0: "not above 3")
-  const weakWhy = (z, after) => `its scale is not above 3 esd${after ? ' once the cells and widths are refined' : ''}${z > 0 ? ` (${(Math.floor(z*10)/10).toFixed(1)} esd)` : ''}`;
-  let res, nIn, lastFree, weakOut = null, ownOut = null;
-  const keptBIC = new Map(), keptOwn = new Map();
-  for (;;){
-    let free = [...scales.filter((_, k)=> !out.has(k)), ...lin];
-    res = run(1, 'scales and background', free);
-    const z1 = zScale(res), vv = model.v.slice();
-    model.phases.forEach((_, k)=> { if (!out.has(k) && !keptBIC.has(k) && !(z1[k] > 3)) leaveOut(k, weakWhy(z1[k], false), vv); });
+  const latHeld = name => [...D.notFound].some(k=> name.startsWith(model.phases[k].pfx));
+  let free = [...scales.filter((_, k)=> !out.has(k)), ...lin];
+  let res = runStage(A, 1, 'scales and background', free);
+  const z1 = zScale(model, res), vv = model.v.slice();
+  model.phases.forEach((_, k)=> { if (!out.has(k) && !keptBIC.has(k) && !(z1[k] > 3)) leaveOut(A, D, k, weakWhy(z1[k], false), vv); });
+  setParams(model, vv);
+  free = free.filter(name=> !out.has(scales.indexOf(name)));
+  const keep = list => list.filter(name=> !model.phases.some((_, k)=> out.has(k) && name.startsWith(model.phases[k].pfx)));
+  free = free.concat(std ? ['zero', 'disp', 'transp'] : [...keep(lattice).filter(name=> !latHeld(name)), 'disp']);
+  runStage(A, 2, std ? 'zero and displacement' : 'lattice and displacement', free);
+  free = free.concat(irf ? keep(model.phases.filter(q=> !q.sizeOff).map(q=> q.pfx + 'Ys')) : ['W', 'Y']);
+  runStage(A, 3, 'widths', free);
+  const nIn = reflectionsInRange(model);
+  /* Without the standard's profile the whole profile is refined, on a sample as on the
+     standard (a sample's is then the instrument's and its own in one; up to v426 its U,
+     V and asymmetry were held at 0 unless opts.instrumentalProfileFree). Held, the
+     asymmetry went into the cell and the displacement, U and V into the rest of the
+     profile: on SrTiO3, corundum, ZnO and a monoclinic cell of 8–200 nm under three
+     instrumental profiles (A = 0.02–0.08) the cell came out 0.2–10·10⁻⁴ off at 2–45
+     esd, χ²_ν up to 2.0 (the truth's 1.04); refined, 0.01–0.9·10⁻⁴, within 2.2 esd,
+     χ²_ν 1.04, for an esd 0.8–2.3× as large and about twice the time. */
+  const uvFree = !irf && nIn.positions >= UV_POSITIONS;
+  // Freed from a typical value (at 0 it has no derivative); held, none.
+  if (!irf && AS === 'asym' && (uvFree ? !(model.v[model.iAsym] > 0) : model.v[model.iAsym] !== 0)){ const vv = model.v.slice(); vv[model.iAsym] = uvFree ? asym0 : 0; setParams(model, vv); }
+  free = free.concat(irf ? keep(model.phases.filter(q=> !q.strainOff).map(q=> q.pfx + 'Xs')) : uvFree ? ['X', 'U', 'V', ...asFree] : ['X']);
+  res = runStage(A, 4, irf ? 'size and strain' : uvFree ? 'full profile' : 'profile shape', free);
+  ({ res, free } = optionalStages(A, D, free, res));
+  return { res, free, nIn };
+}
+/* optionalStages(A, D, free, res) → { res, free }: the optional stages (A.optStages), each
+   on top of what is free already, for the phases not in D.out, then the texture's trials
+   for the phases that ask for one. */
+function optionalStages(A, D, free, res){
+  const { model, optStages, nStages, adpOf } = A, { out } = D;
+  const keep = list => list.filter(name=> !model.phases.some((_, k)=> out.has(k) && name.startsWith(model.phases[k].pfx)));
+  let kSt = 5;
+  const live0 = k => !out.has(k);
+  if (optStages.includes('anisotropic strain')){
+    // Stephens: ε² = ε₀² + Σ S q; from ε₀ = 0 the square root has no derivative.
+    const vv = model.v.slice();
+    model.phases.forEach((q, k)=> { if (q.iS && !q.noIrf && live0(k) && vv[q.iXs] < 0.02) vv[q.iXs] = 0.02; });
     setParams(model, vv);
-    free = free.filter(name=> !out.has(scales.indexOf(name)));
-    const keep = list => list.filter(name=> !model.phases.some((_, k)=> out.has(k) && name.startsWith(pfxOf(k))));
-    free = free.concat(std ? ['zero', 'disp', 'transp'] : [...keep(lattice).filter(name=> !latHeld(name)), 'disp']);
-    run(2, std ? 'zero and displacement' : 'lattice and displacement', free);
-    free = free.concat(irf ? keep(model.phases.filter(q=> !q.sizeOff).map(q=> q.pfx + 'Ys')) : ['W', 'Y']);
-    run(3, 'widths', free);
-    nIn = reflectionsInRange(model);
-    /* Without the standard's profile the whole profile is refined, on a sample as on the
-       standard (a sample's is then the instrument's and its own in one; up to v426 its U,
-       V and asymmetry were held at 0 unless opts.instrumentalProfileFree). Held, the
-       asymmetry went into the cell and the displacement, U and V into the rest of the
-       profile: on SrTiO3, corundum, ZnO and a monoclinic cell of 8–200 nm under three
-       instrumental profiles (A = 0.02–0.08) the cell came out 0.2–10·10⁻⁴ off at 2–45
-       esd, χ²_ν up to 2.0 (the truth's 1.04); refined, 0.01–0.9·10⁻⁴, within 2.2 esd,
-       χ²_ν 1.04, for an esd 0.8–2.3× as large and about twice the time. */
-    const uvFree = !irf && nIn.positions >= UV_POSITIONS;
-    // Freed from a typical value (at 0 it has no derivative); held, none.
-    if (!irf && AS === 'asym' && (uvFree ? !(model.v[model.iAsym] > 0) : model.v[model.iAsym] !== 0)){ const vv = model.v.slice(); vv[model.iAsym] = uvFree ? asym0 : 0; setParams(model, vv); }
-    free = free.concat(irf ? keep(model.phases.filter(q=> !q.strainOff).map(q=> q.pfx + 'Xs')) : uvFree ? ['X', 'U', 'V', ...asFree] : ['X']);
-    res = run(4, irf ? 'size and strain' : uvFree ? 'full profile' : 'profile shape', free);
-    // The optional stages, each on top of what is free already.
-    let kSt = 5;
-    const live0 = k => !out.has(k);
-    if (optStages.includes('anisotropic strain')){
-      // Stephens: ε² = ε₀² + Σ S q; from ε₀ = 0 the square root has no derivative.
-      const vv = model.v.slice();
-      model.phases.forEach((q, k)=> { if (q.iS && !q.noIrf && live0(k) && vv[q.iXs] < 0.02) vv[q.iXs] = 0.02; });
-      setParams(model, vv);
-      free = free.concat(model.phases.flatMap((q, k)=> q.iS && !q.noIrf && live0(k) ? q.iS.map(i=> model.par[i].name) : []));
-      res = run(kSt++, 'anisotropic strain', free);
-    }
-    if (optStages.includes('planar faults')){
-      free = free.concat(model.phases.flatMap((q, k)=> q.iFA != null && !q.noIrf && live0(k) ? [q.pfx + 'FA'] : []));
-      res = run(kSt++, 'planar faults', free);
-    }
-    if (optStages.includes('size distribution')){
-      tS = Date.now();
-      prog(kSt/nStages, 'size distribution');
-      ({ res, free } = sizeDistTrials(model.phases.map((_, k)=> k).filter(k=> model.phases[k].iLS != null && model.phases[k].wppm && live0(k)), free, res));
-      stageStats('size distribution', res);
-      kSt++;
-    }
-    if (optStages.includes('displacement parameters')){
-      free = free.concat(keep(model.phases.flatMap(q=>{
-        const a = adpOf(q);
-        return a === 'overall' ? [q.pfx + 'B'] : a === 'site' ? q.sites.map(st=> model.par[st.iB].name) : a === 'aniso' ? q.sites.flatMap(st=> st.iU.map(i=> model.par[i].name)) : [];
-      })));
-      res = run(kSt++, 'displacement parameters', free);
-    }
-    // The occupancies after the displacements, beside them: both scale a site's
-    // scattering, the one alike at every angle, the other more at high angle.
-    if (optStages.includes('site occupancy')){
-      free = free.concat(keep(model.phases.flatMap(q=> (q.occSites || []).map(s=> model.par[s.iOcc].name))));
-      res = run(kSt++, 'site occupancy', free);
-    }
-    // A preferred orientation (March–Dollase), for the phases that ask for one.
-    const poKs = model.phases.map((_, k)=> k).filter(k=> model.phases[k].iPO != null && !out.has(k));
-    if (poKs.length){
-      tS = Date.now();
-      prog(Math.min(nStages - 0.5, kSt)/nStages, 'preferred orientation');
-      ({ res, free } = textureTrials(poKs, free, res));
-      stageStats('preferred orientation', res);
-    }
-    lastFree = free;
-    // What the phase the 3-esd test left out in the last pass was worth: χ² without it, with
-    // nothing else left out since, against χ² with it (scaled by that fit's χ²_ν, as the
-    // shape's ΔBIC), for its dP parameters. Fitting noise gives χ²(dP): dP ± √(2dP).
-    if (weakOut){
-      const w = weakOut; weakOut = null;
-      const dchi = (chiTot(res) - w.chi)/Math.max(1, w.chi2), dP = w.P - res.stats.P, need = dP*Math.log(res.stats.N);
-      if (out.size === w.out && dP > 0 && dchi > need + 10){
-        // Put back: the stages from the search's state with it again give the fit it had.
-        out.delete(w.k); outWarn.splice(w.idx, 1); keptBIC.set(w.k, { z: w.z, dchi, dP, need });
-        const v2 = vSearch.slice();
-        out.forEach(k=> { v2[model.phases[k].iScale] = 0; model.phases[k].iLat.forEach((i, m)=> { v2[i] = len0[k][m]; }); });
-        setParams(model, v2);
-        stages.length = nSearch;
-        continue;
-      }
-      if (out.size === w.out && dP > 0)
-        outWarn[w.idx] = `${nm(w.k)}: not detected — ${weakWhy(w.z, true)}. Leaving it out raises χ² by ${Math.max(0, dchi).toFixed(0)} for its ${dP} parameters (fitting noise gives about ${dP}; a BIC would keep it above ${(need + 10).toFixed(0)}): ${dchi > dP + 3*Math.sqrt(2*dP) ? 'more than noise gives, too little to tell' : 'within what noise gives'}.`;
-    }
-    /* What the phase the own-intensity test left out in the last pass was worth: χ²
-       without it, nothing else left out since, against χ² with it. A candidate that is not
-       there takes up only what the others' model leaves, and when it goes they take most
-       of it back: on synthetic samples χ² rose by 0.4–10 % (absent NaCl, LaB6, quartz,
-       corundum, Mg beside hosts with a size distribution, anisotropic strain or two
-       populations), or, where it had held a whole second population of an isostructural
-       host (Mg and ZnO), ×3.1–3.9 with 87 % of its Σ w·y_p² taken up again. A phase that
-       is there carries intensity no other can take: in crowded patterns of broad lines
-       (two or three phases of 6–15 nm, 5–50 wt %), where none of its lines stands clear,
-       leaving it out multiplied χ² by 2.8–300, the others taking up 24–53 % of it. It is
-       put back, its own-intensity test waived (keptOwn), when χ² more than doubles and
-       the rise is over a quarter of its Σ w·y_p² (what leaving it out would cost if they
-       took none of it): a quarter is the geometric middle of the 13 % left by the absent
-       and the 47 % by the present. Up to v426 it stayed out: a present phase of 30–50 wt %
-       was lost in all 7 runs of four such samples (χ²_ν 37–313). The doubling is a ratio
-       of χ² totals: where noise is most of χ² (600 counts at the top) a present phase must
-       add more than that noise, and 2 of 11 such phases stayed out (χ² ×1.3, ×1.7); at ten
-       times the counts the absent candidates' ratios stayed at 1.006–1.16. */
-    if (ownOut){
-      const w = ownOut; ownOut = null;
-      const rise = chiTot(res) - w.chi;
-      if (out.size === w.out && chiTot(res) > OWN_KEEP*w.chi && rise > OWN_SHARE*w.sig){
-        out.delete(w.k); outWarn.splice(w.idx, 1); keptOwn.set(w.k, { chi2: w.chi2, without: res.stats.chi2, why: w.why });
-        const v2 = vSearch.slice();
-        out.forEach(k=> { v2[model.phases[k].iScale] = 0; model.phases[k].iLat.forEach((i, m)=> { v2[i] = len0[k][m]; }); });
-        setParams(model, v2);
-        stages.length = nSearch;
-        continue;
-      }
-    }
-    const zs = zScale(res), live = model.phases.map((_, k)=> k).filter(k=> !out.has(k));
-    // Of the phases not above 3 esd, the least significant goes, one per pass (backward
-    // elimination): phases whose lines overlap have correlated scales, and leaving one out
-    // changes the others' esds. All at once (up to v425), a broad and a sharp population
-    // of one SrTiO3 had both fallen under 3 esd and both gone, leaving no phase at all.
-    const zOf = k => Number.isFinite(zs[k]) ? zs[k] : -Infinity;
-    const failing = live.filter(k=> !keptBIC.has(k) && !(zs[k] > 3)), lost = failing.sort((a, b)=> zOf(a) - zOf(b)).slice(0, 1);
-    // Beside other phases, one that only takes up a broad hump or the background, however
-    // significant: its size or strain width run to their bounds, its crystallites under two
-    // cells across, or its cell to the ±10 % bound (an absent NaCl or quartz beside a
-    // SrTiO3 with an amorphous hump came out at 46–48(6) wt %, 0.8 nm, Ys on its bound).
-    const odd = live.length > 1 ? live.filter(k=> !failing.includes(k) && implausible(k)) : [];
-    let drop = null;
-    if (!failing.length && !odd.length && live.length > 1){
-      const ev = ownEvidence(model, model.v, res.stats.chi2);
-      const weak = live.filter(k=> !ev[k].own && !keptOwn.has(k)).sort((a, b)=> ev[a].alone - ev[b].alone || ev[b].under - ev[a].under);
-      if (weak.length && weak.length < live.length){
-        const k = weak[0], e = ev[k], others = live.filter(j=> j !== k && !twins(model.phases[k], model.phases[j])).map(nm).join(', ');
-        drop = { k, why: `${Math.round(e.under*100)} % of its calculated intensity lies under ${others}'s peaks, and ${!(e.alone > 0)
-          ? 'none of its lines stands clear of theirs'
-          : e.alone < 0.05 ? `its lines clear of theirs hold only ${(e.alone*100).toFixed(1)} % of it (under 5 %)`
-          : !Number.isFinite(e.alpha) ? `its lines clear of theirs (${Math.round(e.alone*100)} % of it) have too few points (${e.pts}) to fit its intensity there`
-          : `at its lines clear of theirs (${Math.round(e.alone*100)} % of it) the pattern shows ${Math.round(e.alpha*100)} ± ${Math.round(e.esd*100)} % of the intensity calculated: not told from none`}` };
-      }
-    }
-    if (!lost.length && !odd.length && !drop) break;
-    // Again from the search's state, without them.
-    const v2 = vSearch.slice();
-    out.forEach(k=> { v2[model.phases[k].iScale] = 0; model.phases[k].iLat.forEach((i, m)=> { v2[i] = len0[k][m]; }); });
-    // (The rise is read from the next pass, which runs anyway; a scale at 0 costs nothing.)
-    if (lost.length === 1 && !odd.length && zs[lost[0]] > 0)
-      weakOut = { k: lost[0], z: zs[lost[0]], idx: outWarn.length, chi: chiTot(res), chi2: res.stats.chi2, P: res.stats.P, out: out.size + 1 };
-    if (drop){
-      // its calculated intensity in χ²'s terms, Σ w·y_p²: what leaving it out would cost if
-      // no other phase took any of it up (at the optimum its residual is orthogonal to y_p)
-      const st = evaluate(model, model.v), q = model.phases[drop.k], P = st.pats[drop.k], s = model.v[q.iScale];
-      let sig = 0; for (let i = 0; i < model.n; i++) sig += model.w[i]*(s*P[i])**2;
-      ownOut = { k: drop.k, idx: outWarn.length, chi: chiTot(res), chi2: res.stats.chi2, sig, why: drop.why, out: out.size + 1 };
-    }
-    lost.forEach(k=> leaveOut(k, weakWhy(zs[k], true), v2));
-    odd.forEach(k=> leaveOut(k, implausible(k), v2));
-    if (drop) leaveOut(drop.k, drop.why, v2);
-    setParams(model, v2);
-    stages.length = nSearch;
+    free = free.concat(model.phases.flatMap((q, k)=> q.iS && !q.noIrf && live0(k) ? q.iS.map(i=> model.par[i].name) : []));
+    res = runStage(A, kSt++, 'anisotropic strain', free);
   }
-  warnings.push(...outWarn);
-  keptOwn.forEach((b, k)=> { if (!out.has(k)) warnings.push(`${nm(k)}: ${b.why}; but leaving it out raises χ²_ν from ${b.chi2.toFixed(2)} to ${b.without.toFixed(2)}, more than twice: the other phases cannot take up its intensity, and it is kept.`); });
-  keptBIC.forEach((b, k)=> { if (!out.has(k)) warnings.push(`${nm(k)}: its scale stands at only ${(Math.floor(b.z*10)/10).toFixed(1)} esd (it correlates with its widths or another phase's), but leaving it out raises χ² by ${b.dchi.toFixed(0)} for its ${b.dP} parameters, above the ${(b.need + 10).toFixed(0)} at which a BIC keeps it: kept, with a large esd on its fraction.`); });
-  return finish({ res, out, lastFree, nIn, cs });
+  if (optStages.includes('planar faults')){
+    free = free.concat(model.phases.flatMap((q, k)=> q.iFA != null && !q.noIrf && live0(k) ? [q.pfx + 'FA'] : []));
+    res = runStage(A, kSt++, 'planar faults', free);
+  }
+  if (optStages.includes('size distribution')){
+    A.tS = Date.now();
+    A.prog(kSt/nStages, 'size distribution');
+    ({ res, free } = sizeDistTrials(A, model.phases.map((_, k)=> k).filter(k=> model.phases[k].iLS != null && model.phases[k].wppm && live0(k)), free, res));
+    stageStats(A, 'size distribution', res);
+    kSt++;
+  }
+  if (optStages.includes('displacement parameters')){
+    free = free.concat(keep(model.phases.flatMap(q=>{
+      const a = adpOf(q);
+      return a === 'overall' ? [q.pfx + 'B'] : a === 'site' ? q.sites.map(st=> model.par[st.iB].name) : a === 'aniso' ? q.sites.flatMap(st=> st.iU.map(i=> model.par[i].name)) : [];
+    })));
+    res = runStage(A, kSt++, 'displacement parameters', free);
+  }
+  // The occupancies after the displacements, beside them: both scale a site's
+  // scattering, the one alike at every angle, the other more at high angle.
+  if (optStages.includes('site occupancy')){
+    free = free.concat(keep(model.phases.flatMap(q=> (q.occSites || []).map(s=> model.par[s.iOcc].name))));
+    res = runStage(A, kSt++, 'site occupancy', free);
+  }
+  // A preferred orientation (March–Dollase), for the phases that ask for one.
+  const poKs = model.phases.map((_, k)=> k).filter(k=> model.phases[k].iPO != null && !out.has(k));
+  if (poKs.length){
+    A.tS = Date.now();
+    A.prog(Math.min(nStages - 0.5, kSt)/nStages, 'preferred orientation');
+    ({ res, free } = textureTrials(A, poKs, free, res));
+    stageStats(A, 'preferred orientation', res);
+  }
+  return { res, free };
+}
+/* The 3-esd test is weak where a phase's scale correlates with its widths (very broad
+   lines) or with another phase's (two populations of one phase): the scale's esd is
+   large. A phase the last test leaves out is judged again by what leaving it out cost,
+   from the stages run again without it (weakOut): the rise of χ² (over χ²_ν, as the
+   shape's ΔBIC) against its dP parameters. Above dP·ln N + 10 (ΔBIC under −10, as the
+   shape's test) it is put back, its 3-esd tests waived (keptBIC); below, it stays out
+   and the warning gives the rise. Not a bar at what noise gives (dP + 3√(2dP)): the
+   search placed its cell and width where they gain most, so an absent phase gains more
+   than χ²(dP). 2 nm rutile at 8 wt % beside 80 nm SrTiO3 (lines 9 counts high and 4°
+   wide on 150) stood at 1.9–2.9 esd while leaving it out raised χ² by 24–48 for its 5
+   parameters: more than noise gives, short of the BIC's 53.
+   putBackWeak(A, D, res) → true when the phase the 3-esd test left out in the last pass
+   (D.weakOut) is put back (the stages to run again from the search's state with it): χ²
+   without it (res), with nothing else left out since, against χ² with it (scaled by that
+   fit's χ²_ν, as the shape's ΔBIC), for its dP parameters. Fitting noise gives χ²(dP):
+   dP ± √(2dP). Kept out, its warning gives the rise. */
+function putBackWeak(A, D, res){
+  if (!D.weakOut) return false;
+  const { model } = A, w = D.weakOut; D.weakOut = null;
+  const dchi = (chiTotal(res) - w.chi)/Math.max(1, w.chi2), dP = w.P - res.stats.P, need = dP*Math.log(res.stats.N);
+  if (D.out.size === w.out && dP > 0 && dchi > need + 10){
+    // Put back: the stages from the search's state with it again give the fit it had.
+    D.out.delete(w.k); D.outWarn.splice(w.idx, 1); D.keptBIC.set(w.k, { z: w.z, dchi, dP, need });
+    setParams(model, searchStart(A, D));
+    A.stages.length = D.nSearch;
+    return true;
+  }
+  if (D.out.size === w.out && dP > 0)
+    D.outWarn[w.idx] = `${phaseName(model, w.k)}: not detected — ${weakWhy(w.z, true)}. Leaving it out raises χ² by ${Math.max(0, dchi).toFixed(0)} for its ${dP} parameters (fitting noise gives about ${dP}; a BIC would keep it above ${(need + 10).toFixed(0)}): ${dchi > dP + 3*Math.sqrt(2*dP) ? 'more than noise gives, too little to tell' : 'within what noise gives'}.`;
+  return false;
+}
+/* putBackOwn(A, D, res) → true when the phase the own-intensity test left out in the last
+   pass (D.ownOut) is put back: χ² without it (res), nothing else left out since, against χ²
+   with it. A candidate that is not there takes up only what the others' model leaves, and
+   when it goes they take most of it back: on synthetic samples χ² rose by 0.4–10 % (absent
+   NaCl, LaB6, quartz, corundum, Mg beside hosts with a size distribution, anisotropic strain
+   or two populations), or, where it had held a whole second population of an isostructural
+   host (Mg and ZnO), ×3.1–3.9 with 87 % of its Σ w·y_p² taken up again. A phase that
+   is there carries intensity no other can take: in crowded patterns of broad lines
+   (two or three phases of 6–15 nm, 5–50 wt %), where none of its lines stands clear,
+   leaving it out multiplied χ² by 2.8–300, the others taking up 24–53 % of it. It is
+   put back, its own-intensity test waived (keptOwn), when χ² more than doubles and
+   the rise is over a quarter of its Σ w·y_p² (what leaving it out would cost if they
+   took none of it): a quarter is the geometric middle of the 13 % left by the absent
+   and the 47 % by the present. Up to v426 it stayed out: a present phase of 30–50 wt %
+   was lost in all 7 runs of four such samples (χ²_ν 37–313). The doubling is a ratio
+   of χ² totals: where noise is most of χ² (600 counts at the top) a present phase must
+   add more than that noise, and 2 of 11 such phases stayed out (χ² ×1.3, ×1.7); at ten
+   times the counts the absent candidates' ratios stayed at 1.006–1.16. */
+function putBackOwn(A, D, res){
+  if (!D.ownOut) return false;
+  const w = D.ownOut; D.ownOut = null;
+  const rise = chiTotal(res) - w.chi;
+  if (D.out.size === w.out && chiTotal(res) > OWN_KEEP*w.chi && rise > OWN_SHARE*w.sig){
+    D.out.delete(w.k); D.outWarn.splice(w.idx, 1); D.keptOwn.set(w.k, { chi2: w.chi2, without: res.stats.chi2, why: w.why });
+    setParams(A.model, searchStart(A, D));
+    A.stages.length = D.nSearch;
+    return true;
+  }
+  return false;
+}
+/* ownDrop(A, live, res, keptOwn) → { k, why } or null: of the phases live (more than one,
+   none failing the other tests), the one the own-intensity test leaves out (ownEvidence at
+   res): the one with the least of the pattern its own, when some but not all have none
+   (keptOwn's, put back, are not tested again). */
+function ownDrop(A, live, res, keptOwn){
+  const { model } = A, nm = k => phaseName(model, k);
+  const ev = ownEvidence(model, model.v, res.stats.chi2);
+  const weak = live.filter(k=> !ev[k].own && !keptOwn.has(k)).sort((a, b)=> ev[a].alone - ev[b].alone || ev[b].under - ev[a].under);
+  if (!(weak.length && weak.length < live.length)) return null;
+  const k = weak[0], e = ev[k], others = live.filter(j=> j !== k && !twins(model.phases[k], model.phases[j])).map(nm).join(', ');
+  return { k, why: `${Math.round(e.under*100)} % of its calculated intensity lies under ${others}'s peaks, and ${!(e.alone > 0)
+    ? 'none of its lines stands clear of theirs'
+    : e.alone < 0.05 ? `its lines clear of theirs hold only ${(e.alone*100).toFixed(1)} % of it (under 5 %)`
+    : !Number.isFinite(e.alpha) ? `its lines clear of theirs (${Math.round(e.alone*100)} % of it) have too few points (${e.pts}) to fit its intensity there`
+    : `at its lines clear of theirs (${Math.round(e.alone*100)} % of it) the pattern shows ${Math.round(e.alpha*100)} ± ${Math.round(e.esd*100)} % of the intensity calculated: not told from none`}` };
+}
+/* leaveOutNext(A, D, res) → true when the pass at res leaves a phase out (the stages to run
+   again from the search's state without it), false when the detection is done: of the
+   phases not above 3 esd, the least significant (backward elimination: phases whose lines
+   overlap have correlated scales, and leaving one out changes the others' esds; all at once,
+   up to v425, a broad and a sharp population of one SrTiO3 had both fallen under 3 esd and
+   both gone, leaving no phase at all); beside other phases, every one that only takes up a
+   broad hump or the background, however significant (implausibleWhy: an absent NaCl or
+   quartz beside a SrTiO3 with an amorphous hump came out at 46–48(6) wt %, 0.8 nm, Ys on its
+   bound); else the one the own-intensity test leaves out (ownDrop). The one the 3-esd test
+   leaves out alone (D.weakOut) or the own-intensity test (D.ownOut) is judged again by the
+   next pass (putBackWeak, putBackOwn). */
+function leaveOutNext(A, D, res){
+  const { model } = A, { out, keptBIC, keptOwn } = D;
+  const zs = zScale(model, res), live = model.phases.map((_, k)=> k).filter(k=> !out.has(k));
+  const zOf = k => Number.isFinite(zs[k]) ? zs[k] : -Infinity;
+  const failing = live.filter(k=> !keptBIC.has(k) && !(zs[k] > 3)), lost = failing.sort((a, b)=> zOf(a) - zOf(b)).slice(0, 1);
+  const odd = live.length > 1 ? live.filter(k=> !failing.includes(k) && implausibleWhy(A, k)) : [];
+  const drop = !failing.length && !odd.length && live.length > 1 ? ownDrop(A, live, res, keptOwn) : null;
+  if (!lost.length && !odd.length && !drop) return false;
+  // Again from the search's state, without them.
+  const v2 = searchStart(A, D);
+  // (The rise is read from the next pass, which runs anyway; a scale at 0 costs nothing.)
+  if (lost.length === 1 && !odd.length && zs[lost[0]] > 0)
+    D.weakOut = { k: lost[0], z: zs[lost[0]], idx: D.outWarn.length, chi: chiTotal(res), chi2: res.stats.chi2, P: res.stats.P, out: out.size + 1 };
+  if (drop){
+    // its calculated intensity in χ²'s terms, Σ w·y_p²: what leaving it out would cost if
+    // no other phase took any of it up (at the optimum its residual is orthogonal to y_p)
+    const st = evaluate(model, model.v), q = model.phases[drop.k], P = st.pats[drop.k], s = model.v[q.iScale];
+    let sig = 0; for (let i = 0; i < model.n; i++) sig += model.w[i]*(s*P[i])**2;
+    D.ownOut = { k: drop.k, idx: D.outWarn.length, chi: chiTotal(res), chi2: res.stats.chi2, sig, why: drop.why, out: out.size + 1 };
+  }
+  lost.forEach(k=> leaveOut(A, D, k, weakWhy(zs[k], true), v2));
+  odd.forEach(k=> leaveOut(A, D, k, implausibleWhy(A, k), v2));
+  if (drop) leaveOut(A, D, drop.k, drop.why, v2);
+  setParams(model, v2);
+  A.stages.length = D.nSearch;
+  return true;
+}
+// The detection's warnings: the phases left out, and those put back.
+function detectionWarnings(A, D){
+  const { model, warnings } = A, nm = k => phaseName(model, k);
+  warnings.push(...D.outWarn);
+  D.keptOwn.forEach((b, k)=> { if (!D.out.has(k)) warnings.push(`${nm(k)}: ${b.why}; but leaving it out raises χ²_ν from ${b.chi2.toFixed(2)} to ${b.without.toFixed(2)}, more than twice: the other phases cannot take up its intensity, and it is kept.`); });
+  D.keptBIC.forEach((b, k)=> { if (!D.out.has(k)) warnings.push(`${nm(k)}: its scale stands at only ${(Math.floor(b.z*10)/10).toFixed(1)} esd (it correlates with its widths or another phase's), but leaving it out raises χ² by ${b.dchi.toFixed(0)} for its ${b.dP} parameters, above the ${(b.need + 10).toFixed(0)} at which a BIC keeps it: kept, with a large esd on its fraction.`); });
 }
 
 /* ---------- the free shape's search ----------
@@ -5256,3 +5458,6 @@ function displacementMm(model, disp){ return -disp*D2R*model.radius/2; }
 export { buildModel, calc, autoRefine, fitSettings, shapeOf, getParams, tch, displacementMm,
          addLine, HG2_FLOOR, K_SCHERRER, siteU, lowIndexPlanes, strainFormsAt, lpFactor,
          phaseSites, OCC_MAX, axialNodes, axialOf, axialOn, bgInvOn, KIND_GROUP, shapeNamed };
+// autoRefine's stages, each tested alone (tests/autorefine.test.mjs)
+export { autoSetup, startingProfile, placePeaks, detection, stagePass, putBackWeak, putBackOwn, leaveOutNext, implausibleWhy, zScale, chiTotal,
+         weakWhy, refinedWithOthers, paramGroup, lastChanges, lastFreeList };
