@@ -4,6 +4,10 @@
 - Reply to the user in Italian, tersely.
 - Implementation goes to background agents; they commit, push, and check Pages.
 - After every push, check the "pages build and deployment" run for the pushed commit.
+- Token saving. During long work, update the user at most once an hour, then give a final
+  explanation. On request, super-saving mode: no updates, only the final explanation. During
+  the Italian night (02:00-07:00 Europe/Rome), unless told otherwise, switch to super-saving
+  mode on your own.
 - Write clean code from the first draft, as if the lint rules applied while writing (no unused
   variables, imports or exports, no dead code, no duplicated helpers, consistent style), not
   cleaned up afterwards.
