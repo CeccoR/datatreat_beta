@@ -4075,7 +4075,7 @@ function phaseWarnings(A, out, res){
   if (live.length > 1){
     const ev = ownEvidence(model, model.v, res.stats.chi2);
     if (live.every(k=> !ev[k].own)) warnings.push(MSG.warn(`${live.map(nm).join(', ')}: their peaks overlap throughout, with no line of any one clear of the others': the pattern tells neither whether each is there nor their fractions (a candidate can take up the others' tails or the background: refine without it to compare).`));
-    else live.forEach(k=> { if (ev[k].own && ev[k].alpha < 0.5) warnings.push(MSG.warn(`${nm(k)}: where it is alone it shows ${Math.round(ev[k].alpha*100)} % of the intensity the fit gives it — its fraction rests mostly on peaks it shares.`)); });
+    else live.forEach(k=> { if (ev[k].own && ev[k].alpha < 0.5) warnings.push(MSG.warn(`${nm(k)}: where it is alone it shows ${Math.round(ev[k].alpha*100)} % of the intensity the fit gives it: its fraction rests mostly on peaks it shares.`)); });
   }
 }
 /* shapeStage(A, { res, out, lastFree, carried, held, iso0, keptIso }) → { res, shapes,
@@ -4589,7 +4589,7 @@ const chiTotal = r => r.stats.chi2*Math.max(1, r.stats.N - r.stats.P);
 const weakWhy = (z, after) => `its scale is not above 3 esd${after ? ' once the cells and widths are refined' : ''}${z > 0 ? ` (${(Math.floor(z*10)/10).toFixed(1)} esd)` : ''}`;
 // Phase k left out (D.out, a warning saying why), in vv: its scale 0, its cell the file's.
 function leaveOut(A, D, k, why, vv){
-  D.out.add(k); D.outWarn.push(`${phaseName(A.model, k)}: not detected — ${why}.`);
+  D.out.add(k); D.outWarn.push(`${phaseName(A.model, k)}: not detected: ${why}.`);
   vv[A.model.phases[k].iScale] = 0; A.model.phases[k].iLat.forEach((i, m)=> { vv[i] = D.len0[k][m]; });
 }
 // The values the stages run again from: the search's, the phases out left out.
@@ -4727,7 +4727,7 @@ function putBackWeak(A, D, res){
     return true;
   }
   if (D.out.size === w.out && dP > 0)
-    D.outWarn[w.idx] = `${phaseName(model, w.k)}: not detected — ${weakWhy(w.z, true)}. Leaving it out raises χ² by ${Math.max(0, dchi).toFixed(0)} for its ${dP} parameters (fitting noise gives about ${dP}; a BIC would keep it above ${(need + 10).toFixed(0)}): ${dchi > dP + 3*Math.sqrt(2*dP) ? 'more than noise gives, too little to tell' : 'within what noise gives'}.`;
+    D.outWarn[w.idx] = `${phaseName(model, w.k)}: not detected: ${weakWhy(w.z, true)}. Leaving it out raises χ² by ${Math.max(0, dchi).toFixed(0)} for its ${dP} parameters (fitting noise gives about ${dP}; a BIC would keep it above ${(need + 10).toFixed(0)}): ${dchi > dP + 3*Math.sqrt(2*dP) ? 'more than noise gives, too little to tell' : 'within what noise gives'}.`;
   return false;
 }
 /* putBackOwn(A, D, res) → true when the phase the own-intensity test left out in the last

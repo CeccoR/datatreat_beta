@@ -6,7 +6,7 @@ import { createDeck, cardInfo, fileSafe } from './cards.js';
 import { isObj } from './modkit.js';
 import * as M from './xrd-model.js';
 import * as H from './xrd-html.js';
-import { markSeen } from './alerts.js';
+import { markSeen, inKeys } from './alerts.js';
 
 /* =========================================================
    XRD MODULE
@@ -96,6 +96,11 @@ function sampleName(xml){
                           one box)
      peaksModal, rvModal  the standard's two windows ({ el, box, body }), and the one open
      openModal, onStdKey  (none: null), its Escape (a document listener while it is open)
+     stdSaid              what the last drop on a window said ({ at: that window's element,
+                          bad: its file refused, the box's markup; read: the files dropped
+                          beside it, a line }), under that window's drop zone with what the
+                          reading of the standard's file said (xrd-html.js stdNotes, in both
+                          windows: v573, to v572 the drop's words)
      stdPeaks, stdRv      the standard's peak analysis and its Rietveld refinement
      live                 the cards' panels, by id: { inst, el }
      cardsNext, patNext, stdNext   what the cards of a tab woken or reloaded showed
@@ -127,7 +132,7 @@ function createXrd(ctx){
 function makeState({ key, root, layer, shown }){
   const $ = id => root.querySelector('#' + id);
   const S = { key, root, layer, shown, $, allFiles: [], files: [], curIdx: 0, stdFile: null, deck: null, loadAlerts: '', leftOut: '', uploadAlerts: '',
-    peaksModal: null, rvModal: null, openModal: null, stdPeaks: null, stdRv: null, live: new Map(), cardsNext: null, patNext: null, stdNext: null, resList: null, hist: null };
+    peaksModal: null, rvModal: null, openModal: null, stdSaid: NO_SAID, stdPeaks: null, stdRv: null, live: new Map(), cardsNext: null, patNext: null, stdNext: null, resList: null, hist: null };
   S.onStdKey = e => onStdKey(S, e);
   return S;
 }
@@ -169,6 +174,8 @@ function shows(S){
 // What the reading of the files said (xrd-html.js fileNotes), the standard's what a project
 // opened found in it too.
 const fileNotes = S => H.fileNotes(S.allFiles, S.stdFile, M.keptScans, HU);
+// What the reading of the standard's file said, in its windows (xrd-html.js stdNotes).
+const stdNotes = S => H.stdNotes(S.stdFile, M.keptScans, HU);
 // A box's ×: a drop's emptied; one of the notes', its files marked seen in the list, the
 // standard and the history (alerts.js markSeen), a project opened's line with them.
 function onDismiss(S, e){
@@ -177,11 +184,17 @@ function onDismiss(S, e){
   const what = act.slice('xrd-dismiss-'.length);
   if (what === 'upload') S.uploadAlerts = '';
   else if (what === 'invalid') S.loadAlerts = '';
-  else { markSeen(S.hist, fileNotes(S), what, { keys: ['files', 'std'] }); if (what === 'opened') S.leftOut = ''; }
+  else { markSeen(S.hist, fileNotes(S), what, { put: inKeys(['files', 'std']) }); if (what === 'opened') S.leftOut = ''; }
   rebuildXrdAlerts(S);
 }
+// Every alert of the files: under the samples' drop zone, and under the standard's windows'.
 function rebuildXrdAlerts(S){
   S.$('xrdAlerts').innerHTML = S.loadAlerts + notesHtml(fileNotes(S), w=> 'xrd-dismiss-' + w, { opened: S.leftOut ? [S.leftOut] : [] }) + S.uploadAlerts;
+  const notes = stdNotes(S), D = S.stdSaid;
+  [S.peaksModal, S.rvModal].forEach(w=>{
+    const at = w.el === D.at;
+    w.el.querySelector('.xrd-std-alerts').innerHTML = (at ? D.bad : '') + notesHtml(notes, x=> 'xrd-std-dismiss-' + x, { read: at && D.read ? [D.read] : [] });
+  });
 }
 
 /* ---- The samples ---- */
@@ -332,6 +345,7 @@ function stdModal(S, id, title, info){
   m.addEventListener('click', e=>{ if (e.target === m) closeStd(S); });
   m.querySelector('.xrd-std-x').onclick = ()=> closeStd(S);
   m.querySelector('.xrd-std-file').addEventListener('click', e=>{ if (e.target.closest('[data-std-del]')) setStd(S, null); });
+  m.querySelector('.xrd-std-alerts').addEventListener('click', e=> onStdDismiss(S, e));
   setupDropzone(m.querySelector('#' + id + 'Dz'), m.querySelector('#' + id + 'Files'), fl => onStdDrop(S, m, fl));
   return { el: m, box, body: m.querySelector('.xrd-std-body') };
 }
@@ -342,19 +356,30 @@ function toggleInstr(info0, instr){
   info0.setAttribute('aria-expanded', String(open));
 }
 // One file: of several dropped, the first; it replaces the one loaded. One pattern: of a
-// file of several scans, the first that can be read.
+// file of several scans, the first that can be read. What the drop said replaces what the
+// last said, a drop that loads nothing too (utils.js FILE ALERTS).
 async function onStdDrop(S, m, fl){
   const f = fl[0];
   if (!f) return;
   let r;
   try { r = await readFile(f); } catch (e){ r = { error: `could not be read: ${e && e.message || e}` }; }
-  const alerts = m.querySelector('.xrd-std-alerts');
-  if (r.error){ alerts.innerHTML = fileAlertHtml('bad', [esc(fileLine(f.name, r.error))]); return; }
-  const { f: p, k, notes } = r.pats[0];
+  if (r.error){ S.stdSaid = { at: m, bad: fileAlertHtml('bad', [esc(fileLine(f.name, r.error))], 'xrd-std-dismiss-bad'), read: '' }; rebuildXrdAlerts(S); return; }
+  const p = r.pats[0].f;
   p.color = '#d4a72c';
   setStd(S, p);
-  // (after setStd, which clears the windows' alerts: these are the new file's)
-  alerts.innerHTML = H.stdDropAlerts(fl.length, f.name, r.n, k, p.name, notes, HU);
+  // (after setStd, which lets the last drop's words go: these are the new file's)
+  S.stdSaid = { at: m, bad: '', read: H.stdDropLine(fl.length, f.name, HU) };
+  rebuildXrdAlerts(S);
+}
+// A box's × in a window: the drop's refusal let go; one of the notes', the standard marked
+// seen in its record and the history (alerts.js markSeen), the drop's line of its box with it.
+function onStdDismiss(S, e){
+  const btn = e.target.closest('[data-action^="xrd-std-dismiss-"]');
+  if (!btn) return;
+  const what = btn.dataset.action.slice('xrd-std-dismiss-'.length);
+  if (what === 'bad') S.stdSaid = { ...S.stdSaid, bad: '' };
+  else { markSeen(S.hist, stdNotes(S), what, { put: inKeys(['std']) }); if (what === 'read') S.stdSaid = { ...S.stdSaid, read: '' }; }
+  rebuildXrdAlerts(S);
 }
 // The standard's file in both windows (xrd-html.js stdFileHtml).
 function syncStdFile(S){
@@ -362,13 +387,13 @@ function syncStdFile(S){
     w.el.querySelector('.xrd-std-file').innerHTML = H.stdFileHtml(S.stdFile, HU);
   });
 }
-// The windows' alerts are the last file dropped there: they go with the standard,
-// replaced or removed, and on a restore (up to v484 they stayed, on another standard,
-// on none, in another project).
-const clearStdAlerts = S => [S.peaksModal, S.rvModal].forEach(w=>{ w.el.querySelector('.xrd-std-alerts').innerHTML = ''; });
+// What the last drop on a window said goes with the standard, replaced or removed, and on
+// a restore (up to v484 it stayed, on another standard, on none, in another project); what
+// the reading of the standard's file said is the file's (stdNotes, rebuildXrdAlerts).
+const NO_SAID = { at: null, bad: '', read: '' };
 function setStd(S, f){
   S.stdFile = f;
-  clearStdAlerts(S);
+  S.stdSaid = NO_SAID;
   S.stdPeaks.resetFile();
   syncStdFile(S);
   S.stdPeaks.refresh();
@@ -534,7 +559,7 @@ function restore(S, s0, step){
   S.deck.load(M.cardsIn(U, s), src=> M.cardIn(U, src, R.gone), a=> S.live.get(a.id).inst.restore(a.states[a.type] || {}, step));
   // (what its cards showed, given as its tab woke or the page was reloaded: showNext)
   if (S.cardsNext){ const v = S.cardsNext; S.cardsNext = null; eachCard(S, (e, a)=>{ if (isObj(v[a.id])) e.inst.showNext(v[a.id]); }); }
-  clearStdAlerts(S);
+  S.stdSaid = NO_SAID;
   syncStdFile(S);
   S.stdPeaks.refresh();
   S.stdRv.refresh();

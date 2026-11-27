@@ -49,8 +49,8 @@ function decl(file, name){
   if (m && /^[}\])]/.test(rest.slice(end + 1))) end = rest.indexOf('\n', end + 1);
   return rest.slice(0, end).replace(/^export /, '');
 }
-const UN = ['esc', 'fmtNum', 'csvField', 'csvJoin', 'csvLine', 'X_SVG', 'ALERT_ICON', 'seenFor', 'notesFor', 'alertHtml', 'FILE_ALERT', 'fileAlertHtml', 'fileLine', 'notesHtml', 'isIncluded', 'anySample', 'includedOf', 'includedIndex', 'setIncluded', 'removeFileAt'];
-const IN_ALERTS = new Set(['ALERT_ICON', 'seenFor', 'notesFor']);
+const UN = ['esc', 'fmtNum', 'csvField', 'csvJoin', 'csvLine', 'X_SVG', 'ALERT_ICON', 'markOf', 'seenFor', 'notesFor', 'alertHtml', 'FILE_ALERT', 'fileAlertHtml', 'fileLine', 'notesHtml', 'isIncluded', 'anySample', 'includedOf', 'includedIndex', 'setIncluded', 'removeFileAt'];
+const IN_ALERTS = new Set(['ALERT_ICON', 'markOf', 'seenFor', 'notesFor']);
 const settings = { decimal: '.', field: ';' };
 const PAGE = new Function('settings', [...UN.map(n=> decl(IN_ALERTS.has(n) ? 'alerts.js' : 'utils.js', n)), decl('modkit.js', 'isObj')].join('\n') + `\nreturn { ${[...UN, 'isObj'].join(', ')} };`)(settings);
 // A canonical dump: every number by its shortest round-trip string, NaN, ±∞ and −0 too.
@@ -508,6 +508,10 @@ test('the markup: the Image box, the groups, the alerts and the options, every n
   assert.equal(alertsOf(S), BAD + DUP, 'dismissed');
   assert.deepEqual([w.seen, b.seen, states[0].files.map(f=> f.seen)], [['check'], undefined, [['check'], undefined]]);
   assert.ok(states[0] !== was[0] && states[0].files[1] === was[0].files[1] && states[1] === was[1] && states[2] === was[2] && !was[0].files[0].seen, 'copies where marked, the states\' own objects unchanged');
+  // As a project holds it (v573): its marks those that are one, once each (to v572 whatever it held).
+  const Z = newS();
+  restore(Z, { files: [{ ...states[0].files[0], seen: ['check', 3, null, 'check', 'nope', { check: 1 }, 'read:x'] }, { ...b, seen: 'check' }] });
+  assert.deepEqual(Z.allFiles.map(f=> f.seen), [['check', 'read:x'], undefined]);
   S.allFiles.pop();
   M.dropAlertsOf(S, b.raw.id);
   assert.equal(alertsOf(S), '');

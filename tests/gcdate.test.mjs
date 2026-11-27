@@ -191,6 +191,12 @@ test('a project reopened says it again but for the files dismissed; one edited b
     assert.equal(by['feb30.csv'].badDates, 1);
     assert.deepEqual([by['dm.csv'].seen, by['feb30.csv'].seen], [['read'], ['check']], 'each file marked for the box that named it');
     assert.equal(await page.locator('#gcAlerts .alert').count(), 0, 'reopened: dismissed still');
+    // Marks that are none among them (a project's .json), left out as it is read: those that are
+    // one kept, once each (v573: to v572 kept as they came, saved again with the project).
+    await restore(page, { ...st, files: st.files.map(f=> ({ ...f, seen: [...f.seen, 7, null, f.seen[0], 'nope', { check: true }, ['read'], PAYLOAD] })) });
+    const clean = files(await moduleState(page, 'gc'));
+    assert.deepEqual([clean['dm.csv'].seen, clean['feb30.csv'].seen], [['read'], ['check']], 'read clean');
+    assert.equal(await page.locator('#gcAlerts .alert').count(), 0, 'dismissed still');
     // Not marked, said again.
     await restore(page, { ...st, files: st.files.map(({ seen: _, ...f })=> f) });
     assert.deepEqual([await datesAlert(page), await dmAlert(page)], [[CHECK, 'feb30.csv: 1 row left out: its injection date does not exist.'], [READ, 'dm.csv: dates read as day/month.']], 'reopened: said again');

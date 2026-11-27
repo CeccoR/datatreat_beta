@@ -17,6 +17,7 @@
    parsed as XML, xrd-instr.js readXrdmlScans' scans, or why not).
 ========================================================= */
 import { fixed } from './db.js';
+import { keepSeen } from './alerts.js';
 
 /* A file's scans as read, kept by its bytes for every instance (the file's bytes are the
    same array in the tabs, their histories and their parked states): a tab woken, or an
@@ -113,8 +114,9 @@ function movedOf(old, g, sc){
 }
 /* A project read in may hold anything (an imported .json): the restore takes what it reads
    only as what it should be — a file an object with its pattern, 2θ and intensities as
-   many and two at least (else it is left out, with a note), its name and label text; an
-   index an integer in range; arrays where arrays are kept; the cards of a known kind —
+   many and two at least (else it is left out, with a note), its name and label text, its
+   marks of what was said seen those that are one (alerts.js seenIn, v573); an index an
+   integer in range; arrays where arrays are kept; the cards of a known kind —
    and anything else as its default (up to v484 a curIdx that was no number made the index
    NaN, and the cards read files[NaN].label; a file not an object, or with no arrays,
    threw before anything was drawn). */
@@ -126,7 +128,7 @@ export const isKind = k => Object.prototype.hasOwnProperty.call(KINDS, k);
 export function keptFile(U, f, i, color){
   if (!U.isObj(f)) return null;
   const name = typeof f.name === 'string' && f.name ? f.name : `file ${i+1}`;
-  const g = { ...f, name, label: typeof f.label === 'string' ? f.label : name.replace(/\.[^.]+$/, ''), color: typeof f.color === 'string' ? f.color : color };
+  const g = keepSeen({ ...f, name, label: typeof f.label === 'string' ? f.label : name.replace(/\.[^.]+$/, ''), color: typeof f.color === 'string' ? f.color : color });
   if (!(isArr(g.varMul) && isArr(g.y) && g.varMul.length === g.y.length)) delete g.varMul;
   let r;
   try { r = readAgain(U, g); } catch (e){ return null; }

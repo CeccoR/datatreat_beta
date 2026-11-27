@@ -28,6 +28,7 @@ import { rng, gcCsv } from './fixtures.mjs';
 import { decodeText } from '../textdata.js';
 import * as M from '../gc-model.js';
 import * as H from '../gc-html.js';
+import { markSeen } from '../alerts.js';
 
 // The page's dates are local: the tests' time zone, as the browser tests' (helpers.mjs).
 process.env.TZ = 'UTC';
@@ -52,8 +53,8 @@ function decl(file, name){
   if (m && /^[}\])]/.test(rest.slice(end + 1))) end = rest.indexOf('\n', end + 1);
   return rest.slice(0, end).replace(/^export /, '');
 }
-const UN = ['esc', 'fmtNum', 'csvField', 'csvJoin', 'csvLine', 'cumtrapz', 'meanArr', 'stdArr', 'maxArr', 'minArr', 'X_SVG', 'ALERT_ICON', 'seenFor', 'notesFor', 'alertHtml', 'FILE_ALERT', 'fileAlertHtml', 'fileLine', 'notesHtml', 'exactKey'];
-const IN_ALERTS = new Set(['ALERT_ICON', 'seenFor', 'notesFor']);
+const UN = ['esc', 'fmtNum', 'csvField', 'csvJoin', 'csvLine', 'cumtrapz', 'meanArr', 'stdArr', 'maxArr', 'minArr', 'X_SVG', 'ALERT_ICON', 'markOf', 'seenFor', 'notesFor', 'alertHtml', 'FILE_ALERT', 'fileAlertHtml', 'fileLine', 'notesHtml', 'exactKey'];
+const IN_ALERTS = new Set(['ALERT_ICON', 'markOf', 'seenFor', 'notesFor']);
 const KN = ['isObj', 'isArr', 'num', 'numStr', 'oneOf', 'dateOf', 'arrOf', 'without', 'wideCsv'];
 const CN = ['PLOT_DL_ICON', 'CSV_ICON', 'plotWrap'];
 // (the CSVs' settings as a fresh page has them; a decimal comma where a case asks for one)
@@ -324,6 +325,45 @@ test('files as a project holds them, the replicates\' links, the pairs', ()=>{
   assert.deepEqual(M.partsOf({ ...tcd, mate: tcd }).map(x=> x.warn), Array(2).fill('raw chromatograms paired with raw chromatograms: no injection times'));
   assert.deepEqual(M.rowFiles(all[0]).map(f=> f.name), ['b', 'b_TCD.csv']);
   assert.ok(M.hasTcd(all[0]) && !M.isTable(tcd) && M.isTcd(tcd));
+});
+
+/* A pair's note, marked for its issue (v573, alerts.js markOf): the file paired with the row's,
+   or none. Its × marks that pair alone, in the list and in the states: the file paired
+   wrongly again with another, or raw chromatograms left alone again, said again; the same
+   pair made again, seen. A mark for the box (a table's rows left out, v572's) hides no pair.
+   To v572 the row's file was marked for the box, whatever it was paired with later. A
+   pair's files read from a project, their marks those that are one (alerts.js seenIn). */
+test('a pair\'s note marked for its issue: paired wrongly again with another file, said again; the marks read clean', ()=>{
+  const d = new Date(2026, 0, 1), tb = n => ({ name: n, label: n.slice(0, 1).toUpperCase(), injDates: [d], gas: { h2: [1] } }), tc = n => ({ name: n, label: n.slice(0, 1).toUpperCase(), tcd: { n: 1 } });
+  const all = [tb('a.csv'), tb('b.csv'), tb('c.csv'), tc('t_TCD.csv'), tc('u_TCD.csv')], files = all.slice(0, 3);
+  const hist = { states: [{ files: all.map(f=> ({ ...f })) }], patch(fn){ this.states = this.states.map(fn); } };
+  const pair = (...rows)=> M.regroup(all, files, [], rows.map(r=> r.map(n=> all.flatMap(M.rowFiles).find(f=> f.name === n))));
+  const said = ()=> H.fileNotes(all, HU).filter(n=> PAGE.notesFor([n], n.what).length).map(n=> n.line.replace(/ Drag.*$/, ''));
+  const dismiss = ()=> markSeen(hist, H.fileNotes(all, HU), 'check');
+  pair(['a.csv', 'b.csv'], ['c.csv'], ['t_TCD.csv'], ['u_TCD.csv']);
+  const AB = 'A: two tables paired (a.csv, b.csv): the first is used, as it is alone; b.csv is ignored.', T = 't_TCD.csv: raw chromatograms with no table: shown in Integration, left out of Analysis, with no injection times.';
+  assert.deepEqual(said(), [AB, T, 'u_TCD.csv: raw chromatograms with no table: shown in Integration, left out of Analysis, with no injection times.']);
+  dismiss();
+  assert.deepEqual([said(), all[0].seen, all[2].seen, hist.states[0].files.map(f=> f.seen)], [[], ['check:pair:b.csv'], ['check:alone'], [['check:pair:b.csv'], undefined, undefined, ['check:alone'], ['check:alone']]], 'each marked for its issue, in the list and the state');
+  // Unpaired: nothing to say; paired with c.csv: said; with b.csv again: seen.
+  pair(['a.csv'], ['b.csv'], ['c.csv'], ['t_TCD.csv'], ['u_TCD.csv']);
+  assert.deepEqual(said(), []);
+  pair(['a.csv', 'c.csv'], ['b.csv'], ['t_TCD.csv'], ['u_TCD.csv']);
+  assert.deepEqual(said(), ['A: two tables paired (a.csv, c.csv): the first is used, as it is alone; c.csv is ignored.'], 'paired wrongly again, with another file: said');
+  pair(['a.csv', 'b.csv'], ['c.csv'], ['t_TCD.csv'], ['u_TCD.csv']);
+  assert.deepEqual(said(), [], 'the pair seen, made again: seen');
+  // Raw chromatograms seen alone, paired with raw chromatograms: said; alone again: seen.
+  pair(['a.csv', 'b.csv'], ['c.csv'], ['t_TCD.csv', 'u_TCD.csv']);
+  assert.deepEqual(said(), ['T: two files of raw chromatograms paired (t_TCD.csv, u_TCD.csv): shown in Integration, left out of Analysis, with no injection times.']);
+  pair(['a.csv', 'b.csv'], ['c.csv'], ['t_TCD.csv'], ['u_TCD.csv']);
+  assert.deepEqual(said(), []);
+  // A mark for the box (a table's rows left out, as v572 marked it) hides its rows, not a pair.
+  assert.deepEqual(PAGE.notesHtml(H.fileNotes([{ ...tb('x.csv'), badDates: 2, seen: ['check'], mate: tb('y.csv') }], HU), w=> w).match(/two tables paired|left out/g), ['two tables paired']);
+  // As a project holds them: a pair's files' marks, those that are one, once each.
+  const junk = ['check:pair:b.csv', 7, null, 'check:pair:b.csv', 'nope', 'check:', { read: 1 }, 'read'];
+  const p = M.fileIn(U, { ...tc('t_TCD.csv'), seen: junk, mate: { ...tb('a.csv'), seen: [...junk, 'opened'] } });
+  assert.deepEqual([p.name, p.seen, p.mate.name, p.mate.seen], ['a.csv', ['check:pair:b.csv', 'read', 'opened'], 't_TCD.csv', ['check:pair:b.csv', 'read']]);
+  assert.ok(!('seen' in M.fileIn(U, { ...tc('t_TCD.csv'), seen: 'check', mate: tb('a.csv') }).mate), 'no mark: no seen');
 });
 
 test('the cards\' markup, the parameter table and the alerts, every label escaped', ()=>{

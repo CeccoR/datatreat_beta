@@ -25,6 +25,7 @@
    (Alerts).
 ========================================================= */
 import { hashBytes, fromB64 } from './sem-read.js';
+import { keepSeen } from './alerts.js';
 
 /* ---- On the page ----
    d significant digits, the point as a point (fmtNum, with the CSV's decimal separator and
@@ -605,9 +606,10 @@ export function intensityOf(U, v){
      into one) and an id of the form hashBytes gives for bytes of their length (else
      made from them), once (a second entry of one id is dropped), its bytes those
      another tab holds where one does (U.rawOf); strings for its name and label; its
-     crop whole pixels inside the image, at least MIN_CROP a side, else the default
-     one; its ratio one of the locks; its correction within the fields' ranges; its
-     Default boxes ticked only where the crop and correction are the defaults;
+     marks of what was said seen, those that are one; its crop whole pixels inside the
+     image, at least MIN_CROP a side, else the default one; its ratio one of the locks;
+     its correction within the fields' ranges; its Default boxes ticked only where the
+     crop and correction are the defaults;
    - the settings: a normalisation of the four, numbers within the fields' ranges,
      else the defaults;
    - the groups: ids that are names (no key of a plain object's own), once, each image
@@ -652,10 +654,11 @@ function rawIn(U, raw0){
   if (bytes && !(typeof id === 'string' && ID_RE.test(id) && +id.slice(9) === bytes.length)) id = hashBytes(bytes);
   return id === null ? null : { id, bytes };
 }
-// An image's flags, crop, ratio and correction (f: f0 with its name, label and bytes; r
-// its header).
+// An image's flags, marks of what was said seen (those that are one: alerts.js seenIn,
+// v573), crop, ratio and correction (f: f0 with its name, label and bytes; r its header).
 function fileIn(U, f, f0, r){
   for (const k of ['linked', 'clamped']) f[k] = f0[k] === true;
+  keepSeen(f);
   if (f0.included !== false) delete f.included;
   if ('held' in f && !U.isObj(f.held)) delete f.held;
   // The crop: in the image's pixels; one saved (to v487) on an image whose pixels are

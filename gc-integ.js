@@ -3,6 +3,7 @@ import { Plot, svgEl, linkX, niceTicks } from './plot.js';
 import { plotWrap, chipRow, viewOf, setView, PLOT_DL_ICON } from './modcharts.js';
 import { cardInfo, fileSafe, nameDownloads } from './cards.js';
 import { isObj, oneOf, num } from './modkit.js';
+import { markSeen } from './alerts.js';
 import { integrateMany } from './gc-tcd-pool.js';
 import { snavHtml, snav } from './snav.js';
 import * as M from './gc-integ-model.js';
@@ -532,6 +533,7 @@ function exportEntries(S, C, n){
      held                  the files dropped waiting for their partner (not in the project),
                            let go as it closes
      stdNav, onKey         the standards' selector (snav.js), its keys' listener (while open)
+     warn                  the markup of its box of a calibration of v544–v548's, as drawn
 ========================================================= */
 function calWindow(S, C){
   const m = document.createElement('div');
@@ -539,11 +541,12 @@ function calWindow(S, C){
   m.style.display = 'none';
   m.innerHTML = H.calHtml(HU, C.p);
   S.ctx.layer.appendChild(m);
-  const W = { m, q: s => m.querySelector(s), from: null, isOpen: false, rowsNow: [], held: [], stdNav: null, onKey: null };
+  const W = { m, q: s => m.querySelector(s), from: null, isOpen: false, rowsNow: [], held: [], stdNav: null, onKey: null, warn: '' };
   W.onKey = e => onCalKey(S, C, W, e);
   const info = W.q('.instr-info'), instr = W.q('.xrd-std-instr');
   info.addEventListener('click', ()=>{ const o = instr.style.display === 'none'; instr.style.display = o ? '' : 'none'; info.classList.toggle('is-on', o); info.setAttribute('aria-expanded', String(o)); });
   m.addEventListener('click', e=>{ if (e.target === m || e.target.closest('.xrd-std-x')) closeCal(W); });
+  W.q('.gci-cal-warn').addEventListener('click', e=>{ if (e.target.closest('[data-action="gci-cal-dismiss-opened"]')) dismissCalWarn(S, C, W); });
   setupDropzone(W.q('.gci-cal-dz'), W.q('.gci-cal-in'), list => onCalDrop(S, C, W, list));
   wireCalEdits(S, C, W);
   wireCalNav(S, C, W);
@@ -710,11 +713,18 @@ function refocus(W, was){
   if (f){ if (f.type === 'text'){ f.value = was.v; } f.focus({ preventScroll: true }); if (was.s != null) try { f.setSelectionRange(was.s, was.s); } catch(e){ /* not a text field */ } }
 }
 /* A calibration of v544–v548's, its raw chromatograms alone: said, its standards named
-   by column, until its table is dropped (an alert dismissed stays so while the same
-   files lack theirs). */
+   by column, until its table is dropped or its box's × marks the files seen, in the card's
+   calibration and in every state of the history that holds it (alerts.js markSeen, no step
+   of its own: undo and redo keep it, the project saves it). Drawn again only where it
+   changed: the window is drawn anew while the standards are integrated. */
+const calNotes = C => H.calNotes(HU, C.cal.files);
 function paintCalWarn(C, W){
-  const old = C.cal.files.filter(f=> !f.table), wk = old.map(f=> f.name).join('\n'), warn = W.q('.gci-cal-warn');
-  if (warn.dataset.k !== wk){ warn.dataset.k = wk; warn.innerHTML = H.calWarnHtml(HU, old); }
+  const html = H.calWarnHtml(HU, calNotes(C));
+  if (W.warn !== html){ W.warn = html; W.q('.gci-cal-warn').innerHTML = html; }
+}
+function dismissCalWarn(S, C, W){
+  markSeen(S.kit, calNotes(C), 'opened', { put: M.inCal(U, C.a.id) });
+  paintCalWarn(C, W);
 }
 function paintFits(S, C, W){
   const fits = W.q('.gci-cal-fits');

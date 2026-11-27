@@ -1,7 +1,7 @@
 import { esc, fileAlertHtml, notesHtml, fileLine, NOT_READ, bytesOf, includedOf, setIncluded, removeFileAt, moveFileTo, renderUnifiedFileList, setTabLoaded, setupDropzone, registerHistory, registerTabRedraw, registerCsvExport, csvLine, nextColor, colorOf } from './utils.js';
 import { createDeck } from './cards.js';
 import { decodeText } from './textdata.js';
-import { markSeen } from './alerts.js';
+import { markSeen, keepSeen } from './alerts.js';
 
 /* =========================================================
    MODULE KIT
@@ -192,6 +192,8 @@ export function moduleKit(mod, o){
     const g = { ...f, name, label: typeof f.label === 'string' ? f.label : name.replace(/\.[^.]+$/, ''), color: typeof f.color === 'string' ? f.color : colorOf(i) };
     if (f.included !== false){ delete g.included; delete g.held; }
     else if (!isObj(g.held)) g.held = {};
+    // (its marks of what was said of it seen: those that are one, alerts.js seenIn)
+    keepSeen(g);
     try { return o.file ? o.file(g) : g; } catch(e){ return null; }
   };
   const hist = registerHistory(key, ()=> ({ files: all.map(f=> ({ ...f })), ...o.snapshot() }), s0=>{

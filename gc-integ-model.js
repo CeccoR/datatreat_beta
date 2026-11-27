@@ -30,6 +30,7 @@ import { DEFAULT_METHOD, readTcd, windowCurves, fitCalibration, transferK } from
 import { decodeText } from './textdata.js';
 import { looksTcd, stemOf } from './gc-pair.js';
 import { fixed } from './db.js';
+import { keepSeen } from './alerts.js';
 
 /* ---- The colours, the marks and the rules (pure: the module's, for every instance) ---- */
 export const PEAK_COLORS = ['#9b7bff', '#4cc9a0', '#e3b341', '#d95fd0'];
@@ -124,17 +125,30 @@ export const compact = (U, r)=> r && deNull(U, JSON.parse(JSON.stringify(r, (k, 
    integrated, its results keyed by these bytes as any file's) and the GC software's table
    of the same injections (`table`: { name, rawBytes }), read for one thing only, each
    injection's name; a level per chromatogram, typed by hand. A file of v544–v548's has no
-   table: kept as it is, its standards named by column until the table is dropped. */
+   table: kept as it is, its standards named by column until the table is dropped, which
+   its window says until its × marks the file seen (`seen`, alerts.js: v573; to v572 the ×
+   held while the window was open). */
 export const blankLevel = ()=> ({ h2: null, o2: null, on: true });
 export function calIn(U, c){
   const s = U.isObj(c) ? c : {}, z = U.isObj(s.zero) ? s.zero : {};
   const lv = v => U.num(v, null);
-  const files = Array.isArray(s.files) ? s.files.filter(f=> U.isObj(f) && f.rawBytes instanceof Uint8Array).map(f=> ({
+  const files = Array.isArray(s.files) ? s.files.filter(f=> U.isObj(f) && f.rawBytes instanceof Uint8Array).map(f=> keepSeen({
     name: typeof f.name === 'string' && f.name ? f.name : 'calibration.csv', rawBytes: f.rawBytes,
     levels: Array.isArray(f.levels) ? f.levels.map(x=> U.isObj(x) ? { h2: lv(x.h2), o2: lv(x.o2), on: x.on !== false } : blankLevel()) : [],
-    ...(U.isObj(f.table) && f.table.rawBytes instanceof Uint8Array ? { table: { name: typeof f.table.name === 'string' && f.table.name ? f.table.name : 'calibration table.csv', rawBytes: f.table.rawBytes } } : {}) })) : [];
+    ...(U.isObj(f.table) && f.table.rawBytes instanceof Uint8Array ? { table: { name: typeof f.table.name === 'string' && f.table.name ? f.table.name : 'calibration table.csv', rawBytes: f.table.rawBytes } } : {}), seen: f.seen })) : [];
   return { unit: U.oneOf(s.unit, UNITS), zero: { h2: z.h2 === true, o2: z.o2 === true }, files };
 }
+/* The calibration's files of card `id` in a state, marked by `mark` (alerts.js markSeen's
+   `put`, its window's ×): the state itself where none changed. */
+export const inCal = (U, id)=> (s, mark)=>{
+  if (!U.isObj(s) || !Array.isArray(s.cards)) return s;
+  const cards = s.cards.map(c=>{
+    if (!U.isObj(c) || c.id !== id || !U.isObj(c.cal) || !Array.isArray(c.cal.files)) return c;
+    const files = mark(c.cal.files);
+    return files === c.cal.files ? c : { ...c, cal: { ...c.cal, files } };
+  });
+  return cards.some((c, i)=> c !== s.cards[i]) ? { ...s, cards } : s;
+};
 export const calCopy = c => ({ unit: c.unit, zero: { ...c.zero }, files: c.files.map(f=> ({ ...f, levels: f.levels.map(l=> ({ ...l })) })) });
 
 /* ---- The raw chromatograms, read once per file (by its bytes) ---- */

@@ -211,12 +211,17 @@ was proposed; nothing here is in the code yet.
   files in the list in every module, a box's × marking its files through undo and redo and
   in the project saved; the Rietveld engine's, the CIF reader's and the instrument reader's
   messages each of its kind, kept so in the results, a result saved before read as warnings;
-  the results' amber lines in compact boxes. Left, found then: GC's Calibration window says
-  a calibration of v544–v548 lacks its table in a box whose × holds while the window is
-  open (not kept in the project); XRPD's standard window says what its last drop found until
-  the next (not worked out from the standard's file); three of the engine's messages keep
-  "—" in their words (a phase alone showing n % of its intensity, a phase not detected, the
-  parameters not determined), which the engine's golden outputs hold: to change with them.
+  the results' amber lines in compact boxes. Done in v573, the leftovers: GC's Calibration
+  window's box of a calibration of v544–v548 marks its file seen by its × (kept through undo
+  and redo, the window opened again and the project reopened; to v572 it held while the
+  window was open); XRPD's standard window says what the reading of the standard's file said,
+  worked out from the file there is, × per file (to v572 what its last drop found, until the
+  next undo or restore); four of the engine's messages without "—" (a phase alone showing n %
+  of its intensity, a phase not detected, the parameters not determined, and an occupancy
+  over 1, found then), the golden outputs changed in those words alone; the marks read from
+  a project kept only where they are marks; a mark tied to the issue its note names where
+  that can change while the file stays (GC's pair: paired wrongly again with another file,
+  said again). Nothing of the review is left.
 
 - **Long functions.** A handful of functions run to hundreds of lines: `createRietveld`
   (xrd-rv.js, ~1300), `createPeakAnalysis` (xrd-peaks.js, ~1100), `autoRefine`

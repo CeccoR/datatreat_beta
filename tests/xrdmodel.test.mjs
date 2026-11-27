@@ -47,8 +47,8 @@ function decl(file, name){
   if (m && /^[}\])]/.test(rest.slice(end + 1))) end = rest.indexOf('\n', end + 1);
   return rest.slice(0, end).replace(/^export /, '');
 }
-const UN = ['COLORS', 'colorOf', 'nextColor', 'esc', 'X_SVG', 'ALERT_ICON', 'seenFor', 'notesFor', 'alertHtml', 'FILE_ALERT', 'fileAlertHtml', 'fileLine', 'notesHtml'];
-const IN_ALERTS = new Set(['ALERT_ICON', 'seenFor', 'notesFor']);
+const UN = ['COLORS', 'colorOf', 'nextColor', 'esc', 'X_SVG', 'ALERT_ICON', 'markOf', 'seenFor', 'notesFor', 'alertHtml', 'FILE_ALERT', 'fileAlertHtml', 'fileLine', 'notesHtml'];
+const IN_ALERTS = new Set(['ALERT_ICON', 'markOf', 'seenFor', 'notesFor']);
 export const PAGE = new Function([...UN.map(n=> decl(IN_ALERTS.has(n) ? 'alerts.js' : 'utils.js', n)), decl('modkit.js', 'isObj')].join('\n') + `\nreturn { ${UN.join(', ')}, isObj };`)();
 export const dec = b => new TextDecoder().decode(b);
 export const enc = s => new TextEncoder().encode(s);
@@ -105,12 +105,22 @@ test('a file read again: by its bytes (once), as it was, its data moved, points 
   for (const oldData of [{ dropped: 0 }, { dropped: 1.5 }, { dropped: '2' }, { minimum: 'yes' }, 'x', null, 5]) assert.equal(H.openedNote({ oldData, rawBytes: b, y: [0] }), '', 'a project\'s .json: only a whole count, or true');
   const bad = enc('q'); M.keepScans(bad, [{ error: 'x' }]); read.n = 0; M.readAgain(U, { name: 'c.xrdml', rawBytes: bad, x: [1, 2], y: [1, 2] }); assert.equal(read.n, 0);
   // as a restore takes it
+  const f2 = { name: 'f2', x: [1, 2], y: [1, 2] };
   assert.equal(M.keptFile(U, 5, 0, '#1'), null);
   const k = M.keptFile(U, { x: [2, 1], y: [1, 2], varMul: [1] }, 3, '#abc');
   assert.deepEqual([k.name, k.label, k.color, k.x, 'varMul' in k], ['file 4', 'file 4', '#abc', [1, 2], false]);
   assert.equal(M.keptFile(U, { name: 'a.b.c', label: 7, x: [1, 2], y: [1, 2] }, 0, '#1').label, 'a.b');
   assert.equal(M.keptFile(U, { name: 'n', x: [1], y: [1] }, 0, '#1'), null);
   assert.equal(M.keptFile(U, { name: 'n', x: 'ab', y: [1, 2] }, 0, '#1'), null);
+  // Its marks of what was said seen (v573): those that are one, once each; none, no `seen` (to
+  // v572 whatever the project held). The samples' and the standard's alike (readsOf).
+  const junk = ['read', 5, null, { check: true }, ['check'], 'read', 'opened:x', 'junk', 'check:', 'checked', '<b>'];
+  assert.deepEqual(M.keptFile(U, { ...f2, seen: junk }, 0, '#1').seen, ['read', 'opened:x']);
+  for (const seen of ['check', { 0: 'check' }, 7, [1, null], []]) assert.ok(!(M.keptFile(U, { ...f2, seen }, 0, '#1').seen || []).length, 'a mark that is none');
+  const kept = ['check', 'read'];
+  assert.equal(M.keptFile(U, { ...f2, seen: kept }, 0, '#1').seen, kept, 'clean: as it is');
+  const R = M.readsOf(U, { files: [{ ...f2, seen: junk }], std: { ...f2, name: 's', seen: [...junk, 'opened'] } });
+  assert.deepEqual([R.reads[0].seen, R.stdRead.seen], [['read', 'opened:x'], ['read', 'opened:x', 'opened']]);
 });
 
 test('a project restored: migrated, its files read, those lost, the sample on show, the cards', ()=>{
@@ -163,12 +173,21 @@ test('the markup: the standard\'s window and file, its alerts, the drop\'s, a re
   for (const s of ['aria-labelledby="xrdStdPeaksTitle"', 'id="xrdStdPeaksTitle">Instrumental <b>standard</b>', 'id="xrdStdPeaksDz"', 'id="xrdStdPeaksFiles"', 'class="xrd-std-alerts"', 'class="xrd-std-file"', 'class="xrd-std-body"', '>INFO</div>']) assert.ok(w.includes(s), s);
   assert.equal(H.stdFileHtml(null, HU), '');
   assert.ok(H.stdFileHtml({ name: 'a<b>.xrdml' }, HU).includes('<span class="xrd-std-name">a&lt;b&gt;.xrdml</span>'));
-  // (v567, utils.js FILE ALERTS: a caveat to check a warning; how the file was taken an info)
-  const al = H.stdDropAlerts(2, 'f<1>.xrdml', 3, 1, 'p', ['n<', 'counts over unequal counting times: loaded as counts per second'], HU);
-  assert.equal(al, PAGE.alertHtml('warn', 'Loaded, to check:', ['p: n&lt;.']) + PAGE.alertHtml('info', 'How these files were read:', ['2 files dropped: the first, f&lt;1&gt;.xrdml, is the standard; the others are not used.',
-    'f&lt;1&gt;.xrdml: 3 scans: the standard is scan 2, the first that could be read; the others are not used.', 'p: counts over unequal counting times: loaded as counts per second.']));
-  assert.ok(H.stdDropAlerts(1, 'f', 2, 0, 'p', [], HU).includes('the standard is the first; the others'));
-  assert.equal(H.stdDropAlerts(1, 'f', 1, 0, 'p', [], HU), '');
+  /* (v567, utils.js FILE ALERTS: a caveat to check a warning; how the file was taken an info.
+     v573: worked out from the standard's file, from the scans its bytes were read into, each
+     until its box's × marks it seen; the drop's line of the files dropped beside them; to v572
+     the drop's words, gone at the next undo or restore.) */
+  const bs = enc('std'), bo = enc('one'), sbox = (st, line)=> PAGE.notesHtml(H.stdNotes(st, M.keptScans, HU), w=> 'xrd-std-dismiss-' + w, { read: line ? [line] : [] });
+  M.keepScans(bs, [{ error: 'no scan data' }, scan([1, 2], [1, 2], { notes: ['n<', 'counts over unequal counting times: loaded as counts per second'] }), scan([1, 2], [1, 2])]);
+  M.keepScans(bo, [scan([1, 2], [1, 2])]);
+  const sd = { name: 'f<1> (scan 2).xrdml', src: 'f<1>.xrdml', scan: 1, rawBytes: bs }, SREAD = ['f&lt;1&gt;.xrdml: 3 scans: the standard is scan 2, the first that could be read; the others are not used.',
+    'f&lt;1&gt; (scan 2).xrdml: counts over unequal counting times: loaded as counts per second.'], DROP = '2 files dropped: the first, f&lt;1&gt;.xrdml, is the standard; the others are not used.';
+  assert.equal(H.stdDropLine(2, 'f<1>.xrdml', HU), DROP);
+  assert.equal(sbox(sd, DROP), PAGE.alertHtml('warn', 'Loaded, to check:', ['f&lt;1&gt; (scan 2).xrdml: n&lt;.'], 'xrd-std-dismiss-check') + PAGE.alertHtml('info', 'How these files were read:', [...SREAD, DROP], 'xrd-std-dismiss-read'));
+  assert.equal(sbox({ ...sd, seen: ['check'] }, ''), PAGE.alertHtml('info', 'How these files were read:', SREAD, 'xrd-std-dismiss-read'), 'to check, seen');
+  assert.equal(sbox({ ...sd, seen: ['read', 'check'] }, ''), '', 'both seen');
+  assert.ok(sbox({ ...sd, scan: 0 }, '').includes('the standard is the first; the others'));
+  assert.deepEqual([H.stdDropLine(1, 'f', HU), sbox(null, ''), sbox({ ...sd, rawBytes: undefined }, ''), sbox({ name: 'one.xrdml', rawBytes: bo }, '')], ['', '', '', '']);
   assert.equal(H.scansNote('f', 3, 3), 'f: 3 scans, each a pattern of its own.'); assert.equal(H.scansNote('f', 3, 1), 'f: 3 scans, 1 of them loaded, each a pattern of its own.');
   const d = H.dropAlerts(['x: why.'], ['y'], HU);
   assert.equal(d.load, PAGE.alertHtml('bad', 'Not loaded:', ['x: why.'], 'xrd-dismiss-invalid'));

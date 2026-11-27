@@ -237,7 +237,7 @@ function occLines(S, q, nm, lines){
     row(S, nm, `occupancy_${st.label}`, v, e);
     const z = Number.isFinite(e) && e > 0 ? (v - 1)/e : NaN;
     if (v >= OCC_MAX - 1e-6 || v <= 1e-6) S.warnings.push(MSG.warn(`${nm}: the occupancy of site ${st.label} is on its bound (${v <= 1e-6 ? 0 : OCC_MAX}): it takes up something the model lacks rather than a share of the site.`));
-    else if (z > 3) S.warnings.push(MSG.warn(`${nm}: the occupancy of site ${st.label} is ${fmtEsd(v, e)}, ${z.toFixed(0)} esd over 1: the site scatters more than ${st.element} alone can — a heavier species on it, or the occupancy taking up something else (absorption, the background, a texture).`));
+    else if (z > 3) S.warnings.push(MSG.warn(`${nm}: the occupancy of site ${st.label} is ${fmtEsd(v, e)}, ${z.toFixed(0)} esd over 1: the site scatters more than ${st.element} alone can: a heavier species on it, or the occupancy taking up something else (absorption, the background, a texture).`));
   }
 }
 // The preferred orientation (March–Dollase), its axis and r: a sample's phase, or the
@@ -260,7 +260,7 @@ function fitNotes(S){
   const und = (res.undetermined || []).filter(n=> !/^bg/.test(n));
   // Those the pattern sees only in a combination (X with a phase's Xs: the profile has X + Xs).
   const ties = (res.tied || []).map(t=> t.filter(n=> !/^bg/.test(n))).filter(t=> t.length > 1);
-  if (und.length) warnings.push(MSG.warn(`Not determined by the data (no esd): ${und.map(n=> friendly(model, n)).join(', ')}${ties.length ? ` — the pattern sees only a combination of ${ties.map(t=> t.map(n=> friendly(model, n)).join(' and ')).join('; of ')}` : ''}.`));
+  if (und.length) warnings.push(MSG.warn(`Not determined by the data (no esd): ${und.map(n=> friendly(model, n)).join(', ')}${ties.length ? `: the pattern sees only a combination of ${ties.map(t=> t.map(n=> friendly(model, n)).join(' and ')).join('; of ')}` : ''}.`));
 }
 /* A log-normal distribution of sizes (WPPM): σ of ln D, and the sphere's diameters
    read three ways — the volume-weighted mean (⟨D⁴⟩/⟨D³⟩, what the breadth measures

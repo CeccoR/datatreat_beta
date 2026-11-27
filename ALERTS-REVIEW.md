@@ -1,4 +1,4 @@
-# Avvisi ed errori: revisione (v565 → v572)
+# Avvisi ed errori: revisione (v565 → v573)
 
 Mappa rifatta dal codice di v565 (331 voci: 309 messaggi con testo, 3 flash, 4 solo tooltip, 15 casi muti). Sostituisce la revisione di v540: delle sue 79 proposte 73 valevano ancora, sono riprese qui sotto. I testi dell'interfaccia restano in inglese.
 
@@ -77,7 +77,7 @@ ID della mappa tra parentesi. Fase: 1 file illeggibile, 2 drop zone e testi, 3 c
 | ID | Modifica | Stato |
 |---|---|---|
 | X01 | `Loaded, with a caveat:` → info `How these files were read:` (più scansioni, tempi diversi, tempo stimato) + warn `Loaded, to check:` (scansione non letta, punti tolti, fattori o tempi mancanti) | fatto in v567 |
-| X02 | Finestra dello standard: più file, più scansioni → info | fatto in v567 |
+| X02 | Finestra dello standard: più file, più scansioni → info | fatto in v567; v573: calcolati dal file dello standard, × per file (sotto) |
 | X03 | `Restored, with a caveat:` → `Opened, to check:`, senza vNNN | fatto in v567 |
 | X04 | Avvisi di lettura calcolati dai file, × per file | fatto in v572 (dai byte letti: scansioni, note, scansioni non lette; `Opened, to check:` dal record, `oldData`; la riga dei file lasciati fuori resta della riapertura) |
 | X05 | Riga dello strumento "— ⚠ …" → fatti in grigio + box compatti info/warn | fatto in v571 (`instrNoteKind`: info XI03–XI06 XI08 XI09 XI14, warn il resto) |
@@ -119,7 +119,7 @@ ID della mappa tra parentesi. Fase: 1 file illeggibile, 2 drop zone e testi, 3 c
 | G06 | Un nome: `the GC software's scale (k)`; GI13 via, i rischi nominati nelle righe di GC11 | fatto in v567 |
 | G07–G12 | × che non regge (GI07 GI08), righe ambra → warn compatto, "Suspicious" in un colore, "Method changed" una volta, campi rifiutati (C19) | fatto in v571 (G07: ogni box della card Integration compatto, senza ×) |
 | G13 | `Light-on time is before first injection` → `Light-on at or before the first injection: no point before light-on.` | fatto in v567 (vedi nota) |
-| G14 | GI35 → `Opened, to check:` + `{file}: saved by an older version without its GC table: …`, con la sua × | fatto in v567 |
+| G14 | GI35 → `Opened, to check:` + `{file}: saved by an older version without its GC table: …`, con la sua × | fatto in v567; v573: la × marca il file e regge (sotto) |
 | G15 | Results nascosta senza motivo → grigio `No rate to show: no sample's interval overlaps its injections.` sotto la card | fatto in v567 |
 
 Nota G13: la proposta diceva "at or after"; la condizione del codice (nessuna iniezione prima dell'accensione) è "at or before", ed è quella scritta.
@@ -144,4 +144,14 @@ Custom non ha modifiche proprie: le prende da C01–C05.
 
 Persistenza (U3, R3): in ogni modulo gli avvisi di lettura sono note calcolate dai file presenti (`alerts.js`: `{ what, line, files }`, `notesFor`, `markSeen`; `utils.js` `notesHtml`; modkit `o.notes`); la × marca i file della sua box (`seen` nel record), in tutti gli stati della storia (`UndoStack.patch`, nessun passo), quindi regge undo e redo e si salva col progetto (una modifica da salvare, come un'etichetta). GC: i segni in memoria (`S.seen`) sostituiti dal record. Iodometria: le coppie di colonne lasciate fuori dalla tabella letta (`pairsOut`). EPR e DRS: niente più flag del modulo. X11 come sopra.
 
-Restano fuori (BACKLOG): la box della finestra Calibration GC per le calibrazioni di v544–v548 (× tenuta finché la finestra è aperta), gli avvisi della finestra dello standard XRPD (della drop), tre testi del motore con "—" (XE14, XE30, XE39: cambiarli cambia i golden del motore).
+Restavano fuori, fatti in v573 (sotto): la box della finestra Calibration GC per le calibrazioni di v544–v548, gli avvisi della finestra dello standard XRPD, tre testi del motore con "—" (XE14, XE30, XE39).
+
+## Residui della fase 4 (v573): fatti
+
+| Cosa | Fatto |
+|---|---|
+| XE14 XE30 XE39 col "—" | `{fase}: where it is alone it shows n % of the intensity the fit gives it: its fraction rests mostly on peaks it shares.`; `{fase}: not detected: {perché}.` (i due punti in cui il motore lo scrive); `Not determined by the data (no esd): {parametri}: the pattern sees only a combination of {…}.` Trovato nello stesso giro e cambiato allo stesso modo: l'occupanza oltre 1 (`…alone can: a heavier species on it, …`). Golden: autorefine e stages cambiano solo in quelle stringhe (i loro dump, v572 con le stringhe sostituite, sono quelli di v573 byte per byte); gli altri tre testi non compaiono nei golden |
+| Finestra dello standard XRPD (X02, R3) | Avvisi calcolati dal file dello standard presente (`xrd-html.js` `stdNotes`: scansioni, quella presa, note della sua scansione), nelle due finestre; × per file (`seen` nel record `std`, `inKeys(['std'])`), regge undo/redo e la riapertura; tolto lo standard, tolti gli avvisi. Restano della drop, nella finestra che l'ha ricevuta, il rifiuto e la riga `{n} files dropped: …` (nella box info), fino alla drop successiva, allo standard tolto o a un ripristino |
+| Box della Calibration GC per v544–v548 (G14) | La × marca il file della calibrazione (`seen`, `gc-integ-model.js` `inCal`: la calibrazione della card in ogni stato della storia), senza passo; regge undo/redo, la finestra riaperta e il progetto riaperto. Golden integmodel: cambia solo la × di quella box (`data-action` al posto di `data-dismiss-alert`) |
+| `seen` letto da un progetto | Tenuti solo i segni che lo sono (`alerts.js` `seenIn`, `keepSeen`: stringhe `check`, `read`, `opened`, sole o seguite da `:` e una chiave), una volta; il resto tolto. In tutti i ripristini: modkit (DRS, GC, EPR, Iodometria, Custom; in GC anche il file in coppia), XRPD (file e standard), SEM, la calibrazione GC |
+| Segno legato al problema | Ogni nota può avere una `key`, il problema che nomina dove questo cambia restando il file (`alerts.js` `markOf`: `{box}:{key}`; senza key il nome della box, come in v572). La riga di una coppia GC ha `pair:{file in coppia}` o `alone`: rifatta male con un altro file, o lasciati soli i cromatogrammi, si dice di nuovo; la stessa coppia rifatta resta vista. Un segno di v572 (`check`) non nasconde più una coppia. Altri casi non ce ne sono: le altre note sono fissate dai byte del file (date, celle vuote, formati, scansioni, punti tolti, MWFQ, coppie di colonne, barra delle info SEM, ciò che ha trovato una riapertura) |

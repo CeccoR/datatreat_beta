@@ -210,7 +210,7 @@ test('a pass of the stages, and the detection\'s tests: the scale\'s significanc
   assert.equal(R.putBackOwn(A, D, pass.res), false);
   assert.equal(R.leaveOutNext(A, D, pass.res), true);
   assert.deepEqual([[...D.out], D.weakOut, D.ownOut, A.stages.length], [[1], null, null, 1]);
-  assert.match(D.outWarn[0], /^rutile: not detected — its crystallites come out 0\.\d nm across/);
+  assert.match(D.outWarn[0], /^rutile: not detected: its crystallites come out 0\.\d nm across/);
   assert.equal(m.v[m.phases[1].iScale], 0);
   assert.deepEqual(m.phases[1].iLat.map(i=> m.v[i]), D.len0[1]);
   // the next pass without it: nothing more to leave out
@@ -228,7 +228,7 @@ test('a pass of the stages, and the detection\'s tests: the scale\'s significanc
   assert.deepEqual(m.v, D.vSearch, 'the stages to run again from the search\'s state, the rutile with them');
   const D2 = weak(20);
   assert.equal(R.putBackWeak(A, D2, res0), false);
-  assert.equal(D2.outWarn[1], `rutile: not detected — its scale is not above 3 esd once the cells and widths are refined (2.0 esd). Leaving it out raises χ² by 20 for its 4 parameters (fitting noise gives about 4; a BIC would keep it above ${(4*Math.log(N) + 10).toFixed(0)}): more than noise gives, too little to tell.`);
+  assert.equal(D2.outWarn[1], `rutile: not detected: its scale is not above 3 esd once the cells and widths are refined (2.0 esd). Leaving it out raises χ² by 20 for its 4 parameters (fitting noise gives about 4; a BIC would keep it above ${(4*Math.log(N) + 10).toFixed(0)}): more than noise gives, too little to tell.`);
 });
 
 /* v568: the own-intensity test's put-back compares χ²_ν, as its warning says (6; to v567 the χ²
@@ -259,7 +259,7 @@ test('the own-intensity test: put back by χ²_ν doubled; beside its twin alone
   const sure = { ...pass2.res, params: { ...pass2.res.params, 'p1.scale': 1, 'p2.scale': 1 }, esd: { ...pass2.res.esd, 'p1.scale': 0.01, 'p2.scale': 0.01 } };
   assert.equal(R.leaveOutNext(A2, D2, sure), true);
   assert.deepEqual([...D2.out], [1]);
-  assert.match(D2.outWarn[0], /^SrTiO3: not detected — 0 % of its calculated intensity lies under the other phases' peaks \(its twin SrTiO3, the same structure, not weighed against it\), and at its lines clear of theirs \(100 % of it\) the pattern shows -?\d+ ± \d+ % of the intensity calculated: not told from none\.$/);
+  assert.match(D2.outWarn[0], /^SrTiO3: not detected: 0 % of its calculated intensity lies under the other phases' peaks \(its twin SrTiO3, the same structure, not weighed against it\), and at its lines clear of theirs \(100 % of it\) the pattern shows -?\d+ ± \d+ % of the intensity calculated: not told from none\.$/);
 });
 
 test('from the last result: each parameter\'s group, a result of other phases, what changed and what is held', ()=>{
@@ -383,8 +383,8 @@ test('autoRefine\'s whole output on 26 cases through its branches: v552\'s, bit 
   // and what the cases are there for
   assert.match(said(got['kept-bic'].warnings), /warn: [^|]*: its scale stands at only 2\.\d esd .* above the 40 at which a BIC keeps it: kept/);
   assert.match(said(got['kept-own'].warnings), /warn: SrTiO3: .* but leaving it out raises χ²_ν from 2\.44 to 8\.37, more than twice/);
-  assert.match(said(got.implausible.warnings), /warn: rutile: not detected — its crystallites come out 0\.9 nm across/);
-  assert.match(said(got['absent-rutile'].warnings), /warn: rutile: not detected — its scale is not above 3 esd once the cells and widths are refined \(2\.6 esd\)\. Leaving it out raises χ² by 16/);
+  assert.match(said(got.implausible.warnings), /warn: rutile: not detected: its crystallites come out 0\.9 nm across/);
+  assert.match(said(got['absent-rutile'].warnings), /warn: rutile: not detected: its scale is not above 3 esd once the cells and widths are refined \(2\.6 esd\)\. Leaving it out raises χ² by 16/);
   assert.match(said(got['few-points'].warnings), /bad: The pattern has 11 points for 11 refined parameters/);
   assert.match(said(got['shape-sphere-last'].warnings), /info: [^|]*was not supported by the data in the last result, which kept the isotropic size: held so/);
   assert.match(said(got['std-fcj-to-soller'].warnings), /info: Refined from the last result\.[^|]* The last result was refined with FCJ’s axial divergence .* this one with the Soller model/);

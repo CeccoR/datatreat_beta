@@ -35,16 +35,24 @@ export const stdModalHtml = (id, title, info, u)=> `
 // caption: it is the one file), and × to take it away.
 export const stdFileHtml = (stdFile, u)=> stdFile
   ? `<div class="xrd-std-row"><span class="txt-mini">Standard</span><span class="xrd-std-name">${u.esc(stdFile.name)}</span><button type="button" class="peak-del is-danger idle-dim" data-std-del title="Remove the standard">${u.X_SVG(13)}</button></div>` : '';
-/* A file dropped on a window, the standard now (its name, the files dropped: n; its scans
-   and the one taken, k; the pattern's name and its notes): its caveats to check, and how
-   it was taken, the others not used (an info, v567: to v566 warnings of their own). */
-export function stdDropAlerts(n, name, scans, k, pname, notes, u){
-  const say = notes.map(t=> ({ t: u.esc(u.fileLine(pname, t)), read: isReadNote(t) }));
-  return u.fileAlertHtml('check', say.filter(x=> !x.read).map(x=> x.t))
-    + u.fileAlertHtml('read', [...(n > 1 ? [u.esc(`${n} files dropped: the first, ${name}, is the standard; the others are not used.`)] : []),
-      ...(scans > 1 ? [u.esc(`${name}: ${scans} scans: the standard is ${k ? `scan ${k+1}, the first that could be read` : 'the first'}; the others are not used.`)] : []),
-      ...say.filter(x=> x.read).map(x=> x.t)]);
+/* What the reading of the standard's file said (alerts.js notes, v573: worked out from the
+   standard in its windows, each until its box's × marks it seen; to v572 the words of the
+   drop, gone at the next undo or restore): of a file of several scans, the one taken (its
+   `scan`, the first that could be read), the others not used, an info (v567: to v566
+   warnings of their own); its scan's notes, to check or how it was read (isReadNote), from
+   the scans its bytes were read into (`scans(f)`, xrd-model.js keptScans). What a project
+   opened found in it is said with the samples' (fileNotes). */
+export function stdNotes(std, scans, u){
+  const sc = std && scans(std);
+  if (!sc) return [];
+  const k = Number.isInteger(std.scan) && std.scan >= 0 ? std.scan : 0, name = std.src || std.name;
+  return [...(sc.length > 1 ? [{ what: 'read', line: u.esc(`${name}: ${sc.length} scans: the standard is ${k ? `scan ${k+1}, the first that could be read` : 'the first'}; the others are not used.`), files: [std] }] : []),
+    ...(sc[k] && sc[k].notes || []).map(t=> ({ what: isReadNote(t) ? 'read' : 'check', line: u.esc(u.fileLine(std.name, t)), files: [std] }))];
 }
+// A drop of several files on a window: the first the standard, the others not used (an info
+// of the drop's, beside the standard's notes: until the next drop, the standard removed or a
+// state put back). '' for one.
+export const stdDropLine = (n, name, u)=> n > 1 ? u.esc(`${n} files dropped: the first, ${name}, is the standard; the others are not used.`) : '';
 
 /* ---- The alerts under the samples' drop zone (utils.js FILE ALERTS) ---- */
 // A file of several scans: each a pattern (k of them in the list, of n).

@@ -26,6 +26,7 @@ import { textLines, readTable, parseNum, width } from './textdata.js';
 import { readTcd } from './gc-tcd.js';
 import { looksTcd } from './gc-pair.js';
 import { fixed } from './db.js';
+import { keepSeen } from './alerts.js';
 
 /* ---- The gases, the flow and the pressure (pure: the module's, for every instance) ---- */
 // Axis titles. The SVG form carries the superscripts (g⁻¹, cm⁻², h⁻¹); the plain form is
@@ -293,11 +294,14 @@ export function tableIn(U, f){
 /* Raw chromatograms (v544) as a restore takes them: their bytes (none: not stored in this
    browser, the Integration card says so) and how many chromatograms; a pair, its two files
    each taken so (a mate with nothing to show dropped, the first file alone then), the table
-   first beside raw chromatograms. A mate's own mate, none. */
+   first beside raw chromatograms. A mate's own mate, none; its marks of what was said seen
+   those that are one (alerts.js seenIn), as the row's (modkit.js keptFile): it heads a row
+   once it is unpaired. */
 export function oneIn(U, f){
   if (!isObj(f)) return null;
   const name = typeof f.name === 'string' && f.name ? f.name : 'file', label = typeof f.label === 'string' ? f.label : name.replace(/\.[^.]+$/, '');
   const { mate: _m, ...g } = { ...f, name, label };
+  keepSeen(g);
   if (isTcd(g)) return { ...g, tcd: { n: U.num(g.tcd.n, 0, v=> Number.isInteger(v) && v >= 0) }, rawBytes: g.rawBytes instanceof Uint8Array ? g.rawBytes : null };
   return tableIn(U, g);
 }
@@ -387,7 +391,7 @@ export const gasPresent = (files, k)=> files.some(f=> hasGas(f, k));
    same name but for a final _TCD, any case, a browser's " (1)" aside), with each other or
    with a file alone in the list; a file dragged by its own grip onto another pairs or swaps
    (dropPart). Which kind each file is never changes the pairing: two tables or two files
-   of raw chromatograms may be paired, which is said (gc-html.js pairLines): of two
+   of raw chromatograms may be paired, which is said (gc-html.js pairNotes): of two
    tables the first is the sample, the second ignored; two files of raw chromatograms have
    no times, no sample. Pairing is a change: a step of the history, saved. */
 export const rowFiles = r => r.mate ? [(({ mate: _m, ...x })=> x)(r), r.mate] : [r];

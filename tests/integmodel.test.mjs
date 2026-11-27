@@ -235,6 +235,16 @@ test('the method, its key and v544\'s; a result as the store keeps it; the calib
   assert.deepEqual(M.calIn(U, 'x'), { unit: '%mol', zero: { h2: false, o2: false }, files: [] });
   const cc = M.calCopy(c); cc.files[0].levels[0].h2 = 9; cc.zero.h2 = true;
   assert.deepEqual([c.files[0].levels[0].h2, c.zero.h2, cc.files[0].rawBytes === c.files[0].rawBytes], [0.1, false, true]);
+  /* A file's marks of what its window said seen (v573: its box of a calibration of v544–v548's,
+     its × kept in the state; to v572 not kept): those that are one, once each, copied with it;
+     none, no `seen`. Marked in a state by its card's id (inCal, alerts.js markSeen's put). */
+  const sc = M.calIn(U, { files: [{ name: 's', rawBytes: BYTES['lone_TCD.csv'], seen: ['opened', 4, 'opened', 'x', null, 'opened:k'] }, { name: 't', rawBytes: BYTES['run.csv'], seen: 'opened' }] });
+  assert.deepEqual([sc.files.map(f=> f.seen), M.calCopy(sc).files[0].seen], [[['opened', 'opened:k'], undefined], ['opened', 'opened:k']]);
+  const st = { cards: [{ id: 1, cal: c }, { id: 2, cal: sc }, 7] }, mk = v => v.some(f=> f.name === 'n') ? v.map(f=> f.name === 'n' ? { ...f, seen: ['opened'] } : f) : v;
+  const st1 = M.inCal(U, 1)(st, mk);
+  assert.deepEqual([st1.cards[0].cal.files.map(f=> f.seen), st1.cards[1] === st.cards[1], st1.cards[2], c.files[1].seen], [[undefined, ['opened']], true, 7, undefined]);
+  const bare = { cards: 'x' };
+  assert.ok(M.inCal(U, 2)(st, mk) === st && M.inCal(U, 1)(bare, mk) === bare && M.inCal(U, 1)(null, mk) === null, 'none marked: the state itself');
   // the card's state saved and put back
   const { S, card } = instance([], []), C = card({ id: 1 });
   M.restoreCard(U, S, C, { method: ALT_M, cal: c, ovGas: ['co2', 'o2', 'h2'], ovY: 'area' });
@@ -571,8 +581,10 @@ test('the markup: the instructions, the card\'s and the window\'s bodies, Window
   assert.equal(H.dropAlertHtml(HU, ['a<b: why.'], ['c<']), PAGE.alertHtml('bad', 'Not loaded:', ['a&lt;b: why.']) + PAGE.alertHtml('info', 'Already loaded, not loaded again:', ['c&lt;.']));
   const files = [{ name: 'f<1>', table: { name: 't&' } }, { name: 'g"' }];
   assert.ok(H.calFilesHtml(HU, files).includes('<span class="xrd-std-name">t&amp; + f&lt;1&gt;</span>') && H.calFilesHtml(HU, files).includes('g&quot; <span class="txt-meta">(no table)</span>') && H.calFilesHtml(HU, files).includes('data-cal-del="1"'));
-  assert.equal(H.calWarnHtml(HU, [files[1]]), PAGE.alertHtml('warn', 'Opened, to check:', ['g&quot;: saved by an older version without its GC table: its standards are named by column. Drop the table (the same name without _TCD) to name them.']));
-  assert.equal(H.calWarnHtml(HU, []), '');
+  // (v573: its × marks its file seen, gc-integ.js dismissCalWarn; to v572 the box removed alone)
+  const OLD = 'g&quot;: saved by an older version without its GC table: its standards are named by column. Drop the table (the same name without _TCD) to name them.';
+  assert.equal(H.calWarnHtml(HU, H.calNotes(HU, files)), PAGE.alertHtml('warn', 'Opened, to check:', [OLD], 'gci-cal-dismiss-opened'));
+  assert.deepEqual([H.calWarnHtml(HU, H.calNotes(HU, [files[0], { ...files[1], seen: ['opened'] }])), H.calWarnHtml(HU, [])], ['', '']);
   assert.deepEqual([H.calStatusText([], 0, 0), H.calStatusText([1], 3, 6), H.calStatusText([1], 0, 1)], ['No standards: each pair takes the GC software\'s scale (k).', 'Integrating the standards… (3 left)', '1 chromatogram integrated.']);
   // Stopped, nothing running (v569: to v568 "Integrating…" all the same).
   assert.deepEqual([H.calStatusText([1], 3, 6, true), H.calStatusText([1], 1, 6, true), H.calStatusText([1], 0, 6, true), H.calStatusText([], 0, 0, true)],
@@ -780,7 +792,7 @@ export function outputs(E){
 function calOutputs(E){
   const { S, C, W } = E, o = {};
   o.files = H.calFilesHtml(HU, C.cal.files);
-  o.warn = H.calWarnHtml(HU, C.cal.files.filter(f=> !f.table));
+  o.warn = H.calWarnHtml(HU, H.calNotes(HU, C.cal.files));
   const rows = W.rows = M.calRows(U, S, C);
   W.checked = row => row.lv.on;
   if (C.calSel >= rows.length) C.calSel = Math.max(0, rows.length - 1);

@@ -280,19 +280,22 @@ function badDateLines(f, u){
 const altLines = (f, u)=> f.altExport === true ? [`${u.esc(f.name)}: the alternative export (Inject Time, Amount in ppm).`] : [];
 /* A row whose files cannot be what their pair needs (PAIRS, gc-model.js): two tables (the
    first used), two files of raw chromatograms, and raw chromatograms with no table, which
-   Analysis leaves out. */
-function pairLines(r, u){
-  const [a, b] = rowFiles(r);
-  if (b && isTable(a) && isTable(b)) return [`${u.esc(r.label)}: two tables paired (${u.esc(a.name)}, ${u.esc(b.name)}): the first is used, as it is alone; ${u.esc(b.name)} is ignored. Drag a file by its own grip to pair it.`];
-  if (b && isTcd(a) && isTcd(b)) return [`${u.esc(r.label)}: two files of raw chromatograms paired (${u.esc(a.name)}, ${u.esc(b.name)}): shown in Integration, left out of Analysis, with no injection times. Drag a file by its own grip to pair it.`];
-  return !b && isTcd(a) ? [`${u.esc(a.name)}: raw chromatograms with no table: shown in Integration, left out of Analysis, with no injection times.`] : [];
+   Analysis leaves out. Its note names the issue by its key (alerts.js markOf): the file paired
+   with the row's (`pair:` its name) or none (`alone`), so that a × marks that issue alone and
+   a pair made wrong again with another file, or the file left alone, is said (v573: to v572
+   the row's file marked for the box, whatever it was paired with later). */
+function pairNotes(r, u){
+  const [a, b] = rowFiles(r), note = (key, line)=> [{ what: 'check', key, line, files: [r] }];
+  if (b && isTable(a) && isTable(b)) return note('pair:' + b.name, `${u.esc(r.label)}: two tables paired (${u.esc(a.name)}, ${u.esc(b.name)}): the first is used, as it is alone; ${u.esc(b.name)} is ignored. Drag a file by its own grip to pair it.`);
+  if (b && isTcd(a) && isTcd(b)) return note('pair:' + b.name, `${u.esc(r.label)}: two files of raw chromatograms paired (${u.esc(a.name)}, ${u.esc(b.name)}): shown in Integration, left out of Analysis, with no injection times. Drag a file by its own grip to pair it.`);
+  return !b && isTcd(a) ? note('alone', `${u.esc(a.name)}: raw chromatograms with no table: shown in Integration, left out of Analysis, with no injection times.`) : [];
 }
-/* The notes (alerts.js: { what, line, files }), in the boxes' order: to check, the pairs of
-   every row, then the tables' rows left out and empty cells; how they were read, the tables'
-   dates, then their alternative export. */
+/* The notes (alerts.js: { what, key, line, files }), in the boxes' order: to check, the pairs
+   of every row, then the tables' rows left out and empty cells; how they were read, the
+   tables' dates, then their alternative export (these fixed by the table's bytes: no key). */
 export function fileNotes(all, u){
   const tables = all.filter(isTable), by = (what, list, lines)=> list.flatMap(f=> lines(f, u).map(line=> ({ what, line, files: [f] })));
-  return [...by('check', all, pairLines), ...by('check', tables, badDateLines), ...by('check', tables, blankLines),
+  return [...all.flatMap(r=> pairNotes(r, u)), ...by('check', tables, badDateLines), ...by('check', tables, blankLines),
     ...by('read', tables, dayMonthLines), ...by('read', tables, altLines)];
 }
 

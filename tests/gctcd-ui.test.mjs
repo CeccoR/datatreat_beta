@@ -16,6 +16,8 @@
      swaps, off every file stands alone; the row's ≡ reorders; each a step, "*", undone.
    - Two tables paired (the first used, the second ignored, said) and two files of raw
      chromatograms paired (shown in Integration, no sample, said); raw chromatograms alone.
+     v573: a pair's note dismissed marks that pair alone: the file paired wrongly again with
+     another is said again, the same pair made again is not.
    - A count that differs: said in Integration, the table's values in Analysis, gc_raw.csv's
      source column saying why.
    - The Integration card: its two selectors (the file's over the chromatogram, the plot's
@@ -36,8 +38,9 @@
      .txt export's by number), in its row and in the selector over its chromatogram, drawn
      as the card's (row click, selector, arrows, ← →), its title's top on the plot frame's;
      at 375 px nothing scrolls sideways. A calibration saved by v544–v548 (raw chromatograms
-     alone) opens as it was, nothing fitted again, named by column, said; its table dropped
-     names it.
+     alone) opens as it was, nothing fitted again, named by column, said until the box's ×
+     marks its file seen (v573: no step, kept through undo and redo, the window opened again
+     and the project reopened); its table dropped names it.
    - No standards: the GC software's scale taken over (k = median of area/table value), said
      in an info alert in Integration (its message alone) and in the rate card, the file's k
      under its Peaks, the units said plainly, no superscript.
@@ -318,6 +321,34 @@ test('two tables paired: the first used, the second ignored; two files of raw ch
     const z = await zip(page);
     const raw = z['gc_raw.csv'];
     assert.deepEqual(column(raw, 'H2 (%mol) [twin]').slice(1, 3).map(num), tableRows().slice(0, 2).map(r=> r[0]), 'the first table\'s values');
+    assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
+  } finally { await close(); }
+});
+
+/* A pair's note under the drop zone (v573): its × marks the row for that pair alone; paired
+   wrongly again with another file, said again; the same pair made again, seen (to v572 the
+   row's file marked for the box, whatever it was paired with later). */
+test('a pair\'s note: its × marks that pair; the file paired wrongly again with another said again, the same pair made again not', async ()=>{
+  const { page, errors, csp, close } = await env.page();
+  try {
+    await openModule(page, 'gc');
+    await load(page, [table('twin.csv', tableRows()), table('twin_TCD.csv', tableRows(2)), table('other.csv', tableRows(3))], 2);
+    const pairs = async ()=> (await alerts(page)).join(' ').match(/two tables paired \([^)]*\)/g) || [];
+    assert.deepEqual(await pairs(), ['two tables paired (twin.csv, twin_TCD.csv)']);
+    const h = await history(page, 'gc');
+    await page.click('#gcAlerts [data-action="gc-dismiss-check"]'); await settle(page);
+    assert.deepEqual(await pairs(), [], 'dismissed');
+    assert.deepEqual(await history(page, 'gc'), h, 'no step of the history');
+    // (a file onto a paired one: the two swap; the grips are there while a pair is)
+    await dragFile(page, 'other.csv', 'twin_TCD.csv');
+    assert.deepEqual((await rowsOf(page)).map(r=> r.files), [['twin.csv', 'other.csv'], ['twin_TCD.csv']]);
+    assert.deepEqual(await pairs(), ['two tables paired (twin.csv, other.csv)'], 'paired wrongly again, with another file: said');
+    await dragFile(page, 'twin_TCD.csv', 'other.csv');
+    assert.deepEqual((await rowsOf(page)).map(r=> r.files), [['twin.csv', 'twin_TCD.csv'], ['other.csv']]);
+    assert.deepEqual(await pairs(), [], 'the pair dismissed, made again: seen');
+    await undo(page);
+    assert.deepEqual(await pairs(), ['two tables paired (twin.csv, other.csv)'], 'undone to the other pair: said');
+    assert.deepEqual((await moduleState(page, 'gc')).files[0].seen, ['check:pair:twin_TCD.csv'], 'the row marked for the pair dismissed alone');
     assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
   } finally { await close(); }
 });
@@ -951,7 +982,7 @@ test('an integration that fails says why: a compact error in the card\'s status 
   } finally { await close(); }
 });
 
-test('a calibration saved by v544–v548 (raw chromatograms alone) opens as it was: its levels and rates, nothing fitted again, its standards named by column, said; its table dropped names them', async ()=>{
+test('a calibration saved by v544–v548 (raw chromatograms alone) opens as it was: its levels and rates, nothing fitted again, its standards named by column, said until its × (kept); its table dropped names them', async ()=>{
   const { page, errors, csp, close } = await env.page();
   try {
     await openModule(page, 'gc');
@@ -989,6 +1020,33 @@ test('a calibration saved by v544–v548 (raw chromatograms alone) opens as it w
     assert.match(w, /^⚠ Opened, to check: std_TCD\.csv: saved by an older version without its GC table: its standards are named by column\. Drop the table \(the same name without _TCD\) to name them\.$/);
     assert.match(await m.locator('.gci-cal-status').textContent(), /6 chromatograms integrated/);
     assert.equal(await fitted(page), n0, 'nothing fitted with the window open');
+    // Its × (v573): the file marked seen in the card's calibration, no step of the history; kept
+    // through undo and redo (a step taken before it, the unit), as the window opens again, and in
+    // the project saved and opened again (to v572 the box removed alone, back at the next opening).
+    const warned = ()=> m.locator('.gci-cal-warn .alert').count(), unit = ()=> m.locator('.gci-cal-unit-in').inputValue();
+    await m.locator('.gci-cal-unit-in').selectOption('ppm'); await settle(page);
+    const h1 = await history(page, 'gc');
+    await m.locator('.gci-cal-warn .alert-dismiss').click(); await settle(page);
+    assert.equal(await warned(), 0, 'dismissed');
+    assert.deepEqual(await history(page, 'gc'), h1, 'no step of the history');
+    assert.deepEqual((await moduleState(page, 'gc')).cards.find(c=> c.type === 'integ').cal.files[0].seen, ['opened'], 'its file marked in the state');
+    await undo(page);
+    assert.deepEqual([await unit(), await warned()], ['%mol', 0], 'the unit undone: dismissed still');
+    await undo(page, true);
+    assert.deepEqual([await unit(), await warned()], ['ppm', 0], 'redone: dismissed still');
+    await undo(page);
+    await m.locator('.xrd-std-x').click(); await settle(page);
+    await card.locator('.gci-cal').click(); await m.waitFor({ state: 'visible' }); await settle(page);
+    assert.equal(await warned(), 0, 'the window opened again: dismissed still');
+    await m.locator('.xrd-std-x').click(); await settle(page);
+    await saveAs(page, 'Old v548 seen');
+    await page.locator('#tabBar .ptab.is-on .ptab-x').click(); await settle(page);
+    await openProject(page, 'gc', 'Old v548 seen');
+    await integrated(page);
+    card = page.locator('#tab-gc .an-card').nth(0);
+    await card.locator('.gci-cal').click(); await m.waitFor({ state: 'visible' }); await settle(page);
+    assert.deepEqual([await unit(), await warned()], ['%mol', 0], 'the project opened again: dismissed still');
+    assert.equal(await fitted(page), n0, 'nothing fitted');
     // Its table dropped alone: it names them, one step; nothing else changes, nothing said.
     const s1 = await steps(page);
     await m.locator('.gci-cal-in').setInputFiles([calTable('std.csv')]); await settle(page);

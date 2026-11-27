@@ -23,7 +23,8 @@
      redo, its box's × marking its files (no step of the history, a change to save), the mark
      kept through undo and redo and in the project saved and opened again, a file dropped
      since said, a file removed taking its own (to v571 a flag of the module's or the drop's
-     words, gone or back at the next undo, lost or back at a reopening).
+     words, gone or back at the next undo, lost or back at a reopening). XRPD's standard window
+     the same, from the standard there is (v573: to v572 its drop's words).
    - A save the browser's storage refuses: said, the tab left unsaved (to v566 nothing).
    - SEM's figure composer that cannot load: a banner, as the plots' (v571; to v570 nothing). */
 import { test, before, after } from 'node:test';
@@ -298,6 +299,50 @@ test('R3, Iodometry, XRPD and SEM: each file\'s note until its box\'s × marks i
     const w = n => tif(n, { W: 60, H: 50, strip: 6, sign: n, seed: 3, extraMain: 'ImageStripSize=8\r\n' });
     const BAR = n => `${n}: the row under the image (row 43) is not the info bar's uniform border: the bar may not be where Tescan puts it, so check the image's bottom edge.`;
     await walk(page, { mod: 'sem', first: [w('w.tif')], more: [w('w2.tif')], what: 'check', gone: 1, A: [['warn', CHECK, BAR('w.tif')]], B: [], C: [['warn', CHECK, BAR('w2.tif')]], D: [] });
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+/* XRPD's standard window (v573, R3): what the reading of the standard's file said, worked out
+   from the file there is (to v572 the drop's words, gone at the next undo or restore): said
+   again after an undo and a redo of its drop; a box's × (no step, the standard marked in the
+   state) kept through undo and redo and in the project saved and opened again; the standard
+   removed taking it, back with the removal undone. */
+test('R3, XRPD\'s standard window: the standard\'s note until its box\'s × marks it, through undo and redo and the project reopened; removed with it', async ()=>{
+  const { page, errors, close } = await env.page();
+  try {
+    await openModule(page, 'xrd');
+    await loadFiles(page, 'xrd', env.fx.files.xrd.slice(0, 1));
+    const open = async ()=>{ await page.click('#xrdR2Std'); await page.waitForSelector('#xrdStdRv', { state: 'visible' }); };
+    await open();
+    const said = ()=> boxes(page, '#xrdStdRv .xrd-std-alerts');
+    // A file of two scans, three points of the first no number.
+    const one = xrdml(11, { n: 400 }).toString('utf8'), scan = one.slice(one.indexOf('<scan '), one.indexOf('</scan>') + 7);
+    const nan = scan.replace(/<intensities unit="counts">\S+ \S+ \S+ /, '<intensities unit="counts">NaN NaN NaN ');
+    await drop(page, '#xrdStdRvFiles', [{ name: 'std.xrdml', buffer: Buffer.from(one.replace(scan, nan + scan)) }]);
+    const CHECKED = ['warn', CHECK, 'std (scan 1).xrdml: 3 of 400 points left out, their intensity not a finite number.'], READ2 = ['info', READ, 'std.xrdml: 2 scans: the standard is the first; the others are not used.'];
+    assert.deepEqual(await said(), [CHECKED, READ2], 'dropped');
+    await undo(page);
+    assert.deepEqual(await said(), [], 'its drop undone: no standard');
+    await undo(page, true);
+    assert.deepEqual(await said(), [CHECKED, READ2], 'redone: said, from the file there is');
+    const h = await history(page, 'xrd');
+    await page.click('#xrdStdRv [data-action="xrd-std-dismiss-check"]'); await settle(page);
+    assert.deepEqual(await said(), [READ2], 'dismissed');
+    assert.deepEqual(await history(page, 'xrd'), h, 'no step of the history');
+    assert.deepEqual((await moduleState(page, 'xrd')).std.seen, ['check'], 'the standard marked in the state');
+    await undo(page); await undo(page, true);
+    assert.deepEqual(await said(), [READ2], 'undone and redone: dismissed still');
+    await page.click('#xrdStdRv .xrd-std-x');
+    await saveAs(page, 'Seen std');
+    await page.locator('#tabBar .ptab.is-on .ptab-x').click(); await settle(page);
+    await openProject(page, 'xrd', 'Seen std');
+    await open();
+    assert.deepEqual(await said(), [READ2], 'the project opened again: as saved');
+    await page.click('#xrdStdRv [data-std-del]'); await settle(page);
+    assert.deepEqual(await said(), [], 'the standard removed: its notes with it');
+    await undo(page);
+    assert.deepEqual(await said(), [READ2], 'its removal undone: back');
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });

@@ -15,7 +15,7 @@
    where they end with them.
 ========================================================= */
 import { UNITS, CHI2_HIGH, sig, plural, fin, fitMarks, fullName, thumbPoints, levelsOf } from './gc-integ-model.js';
-import { boxHtml } from './alerts.js';
+import { boxHtml, notesFor } from './alerts.js';
 
 /* ---- The instructions ---- */
 /* "From the area to the concentration", a box of its own in the card's instructions, as the
@@ -165,7 +165,7 @@ function warnLine(u, gasOf, w){
   return `${u.esc(e.label)}: ${w.out} of ${w.n} injections' ${gasOf(w.g).label} outside the standards' range (${sig(w.lo, 3)}–${sig(w.hi, 3)} %mol): extrapolated${w.below ? `, below the lowest standard, where the intercept (${sig(w.L.intercept, 4)}) weighs most` : ''}.`;
 }
 /* (f: gc-integ-model.js alertFacts's) Raw chromatograms with no table, or paired with raw
-   chromatograms, are said under the drop zone, to check (gc-html.js pairLines), and in the
+   chromatograms, are said under the drop zone, to check (gc-html.js pairNotes), and in the
    file list's tooltip: here a grey line names them (v567: to v566 a third time, in this
    box). The calibration by the GC software's scale (k) is said in each Production Rate
    card below, with where its risks are written (to v566 an info box of its header alone).
@@ -249,11 +249,12 @@ export const calHtml = (u, p)=> `
 export const dropAlertHtml = (u, bad, dup = [])=> u.fileAlertHtml('bad', bad.map(u.esc)) + u.fileAlertHtml('dup', dup.map(u.esc));
 // The standards' files, each removable.
 export const calFilesHtml = (u, files)=> files.map((f, i)=> `<div class="xrd-std-row"><span class="txt-mini">Standards</span><span class="xrd-std-name">${f.table ? `${u.esc(f.table.name)} + ${u.esc(f.name)}` : `${u.esc(f.name)} <span class="txt-meta">(no table)</span>`}</span><button type="button" class="peak-del is-danger idle-dim" data-cal-del="${i}" title="Remove these standards and their levels">${u.X_SVG(13)}</button></div>`).join('');
-/* A calibration of v544–v548's, its raw chromatograms alone (`old`: its files with no
-   table): said, its standards named by column, until its table is dropped; its × its own
-   (utils.js alertHtml's: the box removed, gc-integ.js paintCalWarn draws it again only
-   when those files change). */
-export const calWarnHtml = (u, old)=> u.fileAlertHtml('opened', old.map(f=> `${u.esc(f.name)}: saved by an older version without its GC table: its standards are named by column. Drop the table (the same name without _TCD) to name them.`));
+/* A calibration of v544–v548's, its raw chromatograms alone (its files with no table): said,
+   its standards named by column, until its table is dropped or the box's × marks the file
+   seen (notes, alerts.js: its record's `seen`, in the card's state, kept by undo and redo
+   and saved; v573: to v572 a × of the box alone, back as the window opened again). */
+export const calNotes = (u, files)=> files.filter(f=> !f.table).map(f=> ({ what: 'opened', line: `${u.esc(f.name)}: saved by an older version without its GC table: its standards are named by column. Drop the table (the same name without _TCD) to name them.`, files: [f] }));
+export const calWarnHtml = (u, notes)=> u.fileAlertHtml('opened', notesFor(notes, 'opened').map(n=> n.line), 'gci-cal-dismiss-opened');
 /* (what the unit's line says: no standards, the standards being integrated, or not, the
    integration stopped (`stopped`: nothing runs till Re-integrate, as the card's line says;
    v569: to v568 "Integrating…" all the same), all integrated) */
