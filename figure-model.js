@@ -121,10 +121,13 @@ export function setAxes(F, targets, side, ak, v){
    line's in points. The field for every series takes what each of them takes (v570: to v569
    from 0.1 with lines, under a line's 0.2): the ranges of the series met, [0.2, 1] with lines
    and bars. A bar's width read back (applySettings) is put inside its range: a figure saved
-   to v568 could hold one wider than its slot (barWidth). */
+   to v568 could hold one wider than its slot (barWidth); a line's (v571: seriesWidth), one
+   thinner than its 0.2, which the field for every series gave down to 0.1 to v569. */
 export const widthRange = s => s.kind === 'bar' ? [0.1, 1] : [0.2, 6];
 export const everyWidthRange = list => list.map(widthRange).reduce(([lo, hi], [a, b])=> [Math.max(lo, a), Math.min(hi, b)], [0.1, 6]);
-export const barWidth = w =>{ const [lo, hi] = widthRange({ kind: 'bar' }); return Number.isFinite(w) ? Math.min(Math.max(w, lo), hi) : w; };
+// A series' width put inside its own field's range (not a number: as it is).
+export const seriesWidth = s =>{ const [lo, hi] = widthRange(s), w = s.width; return Number.isFinite(w) ? Math.min(Math.max(w, lo), hi) : w; };
+export const barWidth = w => seriesWidth({ kind: 'bar', width: w });
 // One setting given to every series at once (the all-series row): shown, in the legend,
 // the line's width, its dash ('solid': none) or, any other key, the symbol.
 export function setEvery(F, k, v){

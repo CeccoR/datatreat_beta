@@ -5,8 +5,9 @@
    usable), and closes on Escape with the focus back on the button that opened it. A plot's
    stays responsive with a tick step far too fine for its values (v566). Its width for every
    series takes what each series' own field takes (v569, v570), bars saved wider than their
-   slot open at 1 (v570), and its grips and the colour picker take a mouse's primary button
-   alone (v570). */
+   slot open at 1 (v570), lines saved thinner than 0.2 at 0.2 (v571), and its grips and the
+   colour picker take a mouse's primary button alone (v570); an export that fails says why in
+   a compact error in its footer (v571). */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { start, openModule, loadFiles, download, settle, keep } from './helpers.mjs';
@@ -310,6 +311,56 @@ test('plots composer: bars saved wider than their slot (to v568) open at 1; a wi
     await saved([0.8, 0.35]);
     await composeGc(page, 'SvgBar');
     assert.deepEqual(await ownWidths(page), ['0.8', '0.35'], 'widths inside the range: as saved');
+    await closeComposer(page);
+    assert.deepEqual(errors, []);
+    assert.deepEqual(await csp(), []);
+  } finally { await close(); }
+});
+
+/* v571 (v570's follow-up): lines saved with a width of 0.1–0.19, which the field for every
+   series gave to v569, open at 0.2, the least a line's own field takes, not at a width that
+   field would refuse; one inside 0.2–6 as saved. GC's rates over time (lines), the plot's
+   memory of its figure as v569 could have written it. */
+test('plots composer: lines saved thinner than 0.2 (to v569) open at 0.2; a width inside the range as saved (v571)', async ()=>{
+  const { page, errors, csp, close } = await env.page();
+  try {
+    await openModule(page, 'gc');
+    await loadFiles(page, 'gc', env.fx.files.gc);
+    await composeGc(page, 'Svg1');
+    const n = (await ownWidths(page)).length;
+    assert.ok(n >= 3);
+    await closeComposer(page);
+    const saved = ws => page.evaluate(ws=>{
+      const all = JSON.parse(localStorage.getItem('dt-figure-memory'));
+      const k = Object.keys(all).find(k=> all[k].series.length && all[k].series.every(e=> e.rest.kind !== 'bar'));
+      all[k].series.forEach((e, j)=>{ e.rest.width = ws[j % ws.length]; });
+      localStorage.setItem('dt-figure-memory', JSON.stringify(all));
+    }, ws);
+    await saved([0.15, 0.1, 2.5]);
+    await composeGc(page, 'Svg1');
+    assert.deepEqual((await ownWidths(page)).slice(0, 3), ['0.2', '0.2', '2.5'], 'the lines under 0.2 at 0.2, the other as saved');
+    await closeComposer(page);
+    assert.deepEqual(errors, []);
+    assert.deepEqual(await csp(), []);
+  } finally { await close(); }
+});
+
+/* v571 (ALERTS-REVIEW.md C17): an export that fails (the browser making no PNG of the canvas)
+   says why in the footer, a compact error (to v570 red text with no box), until the next
+   export or drawing. */
+test('plots composer: an export that fails says why, a compact error in the footer (v571)', async ()=>{
+  const { page, errors, csp, close } = await env.page();
+  try {
+    await openModule(page, 'gc');
+    await loadFiles(page, 'gc', env.fx.files.gc);
+    await composeGc(page, 'Svg1');
+    await page.evaluate(()=>{ HTMLCanvasElement.prototype.toBlob = function(cb){ cb(null); }; });
+    await page.click('.fig-backdrop [data-fig-png]');
+    await page.waitForSelector('.fig-backdrop .fig-msg:not([hidden]) .alert.bad.compact');
+    assert.match(await page.textContent('.fig-backdrop .fig-msg'), /^✕ The browser could not make the PNG \(\d+ × \d+ px\): try a lower dpi\.$/);
+    // (gone with the next drawing: a width typed)
+    await typeAll(page, '2');
+    assert.equal(await page.locator('.fig-backdrop .fig-msg').isHidden(), true);
     await closeComposer(page);
     assert.deepEqual(errors, []);
     assert.deepEqual(await csp(), []);

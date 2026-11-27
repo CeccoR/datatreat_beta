@@ -381,6 +381,16 @@ button.btn.table-csv-btn:active:not(:disabled) {
   animation: field-shake 0.4s;
 }
 .field-invalid::placeholder { color: var(--bad); opacity: 0.9; }
+/* A value refused, its rule said in red under the field (ALERTS-REVIEW.md C19, v571): in its
+   place where a module keeps one (GC's parameters, an Integration window, a Refinement
+   setting, Iodometry's calibration), else floating under the field for a moment (utils.js
+   flashFieldInvalid), over what follows, so that nothing moves. */
+.field-rule { margin: 4px 0 0; font-size: 12px; line-height: 1.4; color: var(--bad); }
+.field-rule:empty, .field-rule[hidden] { display: none; }
+.field-rule-float {
+  position: fixed; z-index: 10000; margin: 0; max-width: min(320px, calc(100vw - 8px)); pointer-events: none;
+  padding: 2px 6px; border-radius: 6px; background: var(--alert-bad-bg); border: 1px solid var(--alert-bad-line);
+}
 @keyframes field-shake {
   0%,100% { transform: translateX(0); }
   15% { transform: translateX(-6px); }  35% { transform: translateX(6px); }
@@ -2013,6 +2023,8 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 .pg-result > .cag-formula { color: var(--muted); }
 .pg-result > .cag-note { color: var(--muted); font-size: 12px; line-height: 1.5; }
 .cag-alert:not(:empty) { margin-top: 12px; }
+/* (the Scherrer card's table with no peak: its line's place, v571) */
+.xrd-no-peaks { margin: 6px 0; }
 /* ===== XRPD Rietveld card ===== */
 /* The side column's buttons, rows of equal widths: Refine, Refine all; Settings…, Clear,
    Clear all (three in the column's 280 px: the side padding narrowed so that "Settings…"
@@ -2068,7 +2080,9 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 .rvs-cell select { max-width: 100%; }
 .rvs-range { min-width: 0; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rvs-head button.btn.rvs-def { margin-left: auto; flex: none; padding: 2px 10px; font-size: 12px; }
-.rvs-note.is-warn { color: var(--warn); }
+/* A Refinement entry not taken: its rule in red under its row (xrd-rv.js syncFit, v571: to v570
+   in amber in the note at the section's foot). */
+.field-rule.rvs-rule { margin: 3px 0 2px; }
 /* While a run goes on the settings are shown, read only: said under the title. */
 .rvs-busy { margin: 0 0 6px; font-size: 12px; color: var(--warn); }
 /* A phone: the box takes the screen less a margin, with less padding, so that the depth
@@ -2106,6 +2120,12 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 /* The Rietveld card's side: the phases and the structure, then the buttons. */
 .rv-side > .rv-boxes { flex: 1 1 0; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
 .rv-side > .rv-status:empty { display: none; }
+/* (a run or a CIF that failed, what a run chose: a compact box in the status's place, v571) */
+.rv-status > .alert.compact { overflow-wrap: anywhere; }
+/* What the instrument's line rests on, under it: a compact box of each kind (xrd-rv-html.js
+   instrNotesHtml, v571), under the plot, so that the column beside it keeps its top. */
+.rv-instr-notes { display: flex; flex-direction: column; gap: 4px; }
+.rv-instr-notes:not(:empty) { margin-top: 6px; }
 .rv-side > .rv-prog { margin-top: 0; }
 .rv-side > .rv-btns > .btn { height: 33px; }
 :root.narrow-layout .rv-side > .rv-boxes { flex: none; min-height: 300px; }
@@ -2172,6 +2192,8 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 .rv-cell-info .rv-ci-file { color: var(--muted); overflow-wrap: anywhere; }
 /* What reading the CIF found (its own cell, operations it lacked, B made equal). */
 .rv-cell-info .rv-ci-note { color: var(--muted); font-size: 12px; line-height: 1.45; margin-top: 2px; }
+/* What to check in it (occupancies under the formula × Z): a compact warning (v571). */
+.rv-cell-info .rv-ci-warn { margin-top: 4px; line-height: 1.45; }
 /* The refinement's results across the card, flowing down and across as many columns as
    fit (the fit, the specimen or the instrument, each phase, a long one over several);
    notes and warnings across them all, under. By the title, what it was refined with: a
@@ -2182,6 +2204,8 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 .rv-fit-set.is-next { font-style: italic; }
 .rv-fit-set .rv-key-sm { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; vertical-align: 1px; }
 .rv-fit-grid .rv-note.rv-warn { color: var(--warn); }
+/* (a compact box across the columns: no instrumental profile, a CIF's warnings, a curve lost) */
+.rv-fit-grid > .alert.compact.rv-wide { line-height: 1.5; }
 .rv-fit-grid { columns: 230px; column-gap: 24px; }
 .rv-fit-grid > .rv-wide { column-span: all; margin-top: 6px; }
 .rv-group { display: block; margin-bottom: 10px; }
@@ -2229,6 +2253,8 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 /* The peak widths' table at the card's foot, across it; the note under it: the
    instrument's width not taken off. */
 .rv-widths > .rv-wtable { margin-top: 16px; }
+/* (the widths not corrected for the instrument: said by the title, v571) */
+.rv-wtable .rv-wnote { font-size: 12px; margin-left: -4px; }
 .rv-wtable .rv-note { margin-top: 8px; color: var(--muted); font-size: 12px; line-height: 1.5; }
 /* The Scherrer card's two actions under its parameters, side by side. */
 .xrd-pk-btns { display: flex; gap: 8px; }
@@ -3120,8 +3146,10 @@ button.btn.fig-align.cp-anchored { --btn-bd: var(--accent); --btn-fg: var(--acce
   display: flex; align-items: center; gap: 8px;
   padding: 10px 16px; border-top: 1px solid var(--line); flex-shrink: 0;
 }
-/* Why an export failed (a PNG too large for the browser, say), beside the readout. */
-.fig-msg { color: var(--bad); }
+/* Why an export failed (a PNG too large for the browser, say), beside the readout: a compact
+   error (v571). */
+.fig-msg { min-width: 0; }
+.fig-msg[hidden] { display: none; }
 @media (max-width: 900px) {
   /* Stacked: the preview keeps a guaranteed share of the height instead of being
      squeezed to nothing by the controls' own content, which is what `flex: 1 1 auto`
@@ -3523,7 +3551,10 @@ table.iodo-std input { width: 100%; min-width: 0; margin: 0; }
 .iodo-cal-std > .btn { margin-top: 8px; }
 .iodo-cal-fit { margin-top: 10px; font-size: 13px; color: var(--text); }
 .iodo-cal-fit b { color: var(--accent); }
-.iodo-cal-msg:not(:empty) { margin-top: 10px; color: var(--bad); font-size: 13px; }
+/* A line typed that is none: a compact error (v571: to v570 red text, the fields' words with it);
+   a field holding no number, said in red under its group, the line's or the standards'. */
+.iodo-cal-msg:not(:empty) { margin-top: 10px; }
+.iodo-cal-rule { margin-top: 6px; }
 .iodo-cal-foot { flex: none; margin: 0; padding: 12px 18px 16px; }
 @media (max-width: 600px){ .iodo-cal-box { width: 100vw; max-height: 100vh; border-radius: 0; } .iodo-cal-head { padding: 10px 10px 10px 12px; } .iodo-cal-scroll { padding: 12px 12px 4px; } }
 
@@ -3594,7 +3625,9 @@ svg.plot.gci-over { aspect-ratio: 3.236; }
 .gci-win-peaks { font-size: 11px; flex-basis: 100%; }
 table.gci-values th, table.gci-values td { white-space: nowrap; padding: 4px 6px; }
 .gci-bad { color: var(--bad); font-weight: 600; }
-.gci-flag { margin: 8px 0 0; font-size: 12px; color: var(--warn, #d9a21b); }
+/* A warning in the Windows and Peaks boxes, and under a standard's fit: compact (v571: to v570
+   an amber line, .gci-flag's own). */
+.alert.compact.gci-flag { margin-top: 8px; }
 .gci-values-box .txt-meta { margin: 6px 0 0; }
 .gci-side > .gci-cal { margin-top: 12px; }
 /* The calibration's window: XRPD's standard's (.xrd-std-box), its levels' table and a plot a gas. */
@@ -3642,6 +3675,7 @@ td.gci-cal-src.gci-bad { font-weight: 500; }
 .gci-cal-notice:not(:empty) { margin-top: 6px; }
 .gci-cal-fit { margin: 6px 0 0; }
 .gci-cal-fit:empty { display: none; }
+.gci-cal-fit > .alert.compact.gci-flag { margin-top: 6px; }
 :root.narrow-layout table.gci-cal-levels .gci-cal-k, :root.narrow-layout table.gci-cal-levels .gci-cal-th, :root.narrow-layout table.gci-cal-levels .gci-cal-a { display: none; }
 :root.narrow-layout table.gci-cal-levels th, :root.narrow-layout table.gci-cal-levels td { padding: 3px 4px; }
 :root.narrow-layout table.gci-cal-levels td input[type="text"] { width: 54px; }

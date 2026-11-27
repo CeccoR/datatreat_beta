@@ -237,10 +237,13 @@ export function draftOf(cal){
 export const modeIn = v => Object.prototype.hasOwnProperty.call(CAL_MODES, v) ? v : 'none';
 // The fields that hold no number ([field, its name]) that the draft's mode uses.
 export const badUsed = (bad, mode)=> bad.filter(([, n])=> mode === 'line' ? !n.startsWith('standard') : mode === 'std' ? n.startsWith('standard') : false);
-// What the draft gives, said under the fields ('' nothing to say): its fields that hold no
-// number, or a line typed that is none.
-export const calMsg = (draft, bad, L)=> bad.length ? `Not a number: ${[...new Set(bad.map(b=> b[1]))].join(', ')}.`
-  : draft.mode === 'line' && !L ? 'A slope (not 0) and an intercept are needed.' : '';
+// The fields that hold no number ([field, its name] each, badUsed's), said in red under their
+// group, the line's or the standards' (v571, ALERTS-REVIEW.md C19: to v570 at the window's
+// foot); '' none.
+export const notNumber = bad => bad.length ? `Not a number: ${[...new Set(bad.map(b=> b[1]))].join(', ')}.` : '';
+// What the draft gives, said under the fields as an error ('' nothing to say): a line typed that
+// is none, every field holding a number (v571, C17: to v570 red text, the fields' words with it).
+export const calMsg = (draft, bad, L)=> !bad.length && draft.mode === 'line' && !L ? 'A slope (not 0) and an intercept are needed.' : '';
 /* The calibration Apply takes from the draft d (its empty standards left out, its unit
    trimmed: d itself), or null where it is the one there. */
 export function applied(d, cal){

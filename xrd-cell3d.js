@@ -117,7 +117,8 @@ function wireCanvas(V){
 }
 function onDown(V, e){
   const { canvas } = V;
-  if (!V.model || V.drag || (e.pointerType === 'mouse' && e.button !== 0)) return;
+  // (the primary button of any pointer, a pen's barrel button or eraser not: v571)
+  if (!V.model || V.drag || e.button !== 0) return;
   V.drag = { id: e.pointerId, x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, moved: false };
   try { canvas.setPointerCapture(e.pointerId); } catch(_){}
   canvas.classList.add('is-grabbing');

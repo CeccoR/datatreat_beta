@@ -18,7 +18,8 @@
      check:" and "How these files were read:" (DRS's points left out and its formats, XRPD's
      scans, Iodometry's pairs of columns left out, EPR's spectrum with no microwave
      frequency, a half pair refused saying which half is missing).
-   - A save the browser's storage refuses: said, the tab left unsaved (to v566 nothing). */
+   - A save the browser's storage refuses: said, the tab left unsaved (to v566 nothing).
+   - SEM's figure composer that cannot load: a banner, as the plots' (v571; to v570 nothing). */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -294,5 +295,23 @@ test('a plot\'s Copy image that fails says so beside it; the figure composer tha
     assert.equal((await banner(page)).text, 'The figure composer could not be loaded: reload the page.');
     await answer(page, 'ok');
     assert.deepEqual(errors.filter(e=> !/figure composer failed to load|figure\.js|net::ERR_FAILED/.test(e)), []);
+  } finally { await close(); }
+});
+
+/* v571 (the alerts review's (ii)): SEM's figure composer that cannot load (sem-figure.js not
+   served: offline with an old cache, say) says so as the plots' does, a banner (to v570 the
+   console alone); the group's button works again once it can. */
+test('SEM\'s figure composer that cannot load says so, a banner as the plots\' (v571)', async ()=>{
+  const { page, errors, close } = await env.page();
+  try {
+    await openModule(page, 'sem');
+    await loadFiles(page, 'sem', env.fx.files.sem);
+    await page.route('**/sem-figure.js', r=> r.abort());
+    await page.locator('#semGroups .sem-group-fig:not([disabled])').first().click();
+    await page.waitForSelector('.pwa-confirm.show');
+    assert.equal((await banner(page)).text, 'The figure composer could not be loaded: reload the page.');
+    await answer(page, 'ok');
+    assert.equal(await page.locator('.fig-backdrop').count(), 0);
+    assert.deepEqual(errors.filter(e=> !/SEM figure failed to load|sem-figure\.js|net::ERR_FAILED/.test(e)), []);
   } finally { await close(); }
 });

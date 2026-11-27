@@ -14,6 +14,7 @@
 ========================================================= */
 import { NORM, NORMS, P_ATM, P_UNITS, INJ_DELAY_AUTO, GASES, molarVolume, inUnit, injDelay, mOf, aOf, qOf, tOf, pOf, startOf, endOf,
   lightOnWarn, seriesName, gasTxt, blankCounts, byName, headOf, isHead, isTable, isTcd, rowFiles, pairMarks } from './gc-model.js';
+import { boxHtml } from './alerts.js';
 
 /* ---- The instructions ---- */
 // What T and p are (their columns' titles, and the card's instructions).
@@ -118,6 +119,7 @@ export const cardBody = (a, u)=> `
           <button class="btn table-csv-btn" data-csv-mod="gc" data-csv-names="gc_info.csv" title="Download CSV">${u.CSV_ICON}</button>
         </div>
         <div class="gc-param-wrap" id="${pre(a)}ParamTableWrap"></div>
+        <p class="field-rule gc-param-rule" id="${pre(a)}ParamRule" role="alert" hidden></p>
       </div>
       <div class="row" style="align-items:flex-start">
         <div class="col">
@@ -216,10 +218,9 @@ export function paramTableHtml(P, files, u){
 
 // The warning beside a sample's row when its light-on time is before (or at) its first
 // injection (gc-model.js lightOnWarn): no injection before light-on, the dark reading.
+// (the compact box, alerts.js: v571, its look to v570 a style of its own)
 export function lightOnWarnHtml(P, files, i){
-  return lightOnWarn(P, files, i)
-    ? '<div class="alert warn" style="margin:0;padding:6px 8px;font-size:11px">⚠ Light-on at or before the first injection: no point before light-on.</div>'
-    : '';
+  return lightOnWarn(P, files, i) ? boxHtml('warn', 'Light-on at or before the first injection: no point before light-on.') : '';
 }
 
 /* One line per sample per gas, the sample's colour throughout and the gas told by the

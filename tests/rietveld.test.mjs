@@ -43,6 +43,23 @@ test('Rietveld: one pattern refined, then Refine all cancelled', async ()=>{
     assert.ok(r.stats.Rwp > 0 && r.stats.Rwp < 0.2, 'Rwp = ' + r.stats.Rwp);
     assert.equal(r.stats.N, 5384);
     assert.equal(await busy(page), null);
+    /* (v571, ALERTS-REVIEW.md X05, X10) The instrument's line, the facts alone; what was assumed
+       (no radius, no slit in the file: choices that hold in the normal case) an info box under
+       it. No instrumental profile, said once, a compact warning in the results; the peak widths'
+       title says they are not corrected; no grey note nor amber line of it besides. */
+    assert.ok(!/⚠|assumed/.test(await page.textContent(P + 'Instr')), await page.textContent(P + 'Instr'));
+    assert.deepEqual(await page.$$eval(P + 'InstrNotes .alert', as=> as.map(a=> [a.className, a.innerText])),
+      [['alert info compact', 'No goniometer radius in the file: 240 mm assumed (the specimen displacement in mm depends on it).\nNo divergence slit in the file: a fixed slit is assumed.']]);
+    const res = await page.$$eval(P + 'Results .alert, ' + P + 'Results .rv-note', es=> es.map(e=> [e.className, e.textContent]));
+    const noIrf = res.filter(([, t])=> /instrumental profile|include the instrument/.test(t));
+    assert.equal(noIrf.length, 1, JSON.stringify(res));
+    assert.equal(noIrf[0][0], 'alert warn compact rv-wide');
+    assert.match(noIrf[0][1], /^⚠ No instrumental profile: the widths, and the sizes from them, include the instrument's\. Refine the standard first: Instrumental standard…\./);
+    assert.ok(!res.some(([, t])=> /No instrument description/.test(t)), 'the instrument\'s assumptions not among the results');
+    if (await page.isVisible(P + 'Widths')){
+      assert.equal(await page.textContent(P + 'WNote'), '(not corrected for the instrument)');
+      assert.equal(await page.locator(P + 'PkWrap .rv-note').count(), 0, 'no note of it under the table');
+    }
     // Refine all, cancelled while it runs.
     const before = await results(page);
     await page.waitForTimeout(700);   // (a press within 600 ms of the last is not taken: a double click)

@@ -426,6 +426,8 @@ test('the words: the warnings under the table, the step note, the chips, the not
   // The Caglioti box with no standard, no peaks, too few peaks, peaks at too few angles, an exact fit, a curve dropping to zero.
   assert.match(H.cagliotiHtml(null, 0).box, /No standard loaded: no instrumental correction/);
   assert.match(H.cagliotiHtml({ pts: [], fit: null }, 1).box, /No peaks: no instrumental correction/);
+  // (not fitted: a compact warning, v571: to v570 a grey note, X15)
+  assert.match(H.cagliotiHtml(M.instrModelOf([{ pos: 30, fwhm: 0.1 }]), 1).box, /<div class="alert warn compact">⚠ Not fitted: it needs 3 peaks or more\./);
   assert.match(H.cagliotiHtml(M.instrModelOf([{ pos: 30, fwhm: 0.1 }]), 1).box, /Peaks: <b>1<\/b>, 2θ 30.00°.*it needs 3 peaks or more\. The instrumental width is the peak's FWHM at every angle/);
   assert.match(H.cagliotiHtml({ pts: [{ x: 30, b: 0.1 }, { x: 30, b: 0.2 }, { x: 50, b: 0.2 }], fit: null }, 1).box, /it needs peaks at 3 angles or more, and these 3 lie at 2\. The instrumental width is interpolated between the peaks/);
   const th = tt => tt/2*Math.PI/180, exact = M.instrModelOf([30, 50, 70].map(tt=> ({ pos: tt, fwhm: 0.1 + tt/1000, fwhmSig: 0.01 })));
@@ -605,7 +607,8 @@ test('the card\'s markup: the samples\' and the standard\'s, the Results\' secti
   assert.match(card, /id="xrdA4BlWin" value="5"/);
   assert.deepEqual([...card.matchAll(/id="xrdA4Mode(\w+)"[^>]*>(\w+)</g)].map(m=> m[1] + ':' + m[2]), Object.entries(M.TOGGLES).map(([k, m])=> k + ':' + (M.modeDef(false)[m] === 'shared' ? 'all' : 'one')));
   assert.ok(card.includes('data-csv-base="peaks.csv" data-csv-names="peaks.csv"') && std.includes('data-csv-names="standard.csv" title="Download CSV"'));
-  assert.equal(H.NO_PEAKS, '<p style="color:var(--muted);margin:6px 0">No peaks found with current parameters.</p>');
+  // (in the notes' grey, v571: to v570 a style of its own, X16)
+  assert.equal(H.NO_PEAKS, '<p class="txt-meta xrd-no-peaks">No peaks found with current parameters.</p>');
   const evil = `"'><i data-x=1></i>`;
   assert.equal(H.stackLegendHtml([{ color: evil, label: evil }, { color: 'red', label: 'b' }], [1, 0], U),
     '<span><i style="background:red"></i>b</span><span><i style="background:&quot;&#39;&gt;&lt;i data-x=1&gt;&lt;/i&gt;"></i>&quot;&#39;&gt;&lt;i data-x=1&gt;&lt;/i&gt;</span>');

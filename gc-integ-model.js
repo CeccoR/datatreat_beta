@@ -679,7 +679,9 @@ export function takeDropped(S, name, bytes){
     return { kind: 'tcd', name, bytes, d };
   }
   const t = tableOf(S, bytes);
-  if (t.error) return { bad: `${name}: neither raw chromatograms nor a GC table: ${full(t.error.replace(/^not a GC table: /, ''))}` };
+  // (a GC table with no injection to read, its why: v571; to v570 "neither raw chromatograms
+  // nor a GC table" all the same)
+  if (t.error) return { bad: /^not a GC table: /.test(t.error) ? `${name}: neither raw chromatograms nor a GC table: ${full(t.error.replace(/^not a GC table: /, ''))}` : `${name}: ${full(t.error)}` };
   return { kind: 'table', name, bytes, t };
 }
 /* The files dropped (`got`) and those waiting (`held`) paired: a table and raw

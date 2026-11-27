@@ -613,9 +613,10 @@ class Plot{
       // Grip dot near the top for an easy drag target
       const grip = svgEl('circle',{cx:x0, cy:m.t+15, r:7.5, fill:entry.color, 'cursor':'ew-resize'});
       this.gOverlay.appendChild(grip);
-      // (a mouse's primary button alone, as every drag's: to v569 any, the right one too, v570)
+      // (the primary button alone, of any pointer, as every drag's: to v569 any, the right one too;
+      // v570 a mouse's alone, a pen's barrel button or eraser still dragging, v571)
       const startDrag = e=>{
-        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        if (e.button !== 0) return;
         e.preventDefault(); e.stopPropagation(); this._dragVline(entry, e.pointerId);
       };
       hit.addEventListener('pointerdown', startDrag);

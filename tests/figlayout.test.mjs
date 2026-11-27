@@ -517,7 +517,7 @@ function constDecl(file, name){
 const PLOT = new Function('document', ['niceStep', 'niceTicks', 'fmtTick', 'svgEl'].map(n => decl('plot.js', n)).join('\n') + '\n'
   + ['SUB_DROP', 'TILT_DY'].map(n => constDecl('plot.js', n)).join('\n') + '\nreturn { niceTicks, fmtTick, svgEl, SUB_DROP, TILT_DY };')(PAGE);
 const UTIL = new Function(decl('utils.js', 'tiltFits') + '\n' + ['esc', 'CP_PALETTES', 'X_SVG'].map(n => constDecl('utils.js', n)).join('\n')
-  + '\nreturn { tiltFits, esc, CP_PALETTES, X_SVG, colorPickerUI: {}, palettePickerUI: {}, flashFieldInvalid(){}, dropGap(){}, saveBlob(){} };')();
+  + '\nreturn { tiltFits, esc, CP_PALETTES, X_SVG, colorPickerUI: {}, palettePickerUI: {}, flashFieldInvalid(){}, numRule(){ return \'\'; }, boxHtml(){ return \'\'; }, dropGap(){}, saveBlob(){} };')();
 /* figure.js's source (or another's: an older version's, given as text), run with its imports
    handed in; gives its drawFigure and the model's setter. */
 function loadFigure(src = fs.readFileSync(new URL('../figure.js', import.meta.url), 'utf8')){

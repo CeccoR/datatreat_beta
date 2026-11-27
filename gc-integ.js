@@ -1,4 +1,4 @@
-import { esc, csvLine, fmtNum, alertHtml, fileAlertHtml, fileLine, NOT_READ, bytesOf, setupDropzone, X_SVG, bytesKey, exactKey, objId, guardNumericInput, flashFieldInvalid, kept } from './utils.js';
+import { esc, csvLine, fmtNum, boxHtml, fileAlertHtml, fileLine, NOT_READ, bytesOf, setupDropzone, X_SVG, bytesKey, exactKey, objId, guardNumericInput, flashFieldInvalid, kept } from './utils.js';
 import { Plot, svgEl, linkX, niceTicks } from './plot.js';
 import { plotWrap, chipRow, viewOf, setView, PLOT_DL_ICON } from './modcharts.js';
 import { cardInfo, fileSafe, nameDownloads } from './cards.js';
@@ -45,7 +45,7 @@ import * as H from './gc-integ-html.js';
 // utils.js's, modkit.js's and plot.js's helpers the model takes (gc-integ-model.js U), and
 // what the markup takes (gc-integ-html.js u).
 const U = { isObj, oneOf, num, esc, exactKey, bytesKey, objId, fmtNum, csvLine, niceTicks };
-const HU = { esc, alertHtml, fileAlertHtml, X_SVG, snavHtml, plotWrap, chipRow, PLOT_DL_ICON };
+const HU = { esc, fileAlertHtml, X_SVG, snavHtml, plotWrap, chipRow, PLOT_DL_ICON };
 export const INTEG_INFO = H.integInfo(cardInfo(false, false));
 
 /* =========================================================
@@ -373,12 +373,22 @@ function onDrop(S, C, wi, side, v){
   const m = C.drag ? C.drag.m : M.clone(C.method);
   C.drag = null;
   m.windows[wi][side] = M.edgeAt(v);
-  setMethod(S, C, m);
+  setMethod(S, C, m, `w${wi}:${side}`);
 }
-// A method set (a step): its results looked for, else integrated a little later.
-function setMethod(S, C, m){
+/* A method set (a step): its results looked for, else integrated a little later. A window
+   made too short is not taken: its edge's field flashes and the rule is said in red under the
+   window until the next drawing (v571, ALERTS-REVIEW.md C19, G11: to v570 a warning box "Not
+   taken:" over the chromatogram). `edge`: the field's key (w0:from…) when typed or dragged. */
+function setMethod(S, C, m, edge){
   const w = M.tooShort(m);
-  if (w){ draw(S, C, true); C.$('Notice').innerHTML = H.notTakenHtml(HU, `The ${w.key} window must start at least 5 s before it ends.`); return; }
+  if (w){
+    draw(S, C, true);
+    const wi = m.windows.indexOf(w);
+    paintMethod(S, C, C.method, { wi: wi >= 0 ? wi : 0, text: H.tooShortText(w.key) });
+    const f = edge && C.$('Method').querySelector(`input[data-k="${edge}"]`);
+    if (f) flashFieldInvalid(f);
+    return;
+  }
   if (M.methodKey(U, m) === M.methodKey(U, C.method)){ draw(S, C, true); return; }
   M.takeMethod(U, C, m);
   draw(S, C, true);
@@ -389,12 +399,12 @@ function setMethod(S, C, m){
 
 /* ---- Windows: the fit windows' edges (their lines on the chromatogram an aid), each a
    step, with the peaks' nominal places ---- */
-function paintMethod(S, C, m = C.method){
+function paintMethod(S, C, m = C.method, refused = null){
   const box = C.$('Method'), reset = C.el.querySelector('.gci-reset');
   const focus = document.activeElement && box.contains(document.activeElement) ? document.activeElement.dataset.k : null;
   const warn = M.intrusions(m);
   reset.hidden = M.isDefault(U, m);
-  box.innerHTML = H.methodHtml(HU, m, warn);
+  box.innerHTML = H.methodHtml(HU, m, warn, refused);
   box.querySelectorAll('input').forEach(inp=> wireEdge(S, C, inp));
   if (focus){ const f = box.querySelector(`input[data-k="${focus}"]`); if (f) f.focus(); }
 }
@@ -406,7 +416,7 @@ function wireEdge(S, C, inp){
     const v = +String(inp.value).replace(',', '.'), n = M.clone(C.method);
     if (!M.fin(v)){ flashFieldInvalid(inp); inp.value = C.method.windows[+wi][side]; return; }
     n.windows[+wi][side] = v;
-    setMethod(S, C, n);
+    setMethod(S, C, n, inp.dataset.k);
   });
   inp.addEventListener('keydown', e=>{ if (e.key === 'Enter') inp.blur(); });
 }
@@ -678,7 +688,10 @@ function paintWindow(S, C, W){
   W.m.querySelectorAll('.gci-u').forEach(s=>{ s.textContent = `(${C.cal.unit})`; });
   const rows = W.rowsNow = M.calRows(U, S, C), left = M.stdsLeft(U, S, C);
   if (C.calSel >= rows.length) C.calSel = Math.max(0, rows.length - 1);
-  W.q('.gci-cal-status').textContent = H.calStatusText(C.cal.files, left, rows.length, S.halted && !S.job);
+  // (a run that failed says why, an error in the status's place: v571; to v570 "Stopped…")
+  const st = W.q('.gci-cal-status');
+  if (left && S.failed && !S.job) st.innerHTML = boxHtml('bad', esc(H.failedText(S.failed)));
+  else st.textContent = H.calStatusText(C.cal.files, left, rows.length, S.halted && !S.job);
   const [lo, hi] = M.range(C.method);
   W.q('.gci-cal-levels tbody').innerHTML = H.levelRowsHtml(HU, rows, C.calSel, lo, hi);
   box.scrollTop = top;

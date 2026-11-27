@@ -57,7 +57,7 @@ const KN = ['isObj', 'isArr', 'num', 'numStr', 'oneOf', 'dateOf', 'arrOf', 'with
 const CN = ['PLOT_DL_ICON', 'CSV_ICON', 'plotWrap'];
 // (the CSVs' settings as a fresh page has them; a decimal comma where a case asks for one)
 const settings = { decimal: '.', field: ';' };
-const PAGE = new Function('settings', [...UN.map(n=> decl('utils.js', n)), ...KN.map(n=> decl('modkit.js', n)), ...CN.map(n=> decl('modcharts.js', n))].join('\n') +
+const PAGE = new Function('settings', [...UN.map(n=> decl(n === 'ALERT_ICON' ? 'alerts.js' : 'utils.js', n)), ...KN.map(n=> decl('modkit.js', n)), ...CN.map(n=> decl('modcharts.js', n))].join('\n') +
   `\nreturn { ${[...UN, ...KN, ...CN].join(', ')} };`)(settings);
 const ids = new WeakMap();
 let nid = 0;
@@ -161,7 +161,9 @@ test('the injection dates in every form, the two layouts, a file refused, raw ch
   assert.deepEqual([bad.dayMonth, bad.badDates, bad.injDates.length], [undefined, 3, 4]);
   assert.deepEqual([named.monthNames, named.badDates, named.injDates.length, iso(named.injDates[2])], [true, 1, 5, '2026-11-13T15:13:30']);
   assert.deepEqual(M.readGc('Injection date,H2 (B) [%Mol]\n2/30/2025 9:15:00 AM,0.1\n2/31/2025 9:30:00 AM,\n'), { error: 'no injection to read: 1 row with an injection date that does not exist, 1 with no gas value' });
-  assert.equal(M.readGc('Injection date,H2 (B) [%Mol]\n10/20/2026 9:00:00 AM,\n'), null, 'no value at all: refused by its name alone');
+  // (no value at all: why, v571; to v570 refused as no GC table, by its name alone)
+  assert.deepEqual(M.readGc('Injection date,H2 (B) [%Mol]\n10/20/2026 9:00:00 AM,\n10/20/2026 9:15:00 AM,n.a.\n'), { error: 'no injection to read: 2 rows with an injection date and no gas value' }, 'no value at all: why');
+  assert.equal(M.readGc('Injection date,H2 (B) [%Mol]\n'), null, 'no row with a date: no GC table');
   // The alternative export: ppm as %mol, N₂ and the areas left, a name's column read for the calibration's window.
   const a = M.readGc(ALT_MAIN);
   assert.deepEqual([a.altExport, a.monthNames, a.injDates.length, a.gas.h2.slice(1, 3), a.gas.o2[3], a.gas.o2[4]], [true, true, 7, [0.141/1e4, 412.5/1e4], NaN, 150/1e4]);

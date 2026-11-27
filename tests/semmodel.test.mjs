@@ -50,7 +50,7 @@ function decl(file, name){
 }
 const UN = ['esc', 'fmtNum', 'csvField', 'csvJoin', 'csvLine', 'X_SVG', 'ALERT_ICON', 'alertHtml', 'FILE_ALERT', 'fileAlertHtml', 'fileLine', 'isIncluded', 'anySample', 'includedOf', 'includedIndex', 'setIncluded', 'removeFileAt'];
 const settings = { decimal: '.', field: ';' };
-const PAGE = new Function('settings', [...UN.map(n=> decl('utils.js', n)), decl('modkit.js', 'isObj')].join('\n') + `\nreturn { ${[...UN, 'isObj'].join(', ')} };`)(settings);
+const PAGE = new Function('settings', [...UN.map(n=> decl(n === 'ALERT_ICON' ? 'alerts.js' : 'utils.js', n)), decl('modkit.js', 'isObj')].join('\n') + `\nreturn { ${[...UN, 'isObj'].join(', ')} };`)(settings);
 // A canonical dump: every number by its shortest round-trip string, NaN, ±∞ and −0 too.
 const canon = v => JSON.stringify(v, function(k, x){ const o = this[k]; return typeof o === 'number' ? (Object.is(o, -0) ? '#-0' : '#' + o) : x; });
 

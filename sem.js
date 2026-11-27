@@ -1,4 +1,4 @@
-import { esc, csvLine, fmtNum, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, fileAlertHtml, NOT_READ, bytesOf, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, registerBusy, busyChanged, registerModule, onSectionChange, flashFieldInvalid, kept, getModuleHistory } from './utils.js';
+import { esc, csvLine, fmtNum, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, fileAlertHtml, NOT_READ, bytesOf, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, registerBusy, busyChanged, registerModule, onSectionChange, flashFieldInvalid, numRule, confirmBanner, kept, getModuleHistory } from './utils.js';
 import { readTescanTiff, readFile, SemReadError, reducedCopy, cropStats, resample, cardKey, cardLevels } from './sem-read.js';
 import { snavHtml, snav } from './snav.js';
 import { isObj } from './modkit.js';
@@ -315,10 +315,11 @@ function pageArrows(row){
 const HOLD_MS = 300;
 
 /* ---- Fields ---- */
-// A field's number, or null (the field shakes) where it is none or out of lo–hi.
+// A field's number, or null (the field shakes, its range said under it: v571) where it is
+// none or out of lo–hi.
 function readField(el, lo, hi){
   const v = parseFloat(String(el.value).trim().replace(',', '.'));
-  if (!Number.isFinite(v) || v < lo || v > hi){ flashFieldInvalid(el); return null; }
+  if (!Number.isFinite(v) || v < lo || v > hi){ flashFieldInvalid(el, numRule({ min: lo, max: hi })); return null; }
   return v;
 }
 
@@ -1131,7 +1132,11 @@ async function openFigure(S, gid){
   if (!g || S.figOpening || document.querySelector('.fig-backdrop')) return;
   S.figOpening = true;
   try {
-    const mod = await import('./sem-figure.js');
+    let mod;
+    // (not served: offline with an old cache, say; said as the plots' composer says it, v571:
+    // to v570 in the console alone)
+    try { mod = await import('./sem-figure.js'); }
+    catch(err){ console.error('SEM figure failed to load', err); confirmBanner('The figure composer could not be loaded: reload the page.', 'OK'); return; }
     const api = mod.openSemFigure({ title: g.name, images: ()=> M.figureImages(U, S, gid, (f, fit)=> outCanvas(S, f, fit)), getFig: ()=> S.figures[gid] || null,
       setFig: f=>{ S.figures[gid] = f; S.hist.commit(); }, alive: ()=> S.groups.some(x=> x.id === gid) });
     if (api) S.figApi = api;

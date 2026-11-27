@@ -7,13 +7,15 @@
    the legends, the run overview's chips, the window's files, its warning, its standards'
    rows and thumbnails, a standard's fit, a gas's line and its levels. Taken out of v559's
    gc-integ.js as they were: the same markup to the byte.
-   What they need from the page is handed in, u = { esc, alertHtml, X_SVG, snavHtml,
-   plotWrap, chipRow, PLOT_DL_ICON } (utils.js's esc, alerts and close icon, snav.js's
-   selector, modcharts.js's plot box, chips and download icon: gc-integ.js HU), the gases'
+   What they need from the page is handed in, u = { esc, fileAlertHtml, X_SVG, snavHtml,
+   plotWrap, chipRow, PLOT_DL_ICON } (utils.js's esc, file alerts and close icon, snav.js's
+   selector, modcharts.js's plot box, chips and download icon: gc-integ.js HU; the compact
+   boxes are alerts.js's, v571), the gases'
    words (gasOf) where they say a gas, and the cards' own instructions (cards.js cardInfo)
    where they end with them.
 ========================================================= */
 import { UNITS, CHI2_HIGH, sig, plural, fin, fitMarks, fullName, thumbPoints, levelsOf } from './gc-integ-model.js';
+import { boxHtml } from './alerts.js';
 
 /* ---- The instructions ---- */
 /* "From the area to the concentration", a box of its own in the card's instructions, as the
@@ -86,21 +88,28 @@ export const cardHtml = (u, p)=> `
       </div>`;
 
 /* ---- Windows: the fit windows' edges, with the peaks' nominal places ---- */
-// (m: the method shown; warn: its windows' intrusions)
-export function methodHtml(u, m, warn){
+/* (m: the method shown; warn: its windows' intrusions, a compact warning under them (v571: to
+   v570 an amber line); refused: a window's edges not taken, { wi, text }, its rule in red
+   under that window (v571, ALERTS-REVIEW.md C19, G11: to v570 a warning box "Not taken:" over
+   the chromatogram)) */
+export function methodHtml(u, m, warn, refused = null){
   const field = (k, v, label)=> `<input type="text" inputmode="decimal" data-k="${k}" value="${u.esc(String(v))}" aria-label="${u.esc(label)}">`;
   return m.windows.map((w, wi)=> `<div class="gci-win"><span class="gci-win-name">${u.esc(w.key)} fit</span>`
       + `<label>from ${field(`w${wi}:from`, w.from, `${w.key} window from (s)`)}</label>`
       + `<label>to ${field(`w${wi}:to`, w.to, `${w.key} window to (s)`)} s</label>`
-      + `<span class="gci-win-peaks">${(w.peaks || []).map(pk=> `${u.esc(pk.name)} ${fin(pk.t) ? pk.t.toFixed(1) : ''}`).join(' · ')}</span></div>`).join('')
-    + (warn.length ? `<p class="gci-flag">⚠ ${warn.map(u.esc).join(' ')}</p>` : '');
+      + `<span class="gci-win-peaks">${(w.peaks || []).map(pk=> `${u.esc(pk.name)} ${fin(pk.t) ? pk.t.toFixed(1) : ''}`).join(' · ')}</span></div>`
+      + (refused && refused.wi === wi ? `<p class="field-rule gci-win-rule" role="alert">${u.esc(refused.text)}</p>` : '')).join('')
+    + boxHtml('warn', warn.length ? warn.map(u.esc).join(' ') : '', 'gci-flag');
 }
+// Why a window's edges are not taken (setMethod: methodHtml's refused).
+export const tooShortText = key => `The ${key} window must start at least 5 s before it ends.`;
 
 /* ---- Peaks: the values of the chromatogram on show (gc-integ-model.js peaksOf's v) ---- */
 export function valuesHtml(u, gasOf, v){
   if (!v) return '';
   if (v.wait) return `<p class="txt-meta">Not integrated yet.</p>`;
-  if (v.error != null) return `<p class="gci-flag">⚠ Not integrated: ${u.esc(v.error)}</p>`;
+  // (a compact warning, v571: to v570 an amber line, ALERTS-REVIEW.md G08)
+  if (v.error != null) return boxHtml('warn', `Not integrated: ${u.esc(v.error)}`, 'gci-flag');
   const { conv, units, tUnit, gs, unitOf } = v;
   const rows = v.rows.map(({ g, x, shown, tShown, off })=> `<tr><td>${gasOf(g).label}</td><td class="${off ? 'gci-bad' : ''}"${off ? ' title="Out of proportion with the GC table"' : ''}>${sig(x.area, 5)} ± ${sig(x.sd, 2)}</td>`
     + `<td>${fin(x.tApex) ? x.tApex.toFixed(2) : '—'}</td><td class="${fin(x.chi2r) && x.chi2r > CHI2_HIGH ? 'gci-bad' : ''}">${fin(x.chi2r) ? x.chi2r.toFixed(2) : '—'}</td>`
@@ -116,18 +125,32 @@ export function valuesHtml(u, gasOf, v){
   return `<table class="gci-values"><thead><tr><th>Gas</th><th>Area ± sd</th><th>Apex (s)</th><th>χ²<sub>r</sub></th><th>Conc.</th><th>GC table</th></tr></thead><tbody>${rows.join('')}</tbody></table>`
     + (said.length ? `<p class="txt-meta gci-units">${said.join('; ')}.</p>` : '')
     + (from ? `<p class="txt-meta gci-from">${from}</p>` : '')
-    + (v.fl.length ? `<p class="gci-flag">⚠ Suspicious: ${v.fl.map(u.esc).join('; ')}</p>` : '')
-    + (v.keys.some(g=> !conv[g] || !conv[g].f) ? `<p class="txt-meta">${v.keys.filter(g=> !conv[g] || !conv[g].f).map(g=> `${gasOf(g).txt}: ${u.esc(conv[g] ? conv[g].why : 'no concentration')}`).join('; ')}.</p>` : '')
-    + (v.R.stale ? '<p class="txt-meta">(the previous method\'s)</p>' : '');
+    + suspiciousHtml(u, v.fl)
+    + (v.keys.some(g=> !conv[g] || !conv[g].f) ? `<p class="txt-meta">${v.keys.filter(g=> !conv[g] || !conv[g].f).map(g=> `${gasOf(g).txt}: ${u.esc(conv[g] ? conv[g].why : 'no concentration')}`).join('; ')}.</p>` : '');
+  // (the previous method's values: said once, by the notice over the chromatogram, v571, G10;
+  // to v570 here too)
 }
+// Why a chromatogram is suspicious (gc-integ-model.js fitMarks), a compact warning: the card's
+// Peaks and the calibration window's standard alike (v571, G08 and G09: to v570 an amber line
+// here, a red "⚠" there).
+const suspiciousHtml = (u, fl)=> boxHtml('warn', fl.length ? `Suspicious: ${fl.map(u.esc).join('; ')}` : '', 'gci-flag');
 
 /* ---- The status line and the card's alerts ---- */
+/* A run that failed (gc-integ.js S.failed, the pool's or the worker's message): in the card's
+   status and in the calibration window's, a compact error (v571, ALERTS-REVIEW.md C17, X07:
+   to v570 red text in the card, "Stopped…" in the window); a message that says it already, as
+   it is. */
+export function failedText(why){
+  const m = String(why == null ? '' : why).trim().replace(/[.\s]+$/, '');
+  if (!m || /^the integration failed$/i.test(m)) return 'The integration failed.';
+  return /^the integration (worker )?failed\b/i.test(m) ? m.charAt(0).toUpperCase() + m.slice(1) + '.' : `The integration failed: ${m}.`;
+}
 // (x: gc-integ-model.js progressOf's; '' where all is integrated: the line folds away)
 export function statusHtml(u, x){
   const { st, left, pct } = x;
   switch (x.state){
     case 'running': return `<span class="gci-prog"><span class="gci-prog-bar" style="width:${pct}%"></span></span><span>Integrating… ${st.job.done} / ${st.job.total} chromatograms · ${u.esc(st.job.name)}</span>`;
-    case 'failed': return `<span class="gci-bad">The integration failed: ${u.esc(st.failed)}</span>`;
+    case 'failed': return boxHtml('bad', u.esc(failedText(st.failed)));
     case 'stopped': return `<span>Stopped: ${plural(left, 'chromatogram')} not integrated with this method.</span>`;
     case 'soon': return `<span>Method changed: integrating again in a moment…</span>`;
     case 'left': return `<span>${plural(left, 'chromatogram')} to integrate.</span>`;
@@ -145,26 +168,27 @@ function warnLine(u, gasOf, w){
    chromatograms, are said under the drop zone, to check (gc-html.js pairLines), and in the
    file list's tooltip: here a grey line names them (v567: to v566 a third time, in this
    box). The calibration by the GC software's scale (k) is said in each Production Rate
-   card below, with where its risks are written (to v566 an info box of its header alone). */
+   card below, with where its risks are written (to v566 an info box of its header alone).
+   Compact boxes with no ×: worked out again with the files (v571, ALERTS-REVIEW.md G07: to
+   v570 a × took one away until the next drawing). */
 export function alertsHtml(u, gasOf, f){
   const errs = f.errs.map(e=> `${u.esc(e.tcd.name)}: ${u.esc(e.d.error)}`), warn = f.warn.filter(w=> w.kind !== 'twin' && w.kind !== 'alone').map(w=> warnLine(u, gasOf, w));
   const shown = f.warn.filter(w=> w.kind === 'twin' || w.kind === 'alone').map(w=> `<p class="txt-meta gci-shown">${u.esc(w.e.label)}: shown here, no injection times.</p>`);
-  return (errs.length ? u.alertHtml('bad', 'Raw chromatograms that could not be read:', errs) : '')
-    + (warn.length ? u.alertHtml('warn', 'Raw chromatograms to check:', warn) : '')
+  return (errs.length ? boxHtml('bad', ['Raw chromatograms that could not be read:', ...errs]) : '')
+    + (warn.length ? boxHtml('warn', ['Raw chromatograms to check:', ...warn]) : '')
     + shown.join('');
 }
-// A window's edges refused (setMethod).
-export const notTakenHtml = (u, t)=> u.alertHtml('warn', 'Not taken:', [u.esc(t)]);
 
 /* ---- The chromatogram over its residuals ---- */
 /* The notice over a pair of panels (gc-integ.js drawPair): the file that cannot be read
    (`file`), no point in the windows (`what`), not integrated yet, the previous method's;
-   else ''. D: gc-integ-model.js chromOf's. */
+   else ''. D: gc-integ-model.js chromOf's. A compact box, no × (v571, G07: to v570 a ×
+   that held until the next drawing). */
 export function pairNotice(u, o, D){
-  if (D.fail === 'read') return o.d ? u.alertHtml('bad', `${u.esc(o.file)}:`, [u.esc(o.d.error)]) : '';
-  if (D.fail === 'empty') return u.alertHtml('warn', `${u.esc(o.what)}:`, ['no point in the windows']);
-  if (!D.r) return u.alertHtml('info', `${u.esc(o.what)}:`, ['not integrated yet: the model is drawn once it is']);
-  if (D.R.stale) return u.alertHtml('warn', 'Method changed:', ['the model and the values shown are the previous method\'s until this file is integrated again']);
+  if (D.fail === 'read') return o.d ? boxHtml('bad', `${u.esc(o.file)}: ${u.esc(o.d.error)}`) : '';
+  if (D.fail === 'empty') return boxHtml('warn', `${u.esc(o.what)}: no point in the windows.`);
+  if (!D.r) return boxHtml('info', `${u.esc(o.what)}: not integrated yet: the model is drawn once it is.`);
+  if (D.R.stale) return boxHtml('warn', 'Method changed: the model and the values shown are the previous method\'s until this file is integrated again.');
   return '';
 }
 // Its legend (gc-integ-model.js legendItems's [colour, name, mark]).
@@ -202,7 +226,7 @@ export const calHtml = (u, p)=> `
           <div class="xrd-std-alerts gci-cal-alerts"></div>
           <div class="gci-cal-warn"></div>
           <div class="gci-cal-files"></div>
-          <div class="gci-cal-unit"><label class="txt-label">Concentration unit <select class="gci-cal-unit-in" aria-label="Concentration unit">${UNITS.map(un=> `<option value="${un}">${un}</option>`).join('')}</select></label><span class="gci-cal-status txt-meta"></span></div>
+          <div class="gci-cal-unit"><label class="txt-label">Concentration unit <select class="gci-cal-unit-in" aria-label="Concentration unit">${UNITS.map(un=> `<option value="${un}">${un}</option>`).join('')}</select></label><div class="gci-cal-status txt-meta"></div></div>
           <div class="pside gci-cal-pside">
             <div class="plot-nav-row pside-nav gci-cal-nav"><div class="plot-nav-left">${u.snavHtml({ idx: p + 'CalIdx', name: p + 'CalName', prevCls: 'gci-cprev', nextCls: 'gci-cnext', what: 'standard', cls: 'gci-csel' })}</div></div>
             <div class="pside-plot">
@@ -212,7 +236,7 @@ export const calHtml = (u, p)=> `
                 <button class="btn plot-dl-btn" data-dl-svg="${p}CalChrom" data-dl-also="${p}CalResid" data-csv-mod="gc" data-csv-names="standard_chromatogram.csv" data-dl-name="GC_standard_chromatogram.svg" data-dl-legend="${p}CalLegend">${u.PLOT_DL_ICON}</button>
               </div>
             </div>
-            <div class="pside-under"><div id="${p}CalLegend" class="legend gci-legend gci-cal-legend"></div><p class="txt-meta gci-cal-fit"></p><div class="gci-notice gci-cal-notice"></div></div>
+            <div class="pside-under"><div id="${p}CalLegend" class="legend gci-legend gci-cal-legend"></div><div class="txt-meta gci-cal-fit"></div><div class="gci-notice gci-cal-notice"></div></div>
             <div class="pside-col gci-cal-side">
               <div class="txt-mini param-head cap-title gci-cal-head"><span>Standards</span></div>
               <div class="peak-box gci-cal-table"><table class="gci-cal-levels"><thead><tr><th class="gci-cal-k">#</th><th class="gci-cal-th"></th><th class="gci-cal-src">Injection</th><th class="gci-cal-a">H<sub>2</sub> area</th><th class="gci-cal-a">O<sub>2</sub> area</th><th>H<sub>2</sub> <span class="gci-u"></span></th><th>O<sub>2</sub> <span class="gci-u"></span></th><th title="Use this standard">Use</th></tr></thead><tbody></tbody></table></div>
@@ -254,11 +278,12 @@ export function levelRowsHtml(u, rows, sel, lo, hi){
     + `<td><input type="checkbox" data-fi="${x.fi}" data-j="${x.j}" data-g="on"${x.lv.on ? ' checked' : ''} aria-label="Use ${u.esc(x.name)}"></td></tr>`).join('')
     || `<tr><td colspan="8" class="txt-meta">Drop the standards' GC table and its raw chromatograms above.</td></tr>`;
 }
-// The standard on show's fit, in a line under its plot: each gas's area and χ²ᵣ, what makes it suspicious.
+// The standard on show's fit, in a line under its plot: each gas's area and χ²ᵣ; what makes it
+// suspicious under it, the card's warning (suspiciousHtml, v571: to v570 a red "⚠" in the line).
 export function calFitHtml(u, gasOf, keys, x){
   const r = x && x.r, gs = r && r.gases ? keys.filter(g=> r.gases[g]) : [], fl = r ? fitMarks(r) : [];
-  return gs.map(g=>{ const v = r.gases[g]; return `${gasOf(g).label}: area ${sig(v.area, 5)} ± ${sig(v.sd, 2)}, χ²<sub>r</sub> ${fin(v.chi2r) ? v.chi2r.toFixed(2) : '—'}`; }).join(' · ')
-    + (fl.length ? `<span class="gci-bad"> · ⚠ ${fl.map(u.esc).join('; ')}</span>` : '');
+  const line = gs.map(g=>{ const v = r.gases[g]; return `${gasOf(g).label}: area ${sig(v.area, 5)} ± ${sig(v.sd, 2)}, χ²<sub>r</sub> ${fin(v.chi2r) ? v.chi2r.toFixed(2) : '—'}`; }).join(' · ');
+  return line + suspiciousHtml(u, fl);
 }
 // Each gas's line: its intercept's chips, its plot, its numbers (drawn after).
 export const calFitsHtml = (u, gasOf, keys, p, zero)=> keys.map(g=> `<div class="col gci-cal-gas" data-g="${g}">

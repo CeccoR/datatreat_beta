@@ -96,6 +96,11 @@ test('the widths\' ranges: a series\' own, every series\' (their meeting), a bar
   assert.deepEqual(FM.everyWidthRange([curve('a'), bar('b')]), [0.2, 1], 'both');
   assert.deepEqual([3, 1.0001, 1, 0.8, 0.1, 0.05, 0].map(FM.barWidth), [1, 1, 1, 0.8, 0.1, 0.1, 0.1]);
   assert.ok(Number.isNaN(FM.barWidth(NaN)));
+  // (v571: a line's width read back put inside 0.2–6, its own field's range: one of 0.1–0.19
+  // could be saved from the field for every series to v569)
+  assert.deepEqual([0.1, 0.15, 0.19, 0.2, 1.5, 6, 7].map(w=> FM.seriesWidth({ ...curve('a'), width: w })), [0.2, 0.2, 0.2, 0.2, 1.5, 6, 6]);
+  assert.deepEqual([0.05, 0.5, 3].map(w=> FM.seriesWidth({ ...bar('a'), width: w })), [0.1, 0.5, 1]);
+  assert.ok([undefined, NaN].every(w=> !Number.isFinite(FM.seriesWidth({ ...curve('a'), width: w }))), 'no number: as it is');
 });
 
 test('every series, the axes, the divisions, the colours and fills, a rich field', ()=>{

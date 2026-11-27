@@ -496,7 +496,9 @@ function holdInView(card, ms, y0 = card.getBoundingClientRect().top){
   requestAnimationFrame(loop);
 }
 function startMove(D, a, e){
-  if (D.moving || (e.pointerType === 'mouse' && e.button !== 0)) return;
+  // (the primary button of any pointer: a touch's and a pen's tip are 0; to v570 of a mouse's
+  // alone, a pen's barrel button or eraser moving the card, v571)
+  if (D.moving || e.button !== 0) return;
   e.preventDefault();
   const card = D.live.get(a.id), top = card.getBoundingClientRect().top;
   D.moving = { card, y: e.clientY, dy: e.clientY - top, top, t: 0, raf: 0, folding: performance.now() + FOLD_MS + 40 };

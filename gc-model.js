@@ -228,12 +228,14 @@ export function readGc(text, withNames){
     if (any){ injDates.push(d); for (const k in idx) gas[k].push(vals[k]); if (name >= 0) names.push(String(r[name] || '').trim()); }
     else emptyRows++;
   }
-  /* No injection left: refused with why when a row with a value went for its date (the
-     other rows, none with a gas value, counted beside it); by its name alone when no row
-     had a value, whatever its date, as at v509. (dayMonth, badDates, monthNames and
-     altExport only where they apply: any other file's record is as it was.) */
+  /* No injection left: refused with why, the rows with a value whose date went (the other
+     rows, none with a gas value, counted beside them), or the rows with a date, none with a
+     gas value (v571: to v570 refused as no GC table, "no injection date and H₂ or O₂ column
+     under a header", which it has). (dayMonth, badDates, monthNames and altExport only where
+     they apply: any other file's record is as it was.) */
   const rest = rows.length - lost;
-  if (!injDates.length) return lost ? { error: `no injection to read: ${lost} row${lost > 1 ? 's' : ''} with an injection date that does not exist${rest ? `, ${rest} with no gas value` : ''}` } : null;
+  if (!injDates.length) return lost ? { error: `no injection to read: ${lost} row${lost > 1 ? 's' : ''} with an injection date that does not exist${rest ? `, ${rest} with no gas value` : ''}` }
+    : rows.length ? { error: `no injection to read: ${rest} row${rest > 1 ? 's' : ''} with an injection date and no gas value` } : null;
   for (const k in gas) fixed(gas[k]);
   // (`withNames`, the calibration's window only: each injection's name, null with no column of them)
   return { injDates, gas, emptyRows, ...(dm && { dayMonth: true }), ...(badDates && { badDates }), ...(named && { monthNames: true }), ...(alt && { altExport: true }),

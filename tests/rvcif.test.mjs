@@ -219,7 +219,9 @@ test('B: the drop zone with no phase, + CIF from the first, CIFs dropped on the 
     await settle(page);
     ph = await phases(page);
     assert.equal(ph.n, 6);
-    assert.equal(ph.status, '⚠ s00.xrdml: Not a CIF: no data_ block found. · big.tif: not a CIF file (.cif).');
+    // (an error in the status's place, a line a file: v571, ALERTS-REVIEW.md X07; to v570 grey,
+    // "⚠ {file}: {message} · …")
+    assert.equal(await page.innerHTML(P + 'Status'), '<div class="alert bad compact">✕ Not added:<br>s00.xrdml: not a CIF: no data_ block found.<br>big.tif: not a CIF file (.cif).</div>');
     // The notes that named + CIF: the Settings' and the results'.
     for (let i = 0; i < 6; i++){ await page.click(P + 'PhaseList [data-del]'); await settle(page); }
     assert.match(await page.textContent(P + 'Results'), /No phase: add one from a CIF, dropped on Phases beside the pattern or selected with a click there\./);

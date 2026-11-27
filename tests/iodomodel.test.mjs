@@ -138,8 +138,14 @@ test('the calibration: read back, its line, the window\'s draft, its words, Appl
   assert.equal(M.modeIn('std'), 'std'); assert.equal(M.modeIn('toString'), 'none');
   const bad = [[0, 'the slope'], [0, 'standard 2'], [0, 'standard 2']];
   assert.deepEqual(M.badUsed(bad, 'line'), [[0, 'the slope']]); assert.deepEqual(M.badUsed(bad, 'std').length, 2); assert.deepEqual(M.badUsed(bad, 'none'), []);
-  assert.equal(M.calMsg({ mode: 'std' }, M.badUsed(bad, 'std'), null), 'Not a number: standard 2.');
+  // (v571: the fields holding no number said under their group, C19; a line that is none, alone,
+  // a compact error, C17)
+  assert.equal(M.notNumber(M.badUsed(bad, 'std')), 'Not a number: standard 2.');
+  assert.equal(M.notNumber(bad), 'Not a number: the slope, standard 2.');
+  assert.equal(M.notNumber([]), '');
+  assert.equal(M.calMsg({ mode: 'std' }, M.badUsed(bad, 'std'), null), '');
   assert.equal(M.calMsg({ mode: 'line' }, [], null), 'A slope (not 0) and an intercept are needed.');
+  assert.equal(M.calMsg({ mode: 'line' }, [[0, 'the slope']], null), '', 'a field holding no number: said under it');
   assert.equal(M.calMsg({ mode: 'line' }, [], {}), '');
   const ap = M.applied({ mode: 'std', slope: null, intercept: null, stds: [[1, 2], [null, null], [null, 3]], unit: ' mM ' }, M.calDefault());
   assert.deepEqual(ap, { mode: 'std', slope: null, intercept: null, stds: [[1, 2], [null, 3]], unit: 'mM' });
@@ -194,6 +200,10 @@ test('the markup: the calibration\'s summary, the legend, the window, its rows a
   assert.equal(H.calFitHtml({ mode: 'line' }, null, 0, HU), '');
   assert.equal(H.calFitHtml({ mode: 'std' }, null, 1, HU), '<div class="alert bad compact">✕ 1 standard with both values: two of different concentrations at least are needed.</div>');
   assert.equal(H.calFitHtml({ mode: 'std' }, { n: 3, m: 0.1, q: 0.01, r2: 0.5 }, 3, HU), 'Fit of 3 standards: slope <b>0.1</b>, intercept <b>0.01</b>, R² = <b>0.5000</b>');
+  assert.equal(H.calMsgHtml('A <b>', HU), '<div class="alert bad compact">✕ A &lt;b&gt;</div>');
+  assert.equal(H.calMsgHtml('', HU), '');
+  const win = H.calHtml(HU);
+  assert.ok(win.includes('<p class="field-rule iodo-cal-rule" data-rule="line" role="alert"></p>') && win.includes('<p class="field-rule iodo-cal-rule" data-rule="std" role="alert"></p>'), 'a rule under each group of fields');
 });
 
 /* ---- 40 cases: random kinetics files, states and steps, as v562's iodo.js did them ---- */

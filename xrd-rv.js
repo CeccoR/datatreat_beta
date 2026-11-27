@@ -15,7 +15,7 @@
    (xrd-rv-model.js: what a run takes and says, the keys the views are kept under, the state
    saved and put back) and its markup (xrd-rv-html.js) beside it.
 ========================================================= */
-import { fmtData, csvLine, X_SVG, DL_SVG as DL_ICON, downloadBytes, flashFieldInvalid, settings, fitCsvIcons, maxArr, barNames, barChipYmax, NORM_OPTIONS, normOf, confirmModal, keeper } from './utils.js';
+import { fmtData, csvLine, X_SVG, DL_SVG as DL_ICON, downloadBytes, flashFieldInvalid, settings, fitCsvIcons, maxArr, barNames, barChipYmax, NORM_OPTIONS, normOf, confirmModal, keeper, boxHtml } from './utils.js';
 import { fileSafe } from './cards.js';
 import { Plot } from './plot.js';
 import { PLOT_DL_ICON, CSV_ICON } from './modcharts.js';
@@ -174,7 +174,7 @@ function cardState(host, root, o){
     nav: null,             // its pattern selector (snav.js; none on the standard's)
     // What each view was last drawn from (drawPlot, drawStacked, drawSizes, renderSolids,
     // renderWidths) and the markup each box was last given.
-    plotKey: '', instrTxt: '', stackKey: '', stackPlot: null, stackLeg: '', sizeKey: '', sizeChips: '', sizeLeg: '', sizeNote: '',
+    plotKey: '', instrTxt: '', instrNotes: '', stackKey: '', stackPlot: null, stackLeg: '', sizeKey: '', sizeChips: '', sizeLeg: '', sizeNote: '',
     fitSetShown: null, resultsShown: null, phasesShown: null, cellInfoShown: null,
     // resNorm: the stacked patterns' normalisation (Settings…, Results), as the Scherrer card's.
     sizeBy: 'sample', resNorm: 'global',
@@ -192,9 +192,9 @@ function cardState(host, root, o){
     pressT: -Infinity, turnT: -Infinity,   // Refine's last press and turn (quick)
     stdTitle: '', stdShown: '',            // Instrumental standard…'s own title, and the run it shows
     // The settings window (makeSettings): its body as last built (its key: null, none; a
-    // card with no phase builds one of key ''), a body being rebuilt, the Refinement
-    // section's note when an entry was not taken.
-    setModal: null, setBody: null, setKey: null, rebuilding: false, fitNote: null, fitsHere: null, modesHere: null, holdsHere: null, onSetKey: null,
+    // card with no phase builds one of key ''), a body being rebuilt, a Refinement entry not
+    // taken (fitNote, its rule said under its row, fitNoteK: v571).
+    setModal: null, setBody: null, setKey: null, rebuilding: false, fitNote: null, fitNoteK: null, fitsHere: null, modesHere: null, holdsHere: null, onSetKey: null,
   };
 }
 /* What xrd.js holds of the card. refresh: after any change to the files, the card follows
@@ -320,11 +320,13 @@ async function refine(S, list, tell){
     const { error } = await run.lanes.done;
     if (S.cur !== run) return { ok: false, why: 'stopped' };
     if (error) throw error;
-    setStatus(S, M.runEndText(run));
+    // (what the run chose for some patterns, an info: v571, X09)
+    setStatus(S, M.runEndText(run), 'info');
     return { ok: true };
   } catch(e){
     if (S.cur !== run) return { ok: false, why: 'stopped' };
-    setStatus(S, '⚠ ' + e.message);
+    // (an error in the status's place: v571, X07; to v570 "⚠ {message}", grey)
+    setStatus(S, M.failText(e.message), 'bad');
     return { ok: false, why: e.message };
   } finally {
     if (S.cur === run) endRun(S, true);
@@ -454,7 +456,7 @@ async function stdFirst(S, list){
   // (stopped from here, or by the tab manager: cancel said so)
   if (w.cancelled || S.gone || !S.host.placed()){ if (!w.cancelled) releaseHist(S); return; }
   S.waiting = null; hideProg(S); syncButtons(S);
-  if (!r.ok || !irf(S)){ releaseHist(S); setStatus(S, M.stdFailText(r)); return; }
+  if (!r.ok || !irf(S)){ releaseHist(S); setStatus(S, M.stdFailText(r), r.why === 'stopped' ? '' : 'bad'); return; }
   start(S, list());
 }
 
@@ -494,7 +496,7 @@ function drawNone(S){
   if (S.nav) S.nav.update();
   renderRes(S);
   if (S.plot){ S.plot = null; }
-  S.$('Svg').replaceChildren(); S.$('Legend').innerHTML = ''; S.$('Instr').textContent = ''; S.plotKey = S.instrTxt = '';
+  S.$('Svg').replaceChildren(); S.$('Legend').innerHTML = ''; S.$('Instr').textContent = ''; S.$('InstrNotes').innerHTML = ''; S.plotKey = S.instrTxt = S.instrNotes = '';
   renderResults(S, null, null); renderWidths(S, null, null); renderSolids(S, null, null);
 }
 /* The pattern's plot as last drawn (plotKey, xrd-rv-model.js plotKeyOf). The same again, it
@@ -507,8 +509,10 @@ function drawPlot(S, f, r, preserve){
   const drawn = !(S.plot && key === S.plotKey && (preserve || atOrigin(S.plot)));
   if (drawn){ S.plotKey = ''; drawPattern(S, f, r, svg, preserve); S.plotKey = key; }
   else S.plot._stored.forEach(e=>{ if (e.key === f.name) e.label = f.label; });
-  const it = H.instrLine(M.instrOf(f));
+  const ins = M.instrOf(f), it = H.instrLine(ins), nt = H.instrNotesHtml(ins);
   if (it !== S.instrTxt){ S.instrTxt = it; S.$('Instr').textContent = it; }
+  // (what it rests on, under it: v571, X05 and X06)
+  if (nt !== S.instrNotes){ S.instrNotes = nt; S.$('InstrNotes').innerHTML = nt; }
   return drawn;
 }
 // A redraw keeps the 2θ zoom; the height follows what is drawn (a phase's tick row more or
@@ -713,13 +717,15 @@ function renderWidths(S, f, r){
   const box = S.$('Widths'), wd = r && r.widths;
   const phs = wd ? wd.phases.filter(ph=> ph.rows.length) : [];
   if (box.style.display !== (phs.length ? '' : 'none')) box.style.display = phs.length ? '' : 'none';
+  const wn = S.$('WNote'), wt = H.widthsNote(wd);
+  if (wn.textContent !== wt) wn.textContent = wt;
   if (!phs.length){ S.whPlot = null; S.widthsKey = ''; return false; }
   const key = M.widthsKeyOf(f, r, M.allPhases(S), sizeOf(S.$('WhSvg')));
   if (S.whPlot && key === S.widthsKey) return false;
   S.widthsKey = '';
   const colorOf = id => (M.allPhases(S).find(q=> q.id === id) || {}).color || '#888';
   const wrap = S.$('PkWrap');
-  wrap.innerHTML = H.widthsTableHtml(phs, wd, r, colorOf);
+  wrap.innerHTML = H.widthsTableHtml(phs, wd, colorOf);
   drawWH(S, phs, colorOf);
   S.$('Tests').innerHTML = H.testsHtml(phs);
   wireRows(S, f, wrap, colorOf);
@@ -815,11 +821,14 @@ function renderFitSet(S, f, r, shown){
 }
 // The results' box (xrd-rv-html.js resultsHtml), the phases shown those the result was
 // refined with.
+// (a result whose curve cannot be drawn, its phases changed since, says so: lost; v571, X14:
+// to v570 the curve went with no word)
 function renderResults(S, f, r){
   if (!f){ renderFitSet(S, null, null, []); putResults(S, H.noPatternHtml(S.std)); return; }
-  const shown = r && r.params ? (()=>{ try { return curvesOf(S, f, r).list; } catch(e){ return M.phasesFor(S, f); } })() : M.phasesFor(S, f);
+  let lost = false;
+  const shown = r && r.params ? (()=>{ try { return curvesOf(S, f, r).list; } catch(e){ lost = true; return M.phasesFor(S, f); } })() : M.phasesFor(S, f);
   renderFitSet(S, f, r, shown);
-  putResults(S, H.resultsHtml({ r, std: S.std, shown, n: M.phasesFor(S, f).length, any: S.phases.length, irf: ()=> irf(S), stale: ()=> staleOf(S, f, r) }));
+  putResults(S, H.resultsHtml({ r, std: S.std, shown, n: M.phasesFor(S, f).length, any: S.phases.length, irf: ()=> irf(S), stale: ()=> staleOf(S, f, r), lost }));
 }
 function putResults(S, h){ if (h !== S.resultsShown){ S.resultsShown = h; S.$('Results').innerHTML = h; } }
 
@@ -925,15 +934,24 @@ async function addCifs(S, fileList){
       const q = M.newPhase(S.nextId++, text, file.name, prep, S.phases.length, S.std);
       S.phases.push(q);
       if (first == null) first = q.id;
-    } catch(e){ errs.push(`${file.name}: ${e.message}`); }
+    } catch(e){ errs.push([file.name, e.message]); }
   }
   if (first != null) S.sel = first;
   draw(S, true); renderSettings(S); S.host.commit();
-  if (errs.length) setStatus(S, '⚠ ' + errs.join(' · '));
+  // (an error in the status's place, "Not added: {file}: {why}.": v571, X07; to v570 grey,
+  // "⚠ {file}: {message} · …")
+  if (errs.length) setStatus(S, M.notAddedLines(errs), 'bad');
 }
 
 // ---- small UI pieces ----
-function setStatus(S, t){ S.$('Status').textContent = t || ''; }
+/* The status under the phases: grey words (a run's progress, a stop, why Refine cannot), or a
+   compact box of a kind (v571, ALERTS-REVIEW.md X07, X09): 'bad' a run or a CIF that failed,
+   'info' what a run chose; `t` plain text, or its lines. */
+function setStatus(S, t, kind){
+  const el = S.$('Status'), ls = [].concat(t || []).filter(Boolean);
+  if (kind && ls.length) el.innerHTML = boxHtml(kind, ls.map(H.esc));
+  else el.textContent = ls.join(' ');
+}
 function showProg(S, frac){ S.$('ProgWrap').style.display = ''; S.$('ProgBar').style.width = Math.max(0, Math.min(1, frac))*100 + '%'; }
 function hideProg(S){ S.$('ProgWrap').style.display = 'none'; S.$('ProgBar').style.width = '0%'; }
 // A press of Refine or Refine all within a moment of the last, or one of Refine within a
@@ -1076,10 +1094,12 @@ function syncFit(S){
   const def = S.setBody.querySelector('[data-fit-def]');
   if (def) def.disabled = lock || !M.fitShown(S.fit, S.std, S.fitsHere);
   const note = S.setBody.querySelector('[data-fit-note]');
-  if (note){
-    note.classList.toggle('is-warn', !!S.fitNote);
-    note.textContent = M.fitNoteText(S.fitNote);
-  }
+  if (note) note.textContent = M.fitNoteText(null);
+  /* An entry not taken: the rule, in red under its field's row, until the next entry (v571,
+     ALERTS-REVIEW.md C19, X17: to v570 in amber in the note at the section's foot). */
+  S.setBody.querySelectorAll('[data-fit-rule]').forEach(e=> e.remove());
+  const row = S.fitNote && S.setBody.querySelector(`[data-fit-row="${S.fitNoteK}"]`);
+  if (row) row.insertAdjacentHTML('afterend', `<p class="field-rule rvs-rule" data-fit-rule role="alert">${H.esc(S.fitNote)}</p>`);
 }
 // A setting's row: the 1/2θ term's value and its "automatic" (the value locked, showing what
 // automatic gives), a choice's list, a number's field.
@@ -1107,7 +1127,7 @@ function commitFit(S, t){
   const k = t.dataset.fit || t.dataset.fitAuto, m = M.FIT[k]; if (!m) return;
   const e = M.fitEntry(S.fit, m, { auto: !!t.dataset.fitAuto, checked: t.checked, value: t.value, shown: t.dataset.shown }, ()=> autoInv(S).on);
   if (!e) return;
-  if (e.refused){ S.fitNote = e.refused; t.value = t.dataset.shown; flashFieldInvalid(t); syncFit(S); return; }
+  if (e.refused){ S.fitNote = e.refused; S.fitNoteK = k; t.value = t.dataset.shown; flashFieldInvalid(t); syncFit(S); return; }
   if (e.same){ t.value = t.dataset.shown; if (S.fitNote){ S.fitNote = null; syncFit(S); } return; }
   S.fit = e.fit;
   S.fitNote = null;

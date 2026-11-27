@@ -2,6 +2,7 @@
    GENERIC UTILITIES
 ========================================================= */
 import { fixed, isFixed } from './db.js';
+import { ALERT_ICON, boxHtml } from './alerts.js';
 import { listHtml } from './filelist-html.js';
 import { downloadOf, zipEntries, gapFor, landing, outside, halfAt, movedFrom } from './filelist-model.js';
 const COLORS = [
@@ -212,7 +213,8 @@ class ColorPickerUI {
     this._hNum = hslNums[0]; this._sNum = hslNums[1]; this._lNum = hslNums[2];
     this._recentEl = el.querySelector('.cp-recent');
 
-    // 2D map — pointer drag (a mouse's primary button alone: to v569 the right one picked a
+    // 2D map — pointer drag (the primary button alone, of any pointer: a touch's and a pen's
+    // tip are 0, a pen's barrel button and eraser are not, v571; to v569 the right one picked a
     // colour too, v570)
     const onMapMove = e=>{
       const r = this._map.getBoundingClientRect();
@@ -221,7 +223,7 @@ class ColorPickerUI {
       this._emit();
     };
     this._map.addEventListener('pointerdown', e=>{
-      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      if (e.button !== 0) return;
       e.preventDefault(); this._map.setPointerCapture(e.pointerId); onMapMove(e);
       this._map.addEventListener('pointermove', onMapMove);
       this._map.addEventListener('pointerup', ()=>this._map.removeEventListener('pointermove', onMapMove), {once:true});
@@ -234,7 +236,7 @@ class ColorPickerUI {
       this._emit();
     };
     this._hue.addEventListener('pointerdown', e=>{
-      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      if (e.button !== 0) return;
       e.preventDefault(); this._hue.setPointerCapture(e.pointerId); onHueMove(e);
       this._hue.addEventListener('pointermove', onHueMove);
       this._hue.addEventListener('pointerup', ()=>this._hue.removeEventListener('pointermove', onHueMove), {once:true});
@@ -998,14 +1000,15 @@ function wireListDownloads({ wrap, files }){
    and a drop there does nothing (filelist-model.js gapFor). (The line used to be the top
    of the row under the pointer while the row went in that row's place: dragged down, it
    landed under the row the line was over, the gap under the dragged row itself lit, and
-   the one under the last row could not be reached.) A mouse's primary button alone, as a
-   file's own grip (v569: to v568 any button, the right one too, moved the row). */
+   the one under the last row could not be reached.) The primary button alone, of any
+   pointer, as a file's own grip (v569: to v568 any button, the right one too, moved the
+   row; v571: to v570 a mouse's alone, a pen's barrel button or eraser still moving it). */
 function wireListDrag(L){
   L.rows = [...L.wrap.querySelectorAll('.file-row')];
   L.rows.forEach(row=>{
     const handle = row.querySelector('.drag-handle');
     handle.addEventListener('pointerdown', e=>{
-      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      if (e.button !== 0) return;
       e.preventDefault();
       L.drag = { from: +row.dataset.i };
       row.classList.add('dragging');
@@ -1042,7 +1045,7 @@ function wirePartDrag(L){
   L.partEls.forEach(el=>{
     const g = el.querySelector('.fpart-grip');
     g.addEventListener('pointerdown', e=>{
-      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      if (e.button !== 0) return;
       e.preventDefault(); e.stopPropagation();
       L.fdrag = { el, from: partOf(el), paired: el.parentElement.querySelectorAll('.fpart').length > 1, x: e.clientX, y: e.clientY, moved: false };
       el.classList.add('fdragging'); L.wrap.classList.add('fdrag-on');
@@ -2238,12 +2241,49 @@ window.addEventListener('hashchange', ()=>{
    These helpers correct the *displayed* value on blur and flash the field
    (reusing the .field-invalid red + shake animation) so the user notices.
 ========================================================= */
-function flashFieldInvalid(el){
+/* A value refused (ALERTS-REVIEW.md C19, v571): the field flashes and, where the rule is
+   not obvious (`rule`: what it takes, a sentence), a red line under it says the rule for a
+   moment; never a banner or a warning box. The line floats under the field, over what
+   follows (fixed, in the page's top layer), so that nothing in its card moves; it goes as
+   the field is typed in, at the next press anywhere, as the page scrolls or the window
+   changes, or after 4 s. One at a time. (To v570 the flash alone.) */
+let _ruleEl = null;
+function dropRule(){ if (_ruleEl){ const r = _ruleEl; _ruleEl = null; r._off(); r.remove(); } }
+function flashFieldInvalid(el, rule){
   el.classList.remove('field-invalid');
   void el.offsetWidth;                 // reflow so the shake animation restarts
   el.classList.add('field-invalid');
   clearTimeout(el._flashT);
   el._flashT = setTimeout(()=>el.classList.remove('field-invalid'), 450);
+  dropRule();
+  if (!rule || !el.isConnected) return;
+  const b = el.getBoundingClientRect();
+  if (!b.width) return;
+  const r = _ruleEl = document.createElement('div');
+  r.className = 'field-rule field-rule-float';
+  r.setAttribute('role', 'alert');
+  r.textContent = rule;
+  document.body.appendChild(r);
+  const w = r.offsetWidth, vw = document.documentElement.clientWidth;
+  r.style.left = Math.max(4, Math.min(b.left, vw - w - 4)) + 'px';
+  r.style.top = (b.bottom + 3) + 'px';
+  // (not as the field is left: a value is refused as it is, its change coming just before)
+  const gone = ()=>{ if (_ruleEl === r) dropRule(); }, t = setTimeout(gone, 4000);
+  el.addEventListener('input', gone);
+  window.addEventListener('pointerdown', gone, true);
+  window.addEventListener('scroll', gone, true);
+  window.addEventListener('resize', gone);
+  r._off = ()=>{ clearTimeout(t); el.removeEventListener('input', gone); window.removeEventListener('pointerdown', gone, true); window.removeEventListener('scroll', gone, true); window.removeEventListener('resize', gone); };
+}
+/* The rule of a numeric field (guardNumericInput's bounds), said under it when a value is
+   refused: none where it has no bound (a number: obvious). A least bound under any number
+   written (Number.MIN_VALUE: above 0) reads "above 0"; a greatest one past any typed
+   (1e300), none. */
+function numRule({ min = null, max = null, integer = false } = {}){
+  const lo = min == null ? '' : min > 0 && min < 1e-300 ? 'above 0' : `at least ${min}`;
+  const hi = max == null || max >= 1e100 ? '' : `at most ${max}`;
+  const b = [lo, hi].filter(Boolean);
+  return b.length || integer ? `${integer ? 'A whole number' : 'A number'}${b.length ? ', ' + b.join(' and ') : ''}.` : '';
 }
 // Guard one input so it only ever commits a valid value: views update on confirm
 // (blur / Enter), and any invalid entry (empty, non-numeric, out of range, or a
@@ -2267,8 +2307,9 @@ function guardNumericInput(el, opts){
       || (min!=null && v<min) || (max!=null && v>max);
     if (bad){
       // Reject: shake, restore the last confirmed value, and keep the invalid
-      // entry from reaching the module's own listeners (so views stay untouched).
-      flashFieldInvalid(el);
+      // entry from reaching the module's own listeners (so views stay untouched). Its
+      // bounds said under it (v571: numRule).
+      flashFieldInvalid(el, numRule({ min, max, integer }));
       el.value = String(el._lastValid);
       e.stopImmediatePropagation();
       return;
@@ -2599,10 +2640,7 @@ async function bytesOf(file){
    this function: no inline handler, which the page's Content-Security-Policy would refuse). The
    same box, place and behaviour for every kind; only the icon and the colours differ
    (style.css .alert.<kind>). */
-const ALERT_ICON = {
-  bad: '✕ ', warn: '⚠ ',
-  info: '<svg class="alert-ic" viewBox="0 0 16 16" width="1em" height="1em" aria-hidden="true"><circle cx="8" cy="8" r="6.9" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="4.75" r="1.05" fill="currentColor"/><path d="M8 7.4v4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
-};
+// (each kind's icon: alerts.js ALERT_ICON, the compact boxes' module too, v571)
 function alertHtml(kind, header, lines, dismissAction){
   const x = dismissAction
     ? `<button class="alert-dismiss close-x" data-action="${dismissAction}" title="Dismiss">${X_SVG(15)}</button>`
@@ -2764,9 +2802,9 @@ window.addEventListener('load', normalizeNavIcons);
 export {
   colorOf, esc, stateKey, bytesKey, moduleStateKey, viewOnlyChange, registerBusy, moduleBusy, stopModule, colorPickerUI, CP_PALETTES, palettePickerUI, settings, fmtNum, fmtData, csvNum, csvLine, saveBlob, downloadBytes,
   X_SVG, DL_SVG, setupDropzone, renderUnifiedFileList, dropGap, includedOf, setIncluded, removeFileAt, moveFileTo, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, boxStats,
-  maxArr, minArr, NORM_OPTIONS, normOf, fitLinear, tinv, goTab, setTabLoaded, moduleHasData, registerHistory, alertHtml, fileAlertHtml, fileLine, NOT_READ, bytesOf, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState,
+  maxArr, minArr, NORM_OPTIONS, normOf, fitLinear, tinv, goTab, setTabLoaded, moduleHasData, registerHistory, alertHtml, boxHtml, fileAlertHtml, fileLine, NOT_READ, bytesOf, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState,
   getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, guardNumericInput,
-  guardNumberInputs, createDateTimeField, flashFieldInvalid, tiltFits, barNames, barChipYmax, confirmBanner, confirmModal, normalizeProjIcons, refreshProjBar, saveSettings, registerModule,
+  guardNumberInputs, createDateTimeField, flashFieldInvalid, numRule, tiltFits, barNames, barChipYmax, confirmBanner, confirmModal, normalizeProjIcons, refreshProjBar, saveSettings, registerModule,
   makeInstance, attachInstance, detachInstance, dropKey, withState, onAnyChange, onBusyChange, busyChanged, shownOf, showAgain, zoomAgain, keeper, kept, objId, exactKey, dropsBytes, asleep, vacate,
   fixed, isColor, customLast, orderModuleCards
 };

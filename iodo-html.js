@@ -7,11 +7,12 @@
    What they need from the page is handed in, u = { esc, X_SVG } (utils.js's: iodo.js HU).
 ========================================================= */
 import { CAL_MODES, sig } from './iodo-model.js';
+import { boxHtml } from './alerts.js';
 
 // The calibration as the Analysis card says it (L: its line, iodo-model.js calLine); one
 // chosen but incomplete, a warning (v567: to v566 a grey line).
 export const calSumHtml = (cal, L, u)=> cal.mode === 'none' ? 'Calibration: <b>none</b>'
-  : !L ? '<div class="alert warn compact">⚠ Calibration incomplete: not used.</div>'
+  : !L ? boxHtml('warn', 'Calibration incomplete: not used.')
   : `Calibration: <b>A = ${u.esc(sig(L.m))} × c ${L.q < 0 ? '−' : '+'} ${u.esc(sig(Math.abs(L.q)))}</b>${Number.isFinite(L.r2) ? `, R² = <b>${u.esc(L.r2.toFixed(4))}</b>` : ''}${cal.unit.trim() ? `, c in <b>${u.esc(cal.unit.trim())}</b>` : ''}`;
 // The Analysis plot's legend: [colour, its words (markup)] each.
 export const legendHtml = (items, u)=> items.map(([c, t])=> `<span><i style="background:${u.esc(c)}"></i>${t}</span>`).join('');
@@ -36,12 +37,14 @@ export const calHtml = u => `
           <label class="txt-label" for="iodoCalIcpt">Intercept (absorbance)</label>
           <input type="text" inputmode="decimal" class="pg-field" id="iodoCalIcpt" autocomplete="off">
         </div>
+        <p class="field-rule iodo-cal-rule" data-rule="line" role="alert"></p>
         <div class="iodo-cal-std">
           <table class="iodo-std"><thead><tr><th>Concentration</th><th>Absorbance</th><th></th></tr></thead><tbody></tbody></table>
+          <p class="field-rule iodo-cal-rule" data-rule="std" role="alert"></p>
           <button type="button" class="btn btn-sm" data-add-std>+ Standard</button>
           <div class="iodo-cal-fit"></div>
         </div>
-        <div class="iodo-cal-msg" role="status"></div>
+        <div class="iodo-cal-msg" role="alert"></div>
       </div>
       <div class="dt-modal-foot iodo-cal-foot"><button type="button" class="btn" data-cancel>Cancel</button><button type="button" class="btn primary" data-apply>Apply</button></div>
     </div>`;
@@ -53,4 +56,6 @@ export const stdRowsHtml = (stds, u)=> stds.map((p, i)=> `<tr data-i="${i}"><td>
 // none, an error (v567: to v566 a grey line): Apply is held back.
 export const calFitHtml = (draft, L, n, u)=> draft.mode !== 'std' ? '' : L
   ? `Fit of ${L.n} standards: slope <b>${u.esc(sig(L.m, 6))}</b>, intercept <b>${u.esc(sig(L.q, 6))}</b>, R² = <b>${u.esc(L.r2.toFixed(4))}</b>`
-  : `<div class="alert bad compact">✕ ${n} standard${n === 1 ? '' : 's'} with both values: two of different concentrations at least are needed.</div>`;
+  : boxHtml('bad', `${n} standard${n === 1 ? '' : 's'} with both values: two of different concentrations at least are needed.`);
+// A line typed that is none (iodo-model.js calMsg), a compact error under the fields (v571, C17).
+export const calMsgHtml = (msg, u)=> boxHtml('bad', msg ? u.esc(msg) : '');

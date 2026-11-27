@@ -29,6 +29,7 @@ import { readXrdmlScanText } from '../xrd-instr.js';
 import { buildModel, fitSettings } from '../xrd-rietveld.js';
 import * as M from '../xrd-rv-model.js';
 import * as H from '../xrd-rv-html.js';
+import { ALERT_ICON } from '../alerts.js';
 
 const SRT = fs.readFileSync(CIF, 'utf8');
 const BTO = SRT.replace(/SrTiO3/g, 'BaTiO3').replace(/Sr/g, 'Ba').replace(/3\.905/g, '4.00');
@@ -159,10 +160,11 @@ test('the Refinement settings: their ranges, an entry read with either mark, the
   // (a key unknown, out of range, not whole or at its default dropped; the rest in FITS' order, as text)
   const c = M.cleanFit({ bgDegree: 9, maxIter: 50, lambda: 0.001, x: 1, cellRange: 0.073, bgInv: false, shapeStarts: 2.5, zeroRange: -0, shiftTol: NaN });
   assert.equal(JSON.stringify(c), '{"maxIter":50,"bgDegree":9,"bgInv":false,"cellRange":0.073}');
-  // The note on an entry not taken; Defaults offered when one shown is set.
-  assert.equal(M.fitRefusal(M.FIT.maxIter, ' 1.000 ', '40'), 'Max iterations: a whole number from 1 to 1000, without a point or comma — “1.000” not taken; kept 40.');
-  assert.equal(M.fitRefusal(M.FIT.cellRange, 'twenty percent', '5'), 'Cell search range (%): a number from 0.5 to 20 % — “twenty perce…” not taken; kept 5.');
-  assert.equal(M.fitRefusal(M.FIT.lambda, '', '0.001'), 'Starting damping λ: a number from 1e-8 to 1000; kept 0.001.');
+  // The rule of an entry not taken, said under its field (v571: to v570 the note at the
+  // section's foot, the setting's name first, "—"); Defaults offered when one shown is set.
+  assert.equal(M.fitRefusal(M.FIT.maxIter, ' 1.000 ', '40'), 'A whole number from 1 to 1000, without a point or comma: “1.000” not taken; 40 kept.');
+  assert.equal(M.fitRefusal(M.FIT.cellRange, 'twenty percent', '5'), 'A number from 0.5 to 20 %: “twenty perce…” not taken; 5 kept.');
+  assert.equal(M.fitRefusal(M.FIT.lambda, '', '0.001'), 'A number from 1e-8 to 1000; 0.001 kept.');
   const [s, t] = [M.rowsFor(false).fits, M.rowsFor(true).fits];
   assert.deepEqual([M.fitShown({}, false, s), M.fitShown({ zeroRange: 0.5 }, false, s), M.fitShown({ cellRange: 0.1 }, true, t), M.fitShown({ zeroRange: 0.5 }, true, t)], [false, true, false, true]);
   // The automatic 1/2θ term: on from below 20°, never from 0°.
@@ -397,10 +399,26 @@ test('the words: indices barred, formulae, what a phase is refined with, the ins
   assert.deepEqual([H.refinedOf(sto, { ...tx, detected: [2] }, false), H.refinedOf(sto, { ...tx, detected: [1] }, false), H.refinedOf(sto, tx, false), H.refinedOf(sto, { ...tx, detected: ['1'] }, false)],
     ['isotropic size · Lorentzian · microstrain isotropic · B from the CIF', ...Array(3).fill('isotropic size · Lorentzian · microstrain isotropic · B from the CIF · preferred orientation (110)')]);
   assert.equal(H.instrLine(null), '');
-  assert.equal(H.instrLine(M.instrOf(pattern('s00.xrdml', xrdml(0)))), ' Kα₁ 1.540598 Å, Kα₂ 1.544426 Å (×0.5) · R 240 mm — ⚠ No goniometer radius in the file: 240 mm assumed (the specimen displacement in mm depends on it); No divergence slit in the file: a fixed slit is assumed');
+  // (v571: the line the facts alone; what was assumed in a box of each kind under it, X05; no
+  // description at all, what the model assumes, at once, X06)
+  const ins0 = M.instrOf(pattern('s00.xrdml', xrdml(0)));
+  assert.equal(H.instrLine(ins0), ' Kα₁ 1.540598 Å, Kα₂ 1.544426 Å (×0.5) · R 240 mm');
+  assert.equal(H.instrNotesHtml(ins0), '<div class="alert info compact">' + ALERT_ICON.info + 'No goniometer radius in the file: 240 mm assumed (the specimen displacement in mm depends on it).<br>No divergence slit in the file: a fixed slit is assumed.</div>');
+  assert.equal(H.instrNotesHtml(null), '<div class="alert warn compact">⚠ No instrument description could be read from the file: Cu Kα₁/Kα₂ (ratio 0.5), a 240 mm goniometer and no monochromator are assumed.</div>');
+  // Each assumption's kind: neutral (info) or one that may be wrong (warn), by its words.
+  const said = { warnings: ['No wavelength in the file: Cu Kα assumed (Kα₁ 1.540598 Å, Kα₂ 1.544426 Å, Kα₂/Kα₁ 0.5)', 'No Kα₂ in the file: a single wavelength is modelled', 'No Kα₂/Kα₁ ratio in the file: 0.5 assumed',
+    'Kα₂/Kα₁ ratio 2 out of range: 0.5 assumed', 'Diffracted-beam monochromator: crystal "x" not recognised, graphite (002) assumed for the polarisation (K = 0.800)',
+    'Diffracted-beam monochromator: Ge(333) cannot reflect λ = 2.29 Å, graphite(002) assumed for the polarisation (K = 0.800)', 'Incident-beam monochromator: no reflection given, Ge(111) assumed for the polarisation (K = 0.799)',
+    'Incident-beam monochromator: Ge(111) passes Kα₁ alone, so the file\'s Kα₂/Kα₁ ratio of 0.5 is not used', 'Sample mode "Transmission": the model is Bragg–Brentano reflection, whose Lorentz–polarisation and displacement terms do not hold here',
+    'Scan axis "Omega": the model assumes a coupled θ–2θ (Gonio) scan, which Bragg–Brentano focusing needs', 'Automatic divergence slit: the intensities grow as sinθ against a fixed slit, which the model does not correct yet (the data need dividing by sinθ)',
+    'Programmable divergence slit with no irradiated length in the file: modelled as a fixed slit (if it ran in automatic mode, the data need dividing by sinθ)', 'Divergence slit of unknown kind ("y"): a fixed slit is assumed',
+    'Incident-beam monochromator ("z"): it usually passes Kα₁ alone, but the file gives a Kα₂/Kα₁ ratio of 0.5 (check it)', 'something new'] };
+  assert.deepEqual(said.warnings.map(M.instrNoteKind), ['warn', 'info', 'info', 'info', 'info', 'warn', 'info', 'info', 'warn', 'warn', 'warn', 'warn', 'info', 'warn', 'warn']);
+  const notes = H.instrNotesHtml(said);
+  assert.ok(notes.startsWith('<div class="alert warn compact">⚠ No wavelength in the file') && notes.includes('<div class="alert info compact">') && notes.indexOf('alert warn') < notes.indexOf('alert info') && notes.endsWith('a fixed slit is assumed.</div>'), notes);
   assert.equal(H.instrLine({ lam1: 1.5406, lam2: 1.5444, ratio: 0.5, anode: 'Cu', radius: 240, divergence: { type: 'Fixed', deg: 0.25 }, soller: { incident: 0.04 }, filter: { material: 'Ni' }, monochromator: true,
     monochromators: [{ side: 'diffracted', crystal: 'graphite', reflections: 1 }, { side: 'incident', crystal: 'Ge(111)', reflections: 2 }], monoK: 0.7998, detector: { name: 'PIXcel' }, warnings: ['a', 'b'] }),
-  'Cu Kα₁ 1.5406 Å, Kα₂ 1.5444 Å (×0.5) · R 240 mm · Fixed divergence slit 0.25° · Soller 0.04 rad · Ni filter · diffracted graphite + incident Ge(111)×2 monochromator (K 0.800) · PIXcel — ⚠ a; b');
+  'Cu Kα₁ 1.5406 Å, Kα₂ 1.5444 Å (×0.5) · R 240 mm · Fixed divergence slit 0.25° · Soller 0.04 rad · Ni filter · diffracted graphite + incident Ge(111)×2 monochromator (K 0.800) · PIXcel');
   assert.deepEqual(['ellipsoid', 'spheroid', 'cylinder', 'ellcyl', 'box', 'sqbox'].map((type, i)=> H.solidCaption({ type, kind: 'free', dims: [9.95, 10, i ? 123.4 : Infinity] })),
     ['ellipsoid, free: axes 9.9 × 10 × ∞ nm', 'spheroid, free: 9.9 nm across, 123 nm along its axis', 'cylinder, free: diameter 9.9 nm, height 123 nm', 'elliptic cylinder, free: 9.9 × 10 nm across, height 123 nm',
       'box, free: 9.9 × 10 × 123 nm', 'square-based box, free: base 9.9 × 9.9 nm, height 123 nm']);
@@ -415,6 +433,9 @@ test('the words: indices barred, formulae, what a phase is refined with, the ins
   const cell = H.cellDetailsHtml(q, false), body = H.settingsBodyHtml([q], { p: 'zz', std: false, lab6: null, ...M.rowsFor(false), normOptions: '' });
   for (const html of [rows, cell, body]) assert.ok(!html.includes('<i data-x') && html.includes('&quot;\'&gt;&lt;i data-x=1&gt;&lt;/i&gt;'), 'escaped');
   assert.ok(cell.includes('<div class="rv-ci-note">&quot;\'&gt;&lt;i data-x=1&gt;&lt;/i&gt;.</div>'));
+  // What to check in the structure, a compact warning (v571, X13: to v570 a grey note).
+  const qc = { ...q, prep: { ...q.prep, notes: [], cautions: ['the occupancies give O 2, the formula × Z 3: vacancies <b>'] } };
+  assert.ok(H.cellDetailsHtml(qc, false).endsWith('<div class="alert warn compact rv-ci-warn">⚠ The occupancies give O 2, the formula × Z 3: vacancies &lt;b&gt;.</div>'));
 });
 
 /* ---- v559: the card's state and its views, out of xrd-rv.js's createRietveld ---- */
@@ -472,10 +493,10 @@ test('the card\'s state: its phases, a phase added and removed, the Refinement e
   const F = M.FIT, e = (value, shown = 'x', o = {})=> ({ auto: false, checked: false, value, shown, ...o }), auto = ()=> true;
   assert.deepEqual(M.fitEntry({ bgDegree: 8 }, F.maxIter, e('50'), auto), { fit: { maxIter: 50, bgDegree: 8 } });
   assert.deepEqual(M.fitEntry({ maxIter: 50 }, F.maxIter, e('40'), auto), { fit: {} });
-  assert.deepEqual(M.fitEntry({ maxIter: 50 }, F.maxIter, e('50.0'), auto), { refused: 'Max iterations: a whole number from 1 to 1000, without a point or comma — “50.0” not taken; kept x.' });
+  assert.deepEqual(M.fitEntry({ maxIter: 50 }, F.maxIter, e('50.0'), auto), { refused: 'A whole number from 1 to 1000, without a point or comma: “50.0” not taken; x kept.' });
   assert.deepEqual(M.fitEntry({}, F.maxIter, e(' 40 '), auto), { same: true });
   assert.deepEqual(M.fitEntry({}, F.cellRange, e('7,3', '5'), auto), { fit: { cellRange: 0.073 } });
-  assert.deepEqual(M.fitEntry({}, F.cellRange, e('', '5'), auto), { refused: 'Cell search range (%): a number from 0.5 to 20 %; kept 5.' });
+  assert.deepEqual(M.fitEntry({}, F.cellRange, e('', '5'), auto), { refused: 'A number from 0.5 to 20 %; 5 kept.' });
   assert.deepEqual(M.fitEntry({}, F.bgInv, e('', '', { auto: true, checked: false }), ()=> false), { fit: { bgInv: false } });
   assert.deepEqual(M.fitEntry({ bgInv: false }, F.bgInv, e('', '', { auto: true, checked: true }), auto), { fit: {} });
   assert.deepEqual(M.fitEntry({}, F.bgInv, e('', '', { checked: true }), auto), { fit: { bgInv: true } });
@@ -495,7 +516,13 @@ test('the card\'s state: its phases, a phase added and removed, the Refinement e
   assert.ok(run.ph[0] !== q1 && run.ph[0].on !== q1.on && run.ph[0].off !== q1.off && run.ph[0].prep === q1.prep && run.fit !== S.fit && run.hold !== S.hold && run.std.id === 0);
   assert.deepEqual([run.start, run.hold, run.fit, run.irf, run.n, run.done], ['last', HOLD_DEFAULT, { maxIter: 9 }, { U: 1 }, 3, 0]);
   // Its words.
-  assert.deepEqual([M.nothingText(true, 0), M.nothingText(false, 2), M.nothingText(false, 0)], ['Load the standard\'s file to refine it.', 'No phase ticked for this pattern: add one from a CIF, or tick one.', 'Add a phase from a CIF to refine.']);
+  // (v571: the results' words too, X08)
+  assert.deepEqual([M.nothingText(true, 0), M.nothingText(false, 2), M.nothingText(false, 0)], ['Load the standard\'s file to refine it.', 'No phase ticked for this pattern: tick one in the list, or add one from a CIF.', 'Add a phase from a CIF to refine.']);
+  // A run that failed, CIFs not added: an error in the status's place (v571, X07).
+  assert.deepEqual(['The pattern has too few points (40) for a refinement.', 'Refinement failed', 'The refinement worker failed', 'Refinement failed on purpose', 'SrTiO3: cell <x>', '⚠ No phase with id 3.', '', null].map(M.failText),
+    ['Refinement failed: the pattern has too few points (40) for a refinement.', 'Refinement failed.', 'The refinement worker failed.', 'Refinement failed on purpose.', 'Refinement failed: SrTiO3: cell <x>.', 'Refinement failed: no phase with id 3.', 'Refinement failed.', 'Refinement failed.']);
+  assert.deepEqual([M.notAddedLines([['a.cif', 'Not a CIF: no data_ block found.']]), M.notAddedLines([['a.cif', 'None of the atom sites in the CIF could be read.'], ['b.tif', 'not a CIF file (.cif).']]), M.notAddedLines([])],
+    [['Not added: a.cif: not a CIF: no data_ block found.'], ['Not added:', 'a.cif: none of the atom sites in the CIF could be read.', 'b.tif: not a CIF file (.cif).'], []]);
   assert.deepEqual([M.runEndText({ fell: [], bgFreed: [] }), M.runEndText({ fell: ['a (x)', 'b (y)'], bgFreed: ['a', 'c'] })], ['',
     'From the CIF, no last result to start from: a (x); b (y). Scales and background refined, not held: the background\'s terms changed since the last result (a, c).']);
   const lbl = k => ['s0', 's1', 's2'][k], from = ['', ' from its last result'], R0 = { done: 1, n: 3 };
@@ -511,7 +538,7 @@ test('the card\'s state: its phases, a phase added and removed, the Refinement e
   assert.match(M.stdQuestion(false)[0], /^No instrumental standard is loaded/);
   assert.deepEqual([M.stdFailText({ ok: true }), M.stdFailText({ ok: false, why: 'stopped' }), M.stdFailText({ ok: false, why: 'Bad cell.' }), M.stdFailText({ ok: false })],
     ['The standard\'s refinement gave no profile (its file changed meanwhile?): nothing refined.', 'The standard\'s refinement was stopped: nothing refined.',
-      'The standard\'s refinement failed (Bad cell): nothing refined.', 'The standard\'s refinement failed (undefined): nothing refined.']);
+      'The standard\'s refinement failed: Bad cell; nothing refined.', 'The standard\'s refinement failed: no reason given; nothing refined.']);
   assert.deepEqual([M.refineTitle(null, 'why'), M.refineTitle({ own: true }, 'x'), M.refineTitle({ own: false }, '')], ['why', 'The standard is refined first: Cancel stops it', 'Waiting for the standard\'s refinement: Cancel stops waiting (the standard goes on)']);
   assert.deepEqual([null, {}, { frac: 0.256 }, { frac: 7 }, { frac: -1 }].map(M.stdRunView).map(v=> [v.key, v.prog, v.label]), [['', '0', 'Instrumental standard… (refining)'], ['run:null', '0', 'Instrumental standard… (refining)'],
     ['run:26', '0.26', 'Instrumental standard… (refining, 26 %)'], ['run:100', '1', 'Instrumental standard… (refining, 100 %)'], ['run:0', '0', 'Instrumental standard… (refining, 0 %)']]);
@@ -631,7 +658,7 @@ test('the state saved and put back (every value made valid, a run\'s kept throug
 
 test('the card\'s markup: its frame, its section of the Results, its settings window, the legends, the solids, the results; every name escaped', ()=>{
   const card2 = H.cardHtml('xrdR2', false, HU), std = H.cardHtml('xrdStdR', true, HU), res = H.resHtml('xrdR2', HU);
-  for (const id of ['Svg', 'Legend', 'Instr', 'Cifs', 'CifInput', 'PhaseList', 'CifDz', 'AddCif', 'CellName', 'Cell', 'CellInfo', 'Status', 'ProgWrap', 'ProgBar', 'Refine', 'Settings', 'Clear',
+  for (const id of ['Svg', 'Legend', 'Instr', 'InstrNotes', 'WNote', 'Cifs', 'CifInput', 'PhaseList', 'CifDz', 'AddCif', 'CellName', 'Cell', 'CellInfo', 'Status', 'ProgWrap', 'ProgBar', 'Refine', 'Settings', 'Clear',
     'FitSet', 'Results', 'Widths', 'WhSvg', 'WhLegend', 'Tests', 'Solids', 'PkWrap']){ assert.ok(card2.includes(`id="xrdR2${id}"`), id); assert.ok(std.includes(`id="xrdStdR${id}"`), 'std ' + id); }
   for (const id of ['RefineAll', 'Std', 'ClearAll']){ assert.ok(card2.includes(`id="xrdR2${id}"`), id); assert.ok(!std.includes(`id="xrdStdR${id}"`), 'std ' + id); }
   assert.ok(card2.includes('<div class="snav" id="xrdR2Prev+xrdR2Next+xrdR2Label"></div>') && !std.includes('class="snav"'), 'the selector the samples\' alone');
@@ -662,9 +689,19 @@ test('the card\'s markup: its frame, its section of the Results, its settings wi
   const q = { prep: { name: evil, warnings: [evil] } }, calls = [];
   const irf = v => ()=>{ calls.push('irf'); return v; }, stale = v => ()=>{ calls.push('stale'); return v; };
   const none = H.resultsHtml({ r: null, std: false, shown: [q], n: 1, any: 1, irf: irf(null), stale: stale(false) });
-  assert.ok(none.startsWith('<div class="rv-note rv-wide">Not refined yet.') && none.endsWith(`<div class="rv-note rv-wide rv-warn">⚠ ${esc}: ${esc}</div>`));
+  // (a CIF's warnings, a compact box a kind per phase, v571, X12: to v570 an amber line each)
+  assert.ok(none.startsWith('<div class="rv-note rv-wide">Not refined yet.') && none.endsWith(`<div class="alert warn compact rv-wide">⚠ ${esc}: ${esc}</div>`), none);
+  const kinds = { prep: { name: 'P', warnings: ['The file holds 2 structures: the first, data_a, is used.', 'Fm-3m is centred but the operations hold 1 of its 4 centring translations: the cell will be filled incompletely.',
+    'Negative displacement parameters in the CIF.', 'No displacement parameter for O1: B = 0.5 Å² assumed.', 'Site X: occupancy 2 > 1.'] } };
+  assert.deepEqual(kinds.prep.warnings.map(M.cifNoteKind), ['info', 'bad', 'warn', 'info', 'warn']);
+  assert.ok(['A magnetic CIF: its 4 space-group operations are taken, without time reversal; the magnetic moments are not used (they scatter X-rays negligibly).', 'No valid _cell_angle_beta: 90° assumed.',
+    'The symmetry operations do not include the identity: it is added.', 'No tabulated form factor of its own, taken as the tabulated charges around it with the same mean charge: Fe2.5+ (Fe1) as 0.5 Fe2+ + 0.5 Fe3+.'].every(w=> M.cifNoteKind(w) === 'info'));
+  const kb = H.resultsHtml({ r: null, std: false, shown: [kinds], n: 1, any: 1, irf: irf(null), stale: stale(false) });
+  assert.ok(kb.endsWith('<div class="alert bad compact rv-wide">✕ P: Fm-3m is centred but the operations hold 1 of its 4 centring translations: the cell will be filled incompletely.</div>'
+    + '<div class="alert warn compact rv-wide">⚠ P: Negative displacement parameters in the CIF.<br>P: Site X: occupancy 2 &gt; 1.</div>'
+    + `<div class="alert info compact rv-wide">${ALERT_ICON.info}P: The file holds 2 structures: the first, data_a, is used.<br>P: No displacement parameter for O1: B = 0.5 Å² assumed.</div>`), kb);
   assert.match(H.resultsHtml({ r: {}, std: true, shown: [], n: 1, any: 0 }), /\(the certified one, held fixed\)/);
-  assert.match(H.resultsHtml({ r: {}, std: false, shown: [], n: 0, any: 2 }), /No phase ticked for this pattern/);
+  assert.match(H.resultsHtml({ r: {}, std: false, shown: [], n: 0, any: 2 }), /No phase ticked for this pattern: tick one in the list, or add one from a CIF\./);
   assert.match(H.resultsHtml({ r: {}, std: false, shown: [], n: 0, any: 0 }), /No phase: add one from a CIF/);
   assert.deepEqual(calls, []);
   const r = { params: {}, stats: { Rwp: 0.1234, Rexp: 0.05, chi2: 6.1 }, phaseResults: [{ name: evil, phase: true, lines: [{ label: 'a (1-10)', value: '1(2)', title: evil }] }], warnings: ['w (-1 1 0)'], irf: { U: 1 } };
@@ -674,11 +711,26 @@ test('the card\'s markup: its frame, its section of the Results, its settings wi
   assert.ok(done.includes('a (1<span class="hkl-bar"><span class="hkl-sign">-</span>1</span>0): <b>1(2)</b>') && done.includes('⚠ w (<span class="hkl-bar"><span class="hkl-sign">-</span>1</span> 1 0)'));
   assert.ok(done.endsWith('The standard has been refined again since this result: its profile, zero and asymmetry are not the ones these numbers rest on. Refine this pattern again, or <b>Refine all</b>.</div>'));
   calls.length = 0;
-  const noIrf = H.resultsHtml({ r: { ...r, irf: null }, std: false, shown: [], n: 1, any: 1, irf: irf(null), stale: stale(true) });
+  // No instrumental profile: one compact warning, what was refined without it in it (v571, X10:
+  // to v570 a grey note, two amber warnings and the table's note); no instrument description
+  // said under the pattern, not here (X06).
+  const NEED = 'P1: WPPM, planar faults; P2: anisotropic strain: need the standard\'s instrumental profile (refine the standard first), else the instrument\'s broadening and the sample\'s are one and the same; refined without.';
+  const SHAPE = 'Free shape: needs the standard\'s instrumental profile (refine the standard first), else the shape\'s widths and the instrument\'s are one and the same; P1 refined with an isotropic size.';
+  const rn = { ...r, irf: null, warnings: [M.NO_INSTR, NEED, 'w', SHAPE] };
+  const noIrf = H.resultsHtml({ r: rn, std: false, shown: [], n: 1, any: 1, irf: irf(null), stale: stale(true) });
   assert.deepEqual(calls, ['irf']);
-  assert.match(noIrf, /No instrumental profile \(refine the standard first/);
-  assert.match(H.resultsHtml({ r: { ...r, irf: null }, std: false, shown: [], n: 1, any: 1, irf: irf({}), stale: stale(true) }), /this pattern was refined before the standard was/);
+  assert.ok(noIrf.includes('<div class="alert warn compact rv-wide">⚠ No instrumental profile: the widths, and the sizes from them, include the instrument\'s. Refine the standard first: <b>Instrumental standard…</b>.'
+    + '<br>Refined without, as they need it: P1: WPPM, planar faults; P2: anisotropic strain.<br>The free shape needs it: P1 refined with an isotropic size.</div><div class="rv-note rv-wide rv-warn">⚠ w</div>'), noIrf);
+  assert.ok(!noIrf.includes('No instrument description') && !noIrf.includes('refined without.') && (noIrf.match(/No instrumental profile/g) || []).length === 1);
+  assert.match(H.resultsHtml({ r: { ...r, irf: null }, std: false, shown: [], n: 1, any: 1, irf: irf({}), stale: stale(true) }), /⚠ No instrumental profile: the widths, and the sizes from them, include the instrument's\. Refine this pattern again\.<\/div>/);
+  // (the standard's profile refused here: its warning says why; the box only for what was refined without it)
+  assert.ok(!H.resultsHtml({ r: { ...r, irf: null, irfRefused: true }, std: false, shown: [], n: 1, any: 1, irf: irf({}), stale: stale(true) }).includes('No instrumental profile'));
+  assert.match(H.resultsHtml({ r: { ...rn, irfRefused: true }, std: false, shown: [], n: 1, any: 1, irf: irf({}), stale: stale(true) }), /⚠ No instrumental profile: the standard's does not apply to this pattern \(the warnings say why\)\.<br>Refined without/);
   assert.match(H.resultsHtml({ r: { ...r, irf: null, irfRefused: true }, std: true, shown: [], n: 1, any: 1, irf: irf({}), stale: stale(true) }), /The samples take this profile/);
+  // A curve that cannot be drawn, its phases changed since: said (v571, X14: to v570 gone with no word).
+  assert.ok(H.resultsHtml({ r, std: false, shown: [], n: 1, any: 1, irf: irf({ U: 1 }), stale: stale(false), lost: true })
+    .includes('<div class="alert warn compact rv-wide">⚠ This result\'s curve cannot be drawn: its phases changed since. Refine it again.</div>'));
+  assert.deepEqual([H.widthsNote({ corrected: false }), H.widthsNote({ corrected: true }), H.widthsNote(null)], ['(not corrected for the instrument)', '', '']);
   // A number missing (a NaN or ∞ through JSON is null; a project's result without its
   // statistics): a dash, as the CSV leaves its cell empty (16, v568; to v567 null threw, and so
   // did a result with no stats, the draw stopping there and the restore with it).
@@ -831,7 +883,8 @@ function outputs(C, said){
   if (r && r.params){ try { cv = curvesOf(C, f, r); } catch(e){ cv = null; } }
   const shown = r && r.params ? (cv ? cv.list : M.phasesFor(S, f)) : M.phasesFor(S, f), done = !!(r && r.params);
   o.fitSet = [H.fitLineHtml(shown, r, done, done ? M.fitUsed(r, S.std) : [], S.std), M.fitSetTitle(done, shown.length)];
-  o.results = H.resultsHtml({ r, std: S.std, shown, n: M.phasesFor(S, f).length, any: S.phases.length, irf: C.irf, stale: ()=> !S.std && !!r.irf && !M.sameIrf(r.irf, C.irf()) });
+  // (lost: a result whose curve cannot be drawn says so, as xrd-rv.js renderResults, v571)
+  o.results = H.resultsHtml({ r, std: S.std, shown, n: M.phasesFor(S, f).length, any: S.phases.length, irf: C.irf, stale: ()=> !S.std && !!r.irf && !M.sameIrf(r.irf, C.irf()), lost: done && !cv });
   // (the settings' body built again only when the phases on show change: with none at all, a
   // window opened on them was never built, as since v460)
   const key = M.settingsKeyOf(all);

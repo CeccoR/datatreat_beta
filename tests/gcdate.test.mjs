@@ -97,7 +97,8 @@ test('dates that do not exist left out and said, a day/month file found and said
   try {
     await openModule(page, 'gc');
     // Refused: no date that exists; one row with a value whose date does not, the others with
-    // no gas value; no gas value in any row, 2/30 or not (by its name, as at v509).
+    // no gas value; no gas value in any row, 2/30 or not (v571: its why; to v570 by its name, as
+    // at v509, "not a GC table…", which it is).
     const empty = (name, dates, hasValue = ()=> false)=> ({ name, mimeType: 'text/csv',
       buffer: Buffer.from('Injection date,H2 (B) [%Mol]\n' + dates.map((d, i)=> `${d},${hasValue(i) ? '0.5' : ''}`).join('\n') + '\n') });
     const ev = ['10/20/2026 9:00:00 AM', '10/20/2026 9:15:00 AM', '10/20/2026 9:30:00 AM', '2/30/2026 9:45:00 AM'];
@@ -132,7 +133,7 @@ test('dates that do not exist left out and said, a day/month file found and said
     assert.deepEqual(al.find(a=> /Not loaded/.test(a[0])), ['✕ Not loaded:',
       'none.csv: no injection to read: 2 rows with an injection date that does not exist.',
       'badval.csv: no injection to read: 1 row with an injection date that does not exist, 3 with no gas value.',
-      'emptyplusbad.csv: not a GC table: no injection date and H₂ or O₂ column under a header.']);
+      'emptyplusbad.csv: no injection to read: 4 rows with an injection date and no gas value.']);
     assert.deepEqual(await datesAlert(page), [CHECK,
       'feb30.csv: 1 row left out: its injection date does not exist.',
       'noleap.csv: 1 row left out: its injection date does not exist.',

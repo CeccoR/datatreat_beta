@@ -35,7 +35,9 @@ function prepPhase(text, fileName){
   const atoms = expandAtoms(own ? cif.ops : [], cif.sites);
   const sc = structureCell(cif.cell, atoms), sym = sc.sym;
   const comp = checkComposition(atoms, cif.formulaSum, cif.Z, { structural: cif.formulaStructural, sumAsCell: true });
-  const notes = [], warnings = [...(cif.warnings || [])];
+  // (cautions, v571: what the Structure box says as a warning, ALERTS-REVIEW.md X13: to v570
+  // a grey note among the others)
+  const notes = [], warnings = [...(cif.warnings || [])], cautions = [];
   if (sc.basis){
     const c = sc.cell, r = v => +v.toFixed(4), V = metric(c).V/metric(cif.cell).V;
     notes.push(`the structure repeats on a lattice finer than the file's cell: refined in its own cell, a ${r(c.a)}, b ${r(c.b)}, c ${r(c.c)} Å, α ${r(c.alpha)}, β ${r(c.beta)}, γ ${r(c.gamma)}° (${+V.toFixed(4)}× the file's volume; the same pattern)`);
@@ -49,7 +51,7 @@ function prepPhase(text, fileName){
   if (sym.bSpread > 0.01) notes.push(`the B of atoms the symmetry makes equivalent differed (by up to ${+sym.bSpread.toFixed(2)} Å² from their mean): each takes its site's mean`);
   if (sym.group === false) warnings.push('The symmetry found from the atoms does not close into a group at any tolerance tried (atoms of one kind within 0.01 Å of each other?): the operations used may be incomplete.');
   if (comp && !comp.ok && comp.message) warnings.push(comp.message);
-  else if (comp && comp.note) notes.push(comp.note);
+  else if (comp && comp.note) cautions.push(comp.note);
   // The sites, named as the engine names them (phaseSites): what Site occupancy offers.
   const sites = phaseSites(sc.cell, sc.atoms, sym.ops).sites.map(st=> ({ label: st.label, element: st.element, n: st.members.length }));
   // The space group the file names, else the one its atoms have (xrd-sg.js).
@@ -59,7 +61,7 @@ function prepPhase(text, fileName){
   return {
     name: cif.name || (fileName || '').replace(/\.cif$/i, ''), file: fileName || '', formula: cif.formulaSum || '', sites,
     cell: sc.cell, ops: sym.ops, atoms: sc.atoms, system: sym.system, constraint: sym.constraint, order: sym.order,
-    mass: cellMass(sc.atoms), notes, warnings, ownCell: !!sc.basis, Z: cif.Z || null,
+    mass: cellMass(sc.atoms), notes, cautions, warnings, ownCell: !!sc.basis, Z: cif.Z || null,
     sg: sg || null, sgFrom: named ? 'cif' : sg ? 'atoms' : null, src: textKey(text),
   };
 }
@@ -354,6 +356,28 @@ function instrOf(f){
   f.instr = ins || f.instr || null;
   return f.instr;
 }
+/* The instrument's assumptions (its reading's warnings, xrd-instr.js readInstrument), each said
+   under the pattern in its box (xrd-rv-html.js instrNotesHtml, v571, ALERTS-REVIEW.md X05, U6):
+   'info' a choice that holds in the normal case (no Kα₂, the ratio, the radius, a
+   monochromator's crystal or reflection, a perfect crystal's Kα₂ left out, a fixed slit);
+   'warn' one that may be wrong (the wavelength assumed, a crystal that cannot reflect λ, a
+   geometry the model does not take, a slit not fixed, a ratio a monochromator may not pass)
+   and any other. By their words: the file's warnings are kept as words with it. */
+const INSTR_INFO = [/: a single wavelength is modelled$/, /: 0\.5 assumed$/, /^No goniometer radius in the file/, /not recognised, graphite \(002\) assumed for the polarisation/,
+  /: no reflection given, .* assumed for the polarisation/, /passes Kα₁ alone, so the file's Kα₂\/Kα₁ ratio/, /: a fixed slit is assumed$/];
+const instrNoteKind = w => INSTR_INFO.some(re=> re.test(String(w))) ? 'info' : 'warn';
+// No instrument description at all (bytes not stored, a file of no header): what the model
+// assumes, the engine's words (xrd-rietveld.js), said under the pattern at once (v571, X06: to
+// v570 only after a refinement, among its warnings).
+const NO_INSTR = 'No instrument description could be read from the file: Cu Kα₁/Kα₂ (ratio 0.5), a 240 mm goniometer and no monochromator are assumed.';
+/* A CIF's warnings (xrd-cryst.js parseCif, prepPhase), each in its phase's box of its kind
+   (xrd-rv-html.js resultsHtml, v571, ALERTS-REVIEW.md X12, U4): 'bad' centring translations
+   missing (the cell filled incompletely); 'info' a reading's choice (the first of several
+   structures, a magnetic CIF's operations, a cell angle missing, the identity added, a form
+   factor from the charges around it, B assumed); 'warn' the rest. By their words. */
+const CIF_INFO = [/^The file holds \d+ structures: the first/, /^A magnetic CIF/, /^No valid _cell_angle_/, /do not include the identity: it is added/,
+  /^No tabulated form factor of its own, taken as the tabulated charges around it/, /^No displacement parameter for .*: B = [\d.]+ Å² assumed/];
+const cifNoteKind = w => /is centred but the operations hold \d+ of its \d+ centring translation/.test(w) ? 'bad' : CIF_INFO.some(re=> re.test(String(w))) ? 'info' : 'warn';
 // The built-in LaB6's id (the standard's card: lab6).
 const LAB6_ID = 0;
 // The role a result was refined in: as the standard or as a sample; null for a result
@@ -648,11 +672,12 @@ function autoInvOf(f){
   const x0 = scanRange(f)[0], on = bgInvOn(x0, 'auto');
   return { on, why: ` Here automatic gives ${on ? 'on' : 'off'}: ${f.label} starts at ${fitTxt(+x0.toFixed(2))}°.` };
 }
-// The note on a Refinement entry not taken (commitFit): what is allowed, the entry, the
-// value kept.
+// A Refinement entry not taken (commitFit), said in red under its field (v571, ALERTS-REVIEW.md
+// C19, X17: to v570 in amber in the section's note, its name first): what is allowed, the
+// entry, the value kept.
 function fitRefusal(m, value, shown){
-  const raw = String(value).trim();
-  return `${m.label}: ${m.rule}${m.int && /[.,]/.test(raw) ? ', without a point or comma' : ''}${raw ? ` — “${raw.length > 12 ? raw.slice(0, 12) + '…' : raw}” not taken` : ''}; kept ${shown}.`;
+  const raw = String(value).trim(), rule = m.rule.charAt(0).toUpperCase() + m.rule.slice(1);
+  return `${rule}${m.int && /[.,]/.test(raw) ? ', without a point or comma' : ''}${raw ? `: “${raw.length > 12 ? raw.slice(0, 12) + '…' : raw}” not taken` : ''}; ${shown} kept.`;
 }
 
 /* The card's state as saved (snapshot). Each phase's settings (on, dep) and the patterns it
@@ -801,8 +826,29 @@ function runOf(S, irf, n, tell){
   return { ph: S.phases.map(copy), std: copy(stdPhase(S)), start: S.startFrom, hold: S.hold.slice(), fit: { ...S.fit }, irf,
     fell: [], bgFreed: [], n, done: 0, tell };
 }
-// Why Refine has nothing to refine (no pattern with a phase): the standard's, a sample's.
-const nothingText = (std, n) => std ? 'Load the standard\'s file to refine it.' : n ? 'No phase ticked for this pattern: add one from a CIF, or tick one.' : 'Add a phase from a CIF to refine.';
+// Why Refine has nothing to refine (no pattern with a phase): the standard's, a sample's (the
+// words the results under the pattern say too, v571: to v570 two sentences, ALERTS-REVIEW.md X08).
+const NO_TICK = 'No phase ticked for this pattern: tick one in the list, or add one from a CIF.';
+const nothingText = (std, n) => std ? 'Load the standard\'s file to refine it.' : n ? NO_TICK : 'Add a phase from a CIF to refine.';
+/* What a run that failed says, an error in the status's place (xrd-rv.js setStatus, v571,
+   ALERTS-REVIEW.md X07: to v570 "⚠ {message}", grey): "Refinement failed: {why}.", the
+   engine's or the worker's message as its why, its first word not capitalised where it is a
+   plain one (The, A, …: a phase's name keeps its case); a message that says so already, as
+   it is. */
+const lowerFirst = t => /^(The|A|An|No|None|Not|Two|Too)\b/.test(t) ? t.charAt(0).toLowerCase() + t.slice(1) : t;
+const bareWhy = t => String(t == null ? '' : t).replace(/^⚠\s*/, '').trim().replace(/[.\s]+$/, '');
+function failText(msg){
+  const m = bareWhy(msg);
+  if (!m || /^refinement failed$/i.test(m)) return 'Refinement failed.';
+  if (/^(the )?refinement (worker )?failed\b/i.test(m)) return m.charAt(0).toUpperCase() + m.slice(1) + '.';
+  return `Refinement failed: ${lowerFirst(m)}.`;
+}
+// The CIFs a drop could not add ([file, its reader's message] each), an error in the status's
+// place: "Not added: {file}: {why}." (several: a line each under "Not added:").
+function notAddedLines(errs){
+  const ls = errs.map(([f, m])=> `${f}: ${lowerFirst(bareWhy(m))}.`);
+  return ls.length === 1 ? ['Not added: ' + ls[0]] : ls.length ? ['Not added:', ...ls] : [];
+}
 // A run ended: the patterns refined from the CIF though asked from their last result, and
 // those whose scales and background were refined rather than held.
 const runEndText = run => [run.fell.length && `From the CIF, no last result to start from: ${run.fell.join('; ')}.`,
@@ -830,9 +876,10 @@ const stdQuestion = loaded => [loaded
   ? 'The instrumental standard is not refined: without its profile the widths, and the sizes from them, include the instrument\'s. Refine it first, with the settings of its window?'
   : 'No instrumental standard is loaded: without its profile the widths, and the sizes from them, include the instrument\'s.',
   loaded ? 'Refine the standard first' : 'Load a standard…', 'Refine without the standard'];
-// The standard's run, refined first, gave no profile (r: its { ok, why }).
+// The standard's run, refined first, gave no profile (r: its { ok, why }): stopped, said in the
+// status (grey); else an error there (xrd-rv.js stdFirst; v571: to v570 grey, its why in brackets).
 const stdFailText = r => r.ok ? 'The standard\'s refinement gave no profile (its file changed meanwhile?): nothing refined.'
-  : r.why === 'stopped' ? 'The standard\'s refinement was stopped: nothing refined.' : `The standard's refinement failed (${String(r.why).replace(/\.$/, '')}): nothing refined.`;
+  : r.why === 'stopped' ? 'The standard\'s refinement was stopped: nothing refined.' : `The standard's refinement failed: ${lowerFirst(bareWhy(r.why)) || 'no reason given'}; nothing refined.`;
 // Refine's title: a wait for the standard's run (one the standard's window started: Cancel
 // ends the wait, not that run), else why it cannot run now (why).
 const refineTitle = (waiting, why) => waiting ? (waiting.own ? 'The standard is refined first: Cancel stops it' : 'Waiting for the standard\'s refinement: Cancel stops waiting (the standard goes on)') : why;
@@ -1009,6 +1056,6 @@ export { PHASE_COLORS, prepPhase, textKey, prepOf, cellKey, MODES, MODE, siteLis
   resultPhases, curvesFrom, exactJson, scanRange, tickRows, groupTicks,
   sizesOf, sizeKinds, sizeMarks, fitUsed, csvTables, rowsFor, fitShown, naOf, autoInvOf, fitRefusal, stateOf, readState, resultsOf,
   idOf, resKey, curveKey, allPhases, stdPhase, phasesFor, locked, newPhase, dropPhase, keepLoaded, holdWith, fitNoteText, modeTitle, settingsKeyOf, fitEntry,
-  runOf, nothingText, runEndText, progressStatus, progressTell, waitStopText, stoppedText, stdQuestion, stdFailText, refineTitle, stdRunView, ROW_TITLES, rowLock,
+  runOf, NO_TICK, nothingText, failText, notAddedLines, instrNoteKind, cifNoteKind, NO_INSTR, runEndText, progressStatus, progressTell, waitStopText, stoppedText, stdQuestion, stdFailText, refineTitle, stdRunView, ROW_TITLES, rowLock,
   plotKeyOf, patternFrame, tickSegs, stackKeyOf, stackOf, sizeNoteOf, pointGroups, solidsKeyOf, turnKeyOf, solidPngName, widthsKeyOf, pkOf, samePk, markedOf,
   whPoints, whRange, fitSetTitle, cellKeyOf, snapshotOf, restoreInto, showsOf, nextInto };

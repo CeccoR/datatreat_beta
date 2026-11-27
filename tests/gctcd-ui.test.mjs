@@ -331,6 +331,12 @@ test('counts that differ: said in Integration, integrated all the same; Analysis
     const card = page.locator('#tab-gc .an-card').nth(0);
     const ia = (await alerts(page, '#tab-gc .gci-alerts')).join(' ');
     assert.ok(ia.includes(`short: ${N} injections in the table, ${N - 1} chromatograms: not aligned: integrated all the same`), ia);
+    // (a compact box with no ×: worked out again with the files, v571, G07; to v570 a × that held
+    // until the next drawing)
+    assert.equal(await card.locator('.gci-alerts .alert.warn.compact').count(), 1);
+    assert.equal(await card.locator('.gci-alerts .alert-dismiss').count(), 0);
+    const at = await firstTop(page, '#tab-gc .an-card:nth-child(1)', { frame: 'svg.gci-chrom', head: '.gci-win-head' });
+    assert.ok(Math.abs(at.top - at.frame) <= 1, `Windows' top on the frame's under the card's alert: ${JSON.stringify(at)}`);
     assert.equal(await idxOf(card, 'Inj'), `1/${N - 1}`, 'every chromatogram integrated and shown');
     // (all integrated: the status line says nothing and folds away, v545)
     assert.equal(await card.locator('.gci-status').textContent(), '');
@@ -618,10 +624,27 @@ test('the Integration card: its two selectors, the chromatogram over its residua
     const s0 = await steps(page), field = k => card.locator(`.gci-method input[data-k="${k}"]`);
     await field('w0:from').fill('263'); await field('w0:from').press('Enter'); await settle(page);
     assert.match(await card.locator('.gci-method .gci-flag').textContent(), /reaches S264 \(262–267.5 s\), which its model has no peak for/);
+    // (a compact warning, v571, G08: to v570 an amber line)
+    assert.equal(await card.locator('.gci-method .alert.warn.compact.gci-flag').count(), 1);
     assert.equal(await steps(page), s0 + 1);
     await undo(page);
     assert.equal(await card.locator('.gci-method .gci-flag').count(), 0);
     assert.equal(await steps(page), s0);
+    // A window made too short: not taken, its field flashing, its rule in red under the window
+    // (v571, C19 and G11: to v570 a warning box "Not taken:" over the chromatogram); no step; the
+    // next drawing lets it go. Windows' title still on the plot frame's top.
+    const was = await field('w0:from').inputValue(), to = +(await field('w0:to').inputValue());
+    await field('w0:from').fill(String(to - 2)); await field('w0:from').press('Enter');
+    await page.waitForSelector('#tab-gc .gci-method input[data-k="w0:from"].field-invalid');
+    await settle(page);
+    assert.equal(await card.locator('.gci-method .gci-win-rule').textContent(), 'The H2O2 window must start at least 5 s before it ends.');
+    assert.equal(await field('w0:from').inputValue(), was, 'the edge as it was');
+    assert.equal(await card.locator('.gci-notice .alert').count(), 0, 'no box over the chromatogram');
+    assert.equal(await steps(page), s0, 'no step');
+    const rt = await firstTop(page, '#tab-gc .an-card:nth-child(1)', { frame: 'svg.gci-chrom', head: '.gci-win-head' });
+    assert.ok(Math.abs(rt.top - rt.frame) <= 1, `Windows' top on the frame's with the rule under a window: ${JSON.stringify(rt)}`);
+    await card.locator('.gci-knext').click(); await settle(page);
+    assert.equal(await card.locator('.gci-method .gci-win-rule').count(), 0, 'gone at the next drawing');
     assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
   } finally { await close(); }
 });
@@ -655,6 +678,8 @@ test('suspicious: an injection out of proportion with the GC table (beyond 10 %)
     assert.equal(await card.locator('.gci-ksel .snav-name').evaluate(e=> getComputedStyle(e).color), await page.evaluate(()=> { const d = document.createElement('i'); d.style.color = 'var(--bad)'; document.body.appendChild(d); const c = getComputedStyle(d).color; d.remove(); return c; }));
     const flag = await card.locator('.gci-values-box .gci-flag').textContent();
     assert.match(flag, /H₂: -1[67]\.\d % off the GC table's proportion \(k = /, flag);
+    // (a compact warning, v571, G08; the previous method's not said here, G10)
+    assert.match(await card.locator('.gci-values-box .alert.warn.compact.gci-flag').textContent(), /^⚠ Suspicious: H₂: /);
     assert.equal(await card.locator('table.gci-values tbody tr').first().locator('td').nth(1).evaluate(td=> td.classList.contains('gci-bad')), true);
     await card.locator('.gci-ov-chip[data-g="o2"]').click(); await settle(page);
     assert.deepEqual(await reds('o2'), [], 'O₂ in proportion');
@@ -890,6 +915,38 @@ test('after a Stop (v569): standards dropped in the Calibration window are integ
     await card.locator('.gci-cal').click(); await m.waitFor({ state: 'visible' }); await settle(page);
     assert.equal(await m.locator('.gci-cal-status').textContent(), '6 chromatograms integrated.');
     assert.equal(await fitted(page), n1 + 6 + N, 'the standards and the run integrated with the new method');
+    assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
+  } finally { await close(); }
+});
+
+/* v571 (ALERTS-REVIEW.md C17, X07; the review's (iii)): a run that fails (no worker can be
+   made here) says why, a compact error in the card's status line (to v570 red text with no
+   box) and in the calibration window's (to v570 "Stopped…", as a stop); Windows' title still
+   on the plot frame's top. */
+test('an integration that fails says why: a compact error in the card\'s status and in the calibration window\'s, not "Stopped" (v571)', async ()=>{
+  const { page, errors, csp, close } = await env.page();
+  try {
+    await openModule(page, 'gc');
+    await page.evaluate(()=>{ window.Worker = class { constructor(){ throw new Error('no worker here (test)'); } }; });
+    await load(page, [table('run.csv', tableRows()), tcd('run_TCD.csv', areas())], 1);
+    await page.waitForFunction(()=> document.querySelector('#tab-gc .gci-status')?.dataset.state === 'failed', null, { timeout: 30000 });
+    await settle(page);
+    const card = page.locator('#tab-gc .an-card').nth(0), m = page.locator('.gci-cal-modal');
+    const said = '✕ The integration failed: no worker here (test).';
+    assert.equal(await card.locator('.gci-status .alert.bad.compact').textContent(), said);
+    assert.equal(await card.locator('.gci-status .gci-bad').count(), 0, 'no red text with no box');
+    const wt = await firstTop(page, '#tab-gc .an-card:nth-child(1)', { frame: 'svg.gci-chrom', head: '.gci-win-head' });
+    assert.ok(Math.abs(wt.top - wt.frame) <= 1, `Windows' top on the frame's: ${JSON.stringify(wt)}`);
+    // The standards dropped: none integrated, the window says why, not that it was stopped.
+    await card.locator('.gci-cal').click(); await m.waitFor({ state: 'visible' });
+    await m.locator('.gci-cal-in').setInputFiles([calTable('std.csv'), stdTcd('std_TCD.csv')]);
+    await page.waitForFunction(()=> document.querySelectorAll('.gci-cal-modal tbody tr[data-row]').length === 6);
+    await page.waitForFunction(()=> !!document.querySelector('.gci-cal-modal .gci-cal-status .alert.bad.compact'), null, { timeout: 30000 });
+    await settle(page);
+    assert.equal(await m.locator('.gci-cal-status').textContent(), said);
+    assert.ok(!/Stopped/.test(await m.locator('.gci-cal-status').textContent()));
+    const st = await firstTop(page, '.gci-cal-modal', { frame: '.gci-cal-pair svg.gci-chrom', head: '.gci-cal-side > .param-head' });
+    assert.ok(Math.abs(st.top - st.frame) <= 1, `Standards' top on the frame's: ${JSON.stringify(st)}`);
     assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
   } finally { await close(); }
 });

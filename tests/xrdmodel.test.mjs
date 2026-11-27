@@ -48,7 +48,7 @@ function decl(file, name){
   return rest.slice(0, end).replace(/^export /, '');
 }
 const UN = ['COLORS', 'colorOf', 'nextColor', 'esc', 'X_SVG', 'ALERT_ICON', 'alertHtml', 'FILE_ALERT', 'fileAlertHtml', 'fileLine'];
-export const PAGE = new Function([...UN.map(n=> decl('utils.js', n)), decl('modkit.js', 'isObj')].join('\n') + `\nreturn { ${UN.join(', ')}, isObj };`)();
+export const PAGE = new Function([...UN.map(n=> decl(n === 'ALERT_ICON' ? 'alerts.js' : 'utils.js', n)), decl('modkit.js', 'isObj')].join('\n') + `\nreturn { ${UN.join(', ')}, isObj };`)();
 export const dec = b => new TextDecoder().decode(b);
 export const enc = s => new TextEncoder().encode(s);
 // A file's bytes read (the page's XML, here JSON of its scans: new objects at each reading).

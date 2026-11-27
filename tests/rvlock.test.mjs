@@ -226,7 +226,8 @@ test('B: a run that fails, and one that ends: the rows as before at once', async
     await watch(page);
     await refineSample(page);
     await toLabel(page, 'Refine');
-    assert.match(await page.textContent(P + 'Status'), /⚠ Refinement failed on purpose/);
+    // (a compact error in the status's place, v571, X07: to v570 "⚠ {message}", grey)
+    assert.equal(await page.innerHTML(P + 'Status'), '<div class="alert bad compact">✕ Refinement failed on purpose.</div>');
     assert.deepEqual(await seen(page), ['Cancel: locked', 'Refine: free'], 'failed: enabled by the end of the task that ended it');
     unlocked(await rows(page), P, 'failed');
     assert.deepEqual(errors, []);

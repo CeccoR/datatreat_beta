@@ -1,5 +1,5 @@
 import { svgEl, niceTicks, fmtTick, SUB_DROP, TILT_DY } from './plot.js';
-import { colorPickerUI, palettePickerUI, CP_PALETTES, X_SVG, tiltFits, flashFieldInvalid, dropGap, esc, saveBlob } from './utils.js';
+import { colorPickerUI, palettePickerUI, CP_PALETTES, X_SVG, tiltFits, flashFieldInvalid, numRule, dropGap, esc, saveBlob, boxHtml } from './utils.js';
 import { tabOf, TABS } from './tabs.js';
 import * as FL from './figure-layout.js';
 import * as FM from './figure-model.js';
@@ -712,10 +712,11 @@ function renderPreview(){
   if (K.afterRender) K.afterRender();
 }
 
-/* The footer's status line: why an export failed, until the next export or redraw. */
+/* The footer's status: why an export failed, until the next export or redraw; a compact
+   error (v571, ALERTS-REVIEW.md C17: to v570 red text with no box). */
 function say(msg){
   if (!msgEl) return;
-  msgEl.textContent = msg || '';
+  msgEl.innerHTML = boxHtml('bad', msg ? esc(msg) : '');
   msgEl.hidden = !msg;
 }
 
@@ -915,13 +916,13 @@ const num = (label, key, min, max, at, off)=>
   `<label class="fig-row"><span>${label}</span>${numField(`data-${at || 'k'}="${key}"`, valOf(at, key), min, max, off)}</label>`;
 /* A field's number, inside its range. Outside it, or not a number, the field shakes
    red and goes back to the last value it took (flashFieldInvalid), as everywhere in
-   the app: a value is refused, never quietly changed. A range may follow another
-   setting (data-max-k: a key of F). */
+   the app: a value is refused, never quietly changed; its range said under it (v571:
+   utils.js numRule). A range may follow another setting (data-max-k: a key of F). */
 const readNum = t=>{
   const v = parseFloat(String(t.value).replace(',', '.'));
   const lo = parseFloat(t.dataset.min), hi = t.dataset.maxK ? F[t.dataset.maxK] : parseFloat(t.dataset.max);
   if (!isFinite(v) || (isFinite(lo) && v < lo) || (isFinite(hi) && v > hi)){
-    flashFieldInvalid(t);
+    flashFieldInvalid(t, numRule({ min: isFinite(lo) ? lo : null, max: isFinite(hi) ? hi : null }));
     t.value = t.defaultValue;
     return null;
   }
@@ -1077,9 +1078,9 @@ function applySettings(snap){
     const e = saved[pair[i]], rest = e && e.rest;
     if (!rest) return;
     for (const k in rest) if (!IDENTITY.includes(k)) s[k] = rest[k];
-    // (a bar's width inside its field's range: to v568 the field for every series gave bars
-    // up to 6, kept and shown in a field that refused it, v570)
-    if (s.kind === 'bar') s.width = FM.barWidth(s.width);
+    // (a series' width inside its own field's range, which would refuse it: a bar's up to 6
+    // to v568, v570; a line's down to 0.1 to v569, from the field for every series, v571)
+    s.width = FM.seriesWidth(s);
     if (rest.divOf && e.bx && snap.cats){
       const div = new Map();
       e.bx.forEach((x, j)=>{ if (moveX.has(x)) div.set(moveX.get(x), rest.divOf[j]); });
@@ -2331,9 +2332,10 @@ function wireRowDrag(rowSel, { swapIn, onDrop }){
   rows.forEach(row=>{
     const handle = row.querySelector('.fig-grip');
     if (!handle) return;
-    // (a mouse's primary button alone, as the trace list's grips: to v569 any, v570)
+    // (the primary button alone, of any pointer, as the trace list's grips: to v569 any, v570;
+    // a pen's barrel button or eraser to v570, v571)
     handle.addEventListener('pointerdown', e=>{
-      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      if (e.button !== 0) return;
       e.preventDefault();
       from = row;
       row.classList.add('dragging');
@@ -2395,7 +2397,7 @@ function wireBarDrag(){
     const handle = chip.querySelector('.fig-grip') || chip;
     let dragging = false;
     handle.addEventListener('pointerdown', e=>{
-      if (e.pointerType === 'mouse' && e.button !== 0) return;   // (the primary button alone, v570)
+      if (e.button !== 0) return;   // (the primary button alone, of any pointer: v570, v571)
       e.preventDefault();
       dragging = true;
       chip.classList.add('dragging');
@@ -2880,7 +2882,7 @@ export function openComposer(kind){
       </div>
       <div class="fig-foot">
         <span class="txt-meta fig-dim"></span>
-        <span class="txt-meta fig-msg" role="status" hidden></span>
+        <div class="fig-msg" role="alert" hidden></div>
         <span style="flex:1"></span>
         ${K.footHtml}
         <button class="btn btn-sm" type="button" data-fig-svg title="${esc(T.svg)}">Export SVG</button>

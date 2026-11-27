@@ -371,7 +371,8 @@ function makeCal(S){
   S.layer.appendChild(calEl);
   S.stdBody = cq(S, '.iodo-std tbody');
   calEl.addEventListener('input', ()=> sync(S));
-  calEl.addEventListener('change', e=>{ if (e.target.id === 'iodoCalMode') sync(S); });
+  // (a field confirmed holding no number flashes, its words under its group: v571, C19)
+  calEl.addEventListener('change', e=>{ if (e.target.id === 'iodoCalMode') sync(S); else if (e.target.matches('input[inputmode="decimal"]') && M.fieldNum(e.target.value) === undefined) flashFieldInvalid(e.target); });
   calEl.addEventListener('keydown', e=>{ if (e.key === 'Enter' && e.target.matches('input') && !cq(S, '[data-apply]').disabled){ e.preventDefault(); closeCal(S, true); } });
   calEl.addEventListener('click', e=> onCalClick(S, e));
 }
@@ -414,9 +415,13 @@ function sync(S){
   cq(S, '.iodo-cal-std').style.display = d.mode === 'std' ? '' : 'none';
   cq(S, '.iodo-cal-fit').innerHTML = H.calFitHtml(d, L, M.stdsOf(d).length, HU);
   const msg = M.calMsg(d, bad, L);
-  cq(S, '.iodo-cal-msg').textContent = msg;
+  // (the fields that hold no number said under their group, in red; a line that is none, an
+  // error under the fields: v571, ALERTS-REVIEW.md C19 and C17)
+  cq(S, '.iodo-cal-rule[data-rule="line"]').textContent = M.notNumber(bad.filter(([, n])=> !n.startsWith('standard')));
+  cq(S, '.iodo-cal-rule[data-rule="std"]').textContent = M.notNumber(bad.filter(([, n])=> n.startsWith('standard')));
+  cq(S, '.iodo-cal-msg').innerHTML = H.calMsgHtml(msg, HU);
   // (too few standards: said by the fit's line)
-  cq(S, '[data-apply]').disabled = !!msg || (d.mode !== 'none' && !L);
+  cq(S, '[data-apply]').disabled = !!msg || !!bad.length || (d.mode !== 'none' && !L);
 }
 function closeCal(S, apply){
   if (!S.draft) return;

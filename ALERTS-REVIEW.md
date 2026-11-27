@@ -1,4 +1,4 @@
-# Avvisi ed errori: revisione (v565 → v567)
+# Avvisi ed errori: revisione (v565 → v571)
 
 Mappa rifatta dal codice di v565 (331 voci: 309 messaggi con testo, 3 flash, 4 solo tooltip, 15 casi muti). Sostituisce la revisione di v540: delle sue 79 proposte 73 valevano ancora, sono riprese qui sotto. I testi dell'interfaccia restano in inglese.
 
@@ -13,7 +13,7 @@ Mappa rifatta dal codice di v565 (331 voci: 309 messaggi con testo, 3 flash, 4 s
 | info ⓘ | Scelta automatica o lettura corretta nel caso normale: da sapere, niente da fare |
 | grigio | Stato, avanzamento, stato vuoto, come procedere. Mai un problema |
 
-Solo questi quattro aspetti: via le righe ambra senza box, il testo rosso senza box, il "⚠" in una riga grigia, `alert()`. Nelle card il box compatto (stessa icona e colori, padding ridotto: `.alert.compact`).
+Solo questi quattro aspetti: via le righe ambra senza box, il testo rosso senza box, il "⚠" in una riga grigia, `alert()`. Nelle card il box compatto (stessa icona e colori, padding ridotto: `.alert.compact`; markup `boxHtml` in `alerts.js`, senza ×).
 
 **R2. Posto.** Avvisi su un file: sotto la drop zone che lo ha ricevuto, un box per tipo, nell'ordine error → warn → info. Avvisi su un'analisi: nella card, sotto ciò di cui parlano, box compatti. Valore rifiutato: flash e, dove la regola non è ovvia, una riga rossa sotto il campo. Progetto, memoria del browser, altre finestre: banner in alto; domande: banner (finestra centrale solo prima di un lavoro lungo).
 
@@ -68,9 +68,9 @@ ID della mappa tra parentesi. Fase: 1 file illeggibile, 2 drop zone e testi, 3 c
 | C14 | Salvataggio rifiutato da IndexedDB (muto) → banner `“{title}” could not be saved ({reason}): your work is still in its tab.` | fatto in v567 |
 | C15 | Rinomina su un nome esistente, palette con nome esistente (muti) → domanda | fatto in v567 |
 | C16 | Copy image fallito, compositore che non si carica (muti) → `Copy failed` accanto al bottone; banner | fatto in v567 |
-| C17 | Testo rosso senza box (compositore, GI02, IO09) → error compatto | da fare (fase 3) |
+| C17 | Testo rosso senza box (compositore, GI02, IO09) → error compatto | fatto in v571 (IO09: la retta che non è una retta; il campo senza numero va in C19) |
 | C18 | `vNNN` nei testi (XR26–XR28 XS05 GI35 SH33 XE26) → `an older version` | fatto in v567 |
-| C19 | Campo rifiutato: flash + riga rossa sotto il campo (GC10 GI14 XV32 IO09) | da fare (fase 3) |
+| C19 | Campo rifiutato: flash + riga rossa sotto il campo (GC10 GI14 XV32 IO09) | fatto in v571; flash generico (`guardNumericInput`, compositore, SEM): la regola in rosso sotto il campo, fluttuante (`flashFieldInvalid(el, rule)`, `numRule`) |
 
 ### XRPD
 
@@ -80,19 +80,19 @@ ID della mappa tra parentesi. Fase: 1 file illeggibile, 2 drop zone e testi, 3 c
 | X02 | Finestra dello standard: più file, più scansioni → info | fatto in v567 |
 | X03 | `Restored, with a caveat:` → `Opened, to check:`, senza vNNN | fatto in v567 |
 | X04 | Avvisi di lettura calcolati dai file, × per file | da fare (fase 4) |
-| X05 | Riga dello strumento "— ⚠ …" → fatti in grigio + box compatti info/warn | da fare (fase 3) |
-| X06 | Assunzione dello strumento detta subito (XE04) | da fare (fase 3) |
-| X07 | Fallimenti nella riga di stato → error compatto | da fare (fase 3) |
-| X08 | `No phase ticked…` un testo solo | da fare (fase 3) |
-| X09 | XV02 XV03 → info compatto | da fare (fase 3) |
-| X10 | Profilo strumentale mancante detto una volta, warn | da fare (fase 3) |
+| X05 | Riga dello strumento "— ⚠ …" → fatti in grigio + box compatti info/warn | fatto in v571 (`instrNoteKind`: info XI03–XI06 XI08 XI09 XI14, warn il resto) |
+| X06 | Assunzione dello strumento detta subito (XE04) | fatto in v571 (tolto dai risultati alla vista, il motore lo scrive ancora) |
+| X07 | Fallimenti nella riga di stato → error compatto | fatto in v571 (anche XV10: gave no profile e failed; stopped resta grigio) |
+| X08 | `No phase ticked…` un testo solo | fatto in v571 |
+| X09 | XV02 XV03 → info compatto | fatto in v571 |
+| X10 | Profilo strumentale mancante detto una volta, warn | fatto in v571 (XE07 XE15 nel box; profilo rifiutato: solo l'elenco; tabella: titolo `(not corrected for the instrument)`) |
 | X11 | Avvisi del raffinamento → box info/warn (tipo dato dal motore) | da fare (fase 4, risultati salvati) |
-| X12 | Avvisi dei CIF → box compatti per fase | da fare (fase 3) |
-| X13 | XV37 → warn | da fare (fase 3) |
-| X14 | Curva persa in silenzio (XV39) → warn | da fare (fase 3) |
-| X15 | XS07 → warn | da fare (fase 3) |
-| X16 | XS01 stile inline → txt-meta | da fare (fase 3) |
-| X17 | XV32 → riga rossa sotto il campo (C19) | da fare (fase 3) |
+| X12 | Avvisi dei CIF → box compatti per fase | fatto in v571 (`cifNoteKind`) |
+| X13 | XV37 → warn | fatto in v571 (nel box Structure) |
+| X14 | Curva persa in silenzio (XV39) → warn | fatto in v571 |
+| X15 | XS07 → warn | fatto in v571 |
+| X16 | XS01 stile inline → txt-meta | fatto in v571 |
+| X17 | XV32 → riga rossa sotto il campo (C19) | fatto in v571 |
 
 ### SEM, DRS
 
@@ -117,12 +117,14 @@ ID della mappa tra parentesi. Fase: 1 file illeggibile, 2 drop zone e testi, 3 c
 | G04 | Coppie da controllare: warn alla drop zone e tooltip; nella card Integration solo `{label}: shown here, no injection times.` in grigio | fatto in v567 |
 | G05 | Sempre `{n} injections in the table, {m} chromatograms`; GC12 rimanda alla card Integration | fatto in v567 |
 | G06 | Un nome: `the GC software's scale (k)`; GI13 via, i rischi nominati nelle righe di GC11 | fatto in v567 |
-| G07–G12 | × che non regge (GI07 GI08), righe ambra → warn compatto, "Suspicious" in un colore, "Method changed" una volta, campi rifiutati (C19) | da fare (fase 3) |
+| G07–G12 | × che non regge (GI07 GI08), righe ambra → warn compatto, "Suspicious" in un colore, "Method changed" una volta, campi rifiutati (C19) | fatto in v571 (G07: ogni box della card Integration compatto, senza ×) |
 | G13 | `Light-on time is before first injection` → `Light-on at or before the first injection: no point before light-on.` | fatto in v567 (vedi nota) |
 | G14 | GI35 → `Opened, to check:` + `{file}: saved by an older version without its GC table: …`, con la sua × | fatto in v567 |
 | G15 | Results nascosta senza motivo → grigio `No rate to show: no sample's interval overlaps its injections.` sotto la card | fatto in v567 |
 
 Nota G13: la proposta diceva "at or after"; la condizione del codice (nessuna iniezione prima dell'accensione) è "at or before", ed è quella scritta.
+
+Trovati dopo la mappa, fatti in v571: (i) tabella GC con date ma nessun valore di gas → `no injection to read: {n} rows with an injection date and no gas value` (era "not a GC table…"; nella Calibration senza "neither… nor a GC table"); (ii) SE19 compositore SEM che non si carica → banner come C16; (iii) Calibration GC dopo un'integrazione fallita → error compatto col motivo (era "Stopped…").
 
 ### EPR, Iodometria
 
@@ -140,5 +142,4 @@ Custom non ha modifiche proprie: le prende da C01–C05.
 
 ## Ordine che resta
 
-3. Card e righe di stato: X05–X10, X12–X17, G07–G12, C17, C19.
-4. Persistenza (X04, S04, D02), poi X11, che tocca il formato dei risultati salvati.
+4. Persistenza (X04, S04, D02), poi X11, che tocca il formato dei risultati salvati (con XV20 e XV22, ancora righe ambra).

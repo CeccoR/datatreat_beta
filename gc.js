@@ -1,4 +1,4 @@
-import { settings, fmtNum, csvLine, cumtrapz, maxArr, minArr, meanArr, stdArr, alertHtml, fileAlertHtml, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, confirmBanner, esc, registerModule, keeper, objId, exactKey } from './utils.js';
+import { settings, fmtNum, csvLine, cumtrapz, maxArr, minArr, meanArr, stdArr, alertHtml, fileAlertHtml, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, esc, registerModule, keeper, objId, exactKey } from './utils.js';
 import { Plot, svgEl } from './plot.js';
 import { cardInfo, fileSafe, nameDownloads } from './cards.js';
 import { moduleKit, wideCsv, isObj, num, numStr, oneOf, dateOf, arrOf, without, cardList } from './modkit.js';
@@ -334,6 +334,10 @@ function makeCard(S, a, card){
 /* ---- The card's parameter table (gc-html.js paramTableHtml) and its fields ---- */
 function renderTable(S, C){
   const wrap = C.$('ParamTableWrap');
+  // (a refusal said under it holds until the table changes: anything confirmed in it, an
+  // all/one chip pressed, the table drawn again)
+  clearRule(C);
+  if (!wrap.dataset.ruled){ wrap.dataset.ruled = '1'; wrap.addEventListener('change', ()=> clearRule(C), true); wrap.addEventListener('click', e=>{ if (e.target.closest('.gc-toggle')) clearRule(C); }, true); }
   if (!S.files.length){ wrap.innerHTML=''; return; }
   wrap.innerHTML = H.paramTableHtml(C.P, S.files, HU);
   if (drawable(S)) fitCsvIcons();
@@ -393,10 +397,19 @@ function wireNorm(S, C, wrap){
     compute(S, C); S.kit.commit();
   });
 }
+/* A value the interval refuses (a bound typed, an all/one chip): the field or the chip flashes
+   and the rule is said in red under the parameter table until the next change in it (v571,
+   ALERTS-REVIEW.md C19, G12: to v570 a banner). */
+function refuseParam(C, el, why){
+  flashFieldInvalid(el);
+  const r = C.$('ParamRule');
+  r.textContent = why; r.hidden = false;
+}
+function clearRule(C){ const r = C.$('ParamRule'); if (r && !r.hidden){ r.hidden = true; r.textContent = ''; } }
 // An all/one chip: flipped (gc-model.js flipMode), or refused with why, as a value typed is.
 function modeToggled(S, C, btn){
   const pair = btn.dataset.pair, why = M.flipMode(C.P, S.files, pair);
-  if (why){ flashFieldInvalid(btn); confirmBanner(why, 'OK'); return; }
+  if (why){ refuseParam(C, btn, why); return; }
   if (pair === 'start' || pair === 'end') C.sel = C.hov = null;
   renderTable(S, C); compute(S, C); S.kit.commit();
 }
@@ -459,7 +472,7 @@ function wireBound(S, C, inp, which, isShared, i){
     if (v===null){ inp.value = cur; echo(); return; }
     // A shared start must stay below every sample's end; a per-sample start below its own end.
     const why = M.intervalWhy(P, S.files, which, v, isShared, i);
-    if (why){ flashFieldInvalid(inp); inp.value = cur; echo(); confirmBanner(why, 'OK'); return; }
+    if (why){ inp.value = cur; echo(); refuseParam(C, inp, why); return; }
     if (isShared){ if (which==='start') P.startShared=v; else P.endShared=v; }
     else { if (which==='start') P.startArr[i]=v; else P.endArr[i]=v; }
     echo();

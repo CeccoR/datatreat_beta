@@ -44,6 +44,7 @@ import * as G from '../gc-tcd.js';
 import * as GM from '../gc-model.js';
 import * as M from '../gc-integ-model.js';
 import * as H from '../gc-integ-html.js';
+import { boxHtml } from '../alerts.js';
 
 // The page's dates are local: the tests' time zone, as the browser tests' (helpers.mjs).
 process.env.TZ = 'UTC';
@@ -71,7 +72,7 @@ function decl(file, name){
 const UN = ['esc', 'fmtNum', 'csvField', 'csvJoin', 'csvLine', 'X_SVG', 'ALERT_ICON', 'alertHtml', 'FILE_ALERT', 'fileAlertHtml', 'exactKey', '_bytesKey', 'bytesKey'];
 const KN = ['isObj', 'num', 'oneOf'], CN = ['PLOT_DL_ICON', 'plotWrap', 'chipRow'];
 const settings = { decimal: '.', field: ';' };
-const PAGE = new Function('settings', [...UN.map(n=> decl('utils.js', n)), ...KN.map(n=> decl('modkit.js', n)), ...CN.map(n=> decl('modcharts.js', n)),
+const PAGE = new Function('settings', [...UN.map(n=> decl(n === 'ALERT_ICON' ? 'alerts.js' : 'utils.js', n)), ...KN.map(n=> decl('modkit.js', n)), ...CN.map(n=> decl('modcharts.js', n)),
   decl('snav.js', 'snavHtml'), decl('plot.js', 'niceStep'), decl('plot.js', 'niceTicks'), decl('cards.js', 'cardInfo')].join('\n')
   + `\nreturn { ${[...UN, ...KN, ...CN, 'snavHtml', 'niceTicks', 'cardInfo'].join(', ')} };`)(settings);
 const ids = new WeakMap();
@@ -520,23 +521,30 @@ test('the markup: the instructions, the card\'s and the window\'s bodies, Window
   for (const s of ['id="gc7CalTitle"', 'id="gc7CalChrom"', 'id="gc7CalResid"', 'id="gc7CalLegend"', '<option value="%mol">%mol</option><option value="ppm">ppm</option>', 'gci-cal-levels']) assert.ok(cal.includes(s), s);
   const m = M.methodIn(U, { windows: [{ key: 'H2O2', from: 264, to: 331 }] });
   const mh = H.methodHtml(HU, { ...m, windows: [{ ...m.windows[0], key: 'K<b>' }] }, ['a <i>']);
-  assert.ok(mh.includes('<span class="gci-win-name">K&lt;b&gt; fit</span>') && mh.includes('aria-label="K&lt;b&gt; window from (s)"') && mh.includes('value="264"') && mh.endsWith('<p class="gci-flag">⚠ a &lt;i&gt;</p>'));
-  assert.ok(mh.includes('H2 287.3 · O2 302.3 · S310 310.2'));
+  // (v571: the windows' intrusions a compact warning, G08; a window not taken its rule in red
+  // under it, C19 and G11)
+  assert.ok(mh.includes('<span class="gci-win-name">K&lt;b&gt; fit</span>') && mh.includes('aria-label="K&lt;b&gt; window from (s)"') && mh.includes('value="264"') && mh.endsWith('<div class="alert warn compact gci-flag">⚠ a &lt;i&gt;</div>'));
+  assert.ok(mh.includes('H2 287.3 · O2 302.3 · S310 310.2') && !mh.includes('field-rule'));
+  const refused = H.methodHtml(HU, m, [], { wi: 0, text: H.tooShortText('K<b>') });
+  assert.ok(refused.endsWith('</div><p class="field-rule gci-win-rule" role="alert">The K&lt;b&gt; window must start at least 5 s before it ends.</p>') && !refused.includes('alert warn'), refused);
+  assert.equal(H.methodHtml(HU, m, [], { wi: 1, text: 'x' }).includes('field-rule'), false, 'the rule under its own window');
   // Peaks
   const gasOf = M.gasTable(U, GASES).gasOf;
   assert.equal(H.valuesHtml(HU, gasOf, null), '');
   assert.equal(H.valuesHtml(HU, gasOf, { wait: true }), '<p class="txt-meta">Not integrated yet.</p>');
-  assert.equal(H.valuesHtml(HU, gasOf, { error: 'a <b>' }), '<p class="gci-flag">⚠ Not integrated: a &lt;b&gt;</p>');
+  assert.equal(H.valuesHtml(HU, gasOf, { error: 'a <b>' }), '<div class="alert warn compact gci-flag">⚠ Not integrated: a &lt;b&gt;</div>');
   const conv = { h2: { how: 'transfer', k: 41234.567, n: 12, f: A => A }, o2: { why: 'none <x>' } };
   const vh = H.valuesHtml(HU, gasOf, { R: { stale: true }, conv, gs: ['h2'], unitOf: ()=> '%mol', units: ['%mol'], tUnit: '%mol', aligned: true, keys: ['h2', 'o2'], fl: ['χ²ᵣ <9>'],
     rows: [{ g: 'h2', x: { area: 1234.5678, sd: 2.345, tApex: 287.345, chi2r: 5.5 }, shown: 0.123456, tShown: 0.12, off: true }] });
   assert.ok(vh.includes('<td class="gci-bad" title="Out of proportion with the GC table">1234.6 ± 2.3</td>') && vh.includes('<td>287.35</td><td class="gci-bad">5.50</td><td>0.1235</td><td>0.1200</td>'));
   assert.ok(vh.includes('Conc. and GC table in %mol.') && vh.includes('Concentration from the GC software\'s scale (k): k = 41235 area per %mol (H<sub>2</sub>, median of 12 injections).'));
-  assert.ok(vh.includes('⚠ Suspicious: χ²ᵣ &lt;9&gt;') && vh.includes('O₂: none &lt;x&gt;.') && vh.endsWith('(the previous method\'s)</p>'));
+  // (v571: suspicious, a compact warning, G08; the previous method's said by the notice alone, G10)
+  assert.ok(vh.includes('<div class="alert warn compact gci-flag">⚠ Suspicious: χ²ᵣ &lt;9&gt;</div>') && vh.endsWith('O₂: none &lt;x&gt;.</p>') && !vh.includes('previous method'));
   // the status, the alerts, the notices, the legends
   const st = { job: { done: 2, total: 5, name: 'a<b>' }, failed: 'f<x>' };
   assert.equal(H.statusHtml(HU, { st, state: 'running', pct: 40 }), '<span class="gci-prog"><span class="gci-prog-bar" style="width:40%"></span></span><span>Integrating… 2 / 5 chromatograms · a&lt;b&gt;</span>');
-  assert.deepEqual(['failed', 'stopped', 'soon', 'left', 'done', 'none'].map(s=> H.statusHtml(HU, { st, left: 1, state: s })), ['<span class="gci-bad">The integration failed: f&lt;x&gt;</span>', '<span>Stopped: 1 chromatogram not integrated with this method.</span>',
+  // (v571: a run that failed, a compact error, C17)
+  assert.deepEqual(['failed', 'stopped', 'soon', 'left', 'done', 'none'].map(s=> H.statusHtml(HU, { st, left: 1, state: s })), ['<div class="alert bad compact">✕ The integration failed: f&lt;x&gt;.</div>', '<span>Stopped: 1 chromatogram not integrated with this method.</span>',
     '<span>Method changed: integrating again in a moment…</span>', '<span>1 chromatogram to integrate.</span>', '', '<span class="txt-meta">No raw chromatograms (TCD) loaded: drop them beside their tables.</span>']);
   const e = { label: 'L<b>', rows: 3, n: 1, tcd: { name: 't<i>' }, twin: 'w&', d: { error: 'e<>' } };
   const ah = H.alertsHtml(HU, gasOf, { errs: [e], warn: [{ kind: 'rows', e }, { kind: 'twin', e }, { kind: 'alone', e }, { kind: 'out', e, g: 'o2', out: 2, n: 5, lo: 0.02, hi: 0.1, below: true, L: { intercept: -123.456 } }] });
@@ -546,11 +554,14 @@ test('the markup: the instructions, the card\'s and the window\'s bodies, Window
   // check under the drop zone; the GC software's scale said by the Production Rate cards)
   assert.ok(ah.endsWith('<p class="txt-meta gci-shown">L&lt;b&gt;: shown here, no injection times.</p><p class="txt-meta gci-shown">L&lt;b&gt;: shown here, no injection times.</p>') && !ah.includes('(t&lt;i&gt;, w&amp;)') && !ah.includes('software'), ah);
   assert.equal(H.alertsHtml(HU, gasOf, { errs: [], warn: [] }), '');
-  assert.equal(H.notTakenHtml(HU, 'x<y'), PAGE.alertHtml('warn', 'Not taken:', ['x&lt;y']));
+  // (v571: the card's boxes compact, with no ×, G07)
+  assert.ok(ah.startsWith('<div class="alert bad compact">✕ Raw chromatograms that could not be read:<br>t&lt;i&gt;: e&lt;&gt;</div><div class="alert warn compact">⚠ Raw chromatograms to check:<br>') && !ah.includes('alert-dismiss'), ah);
+  assert.deepEqual(['The integration failed', 'The integration worker failed.', 'out of memory', '', null].map(H.failedText),
+    ['The integration failed.', 'The integration worker failed.', 'The integration failed: out of memory.', 'The integration failed.', 'The integration failed.']);
   const o = { d: { error: 'bad<' }, file: 'f<', what: 'w<' };
   assert.deepEqual([H.pairNotice(HU, o, { fail: 'read' }), H.pairNotice(HU, { d: null }, { fail: 'read' }), H.pairNotice(HU, o, { fail: 'empty' }), H.pairNotice(HU, o, { r: null, R: {} }), H.pairNotice(HU, o, { r: {}, R: { stale: true } }), H.pairNotice(HU, o, { r: {}, R: {} })],
-    [PAGE.alertHtml('bad', 'f&lt;:', ['bad&lt;']), '', PAGE.alertHtml('warn', 'w&lt;:', ['no point in the windows']), PAGE.alertHtml('info', 'w&lt;:', ['not integrated yet: the model is drawn once it is']),
-      PAGE.alertHtml('warn', 'Method changed:', ['the model and the values shown are the previous method\'s until this file is integrated again']), '']);
+    [boxHtml('bad', 'f&lt;: bad&lt;'), '', boxHtml('warn', 'w&lt;: no point in the windows.'), boxHtml('info', 'w&lt;: not integrated yet: the model is drawn once it is.'),
+      boxHtml('warn', 'Method changed: the model and the values shown are the previous method\'s until this file is integrated again.'), '']);
   assert.equal(H.chromLegendHtml(HU, [['#1', 'a<', ''], ['#2', 'b', 'mk-dots']]), '<span><i style="background:#1"></i>a&lt;</span><span><i class="mk-dots" style="color:#2"></i>b</span><span><i class="mk-box gci-mk-nb"></i>peaks the model leaves out</span>');
   assert.equal(H.ovGasHtml(gasOf, ['h2', 'o2'], 'o2'), '<button type="button" class="mode-chip plot-chip gci-ov-chip" data-g="h2" aria-pressed="false" title="Show H₂ (one gas at a time)">H<sub>2</sub></button><button type="button" class="mode-chip plot-chip gci-ov-chip is-on" data-g="o2" aria-pressed="true" title="Show O₂ (one gas at a time)">O<sub>2</sub></button>');
   assert.ok(H.ovYHtml(HU, { mode: 'area', c: null, G: gasOf('h2') }).includes('title="No calibration of H₂ and no table to take a scale from" disabled>Conc.</button>'));
@@ -573,7 +584,8 @@ test('the markup: the instructions, the card\'s and the window\'s bodies, Window
   for (const s of ['class="peak-row selected is-excluded" data-row="0"', '<td class="gci-cal-src gci-bad" title="n&lt;b&gt; (t&gt;, f&lt;, column 1)"><span class="gci-cal-name">n&lt;b&gt;</span>', '<td class="gci-cal-a">…</td>',
     'data-g="h2" value="0.05" aria-label="H2 concentration of n&lt;b&gt;"', 'data-g="o2" value="" aria-label', 'data-g="on" aria-label="Use n&lt;b&gt;"', '<polyline points="0.0,21.0 36.0,1.0 72.0,21.0"']) assert.ok(lh.includes(s), s);
   assert.equal(H.thumbHtml(d, 0, 0, 2), '<svg class="gci-thumb" viewBox="0 0 72 22" width="72" height="22" aria-hidden="true"><polyline points="0.0,21.0 36.0,1.0 72.0,21.0" fill="none" stroke="currentColor" stroke-width="1"/></svg>');
-  assert.equal(H.calFitHtml(HU, gasOf, ['h2', 'o2'], { r: { gases: { h2: { area: 1234.5, sd: 1.2, chi2r: 5 } }, windows: [{ key: 'A', chi2r: 5 }] } }), 'H<sub>2</sub>: area 1234.5 ± 1.2, χ²<sub>r</sub> 5.00<span class="gci-bad"> · ⚠ χ²ᵣ 5.00, above 4</span>');
+  // (v571: what makes the standard suspicious, the card's compact warning under its line, G09)
+  assert.equal(H.calFitHtml(HU, gasOf, ['h2', 'o2'], { r: { gases: { h2: { area: 1234.5, sd: 1.2, chi2r: 5 } }, windows: [{ key: 'A', chi2r: 5 }] } }), 'H<sub>2</sub>: area 1234.5 ± 1.2, χ²<sub>r</sub> 5.00<div class="alert warn compact gci-flag">⚠ Suspicious: χ²ᵣ 5.00, above 4</div>');
   assert.equal(H.calFitHtml(HU, gasOf, ['h2'], null), '');
   const fits = H.calFitsHtml(HU, gasOf, ['h2', 'o2'], 'gc7', { h2: false, o2: true });
   assert.ok(fits.includes('id="gc7Calh2"') && fits.includes('data-dl-name="GC_calibration_O2.svg"') && fits.includes('class="mode-chip plot-chip gci-zero-chip is-on" data-g="o2" data-zero="1"'));

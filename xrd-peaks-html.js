@@ -10,6 +10,7 @@
    (u: xrd-peaks.js U).
 ========================================================= */
 import { scherrerD, sizeCorr, belowInstr, cagAt } from './xrd-peaks-model.js';
+import { boxHtml } from './alerts.js';
 
 // "mean ± std" (or just "mean" for n=1, "—" for none)
 function fmtMeanStd(mean, std, n){
@@ -87,9 +88,10 @@ function cagliotiHtml(m, nFiles){
     // detected one) do not make a curve either.
     const nx = new Set(m.pts.map(q=> q.x)).size;
     const lack = nx === n ? `it needs 3 peaks or more` : `it needs peaks at 3 angles or more, and these ${n} lie at ${nx}`;
+    // (a warning: the width it gives may not be the instrument's, v571; to v570 a grey note)
     return { box: html + `<div class="pg-stat">Peaks: <b>${n}</b>${span}</div>`
-      + `<div class="pg-stat cag-note">Not fitted: ${lack}. The instrumental width is ${nx === 1
-        ? "the peak's FWHM at every angle" : 'interpolated between the peaks, and held at the end ones beyond them'}.</div>`, alert: '' };
+      + boxHtml('warn', `Not fitted: ${lack}. The instrumental width is ${nx === 1
+        ? "the peak's FWHM at every angle" : 'interpolated between the peaks, and held at the end ones beyond them'}.`), alert: '' };
   }
   const f = m.fit;
   html += ['U', 'V', 'W'].map((k, i)=> `<div class="pg-stat">${k}: <b>${fmtPar(f.uvw[i], f.se[i])} °²</b></div>`).join('');
@@ -279,8 +281,8 @@ function resHtml(p, { PLOT_DL_ICON }){
           </div>
         </div>`;
 }
-// The table's box with no peak to list.
-const NO_PEAKS = '<p style="color:var(--muted);margin:6px 0">No peaks found with current parameters.</p>';
+// The table's box with no peak to list (in the grey of the notes, v571: to v570 a style of its own).
+const NO_PEAKS = '<p class="txt-meta xrd-no-peaks">No peaks found with current parameters.</p>';
 // The Results' stacked patterns' legend: those drawn (shown, their indices in fs), each in its colour.
 const stackLegendHtml = (fs, shown, { esc })=> shown.map(k=> `<span><i style="background:${esc(fs[k].color)}"></i>${esc(fs[k].label)}</span>`).join('');
 // The size chart's legend: its series (xrd-peaks-model.js sizeSeries), each its boxes' colour.

@@ -23,7 +23,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { start, openModule, loadFiles, settle, moduleState, banner, answer, download, readZip, parseCsv, undo } from './helpers.mjs';
+import { start, openModule, loadFiles, settle, moduleState, banner, download, readZip, parseCsv, undo } from './helpers.mjs';
 import { drsCsv, caryCsv, eprPair } from './fixtures.mjs';
 
 let env;
@@ -148,22 +148,28 @@ test('30c: GC refuses an interval bound back to "all" that would end an interval
     await pair('start'); await pair('end');
     await cell(0, 'start', 10); await cell(1, 'end', 5);
     // alpha 10–24 h, beta 0–5 h: a start of 10 for both would end beta's before it starts.
+    // Refused: said in red under the parameter table, no banner (v571, ALERTS-REVIEW.md C19,
+    // G12: to v570 a banner), until the next change in the table.
+    const rule = ()=> page.evaluate(()=>{ const r = document.querySelector('#tab-gc .gc-param-rule'); return r && !r.hidden && r.offsetHeight ? r.textContent : null; });
     await pair('start');
-    const said = await banner(page);
-    assert.match(said && said.text || '', /^The interval must start before it ends: 10 h is not before the end of beta, 5 h\.$/);
-    await answer(page, 'ok');
+    assert.equal(await banner(page), null, 'no banner');
+    assert.match(await rule() || '', /^The interval must start before it ends: 10 h is not before the end of beta, 5 h\.$/);
     let c = await card();
     assert.equal(c.startMode, 'one', 'the flip refused');
     assert.deepEqual(c.startArr, [10, 0]);
-    // A value typed and refused: the same words.
+    // A value typed and refused: the same words, the field flashing.
     await cell(1, 'start', 7);
-    const typed = await banner(page);
-    assert.match(typed && typed.text || '', /^The interval must start before it ends: 7 h is not before the end of beta, 5 h\.$/);
-    await answer(page, 'ok');
+    assert.equal(await banner(page), null);
+    assert.match(await rule() || '', /^The interval must start before it ends: 7 h is not before the end of beta, 5 h\.$/);
     assert.deepEqual((await card()).startArr, [10, 0], 'the value typed refused');
+    // A value taken in the table: the rule gone.
+    await cell(0, 'start', 9);
+    assert.equal(await rule(), null, 'gone with the next change');
+    await cell(0, 'start', 10);
     // The end flipped back the same way: alpha's 24 for both is after both starts, taken.
     await pair('end');
     assert.equal(await banner(page), null);
+    assert.equal(await rule(), null);
     c = await card();
     assert.equal(c.endMode, 'all'); assert.equal(c.endShared, 24);
     // Now the start can go back to all.
