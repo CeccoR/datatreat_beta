@@ -540,7 +540,7 @@ function named(S, a){
    reference; the cards' settings, peaks and results, the standard's and the files'
    order, labels and colours are captured so any change can be stepped back. ---- */
 function snapshot(S){
-  return {
+  const s = {
     v: 2,
     files: S.allFiles.map(f=>({...f})),
     std: S.stdFile ? {...S.stdFile} : null,
@@ -552,6 +552,9 @@ function snapshot(S){
       return { ...S.deck.saved(a), states };
     }),
   };
+  // (a file left out holding a sample's CIF: its text in its card's pool, v577)
+  M.heldOut(U, s.files, s.cards);
+  return s;
 }
 // step: an undo or a redo (UndoStack), which a run going on keeps its own panel through
 // (xrd-rv.js restore). (xrd-model.js: the state migrated, its files read again, the

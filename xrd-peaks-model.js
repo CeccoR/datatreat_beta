@@ -445,10 +445,15 @@ function topOf(maxima){ const m = Math.max(-Infinity, ...maxima); return m > 0 ?
    assigned peaks alone; a sample with no CIF has its peaks listed, not grouped, and is in
    neither. To v574 the samples' peaks were matched with one another by their positions,
    which reflections closer than a FWHM could swap.
-   (v576) Where the sample's λ names a tube's line (kAlpha2Of), a peak no reflection is
-   within its tolerance of is looked for at the reflections' Kα2 too: one there is named by
-   them, "(110) Kα2", and is left out of the sizes as an unassigned one, as it repeats its
-   Kα1 peak. */
+   (v576) Where the sample's λ names a tube's line (kAlpha2Of), the reflections are placed at
+   the tube's Kα2 too, and a peak at a reflection's Kα2 is named by it, "(110) Kα2", and left
+   out of the sizes as an unassigned one, as it repeats its Kα1 peak. Which one is (v577; to
+   v576 a peak no reflection was within the tolerance of at λ but one at Kα2 was: a Kα1 peak
+   of a cell smaller than its CIF's fell on its line's Kα2 so, and a resolved Kα2 peak whose
+   valley stands above half its height, its half-maximum walk running over its Kα1 peak, was
+   wide enough to reach its line at λ, named by it and sized): one whose nearest line within
+   its tolerance, at λ or at Kα2, is a reflection's Kα2, with a peak below it and taller
+   assigned to that reflection at λ (its partner: peakRow). */
 // A sample's CIF, its file's name and its text; anything else, none.
 const cifEntry = v => v && typeof v === 'object' && typeof v.file === 'string' && typeof v.cif === 'string' ? { file: v.file, cif: v.cif } : null;
 /* As a state holds it (v576; to v575 each sample its text, a CIF given to ten samples saved ten
@@ -486,20 +491,29 @@ function kAlpha2Of(lam){
 /* A sample's assignment: its phase (prep) and species (sp, its name), its reflections over
    its pattern f's range at the wavelength lam (refl; reflOf: phaseReflections, which the
    card keeps) and at its tube's Kα2 (lam2, refl2: none where lam names no tube's line), and
-   each kept peak of its processing pr, in their order (rows: peakRow's); null with no CIF
-   (q), one that does not read as one, or no processing. */
+   each kept peak of its processing pr, in their order (rows: peakRow's, made in 2θ order, as
+   a peak's partner is below it); null with no CIF (q), one that does not read as one, or no
+   processing. */
 function sampleAssign(f, pr, lam, q, reflOf = phaseReflections){
   const prep = phaseOfCif(q);
   if (!prep || !pr) return null;
   const a = f.x[0], b = f.x[f.x.length - 1], lo = Math.min(a, b), hi = Math.max(a, b), lam2 = kAlpha2Of(lam);
   const refl = reflOf(prep, lam, lo, hi), refl2 = lam2 > 0 ? reflOf(prep, lam2, lo, hi) : [];
-  return { prep, sp: prep.name, refl, lam2, refl2, rows: pr.peaks.filter(pk=> !pk.removed).map(pk=> peakRow(pk, refl, refl2)) };
+  const kept = pr.peaks.filter(pk=> !pk.removed), below = [], row = new Map();
+  kept.slice().sort((u, v)=> u.detPos - v.detPos).forEach(pk=>{ const r = peakRow(pk, refl, refl2, below); below.push(r); row.set(pk, r); });
+  return { prep, sp: prep.name, refl, lam2, refl2, rows: kept.map(pk=> row.get(pk)) };
 }
-// A peak's row: its reflections (refl) and their label; none within its tolerance, those at
-// Kα2 that are (k2, v576: none where it has some at λ), labelled "(110) Kα2"; neither, ''.
-function peakRow(pk, refl, refl2){
-  const rs = peakRefl(pk, refl), k2 = rs.length ? [] : peakRefl(pk, refl2);
-  return { pk, refl: rs, k2, label: rs.length ? reflLabel(rs) : k2.length ? reflLabel(k2) + ' Kα2' : '' };
+/* A peak's row: its reflections (refl) and their label; at Kα2 (v576), those there within its
+   tolerance (k2, none where it is not at Kα2), labelled "(110) Kα2"; neither, ''. A peak is
+   at Kα2 (v577) where its nearest line within its tolerance is a reflection's Kα2 (a line at
+   λ as near, not) and a peak below it (below: their rows) is its partner, taller and
+   assigned to that reflection at λ; else no Kα2 line is its, and it takes its reflections
+   at λ, or none. */
+const gapTo = (pk, rs)=> Math.min(...rs.map(r=> Math.abs(r.tt - pk.detPos)));
+function peakRow(pk, refl, refl2, below){
+  const rs = peakRefl(pk, refl), k2 = peakRefl(pk, refl2), d2 = gapTo(pk, k2), near = k2.find(r=> Math.abs(r.tt - pk.detPos) === d2);
+  const hkl = near && String(near.hkl), partner = r => r.pk.detPos < pk.detPos && r.pk.height > pk.height && r.refl.some(q=> String(q.hkl) === hkl);
+  return near && d2 < gapTo(pk, rs) && below.some(partner) ? { pk, refl: [], k2, label: reflLabel(k2) + ' Kα2' } : { pk, refl: rs, k2: [], label: reflLabel(rs) };
 }
 // The samples' species (A: their assignments), each once, in the samples' order.
 const speciesOf = A => [...new Set(A.filter(Boolean).map(a=> a.sp))];

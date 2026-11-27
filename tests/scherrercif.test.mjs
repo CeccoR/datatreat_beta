@@ -21,7 +21,11 @@
      its text) opened as it was; a card switched to Rietveld and back, a sample left out and
      taken back in meanwhile, its CIF kept;
    - (v576) a pattern whose Kα2 peaks are resolved (115° to 140°): each named "(hkl) Kα2" (to
-     v575 unassigned), out of the sizes and the chart, the rule in grey saying so.
+     v575 unassigned), out of the sizes and the chart, the rule in grey saying so;
+   - (v577) a sample left out holding its CIF by the card's pool in the project (to v576 its
+     text whole, once more), with the card a Scherrer and a Rietveld one, the text in the pool
+     though no sample in use has it; the project opened again, the sample taken back in with
+     its CIF, undone and redone.
    No page error, no CSP violation. */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -56,6 +60,9 @@ async function addCif(page, file){
   await page.waitForFunction(p=> [...document.querySelectorAll(p + 'PeakTableWrap th')].some(t=> t.textContent === 'hkl'), P);
   await settle(page);
 }
+// The card made another kind; a file left out or taken back in (what: its box ticked after).
+async function kindOf(page, k){ await page.click('#tab-xrd .an-card[data-an="1"] .an-type'); await page.click(`.an-menu:not([hidden]) [data-kind="${k}"]`); await settle(page); }
+async function leave(page, i, what){ await page.locator('#xrdFileTableWrap .file-incl').nth(i).click(); await settle(page); assert.ok(what === await page.locator('#xrdFileTableWrap .file-incl').nth(i).isChecked()); }
 const HKL = ['(100)', '(110)', '(111)', '(200)', '(211)', '(220)', '(310)'];
 const filesOf = d => Object.fromEntries(readZip(d.buf).map(e=> [e.name.replace(/^.* - /, ''), parseCsv(e.data.toString('utf8').replace(/^﻿/, ''), ';')]));
 
@@ -184,8 +191,6 @@ test('an older version\'s project: no CIF, its peaks not grouped, the note in th
    may be another); undone and redone. */
 test('the CIFs\' texts once: a project of v575 opened as it was; a card switched to Rietveld and back, a sample left out meanwhile, its CIF kept (v576)', async ()=>{
   const { page, errors, csp, close } = await env.page({ viewport: { width: 1400, height: 1000 } });
-  const kind = async k =>{ await page.click('#tab-xrd .an-card[data-an="1"] .an-type'); await page.click(`.an-menu:not([hidden]) [data-kind="${k}"]`); await settle(page); };
-  const leave = async (i, what)=>{ await page.locator('#xrdFileTableWrap .file-incl').nth(i).click(); await settle(page); assert.ok(what === await page.locator('#xrdFileTableWrap .file-incl').nth(i).isChecked()); };
   try {
     await openModule(page, 'xrd');
     await loadFiles(page, 'xrd', env.fx.files.xrd);
@@ -204,18 +209,63 @@ test('the CIFs\' texts once: a project of v575 opened as it was; a card switched
     const again = await scherrer(page);
     assert.deepEqual([again.cif, again.cifTexts], [sc.cif, sc.cifTexts], 'saved with the pool');
     // The card a Rietveld one, s00 left out, the card a Scherrer one again, s00 back in: its CIF kept.
-    await kind('rietveld');
+    await kindOf(page, 'rietveld');
     assert.deepEqual([(await scherrer(page)).cif, (await scherrer(page)).cifTexts.length], [sc.cif, 1], 'kept with the pool');
-    await leave(0, false);
-    await kind('scherrer');
+    await leave(page, 0, false);
+    await kindOf(page, 'scherrer');
     assert.deepEqual(await cifFiles(page), ['SrTiO3.cif', null]);
-    await leave(0, true);
+    await leave(page, 0, true);
     assert.deepEqual(await cifFiles(page), ['SrTiO3.cif', 'SrTiO3.cif', null]);
     assert.deepEqual([(await scherrer(page)).cif, (await scherrer(page)).cifTexts.length], [sc.cif, 1]);
     await undo(page);
     assert.deepEqual(await cifFiles(page), ['SrTiO3.cif', null]);
     await undo(page, true);
     assert.deepEqual(await cifFiles(page), ['SrTiO3.cif', 'SrTiO3.cif', null]);
+    assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
+  } finally { await close(); }
+});
+
+/* v577: a sample left out holds its CIF by the pool of its card's settings in the state saved,
+   as a sample in use does (to v576 its text whole, once more in the project for each such
+   sample): s00 and s01 given SrTiO3, s00 left out (the card a Scherrer one), s01 given none
+   (the text in the pool for s00's alone), the card a Rietveld one: the text once in the project
+   each time. The project opened again, the card a Scherrer one, s00 taken back in: its CIF
+   with it; undone and redone. */
+test('a sample left out holds its CIF by the card\'s pool in the project, its text once; opened again, taken back in with it (v577)', async ()=>{
+  const { page, errors, csp, close } = await env.page({ viewport: { width: 1400, height: 1000 } });
+  // The project as exported: s00's held CIF, the pool of the card's Scherrer settings, the text's count.
+  const saved = async ()=>{ const { obj } = await exportProject(page), s = obj.state.cards[0].states.scherrer;
+    return { obj, held: obj.state.files[0].held['A1:cif'], cif: s.cif, texts: s.cifTexts.length, n: JSON.stringify(obj).split('data_SrTiO3').length - 1 }; };
+  const REF = { file: 'SrTiO3.cif', ref: 0 };
+  try {
+    await openModule(page, 'xrd');
+    await loadFiles(page, 'xrd', env.fx.files.xrd);
+    await addCif(page, env.fx.cif);
+    await step(page);
+    await page.selectOption(P + 'Cif', { label: 'SrTiO3' }); await settle(page);
+    await leave(page, 0, false);
+    let o = await saved();
+    assert.deepEqual([o.held, o.cif, o.texts, o.n], [REF, [REF, null], 1, 1], 'left out: by the pool, the text once');
+    await page.selectOption(P + 'Cif', { label: 'none' }); await settle(page);
+    assert.deepEqual(await cifFiles(page), [null, null]);
+    o = await saved();
+    assert.deepEqual([o.held, o.cif, o.texts, o.n], [REF, [null, null], 1, 1], 'its text in the pool for it alone');
+    await kindOf(page, 'rietveld');
+    o = await saved();
+    assert.deepEqual([o.held, o.cif, o.texts, o.n], [REF, [null, null], 1, 1], 'the card a Rietveld one');
+    // Opened again: the card a Scherrer one, s00 taken back in with its CIF; undone, redone.
+    await importProject(page, projectFile(env, 'leftout.datatreat', { ...o.obj, title: 'Left out CIF' }, { sign: true }));
+    await openProject(page, 'xrd', 'Left out CIF');
+    await kindOf(page, 'scherrer');
+    assert.deepEqual(await cifFiles(page), [null, null]);
+    await leave(page, 0, true);
+    assert.deepEqual(await cifFiles(page), ['SrTiO3.cif', null, null]);
+    await undo(page);
+    assert.deepEqual(await cifFiles(page), [null, null]);
+    await undo(page, true);
+    assert.deepEqual(await cifFiles(page), ['SrTiO3.cif', null, null]);
+    for (let k = 0; k < 3 && !(await page.textContent(P + 'CurrentLabel')).includes('s00'); k++) await step(page);
+    assert.deepEqual([(await sel(page)).shown, (await table(page)).rows.map(r=> r[2])], ['SrTiO3', HKL], 's00 shown, its peaks named');
     assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
   } finally { await close(); }
 });
@@ -233,7 +283,7 @@ test('Kα2 peaks resolved: each "(hkl) Kα2", in the table and peaks.csv, out of
     const K2 = ['(331)', '(331) Kα2', '(420)', '(420) Kα2', '(421)', '(421) Kα2', '(332)', '(332) Kα2'];
     let t = await table(page);
     assert.deepEqual(t.rows.map(r=> r[2]), K2);
-    assert.equal(t.rule, 'hkl: the reflections of SrTiO3 at λ 1.540598 Å within 0.5 FWHM of a peak\'s 2θ, 0.1° at least; 4 of 8 peaks only at a reflection\'s Kα2 (λ 1.544426 Å), named so and left out of its sizes, as each repeats its Kα1 peak.');
+    assert.equal(t.rule, 'hkl: the reflections of SrTiO3 at λ 1.540598 Å within 0.5 FWHM of a peak\'s 2θ, 0.1° at least; 4 of 8 peaks at a reflection\'s Kα2 (λ 1.544426 Å), the nearest line within their tolerance, with a taller peak below at that reflection\'s λ: named so and left out of its sizes, as each repeats its Kα1 peak.');
     // The mean over the Kα1 peaks' sizes alone (the table's own, rows 1, 3, 5, 7).
     const sizes = t.rows.filter((_, i)=> i % 2 === 0).map(r=> +r[5]), mean = sizes.reduce((a, v)=> a + v, 0)/sizes.length;
     const said = await page.$eval(P + 'PeakTableWrap .size-summary b', b=> parseFloat(b.textContent));

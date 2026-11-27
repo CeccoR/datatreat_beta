@@ -1,0 +1,313 @@
+/* A trace list's row menu (v579, BACKLOG 25; utils.js, the row's menu): a right-click anywhere
+   on a row of a module's list opens a menu of what the row's include box and its buttons at
+   the right do, made from the one list they are made from (filelist-model.js ROW_ACTS), in
+   every module that shows the list (DRS, XRPD, GC, EPR, SEM, Custom, Iodometry): its items the
+   row's controls' own words and states, the remove last, apart and red; laid over the page,
+   nothing of it moved. Each item does what its control does (the module's state after it the
+   same as after the control, a removal undone, a download the file's bytes). The keys: the
+   ContextMenu key and Shift+F10 in a row, ↓ ↑ Home End round the items, Enter and Space, ← →
+   kept from the samples, Escape and Tab giving the focus back to the row. A finger held on a
+   row (touch, through CDP) opens it at the finger, the click it ends with eaten; a finger
+   moved, the page scrolled, a short tap or a finger on the grip: none. Ctrl+Z, Ctrl+Y and
+   Ctrl+Shift+Z close it before they act (xrdcards 22's kinds' menu, the same), and so does
+   the list drawn again; inside the window at its edges; the browser's own menu held back on
+   the rows alone, and in a name field being typed in left to it; a right-click while a row is
+   dragged by its grip does nothing. Every file made up. */
+import { test, before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { start, openModule, loadFiles, settle, download, moduleState, history } from './helpers.mjs';
+
+let env;
+before(async ()=>{ env = await start(); });
+after(()=> env && env.close());
+
+const W = mod => `#${mod}FileTableWrap`;
+const row = (page, mod, k)=> page.locator(`${W(mod)} tr.file-row`).nth(k);
+const opened = page => page.locator('.row-menu').count();
+// A Cary Kinetics export of two traces (Iodometry), 301 points each.
+function kinetics(){
+  const tr = [{ name: 'Trace A', inj: 10.05, k: 0.5, wl: '350.0', when: '7/23/2025 10:17:45 AM' }, { name: 'Trace B', inj: 12.05, k: 0.3, wl: '350.0', when: '7/23/2025 12:07:33 PM' }];
+  const T = Array.from({ length: 301 }, (_, j)=> +(0.05 + 0.2*j).toFixed(2));
+  let s = tr.map(t=> t.name + ',,').join('') + '\r\n' + tr.map(()=> 'Time (sec),Abs,').join('') + '\r\n';
+  T.forEach(t=>{ s += tr.map(r=> `${t.toFixed(2)},${(0.2 + (t >= r.inj ? r.k*(1 - Math.exp(-(t - r.inj)/40)) : 0)).toFixed(10)},`).join('') + '\r\n'; });
+  s += '\r\n';
+  for (const t of tr) s += `${t.name},\r\n${t.name}\r\nCollection Time: ${t.when}\r\nOperator Name  :\r\nKinetics Version 5.3.0.1079\r\nParameter List :\r\nInstrument  Cary 60\r\nWavelength (nm)  ${t.wl}\r\nOrdinate mode  Abs\r\nAve Time (sec)  0.1000\r\nMethod Log     :\r\nEnd Method Modifications\r\n<Current Wavelength> , ${t.wl}\r\n<Cycle Count> , 1\r\n\r\n`;
+  return s;
+}
+const CUSTOM = 'Time (s),Signal (mV),Ref (mV)\n1,2,4\n2,3,5\n3,4,6\n';
+// Each module's files and the rows they make.
+const FILES = {
+  tauc: e=> [e.fx.files.tauc, 2], xrd: e=> [e.fx.files.xrd, 3], gc: e=> [e.fx.files.gc, 2], epr: e=> [e.fx.files.epr, 2], sem: e=> [e.fx.files.sem, 3],
+  fig: ()=> [[{ name: 'a.csv', mimeType: 'text/csv', buffer: Buffer.from(CUSTOM) }], 2],
+  iodo: e=> [[e.fx.put('kin.csv', kinetics())], 2],
+};
+async function load(page, mod){
+  await openModule(page, mod);
+  const [files, n] = FILES[mod](env);
+  await loadFiles(page, mod, files, n);
+}
+
+// The menu on show, item by item: [role, words, aria-checked, red, control] or 'sep'.
+const items = page => page.$$eval('.row-menu > *', els=> els.map(e=> e.getAttribute('role') === 'separator' ? 'sep'
+  : [e.getAttribute('role'), e.textContent, e.getAttribute('aria-checked'), e.classList.contains('is-danger'), e.dataset.ctl]));
+// What the row's own controls say the menu should be: its box, then its buttons at the right, those
+// that are red last, after a line.
+const fromRow = (page, mod, k)=> row(page, mod, k).evaluate(r=>{
+  const box = r.querySelector('td.incl-cell input[type="checkbox"]'), ctl = el => [...el.classList].find(c=> c === 'dl-file' || c === 'row-del');
+  const all = [['menuitemcheckbox', box.title, String(box.checked), false, box.className],
+    ...[...r.querySelectorAll('td.row-acts button')].map(b=> ['menuitem', b.title, null, b.classList.contains('is-danger'), ctl(b)])];
+  const keep = all.filter(a=> !a[3]), take = all.filter(a=> a[3]);
+  return [...keep, ...(keep.length && take.length ? ['sep'] : []), ...take];
+});
+// Every box laid out in the module's section, and the page's scroll: what opening the menu must not move.
+const layout = (page, mod)=> page.evaluate(mod=> [window.scrollX, window.scrollY, document.documentElement.scrollWidth, document.documentElement.scrollHeight,
+  ...[...document.querySelectorAll(`#tab-${mod} *`)].filter(e=> e.getClientRects().length).map(e=>{ const r = e.getBoundingClientRect(); return [r.x, r.y, r.width, r.height].map(v=> v.toFixed(2)).join(','); })].join(';'), mod);
+const focused = page => page.evaluate(()=>{ const a = document.activeElement; return a.matches('tr.file-row') ? 'row ' + a.dataset.i : a.closest('.row-menu') ? 'item ' + a.textContent : a.tagName + '.' + a.className; });
+const rightClick = (page, mod, k, cell = 'td.fname')=> row(page, mod, k).locator(cell).first().click({ button: 'right' });
+
+test('a row\'s menu, in every module: its items the row\'s controls\' own, the remove last, apart and red; nothing of the page moved', async ()=>{
+  const { page, errors, close } = await env.page();
+  try {
+    for (const mod of ['tauc', 'xrd', 'gc', 'epr', 'sem', 'fig', 'iodo']){
+      await load(page, mod);
+      // (the second row left out by its box: its item unticked)
+      await row(page, mod, 1).locator('.file-incl').click(); await settle(page);
+      for (const k of [0, 1]){
+        const before = await layout(page, mod);
+        await rightClick(page, mod, k);
+        assert.equal(await opened(page), 1, `${mod} row ${k}: the menu open`);
+        const want = await fromRow(page, mod, k);
+        assert.deepEqual(await items(page), want, `${mod} row ${k}: the row's controls, in their words and states`);
+        assert.deepEqual(want.map(a=> a === 'sep' ? a : [a[1], a[2], a[3]]), [['Include in the analysis', String(!k), false], ['Download its file', null, false], 'sep', ['Remove', null, true]], mod);
+        assert.deepEqual(await page.$eval('.row-menu', m=> [m.getAttribute('role'), m.classList.contains('an-menu'), getComputedStyle(m).position]), ['menu', true, 'fixed'], 'the app\'s menu, laid over the page');
+        assert.deepEqual(await row(page, mod, k).evaluate(r=> [r.getAttribute('aria-haspopup'), r.getAttribute('aria-expanded'), r.classList.contains('menu-on')]), ['menu', 'true', true], `${mod} row ${k}: its row`);
+        assert.equal(await focused(page), 'item Include in the analysis', 'the focus on its first item');
+        assert.equal(await layout(page, mod), before, `${mod} row ${k}: nothing moved`);
+        await page.keyboard.press('Escape');
+        assert.equal(await opened(page), 0);
+        assert.equal(await focused(page), 'row ' + k, `${mod} row ${k}: the focus back on the row`);
+        assert.deepEqual(await row(page, mod, k).evaluate(r=> [r.hasAttribute('aria-expanded'), r.classList.contains('menu-on')]), [false, false]);
+      }
+    }
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+/* Each item against its control, in DRS (the module kit's list), XRPD and SEM (their own
+   callbacks): the state after the item the state after the control; a removal undone, the
+   rows back; the download the control's. */
+test('each item does what its control does: include, remove (undone), download', async ()=>{
+  const { page, errors, close } = await env.page();
+  const pick = async (mod, k, words)=>{ await rightClick(page, mod, k); await page.locator('.row-menu [data-ctl]', { hasText: words }).click(); await settle(page); };
+  const rows = mod => page.$$eval(`${W(mod)} tr.file-row`, rs=> rs.map(r=> [r.querySelector('.file-label').value, r.querySelector('.file-incl').checked]));
+  try {
+    for (const mod of ['tauc', 'xrd', 'sem']){
+      await load(page, mod);
+      const r0 = await rows(mod), s0 = await moduleState(page, mod), h0 = (await history(page, mod)).index;
+      for (const [words, ctl] of [['Include in the analysis', '.file-incl'], ['Remove', '.row-del']]){
+        await pick(mod, 1, words);
+        const byMenu = await moduleState(page, mod), r1 = await rows(mod);
+        assert.equal((await history(page, mod)).index, h0 + 1, `${mod} ${words}: a step`);
+        assert.notDeepEqual(r1, r0, `${mod} ${words}: done`);
+        await page.keyboard.press('Control+z'); await settle(page);
+        assert.deepEqual([await rows(mod), await moduleState(page, mod)], [r0, s0], `${mod} ${words}: undone`);
+        await row(page, mod, 1).locator(ctl).click(); await settle(page);
+        assert.deepEqual([await rows(mod), await moduleState(page, mod)], [r1, byMenu], `${mod} ${words}: as its control does`);
+        await page.keyboard.press('Control+z'); await settle(page);
+      }
+      const byMenu = await download(page, async ()=>{ await rightClick(page, mod, 0); await page.click('.row-menu [data-ctl="dl-file"]'); });
+      assert.equal(await focused(page), 'row 0', mod + ': the focus on the row');
+      const byButton = await download(page, ()=> row(page, mod, 0).locator('.dl-file').click());
+      assert.equal(byMenu.name, path.basename(FILES[mod](env)[0][0]), mod + ': the file, under its name');
+      assert.ok(byMenu.buf.equals(fs.readFileSync(FILES[mod](env)[0][0])) && byMenu.buf.equals(byButton.buf), mod + ': its bytes, as its button gives them');
+    }
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+test('the keys: ContextMenu and Shift+F10 in a row, ↓ ↑ Home End round the items, Enter and Space, ← → kept from the samples, Escape and Tab', async ()=>{
+  const { page, errors, close } = await env.page();
+  try {
+    await load(page, 'tauc');
+    const count = ()=> page.locator('#tab-tauc .an-card .nav-count').first().textContent();
+    const n0 = await count();
+    await row(page, 'tauc', 0).locator('.file-incl').focus();
+    await page.keyboard.press('ContextMenu');
+    assert.equal(await opened(page), 1, 'the ContextMenu key');
+    const [m, r] = await Promise.all([page.locator('.row-menu').boundingBox(), row(page, 'tauc', 0).boundingBox()]);
+    assert.ok(Math.abs(m.y - (r.y + r.height + 6)) < 1 && Math.abs(m.x - Math.max(8, r.x)) < 1, `under the row, from its left: ${JSON.stringify([m, r])}`);
+    const walk = [];
+    for (const k of ['ArrowDown', 'ArrowDown', 'ArrowDown', 'ArrowUp', 'Home', 'End', 'ArrowRight', 'ArrowLeft']){ await page.keyboard.press(k); walk.push(await focused(page)); }
+    assert.deepEqual(walk.map(w=> w.slice(5)), ['Download its file', 'Remove', 'Include in the analysis', 'Remove', 'Include in the analysis', 'Remove', 'Remove', 'Remove']);
+    assert.equal(await count(), n0, '← → do not step the samples under the menu');
+    await page.keyboard.press('Escape');
+    assert.deepEqual([await opened(page), await focused(page)], [0, 'row 0'], 'Escape: the focus back on the row');
+    // Shift+F10 from the row itself; Enter on the download.
+    await page.keyboard.press('Shift+F10');
+    assert.equal(await opened(page), 1, 'Shift+F10');
+    await page.keyboard.press('ArrowDown');
+    const d = await download(page, ()=> page.keyboard.press('Enter'));
+    assert.equal(d.name, 'drs1.csv');
+    assert.deepEqual([await opened(page), await focused(page)], [0, 'row 0']);
+    // Space on the box's item: left out; the row drawn again keeps the focus.
+    const h0 = (await history(page, 'tauc')).index;
+    await page.keyboard.press('Shift+F10'); await page.keyboard.press('Space'); await settle(page);
+    assert.deepEqual([await row(page, 'tauc', 0).locator('.file-incl').isChecked(), (await history(page, 'tauc')).index, await focused(page)], [false, h0 + 1, 'row 0']);
+    // Tab closes it; the remove's item by the keys; then the focus on the row in its place.
+    await page.keyboard.press('Shift+F10'); await page.keyboard.press('Tab');
+    assert.deepEqual([await opened(page), await focused(page)], [0, 'row 0'], 'Tab');
+    await page.keyboard.press('Shift+F10'); await page.keyboard.press('End'); await page.keyboard.press('Enter'); await settle(page);
+    assert.deepEqual([await page.locator(`${W('tauc')} tr.file-row`).count(), await focused(page)], [1, 'row 0'], 'removed, the next row focused');
+    // The ContextMenu key in a name field: the field's own menu.
+    await row(page, 'tauc', 0).locator('.file-label').focus();
+    await page.keyboard.press('ContextMenu');
+    assert.equal(await opened(page), 0, 'not from a name field');
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+test('a finger held on a row opens its menu, the click it ends with eaten; moved, the page scrolled, a tap or on the grip: none', async ()=>{
+  const { page, ctx, errors, close } = await env.page({ touch: true, viewport: { width: 800, height: 600 } });
+  try {
+    await load(page, 'tauc');
+    const cdp = await ctx.newCDPSession(page);
+    const at = async (k, sel)=>{ const b = await row(page, 'tauc', k).locator(sel).first().boundingBox(); return { x: b.x + b.width/2, y: b.y + b.height/2 }; };
+    const touch = (type, p)=> cdp.send('Input.dispatchTouchEvent', { type, touchPoints: p ? [{ x: p.x, y: p.y, id: 1 }] : [] });
+    const hold = async (p, ms, mid)=>{ await touch('touchStart', p); if (mid) await mid(); await page.waitForTimeout(ms); const n = await opened(page); await touch('touchEnd'); await settle(page); return n; };
+    const h0 = (await history(page, 'tauc')).index;
+    // Held on the file's name: the menu at the finger.
+    const p = await at(0, 'td.fname');
+    assert.equal(await hold(p, 750), 1, 'held: the menu');
+    const m = await page.locator('.row-menu').boundingBox();
+    assert.ok(Math.abs(m.x - p.x) < 1 && Math.abs(m.y - p.y) < 1, `at the finger: ${JSON.stringify([m, p])}`);
+    assert.equal(await opened(page), 1, 'still open, the finger lifted');
+    await page.keyboard.press('Escape');
+    // Held on the include box: the box as it was (the click the hold ends with, if any, eaten).
+    assert.equal(await hold(await at(0, '.file-incl'), 750), 1);
+    assert.deepEqual([await row(page, 'tauc', 0).locator('.file-incl').isChecked(), (await history(page, 'tauc')).index], [true, h0], 'the box untouched');
+    // A tap on an item: done.
+    const it = await page.locator('.row-menu [data-ctl="row-del"]').boundingBox();
+    await page.touchscreen.tap(it.x + it.width/2, it.y + it.height/2); await settle(page);
+    assert.deepEqual([await opened(page), await page.locator(`${W('tauc')} tr.file-row`).count(), (await history(page, 'tauc')).index], [0, 1, h0 + 1], 'removed by a tap on its item');
+    await page.keyboard.press('Control+z'); await settle(page);
+    // Moved 12 px, the page scrolled, a short tap, the grip: no menu.
+    const q = await at(1, 'td.fname');
+    assert.equal(await hold(q, 750, async ()=>{ for (const dx of [4, 8, 12]){ await touch('touchMove', { x: q.x + dx, y: q.y }); } }), 0, 'moved: none');
+    assert.equal(await hold(q, 750, ()=> page.evaluate(()=> window.scrollBy(0, 40))), 0, 'the page scrolled: none');
+    await page.evaluate(()=> window.scrollTo(0, 0)); await settle(page);
+    assert.equal(await hold(await at(1, 'td.fname'), 120), 0, 'a tap: none');
+    await page.waitForTimeout(600);
+    assert.equal(await opened(page), 0, 'nor after');
+    assert.equal(await hold(await at(1, '.drag-handle'), 750), 0, 'on the grip: none');
+    assert.equal(await page.locator(`${W('tauc')} tr.file-row`).count(), 2);
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+/* As the kinds' menu through a step (xrdcards 22): the history's keys close it before they act,
+   and the step is done, nothing lost; the list drawn again otherwise closes it too. */
+test('Ctrl+Z, Ctrl+Y and Ctrl+Shift+Z close the menu before they act; the list drawn again closes it', async ()=>{
+  const { page, errors, close } = await env.page();
+  const rows = ()=> page.$$eval(`${W('tauc')} tr.file-row`, rs=> rs.map(r=> r.querySelector('.file-label').value));
+  try {
+    await load(page, 'tauc');
+    await row(page, 'tauc', 1).locator('.row-del').click(); await settle(page);
+    const h = (await history(page, 'tauc')).index;
+    for (const [key, n, at] of [['Control+z', 2, h - 1], ['Control+y', 1, h], ['Control+z', 2, h - 1], ['Control+Shift+Z', 1, h]]){
+      await rightClick(page, 'tauc', 0);
+      assert.equal(await opened(page), 1);
+      await page.keyboard.press(key); await settle(page);
+      assert.deepEqual([await opened(page), (await rows()).length, (await history(page, 'tauc')).index], [0, n, at], key + ': closed, then done');
+    }
+    // Nothing lost after: a name typed reaches the state, the menu opens on the rows drawn since.
+    const lab = row(page, 'tauc', 0).locator('.file-label');
+    await lab.fill('mine'); await lab.press('Enter'); await settle(page);
+    assert.equal((await moduleState(page, 'tauc')).files[0].label, 'mine');
+    await rightClick(page, 'tauc', 0);
+    assert.deepEqual(await items(page), await fromRow(page, 'tauc', 0));
+    // The list drawn again with the menu open (its include-all box pressed by a script): closed.
+    await page.evaluate(id=> document.querySelector(id + ' .incl-all').click(), W('tauc')); await settle(page);
+    assert.equal(await opened(page), 0, 'closed with the list drawn again');
+    assert.equal(await row(page, 'tauc', 0).locator('.file-incl').isChecked(), false);
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+test('the menu inside the window: at the pointer where there is room, else over it and short of the right edge', async ()=>{
+  const { page, errors, close } = await env.page({ viewport: { width: 375, height: 700 } });
+  try {
+    await load(page, 'tauc');
+    // (the window's bottom 20 px under the last row: no room under it for the menu)
+    const r = await row(page, 'tauc', 1).boundingBox(), H = Math.ceil(r.y + r.height + 20), x = r.x + r.width - 3, y = r.y + r.height - 3;
+    await page.setViewportSize({ width: 375, height: H }); await settle(page);
+    await page.mouse.click(x, y, { button: 'right' });
+    const m = await page.locator('.row-menu').boundingBox();
+    assert.ok(m.x >= 8 - 0.5 && m.x + m.width <= 375 - 8 + 0.5 && m.y >= 8 - 0.5 && m.y + m.height <= H - 8 + 0.5, `inside the window by 8 px: ${JSON.stringify([m, H])}`);
+    assert.ok(Math.abs(m.y + m.height - y) < 1 && Math.abs(m.x + m.width - (375 - 8)) < 1 && m.x < x, `over the pointer, the window ending under it; pushed in from its right edge: ${JSON.stringify([m, x, y])}`);
+    assert.equal(await page.evaluate(()=> document.documentElement.scrollWidth - document.documentElement.clientWidth), 0, 'no sideways scroll');
+    await page.keyboard.press('Escape');
+    // Room: its corner on the pointer.
+    await page.setViewportSize({ width: 375, height: 700 }); await settle(page);
+    const b = await row(page, 'tauc', 0).locator('td.fname').boundingBox(), px = b.x + 4, py = b.y + 4;
+    await page.mouse.click(px, py, { button: 'right' });
+    const m2 = await page.locator('.row-menu').boundingBox();
+    assert.ok(Math.abs(m2.x - px) < 1 && Math.abs(m2.y - py) < 1, `at the pointer: ${JSON.stringify([m2, px, py])}`);
+    // A scroll and a resize close it.
+    await page.evaluate(()=> window.scrollBy(0, 30)); await settle(page);
+    assert.equal(await opened(page), 0, 'closed by a scroll');
+    await page.mouse.click(px, py - 30, { button: 'right' });
+    assert.equal(await opened(page), 1);
+    await page.setViewportSize({ width: 380, height: 700 }); await settle(page);
+    assert.equal(await opened(page), 0, 'closed by a resize');
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+test('the browser\'s own menu held back on the rows alone: the head, the drop zone, a plot and a name field typed in keep it', async ()=>{
+  const { page, errors, close } = await env.page();
+  try {
+    await load(page, 'tauc');
+    await page.evaluate(()=>{ window.__cm = []; window.addEventListener('contextmenu', e=> window.__cm.push(e.defaultPrevented)); });
+    const tried = async loc =>{
+      await loc.click({ button: 'right' });
+      const r = [await page.evaluate(()=> window.__cm.pop()), await opened(page)];
+      await page.keyboard.press('Escape');
+      return r;
+    };
+    assert.deepEqual(await tried(row(page, 'tauc', 0).locator('td.fname')), [true, 1], 'a row: held back, the row\'s menu');
+    assert.deepEqual(await tried(row(page, 'tauc', 1).locator('.drag-handle')), [true, 1], 'its grip too');
+    assert.deepEqual(await tried(row(page, 'tauc', 1).locator('.file-label')), [true, 1], 'its name field, not typed in');
+    assert.deepEqual(await tried(page.locator(`${W('tauc')} thead th`).nth(2)), [false, 0], 'the head');
+    assert.deepEqual(await tried(page.locator('#taucDropzone')), [false, 0], 'the drop zone');
+    assert.deepEqual(await tried(page.locator('#tab-tauc svg.plot').first()), [false, 0], 'a plot');
+    await row(page, 'tauc', 0).locator('.file-label').click();
+    assert.deepEqual(await tried(row(page, 'tauc', 0).locator('.file-label')), [false, 0], 'a name field typed in: its own');
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+test('a right-click while a row is dragged by its grip does nothing; the drag goes on', async ()=>{
+  const { page, errors, close } = await env.page();
+  try {
+    await load(page, 'xrd');
+    const names = ()=> page.$$eval(`${W('xrd')} tr.file-row td.fname`, ts=> ts.map(t=> t.textContent));
+    const n0 = await names(), h0 = (await history(page, 'xrd')).index;
+    // (not dragged: its grip opens the menu, as the rest of the row)
+    await rightClick(page, 'xrd', 0, '.drag-handle');
+    assert.equal(await opened(page), 1);
+    await page.keyboard.press('Escape');
+    const g = await row(page, 'xrd', 0).locator('.drag-handle').boundingBox(), r = await row(page, 'xrd', 2).boundingBox();
+    await page.mouse.move(g.x + g.width/2, g.y + g.height/2);
+    await page.mouse.down();
+    await page.mouse.move(g.x + g.width/2, r.y + r.height*0.8, { steps: 8 });
+    await page.mouse.down({ button: 'right' });
+    assert.equal(await opened(page), 0, 'no menu mid-drag');
+    await page.mouse.up({ button: 'right' });
+    await page.mouse.up();
+    await settle(page);
+    assert.deepEqual([await names(), (await history(page, 'xrd')).index, await opened(page)], [[...n0.slice(1), n0[0]], h0 + 1, 0], 'the drag done, as without the right button');
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});

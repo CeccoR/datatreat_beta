@@ -772,9 +772,9 @@ export function barLabel(C, fr, s, j, cx, yy, yv, zero, err, ink, paper){
 /* One box of a box plot, in its bar's slot: the box from the first to the third
    quartile, the median across it, whiskers to the furthest values within 1.5 IQR with
    caps, each value beyond a circle, the mean a cross (none when it is no number); a box
-   marked minBox (v576: XRPD's crystallite sizes, plot.js box) no shorter than the cross,
-   about its middle. The lines and shapes as { x1, x2, y1, y2 } and the like; its division
-   (d) and colour. */
+   marked minBox (as plot.js box drew it: v576 XRPD's crystallite sizes, v577 every box
+   plot) no shorter than the cross, about its middle. The lines and shapes as { x1, x2, y1,
+   y2 } and the like; its division (d) and colour. */
 export function boxMarks(fr, s, j, b, cx, wPx){
   const { Yc } = fr;
   const hw = wPx/2, cap = Math.min(4, hw/2), r = Math.min(2.5, hw*0.4);

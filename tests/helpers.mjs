@@ -62,9 +62,10 @@ export async function start(){
   };
 }
 
-async function openApp(browser, base, { viewport = { width: 1400, height: 900 }, clipboard = false } = {}){
+// (touch: a touch screen as well, its fingers driven through CDP's Input.dispatchTouchEvent)
+async function openApp(browser, base, { viewport = { width: 1400, height: 900 }, clipboard = false, touch = false } = {}){
   const ctx = await browser.newContext({ viewport, timezoneId: 'UTC', locale: 'en-US', colorScheme: 'dark',
-    serviceWorkers: 'block', acceptDownloads: true });
+    serviceWorkers: 'block', acceptDownloads: true, hasTouch: touch });
   if (clipboard) await ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: base });
   const page = await ctx.newPage();
   const errors = [], csp = [];

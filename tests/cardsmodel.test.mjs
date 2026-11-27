@@ -91,6 +91,11 @@ test('the places: the menu, the scroll that brings a card into view, a card held
   assert.deepEqual(M.menuAt({ ...r, top: 700, bottom: 730 }, 150, 90, 1200, 800, false), { left: 100, top: 604 }, 'over its anchor where the window ends first');
   assert.deepEqual(M.menuAt({ left: 1150, top: 20, bottom: 30, width: 40 }, 150, 900, 1200, 800, false), { left: 1042, top: 8 }, 'inside the window by 8 px');
   assert.deepEqual(M.menuAt({ left: -50, top: 0, bottom: 10, width: 10 }, 150, 50, 100, 800, true), { left: 8, top: 16 });
+  // (v579: a trace list's row menu at a point, the pointer's, no gap: its corner on it, or over
+  // it and in from the window's edges where the window ends first)
+  const pt = (x, y)=> ({ left: x, top: y, bottom: y, width: 0 });
+  assert.deepEqual(M.menuAt(pt(300, 200), 150, 90, 1200, 800, false, 0), { left: 300, top: 200 });
+  assert.deepEqual(M.menuAt(pt(1190, 780), 150, 90, 1200, 800, false, 0), { left: 1042, top: 690 });
   // In view: its head whole between the bar and the window's foot, or the card covering the screen.
   assert.equal(M.revealOf(60, { top: 100, bottom: 500, height: 400 }, { top: 100, bottom: 140 }, 800), 0);
   assert.equal(M.revealOf(60, { top: 0, bottom: 900, height: 900 }, { top: 0, bottom: 40 }, 800), 0, 'covering the screen');
