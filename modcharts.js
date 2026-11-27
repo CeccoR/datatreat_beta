@@ -48,7 +48,7 @@ export const viewKey = list => list.map(f=> f.name).join('\n');
 export function chipRow(opts, shown, { cls, data, name = o=> o.label, can = ()=> true, why = ()=> '' }){
   return opts.map(o=>{
     const on = shown.includes(o.key), ok = can(o);
-    const title = !ok ? why(o) : on && shown.length === 1 ? `${name(o)} — the only one shown` : `Show / hide ${name(o)}`;
+    const title = !ok ? why(o) : on && shown.length === 1 ? `${name(o)}: the only one shown` : `Show / hide ${name(o)}`;
     return `<button type="button" class="mode-chip ${cls}${on ? ' is-on' : ''}" ${data(o)} title="${esc(title)}"${ok ? '' : ' disabled'}>${o.label}</button>`;
   }).join('');
 }

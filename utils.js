@@ -2627,9 +2627,10 @@ const fileLine = (name, why)=> `${name}: ${why}${/[.?!]$/.test(why) ? '' : '.'}`
 /* The boxes of what the reading of the files said, worked out from the files in the list
    (v572, R3: alerts.js notes, those with a file not marked seen), in the order warning (to
    check, then a project opened), info: `act(what)` the data-action of each box's ×, which
-   marks its files (alerts.js markSeen); `more[what]`, lines of a box beside its notes (what a
-   project opened left out, which is no file in the list). */
-const notesHtml = (notes, act, more = {})=> ['check', 'opened', 'read'].map(w=> fileAlertHtml(w, [...notesFor(notes, w).map(n=> n.line), ...(more[w] || [])], act(w))).join('');
+   marks its files (alerts.js markSeen); `more[what]`, lines of a box after its notes (what a
+   project opened left out, which is no file in the list); `lead[what]`, before them (what a
+   drop on XRPD's standard's window said of the drop, v574: to v573 after its file's notes). */
+const notesHtml = (notes, act, more = {}, lead = {})=> ['check', 'opened', 'read'].map(w=> fileAlertHtml(w, [...(lead[w] || []), ...notesFor(notes, w).map(n=> n.line), ...(more[w] || [])], act(w))).join('');
 /* A file dropped whose bytes cannot be read: gone from the disk since it was chosen,
    moved, or no permission (the browser's NotFoundError or NotReadableError). To v566 DRS,
    GC, Custom, SEM and Iodometry stopped the drop there with no word, XRPD and EPR said the

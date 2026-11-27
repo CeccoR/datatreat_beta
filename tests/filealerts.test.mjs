@@ -24,7 +24,8 @@
      kept through undo and redo and in the project saved and opened again, a file dropped
      since said, a file removed taking its own (to v571 a flag of the module's or the drop's
      words, gone or back at the next undo, lost or back at a reopening). XRPD's standard window
-     the same, from the standard there is (v573: to v572 its drop's words).
+     the same, from the standard there is (v573: to v572 its drop's words); a drop's line of
+     several files first in its box, before the file's notes (v574: to v573 after them).
    - A save the browser's storage refuses: said, the tab left unsaved (to v566 nothing).
    - SEM's figure composer that cannot load: a banner, as the plots' (v571; to v570 nothing). */
 import { test, before, after } from 'node:test';
@@ -162,6 +163,11 @@ test('XRPD\'s standard window: a file gone from the disk refused with why (not t
     await drop(page, '#xrdStdRvFiles', [{ name: 'std.xrdml', buffer: xrdml(11) }, { name: 'other.xrdml', buffer: xrdml(12) }]);
     assert.deepEqual(await said(), [['info', 'How these files were read:', '2 files dropped: the first, std.xrdml, is the standard; the others are not used.']]);
     assert.match(await page.locator('#xrdStdRv .xrd-std-file').textContent(), /std\.xrdml/);
+    // The drop's line its box's first, before what the reading of the file said (v574: to v573 after).
+    const one = xrdml(13, { n: 400 }).toString('utf8'), scan = one.slice(one.indexOf('<scan '), one.indexOf('</scan>') + 7);
+    await drop(page, '#xrdStdRvFiles', [{ name: 'two.xrdml', buffer: Buffer.from(one.replace(scan, scan + scan)) }, { name: 'other.xrdml', buffer: xrdml(12) }]);
+    assert.deepEqual(await said(), [['info', 'How these files were read:', '2 files dropped: the first, two.xrdml, is the standard; the others are not used.',
+      'two.xrdml: 2 scans: the standard is the first; the others are not used.']]);
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });

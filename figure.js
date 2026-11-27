@@ -1843,7 +1843,7 @@ function serieRowHtml(s, i){
 function panelGroupsHtml(){
   return F.panels.map((p, pi)=>`
     <div class="fig-group" data-pg="${pi}">
-      <div class="fig-group-h">P${pi+1}${p.title ? ' — ' + esc(p.title) : ''}</div>
+      <div class="fig-group-h">P${pi+1}${p.title ? ': ' + esc(p.title) : ''}</div>
       ${F.series.map((s, i)=> s.panel === pi ? serieRowHtml(s, i) : '').join('')
         || '<p class="txt-meta fig-group-empty">Drag a series here.</p>'}
     </div>`).join('');
@@ -1936,7 +1936,7 @@ function controlsHtml(){
         </select></div>`;
     }).join('')}
     ${chk('Keep labels and titles off edges that face another panel','innerClean')}
-    <p class="txt-meta">With that on, a side facing a neighbouring panel keeps its tick marks only — which is what stops two panels' numbers from running into each other.</p>
+    <p class="txt-meta">With that on, a side facing a neighbouring panel keeps its tick marks only, which is what stops two panels' numbers from running into each other.</p>
   </section>
 
   <section class="fig-sec"><h4>Data labels</h4>
@@ -1965,7 +1965,7 @@ function controlsHtml(){
     <div class="fig-subhead">Type</div>
     ${sel('Font','family', Object.entries(FONTS).map(([k,v])=>[k, v.label]), F.font.family, 'f')}
     <div class="fig-row"><span>Colour of every line and letter</span>
-      <button class="color-swatch" data-inksw data-color="${esc(F.inkColor)}" style="background:${esc(F.inkColor)}" title="Frame, ticks, numbers, titles, legend — everything but the data"></button></div>
+      <button class="color-swatch" data-inksw data-color="${esc(F.inkColor)}" style="background:${esc(F.inkColor)}" title="Frame, ticks, numbers, titles, legend: everything but the data"></button></div>
     <div class="fig-row"><span>X tick labels tilt (&deg;)</span>${F.catRotAuto
       ? `<input type="text" value="${lastCatRot}" data-autorot disabled title="Chosen automatically: the least that keeps the names inside their panel and apart">`
       : numField('data-k="catRot"', F.catRot, 0, 90)}

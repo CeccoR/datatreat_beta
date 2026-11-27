@@ -174,6 +174,18 @@ was proposed; nothing here is in the code yet.
   of a negative E_g. Whether that is a real consumption or an artefact (a leak, a drift of
   the baseline) is the user's call: a warning like DRS's, the bar hidden, or as it is.
   Decided for v567: no new message; left as it is until the user says.
+- **Tables alone have no grip: two tables unpaired cannot be paired again by hand (looked at
+  in v574, as v544 made it).** While no raw chromatograms and no pair are in the list, its
+  files have no grip of their own (gc.js traceRows: no `parts`), the list exactly v543's. So
+  v544 meant it: its prototype's notes ("While no raw chromatograms and no pair are loaded,
+  `parts` is null and the list is exactly v543's"), the comment it wrote ("as to v543") and
+  gctcd-ui's test "tables alone: no grip", unchanged since (`git log -S`: v544, then v557's
+  split). Its other side: two tables paired by their names (a table named `…_TCD`) and
+  unpaired by hand leave tables alone, the grips go with the pair, and the tables cannot be
+  paired by hand again (an undo can). Two tables paired serve nothing (the second is
+  ignored), so only the way back is lost. Proposed, for the user: the grips whenever the list
+  has two files, whatever they are (the list then no longer v543's with tables alone), or
+  kept while the tab's history holds a pair. Left as it is meanwhile.
 
 ## EPR
 
@@ -217,7 +229,15 @@ was proposed; nothing here is in the code yet.
   over 1, found then), the golden outputs changed in those words alone; the marks read from
   a project kept only where they are marks; a mark tied to the issue its note names where
   that can change while the file stays (GC's pair: paired wrongly again with another file,
-  said again). Nothing of the review is left.
+  said again). Done in v574, what v573 left: in GC a box's × marks its file in the states that
+  hold it as a pair's second too (gc-model.js inRows; to v573 only where it headed a row, so
+  that, undone to such a state and unpaired, the file was said again); XRPD's standard window
+  has the drop's line (`{n} files dropped: …`) first in its box again, before the file's notes
+  (v573 put it after them); the tooltips and instructions say ":" or "," for "—" (the
+  Rietveld engine's result lines, GC's T and p and its instructions, the Rietveld card's, its
+  settings' and its standard's, the Scherrer standard's, SEM's thumbnails, the plots' chips, the
+  figure composer's), the golden outputs changed in those words alone (gcmodel, integmodel,
+  rvmodel, stages). Nothing of the review is left.
 
 - **Long functions.** A handful of functions run to hundreds of lines: `createRietveld`
   (xrd-rv.js, ~1300), `createPeakAnalysis` (xrd-peaks.js, ~1100), `autoRefine`

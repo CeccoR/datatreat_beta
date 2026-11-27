@@ -193,7 +193,7 @@ function rebuildXrdAlerts(S){
   const notes = stdNotes(S), D = S.stdSaid;
   [S.peaksModal, S.rvModal].forEach(w=>{
     const at = w.el === D.at;
-    w.el.querySelector('.xrd-std-alerts').innerHTML = (at ? D.bad : '') + notesHtml(notes, x=> 'xrd-std-dismiss-' + x, { read: at && D.read ? [D.read] : [] });
+    w.el.querySelector('.xrd-std-alerts').innerHTML = (at ? D.bad : '') + notesHtml(notes, x=> 'xrd-std-dismiss-' + x, {}, { read: at && D.read ? [D.read] : [] });
   });
 }
 

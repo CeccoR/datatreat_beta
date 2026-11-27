@@ -1,4 +1,4 @@
-# Avvisi ed errori: revisione (v565 → v573)
+# Avvisi ed errori: revisione (v565 → v574)
 
 Mappa rifatta dal codice di v565 (331 voci: 309 messaggi con testo, 3 flash, 4 solo tooltip, 15 casi muti). Sostituisce la revisione di v540: delle sue 79 proposte 73 valevano ancora, sono riprese qui sotto. I testi dell'interfaccia restano in inglese.
 
@@ -155,3 +155,12 @@ Restavano fuori, fatti in v573 (sotto): la box della finestra Calibration GC per
 | Box della Calibration GC per v544–v548 (G14) | La × marca il file della calibrazione (`seen`, `gc-integ-model.js` `inCal`: la calibrazione della card in ogni stato della storia), senza passo; regge undo/redo, la finestra riaperta e il progetto riaperto. Golden integmodel: cambia solo la × di quella box (`data-action` al posto di `data-dismiss-alert`) |
 | `seen` letto da un progetto | Tenuti solo i segni che lo sono (`alerts.js` `seenIn`, `keepSeen`: stringhe `check`, `read`, `opened`, sole o seguite da `:` e una chiave), una volta; il resto tolto. In tutti i ripristini: modkit (DRS, GC, EPR, Iodometria, Custom; in GC anche il file in coppia), XRPD (file e standard), SEM, la calibrazione GC |
 | Segno legato al problema | Ogni nota può avere una `key`, il problema che nomina dove questo cambia restando il file (`alerts.js` `markOf`: `{box}:{key}`; senza key il nome della box, come in v572). La riga di una coppia GC ha `pair:{file in coppia}` o `alone`: rifatta male con un altro file, o lasciati soli i cromatogrammi, si dice di nuovo; la stessa coppia rifatta resta vista. Un segno di v572 (`check`) non nasconde più una coppia. Altri casi non ce ne sono: le altre note sono fissate dai byte del file (date, celle vuote, formati, scansioni, punti tolti, MWFQ, coppie di colonne, barra delle info SEM, ciò che ha trovato una riapertura) |
+
+## Residui di v573 (v574): fatti
+
+| Cosa | Fatto |
+|---|---|
+| Segno su un file in coppia in uno stato vecchio | GC: la × marca il file anche negli stati dove è il secondo di una coppia (`gc-model.js` `inRows`, modkit `markIn`); fino a v573 solo dove era in testa alla riga, e tornati con undo a quello stato e sciolta la coppia la sua nota tornava |
+| Ordine nella box info della finestra dello standard XRPD | La riga della drop (`{n} files dropped: …`) di nuovo prima, poi le note del file (`utils.js` `notesHtml`, `lead`); in v573 dopo |
+| "—" nei tooltip e nelle istruzioni | ":" o "," al suo posto: titoli delle righe del worker Rietveld, `T_TITLE` e `P_TITLE` e istruzioni GC, `RV_INFO`, `RV_STD_INFO`, `STD_INFO`, titoli delle impostazioni Rietveld, miniature SEM, chip dei grafici, composer. Golden: gcmodel, integmodel, rvmodel e stages cambiano solo in quelle stringhe (i dump di v573 con le stringhe sostituite sono quelli di v574 byte per byte). Restano il "—" che sta per un valore assente (celle, placeholder, l'opzione "—" dei ruoli di colonna), il footer e i meta della pagina |
+| Maniglie dei file GC con sole tabelle | Non cambiato: voluto da v544 ("as to v543", test "tables alone: no grip"); in BACKLOG la proposta |
