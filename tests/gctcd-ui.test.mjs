@@ -1764,3 +1764,75 @@ test('Integrate on 36 chromatograms (v578): no task of the page\'s thread over 1
     assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
   } finally { await close(); }
 });
+
+/* v585: the Calibration window's lists have the trace list's row menu (utils.js wireRowMenu,
+   rowmenu.test.mjs): a standard's row, its Use (ticked as it is, a step, undone; the window kept
+   open by Escape), read off its control; a file's row, its × (red), removing the standards, a
+   step, undone. The levels named by the window's display names, H₂ and O₂ (to v584 "H2", "O2").
+   Where the Production Rate card's values come from: compact boxes with no × (ALERTS-REVIEW.md
+   R1–R3; to v584 the info and the warning the drop zone's, with a ×). */
+test('v585: the calibration window\'s rows: a standard\'s menu of its Use, a file\'s of its ×; the levels named H₂ and O₂; the card\'s sources in compact boxes', async ()=>{
+  const { page, errors, csp, close } = await env.page();
+  const menuItems = ()=> page.$$eval('.row-menu > *', els=> els.map(e=> e.getAttribute('role') === 'separator' ? 'sep' : [e.getAttribute('role'), e.lastChild.textContent, e.getAttribute('aria-checked'), e.classList.contains('is-danger')]));
+  const opened = ()=> page.locator('.row-menu').count();
+  try {
+    await openModule(page, 'gc');
+    await load(page, [table('run.csv', tableRows()), tcd('run_TCD.csv', areas())], 1);
+    await integrated(page);
+    const src = page.locator('#tab-gc .an-card').nth(1).locator('.gc-src .alert');
+    assert.ok(await src.count() >= 1, 'the GC software\'s scale said');
+    assert.deepEqual(await src.evaluateAll(as=> as.map(a=> [a.classList.contains('compact'), !!a.querySelector('.alert-dismiss, .close-x, button')])), Array(await src.count()).fill([true, false]), 'compact, no ×');
+    const card = page.locator('#tab-gc .an-card').nth(0), m = page.locator('.gci-cal-modal');
+    await card.locator('.gci-cal').click(); await m.waitFor({ state: 'visible' });
+    await m.locator('.gci-cal-in').setInputFiles([calTable('std.csv'), stdTcd('std_TCD.csv')]);
+    await calDone(page); await settle(page);
+    // The levels' names.
+    const labels = await m.locator('.gci-cal-levels tbody input[type="text"]').evaluateAll(is=> is.map(i=> i.getAttribute('aria-label')));
+    assert.equal(labels.length, 12);
+    assert.ok(labels.every((l, k)=> l === `${k % 2 ? 'O₂' : 'H₂'} concentration of ${labels[k - k % 2].replace(/^H₂ concentration of /, '')}`) && !labels.some(l=> /^[HO]2 /.test(l)), labels.join(' | '));
+    // A standard's row: its Use.
+    const ROW = m.locator('.gci-cal-levels tbody tr[data-row]').nth(1), use = ROW.locator('input[type="checkbox"]'), s0 = await steps(page);
+    const full = await ROW.locator('.gci-cal-src').getAttribute('title');
+    await ROW.locator('.gci-cal-name').click({ button: 'right' });
+    assert.deepEqual(await menuItems(), [['menuitemcheckbox', await use.getAttribute('aria-label'), 'true', false]]);
+    assert.deepEqual(await page.$eval('.row-menu', e=> [e.getAttribute('role'), e.getAttribute('aria-label')]), ['menu', full]);
+    assert.deepEqual(await ROW.evaluate(r=> [r.getAttribute('aria-haspopup'), r.getAttribute('aria-expanded'), r.classList.contains('menu-on')]), ['menu', 'true', true]);
+    await page.keyboard.press('Escape');
+    assert.deepEqual([await opened(), await m.isVisible(), await ROW.evaluate(r=> document.activeElement === r)], [0, true, true], 'Escape: the menu closed, the window open, the focus on the row');
+    await page.keyboard.press('Shift+F10'); await page.keyboard.press('Space'); await settle(page);
+    assert.deepEqual([await use.isChecked(), await ROW.evaluate(r=> r.classList.contains('is-excluded')), await steps(page)], [false, true, s0 + 1], 'Space: left out, a step');
+    await ROW.locator('.gci-cal-name').click({ button: 'right' });
+    assert.equal((await menuItems())[0][2], 'false', 'its item unticked');
+    await page.keyboard.press('Control+z'); await settle(page);
+    assert.deepEqual([await opened(), await use.isChecked(), await steps(page)], [0, true, s0], 'Ctrl+Z: closed, undone');
+    // A file's row: its ×, red; the standards removed, a step, undone.
+    const FILE = m.locator('.gci-cal-files .xrd-std-row').first();
+    await FILE.locator('.xrd-std-name').click({ button: 'right' });
+    assert.deepEqual(await menuItems(), [['menuitem', 'Remove these standards and their levels', null, true]]);
+    assert.equal(await page.$eval('.row-menu', e=> e.getAttribute('aria-label')), 'std.csv + std_TCD.csv');
+    await page.locator('.row-menu [data-ctl]').click(); await settle(page);
+    assert.deepEqual([await m.locator('.gci-cal-files .xrd-std-row').count(), await m.locator('.gci-cal-levels tbody tr[data-row]:visible').count(), await steps(page), await m.isVisible()], [0, 0, s0 + 1, true], 'removed, a step');
+    await page.keyboard.press('Control+z'); await settle(page);
+    assert.deepEqual([await m.locator('.gci-cal-files .xrd-std-row').count(), await m.locator('.gci-cal-levels tbody tr[data-row]:visible').count()], [1, 6], 'undone');
+    assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
+  } finally { await close(); }
+});
+
+/* v585: a run that fails with no reason (its promise rejected with nothing, a worker's
+   postMessage throwing undefined here) says so in words, not "undefined" (to v584
+   String(undefined)). */
+test('v585: an integration that fails with no reason says its workers gave none, not "undefined"', async ()=>{
+  const { page, errors, csp, close } = await env.page();
+  try {
+    await openModule(page, 'gc');
+    await page.evaluate(()=>{ window.Worker = class { addEventListener(){} removeEventListener(){} terminate(){} postMessage(){ throw undefined; } }; });
+    await load(page, [table('run.csv', tableRows()), tcd('run_TCD.csv', areas())], 1);
+    await page.waitForFunction(()=> document.querySelector('#tab-gc .gci-status')?.dataset.state === 'failed', null, { timeout: 30000 });
+    await settle(page);
+    const said = await page.locator('#tab-gc .an-card').nth(0).locator('.gci-status .alert.bad.compact').textContent();
+    assert.equal(said, '✕ The integration failed: its workers gave no reason.');
+    const src = await page.locator('#tab-gc .an-card').nth(1).locator('.gc-src .alert.bad.compact').textContent();
+    assert.ok(src.endsWith('run: the integration failed: its workers gave no reason.') && !/undefined/.test(src), src);
+    assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
+  } finally { await close(); }
+});

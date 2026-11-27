@@ -180,8 +180,8 @@ test('a numeric field\'s value refused: its rule in red under it, floating, gone
     await page.waitForFunction(()=> document.querySelector('#tab-gc .gcShared[data-f="m"]').getAnimations().length === 0);
     const r = await page.evaluate(()=>{ const e = document.querySelector('.field-rule-float'), f = document.querySelector('#tab-gc .gcShared[data-f="m"]').getBoundingClientRect(), b = e.getBoundingClientRect();
       return { text: e.textContent, dy: b.top - f.bottom, dx: b.left - f.left, pos: getComputedStyle(e).position, n: document.querySelectorAll('.field-rule-float').length }; });
-    // (v581: m's rule says empty is none, as it is)
-    assert.deepEqual([r.text, r.pos, r.n], ['A number, at least 0.001, or none (empty).', 'fixed', 1]);
+    // (v585: m's rule its bounds alone, an empty field refused as 0 is; v581–v584 "…, or none (empty).")
+    assert.deepEqual([r.text, r.pos, r.n], ['A number, at least 0.001.', 'fixed', 1]);
     assert.ok(r.dy >= 0 && r.dy <= 6 && Math.abs(r.dx) <= 1, `under the field at rest: ${JSON.stringify(r)}`);
     assert.deepEqual(await ruleAt(), at0, 'the rule still through the shake');
     assert.equal(await m.inputValue(), was, 'the value put back');

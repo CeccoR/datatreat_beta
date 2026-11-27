@@ -7,12 +7,12 @@
    drop zone (the pairs, the dates, the empty cells, the alternative export: their lines,
    which modkit.js puts in their boxes) and at a card's top (where its values came from).
    Taken out of v556's gc.js as they were: the same markup to the byte.
-   What they need from the page is handed in, u = { esc, num, plotWrap, CSV_ICON, alertHtml }
-   (utils.js's esc and alerts, modkit.js's num, modcharts.js's plot box and CSV icon: gc.js
+   What they need from the page is handed in, u = { esc, num, plotWrap, CSV_ICON }
+   (utils.js's esc, modkit.js's num, modcharts.js's plot box and CSV icon: gc.js
    HU), and the cards' own instructions (cards.js cardInfo) where they end with them.
 ========================================================= */
 import { NORM, PER, P_ATM, P_UNITS, INJ_DELAY_AUTO, GASES, molarVolume, inUnit, injDelay, mOf, aOf, qOf, tOf, pOf, startOf, endOf,
-  lightOnWarn, lacking, seriesName, gasTxt, blankCounts, byName, headOf, isHead, isTable, isTcd, rowFiles, heldOf } from './gc-model.js';
+  lightOnWarn, seriesName, gasTxt, blankCounts, byName, headOf, isHead, isTable, isTcd, rowFiles, heldOf } from './gc-model.js';
 import { boxHtml } from './alerts.js';
 import { failedWhy } from './gc-integ-html.js';
 
@@ -68,9 +68,9 @@ const RATES_HTML = (()=>{
     [display(F, eq, x, dot, nd, dot, pow10('6'))],
     `${im(F)}: µmol h⁻¹ (10⁶ µmol mol⁻¹).`,
     `Assumed: the carrier's flow ${im(nd)} is the total flow leaving the reactor, which holds when the products are a small part of it (ppm to a few %mol).`)
-  + step('Rate', "The gas's flow over the photocatalyst's mass or, for a film, its area, as the m column's header chooses; as it flows where a sample has none.",
-    [display(r, eq, cases([[mfrac(F, mrow(m, slash, mn('1000'))), mtext('by mass')], [mfrac(F, A), mtext('by area')], [F, mtext('not normalised')]]))],
-    `${im(r)}: µmol g⁻¹ h⁻¹ with ${im(m)} in mg (1000 mg g⁻¹), µmol cm⁻² h⁻¹ with ${im(A)} in cm², or µmol h⁻¹ not normalised.`)
+  + step('Rate', "The gas's flow over the photocatalyst's mass or, for a film, its area, as the m column's header chooses.",
+    [display(r, eq, cases([[mfrac(F, mrow(m, slash, mn('1000'))), mtext('by mass')], [mfrac(F, A), mtext('by area')]]))],
+    `${im(r)}: µmol g⁻¹ h⁻¹ with ${im(m)} in mg (1000 mg g⁻¹), or µmol cm⁻² h⁻¹ with ${im(A)} in cm².`)
   + step('Time', "Each injection's time from light-on, in hours.",
     [display(t, eq, mfrac(mrow(tinj, mo('+'), delay, mo('−'), ton), mn('3600')))],
     `${im(t)}: h; ${im(tinj)}, the injection date, ${im(delay)}, the injection delay, and ${im(ton)}, the light-on time: s (3600 s h⁻¹).`,
@@ -94,11 +94,10 @@ const RATES_HTML = (()=>{
   + `${display(r, eq, mfrac(mn(ex.F), mn('2.5')), eq, mn(ex.ra), unit('µmol', ['cm', '−2'], ['h', '−1']))}</div></li>`
   + '</ol></div>';
 })();
-export const gcInfo = cardInfo => `Set catalyst mass (m) or, for a film, its area (A), carrier gas flow rate (Q), its temperature (T) and pressure (p), the light-on time and the integration interval for each sample to compute mean H₂ and O₂ production rates; the <b>header of the m column</b> chooses for the whole card what the rates are divided by: the photocatalyst's <b>mass</b>, m (mg) (rates in µmol g⁻¹ h⁻¹, production in µmol g⁻¹; the default; to v540 in mmol g⁻¹ h⁻¹ and mmol g⁻¹, so a project saved before shows the same results, their numbers 1000 times what they were) or its <b>area</b>, A (cm²) (µmol cm⁻² h⁻¹ and µmol cm⁻², the usual units for films); the column then shows A, with its own all / one, the masses and the areas both kept apart, so that switching back loses neither and never reads one as the other. The rates are normalised where every sample has a value of the one chosen above 0; a field left empty is none, and while a sample has none the rates are not normalised (µmol h⁻¹ and µmol), a line under the parameters naming the samples. The plots, the bar chart, the CSVs and their headers follow. the <b>H₂ / O₂</b> chips on each plot choose the gases drawn, for Analysis and for Results; the CSVs have every gas, whichever is drawn. Two layouts are read. The <b>default</b>: a header naming the Injection Date and each gas's %mol column (H₂, O₂). The <b>alternative</b>, the instrument's tab-separated .txt export: a header naming Inject Time and its Area and Amount columns, over a line naming each column's gas (Hydrogen, Nitrogen, Oxygen); H₂ and O₂ are read from the Amount columns, in ppm, and worked out as %mol (ppm / 10⁴), gc_raw.csv writing them in ppm (its column headed so), the Area columns and N₂ left out, and an info alert under the drop zone names each file read so. An empty H₂ or O₂ cell, or one reading n.a., leaves that injection out of that gas only, and the alert under the drop zone says how many were skipped; a blank line, a line of separators alone and a row with no date (n.a.) are passed over. An injection date is the day, the month and the year between slashes, the month a number or an English name (Nov, November), the year of 4 digits or 2 (26 is 2026), then the time, h:mm or h:mm:ss, with AM/PM or in 24 hours (14:13). Numeric dates are read month/day, as the instrument writes them, or day/month in a file where some do not exist so and every one does that way, its times going on as the rows do; a month named is read where it stands (13/Nov/26 is 13 November). A row whose date does not exist (2/30, 13/13, 31/Nov, 13:00 PM) is left out, and the alert says either. Use the <b>all / one</b> toggles to share a value across samples or set it per sample. <b>T</b> is ${T_TITLE}. <b>p</b> is ${P_TITLE}; its unit (atm, bar, kPa, mbar, Torr = mmHg, psi) is chosen in its column's header, which converts the values shown, not the pressure. A <b>mass-flow controller</b> (an Alicat MC, say) gives a mass flow as the volume it would take at its reference conditions (sccm, slpm), so the molar flow is n/t = p<sub>ref</sub>·Q/(R·T<sub>ref</sub>) with the controller's reference T and p: the real temperature and pressure of the gas, in the lines or in the reactor, do not enter. Set T and p to its standard conditions: Alicat's default is 25 °C and 14.696 psia (1 atm) for its standard units, 0 °C and 1 atm for its normal ones (NCCM, NLPM), and the device's STP/NTP menu can change them. Its reading is right for the gas it is set to: another gas or a mixture needs that gas chosen on the device, or its correction factor. ${RATES_HTML}A new analysis, and a project that holds none, starts at 25 °C and 1 atm. The <b>injection delay</b> moves every injection on from its logged date to the moment the sample is actually injected; <b>Auto</b> uses 60.6 s. In per-sample interval mode the vertical lines are coloured by sample: hover or select a table row to highlight its interval on the plot (and vice-versa). <b>Replicates</b>: the <b>Sample</b> column of the file list says which sample each file is: its own (as it starts), or another file's, named by that file's label (a label renamed shows at once and changes no link); a file that heads a group, set to another, takes its group along, and a head removed leaves its group to its next file. The time plots stay one per file; the mean-rate bar chart has one bar per sample, named after its head's label (the first included file's, the head left out), its height the mean of its included files' mean rates, each worked out with its own parameters, and its error bar the files' standard deviation (n − 1 under it; none for a single file); a file left out is out of the mean and of n. With replicates (a sample of more than one included file), mean_rates.csv has a row per sample (each gas's mean, ± and n) and mean_rates_by_file.csv a row per file, as mean_rates.csv has without them. <b>Raw chromatograms</b> (v544): a table paired with its raw chromatograms (they share a row of the file list) takes its H₂ and O₂ from the nearest <b>Integration</b> card above this one, re-integrated, the table still giving the injection times, when the table has as many injections (its rows with a date and a value) as there are chromatograms and the gas has a calibration (the standards, or the GC software's scale taken over); everything after is as above. Where it cannot, the table's own values are used, and an alert at the top of this card says why (the counts differ, no calibration and too few injections to take the software's scale, the integration not done yet). A card with no Integration card above it uses the tables, as before. gc_raw.csv then says, at each injection, which value was used (the <i>source</i> column), with the table's, the re-integrated one and the fitted area beside it. ${cardInfo}`;
+export const gcInfo = cardInfo => `Set catalyst mass (m) or, for a film, its area (A), carrier gas flow rate (Q), its temperature (T) and pressure (p), the light-on time and the integration interval for each sample to compute mean H₂ and O₂ production rates; the <b>header of the m column</b> chooses for the whole card what the rates are divided by: the photocatalyst's <b>mass</b>, m (mg) (rates in µmol g⁻¹ h⁻¹, production in µmol g⁻¹; the default; to v540 in mmol g⁻¹ h⁻¹ and mmol g⁻¹, so a project saved before shows the same results, their numbers 1000 times what they were) or its <b>area</b>, A (cm²) (µmol cm⁻² h⁻¹ and µmol cm⁻², the usual units for films); the column then shows A, with its own all / one, the masses and the areas both kept apart, so that switching back loses neither and never reads one as the other. Every sample has its value, at least 0.001 (an empty field, 0, below it or no number is refused, its value kept; a sample added starts at 15 mg and 1 cm²), so the rates are always normalised by the one chosen. The plots, the bar chart, the CSVs and their headers follow. the <b>H₂ / O₂</b> chips on each plot choose the gases drawn, for Analysis and for Results; the CSVs have every gas, whichever is drawn. Two layouts are read. The <b>default</b>: a header naming the Injection Date and each gas's %mol column (H₂, O₂). The <b>alternative</b>, the instrument's tab-separated .txt export: a header naming Inject Time and its Area and Amount columns, over a line naming each column's gas (Hydrogen, Nitrogen, Oxygen); H₂ and O₂ are read from the Amount columns, in ppm, and worked out as %mol (ppm / 10⁴), gc_raw.csv writing them in ppm (its column headed so), the Area columns and N₂ left out, and an info alert under the drop zone names each file read so. An empty H₂ or O₂ cell, or one reading n.a., leaves that injection out of that gas only, and the alert under the drop zone says how many were skipped; a blank line, a line of separators alone and a row with no date (n.a.) are passed over. An injection date is the day, the month and the year between slashes, the month a number or an English name (Nov, November), the year of 4 digits or 2 (26 is 2026), then the time, h:mm or h:mm:ss, with AM/PM or in 24 hours (14:13). Numeric dates are read month/day, as the instrument writes them, or day/month in a file where some do not exist so and every one does that way, its times going on as the rows do; a month named is read where it stands (13/Nov/26 is 13 November). A row whose date does not exist (2/30, 13/13, 31/Nov, 13:00 PM) is left out, and the alert says either. Use the <b>all / one</b> toggles to share a value across samples or set it per sample. <b>T</b> is ${T_TITLE}. <b>p</b> is ${P_TITLE}; its unit (atm, bar, kPa, mbar, Torr = mmHg, psi) is chosen in its column's header, which converts the values shown, not the pressure. A <b>mass-flow controller</b> (an Alicat MC, say) gives a mass flow as the volume it would take at its reference conditions (sccm, slpm), so the molar flow is n/t = p<sub>ref</sub>·Q/(R·T<sub>ref</sub>) with the controller's reference T and p: the real temperature and pressure of the gas, in the lines or in the reactor, do not enter. Set T and p to its standard conditions: Alicat's default is 25 °C and 14.696 psia (1 atm) for its standard units, 0 °C and 1 atm for its normal ones (NCCM, NLPM), and the device's STP/NTP menu can change them. Its reading is right for the gas it is set to: another gas or a mixture needs that gas chosen on the device, or its correction factor. ${RATES_HTML}A new analysis, and a project that holds none, starts at 25 °C and 1 atm. The <b>injection delay</b> moves every injection on from its logged date to the moment the sample is actually injected; <b>Auto</b> uses 60.6 s. In per-sample interval mode the vertical lines are coloured by sample: hover or select a table row to highlight its interval on the plot (and vice-versa). <b>Replicates</b>: the <b>Sample</b> column of the file list says which sample each file is: its own (as it starts), or another file's, named by that file's label (a label renamed shows at once and changes no link); a file that heads a group, set to another, takes its group along, and a head removed leaves its group to its next file. The time plots stay one per file; the mean-rate bar chart has one bar per sample, named after its head's label (the first included file's, the head left out), its height the mean of its included files' mean rates, each worked out with its own parameters, and its error bar the files' standard deviation (n − 1 under it; none for a single file); a file left out is out of the mean and of n. With replicates (a sample of more than one included file), mean_rates.csv has a row per sample (each gas's mean, ± and n) and mean_rates_by_file.csv a row per file, as mean_rates.csv has without them. <b>Raw chromatograms</b> (v544): a table paired with its raw chromatograms (they share a row of the file list) takes its H₂ and O₂ from the nearest <b>Integration</b> card above this one, re-integrated, the table still giving the injection times, when the table has as many injections (its rows with a date and a value) as there are chromatograms and the gas has a calibration (the standards, or the GC software's scale taken over); everything after is as above. Where it cannot, the table's own values are used, and an alert at the top of this card says why (the counts differ, no calibration and too few injections to take the software's scale, the integration not done yet). A card with no Integration card above it uses the tables, as before. gc_raw.csv then says, at each injection, which value was used (the <i>source</i> column), with the table's, the re-integrated one and the fitted area beside it. ${cardInfo}`;
 
 /* ---- The parameter table's cells ---- */
-// A numeric text cell; `state` = 'on' (editable), 'ro' (read-only) or 'off' (disabled); a value
-// that is none (null: a mass or an area left empty), empty.
+// A numeric text cell; `state` = 'on' (editable), 'ro' (read-only) or 'off' (disabled).
 function numCell(cls, attrs, value, state, u){
   const dis = state==='off' ? 'disabled' : (state==='ro' ? 'readonly' : '');
   return `<input class="${cls}" ${attrs} type="text" inputmode="decimal" value="${u.esc(value)}" ${dis} style="width:100%">`;
@@ -121,7 +120,6 @@ export const cardBody = (a, u)=> `
         </div>
         <div class="gc-param-wrap" id="${pre(a)}ParamTableWrap"></div>
         <p class="field-rule gc-param-rule" id="${pre(a)}ParamRule" role="alert" hidden></p>
-        <div class="gc-norm-info" id="${pre(a)}NormInfo"></div>
       </div>
       <div class="row" style="align-items:flex-start">
         <div class="col">
@@ -177,7 +175,7 @@ export function paramTableHtml(P, files, u){
      own type as p's unit is, its options the column's names; in a compact type (11 px, v582:
      to v581 the header's 12 px, the table then 1060 px at least). */
   const isA = P.normBy === 'A', nf = isA ? 'a' : 'm', nMode = isA ? P.aMode : P.mMode, nShared = isA ? P.aShared : P.mShared, nOf = isA ? aOf : mOf;
-  const normSel = `<select class="gc-norm" aria-label="Normalize the rates by m or A" title="What the rates are divided by, for every sample of this card: the photocatalyst's mass m (µmol g⁻¹ h⁻¹) or, for a film, its area A (µmol cm⁻² h⁻¹), each kept apart; a sample with none (its field empty): not normalised (µmol h⁻¹)" style="width:auto;margin:-3px 0;padding:0 2px;border-radius:5px;font:inherit;font-size:11px;color:inherit">${
+  const normSel = `<select class="gc-norm" aria-label="Normalize the rates by m or A" title="What the rates are divided by, for every sample of this card: the photocatalyst's mass m (µmol g⁻¹ h⁻¹) or, for a film, its area A (µmol cm⁻² h⁻¹), each kept apart" style="width:auto;margin:-3px 0;padding:0 2px;border-radius:5px;font:inherit;font-size:11px;color:inherit">${
     PER.map(v=> `<option value="${v}"${v === P.normBy ? ' selected' : ''}>${NORM[v].col}</option>`).join('')}</select>`;
   const unitSel = `<select class="gc-unit" aria-label="Unit of p" title="The unit p is shown and written in: switching it converts the values, not the pressure (Torr: mmHg)" style="width:auto;margin:-3px 0;padding:0 2px;border-radius:5px;font:inherit;color:inherit">${
     Object.keys(P_UNITS).map(un=> `<option value="${un}"${un === P.pUnit ? ' selected' : ''}>${un}</option>`).join('')}</select>`;
@@ -222,14 +220,6 @@ export function paramTableHtml(P, files, u){
   });
   html += `</tbody></table></div>`;
   return html;
-}
-
-/* Where the rates are not normalised (gc-model.js normKey: an included sample with no value of
-   the quantity chosen, its field left empty), a compact info under the parameters naming the
-   samples (v581); else nothing. */
-export function normInfoHtml(P, files, u){
-  const l = lacking(P, files);
-  return l.length ? boxHtml('info', `No ${P.normBy} for ${l.map(f=> u.esc(f.label)).join(', ')}: the rates are not normalised, in µmol h⁻¹ and µmol.`) : '';
 }
 
 // The warning beside a sample's row when its light-on time is before (or at) its first
@@ -320,11 +310,13 @@ export function fileNotes(all, u){
 }
 
 /* Where a card's values came from, said at its top (v544): the samples re-integrated, and
-   how each gas is made a concentration (the standards, or the GC software's scale, an info
-   alert); the samples paired with raw chromatograms that keep their table, and why (a
-   warning); those whose integration failed, with the job's message, a compact error first
-   (v584, ALERTS-REVIEW.md R1–R4: to v583 "not done yet" in the warning, the failure untold).
-   Nothing while no sample is paired or no Integration card is above (`name`, that card's). */
+   how each gas is made a concentration (the standards, or the GC software's scale, an info);
+   the samples paired with raw chromatograms that keep their table, and why (a warning); those
+   whose integration failed, with the job's message, an error first (v584: to v583 "not done
+   yet" in the warning, the failure untold). Said of the card's analysis, worked out again with
+   it: compact boxes with no × (ALERTS-REVIEW.md R1–R3; v585: to v584 the info and the warning
+   the drop zone's boxes, with a × that held until the next drawing). Nothing while no sample is
+   paired or no Integration card is above (`name`, that card's). */
 export function srcAlertsHtml(dataTables, name, u){
   const used = [], kept = [], failed = [], txt = Object.fromEntries(GASES.map(g=> [g.key, gasTxt(g)]));
   const k5 = v => Number.isFinite(v) ? String(+v.toPrecision(5)) : '?';
@@ -343,6 +335,6 @@ export function srcAlertsHtml(dataTables, name, u){
   if (dataTables.some(d=> d.src && d.src.gas && Object.values(d.src.how).includes('transfer'))) used.push(`The GC software's scale (k): its risks are in the instructions of ${u.esc(name)}.`);
   const head = `The GC software's table used instead of the re-integration (${u.esc(name)}):`;
   return (failed.length ? boxHtml('bad', [head, ...failed]) : '')
-    + (used.length ? u.alertHtml('info', `H₂ and O₂ re-integrated from the raw chromatograms (${u.esc(name)}), the times from the tables:`, used) : '')
-    + (kept.length ? u.alertHtml('warn', head, kept) : '');
+    + (used.length ? boxHtml('info', [`H₂ and O₂ re-integrated from the raw chromatograms (${u.esc(name)}), the times from the tables:`, ...used]) : '')
+    + (kept.length ? boxHtml('warn', [head, ...kept]) : '');
 }

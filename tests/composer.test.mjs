@@ -731,6 +731,46 @@ test('plots composer: its pickers inside the page, short of its scrollbar (v584)
   } finally { await close(); }
 });
 
+/* v585: as v584's, the page left as the composer leaves it: no scrollbar drawn under it, the
+   gutter it keeps (style.css: a modal open, the page's overflow hidden, scrollbar-gutter
+   stable). Chromium leaves that gutter in clientWidth, then the window's innerWidth; the page's
+   own box (documentElement's getBoundingClientRect) is the room left: the pickers placed short
+   of it (utils.js viewport; to v584 by clientWidth, on the gutter). */
+test('plots composer: its pickers short of the gutter its window keeps, no scrollbar drawn (v585)', async ()=>{
+  const { page, errors, csp, close } = await env.page({ scrollbars: true });
+  try {
+    await openModule(page, 'gc');
+    await loadFiles(page, 'gc', env.fx.files.gc);
+    const edge = async (btn, pop, kind)=>{
+      await page.locator(btn).first().click();
+      await page.waitForSelector(pop, { state: 'visible' });
+      const r = await page.evaluate(([btn, pop, kind])=>{
+        const b = document.querySelector(btn), el = document.querySelector(pop), d = document.documentElement, pw = el.offsetWidth;
+        const room = d.getBoundingClientRect().width, g = innerWidth - room, bar = getComputedStyle(d).overflowY;
+        const x = kind === 'beside' ? room - 18 - pw + g/2 - 20 : room - 4;
+        b.getBoundingClientRect = ()=> new window.DOMRect(x, 300, 20, 20);
+        window.dispatchEvent(new Event('resize'));
+        const box = el.getBoundingClientRect();
+        delete b.getBoundingClientRect;
+        window.dispatchEvent(new Event('resize'));
+        const want = { beside: x - pw - 10, chars: room - pw - 8 }[kind];
+        return { g, room, cw: d.clientWidth, iw: innerWidth, bar, pw, left: box.left, right: box.right, want };
+      }, [btn, pop, kind]);
+      assert.equal(r.bar, 'hidden', `${pop}: the page's scrollbar not drawn under the window`);
+      assert.ok(r.g > 0 && r.cw === r.iw, `${pop}: a gutter kept (${r.g} px), which clientWidth leaves in: ${JSON.stringify(r)}`);
+      assert.ok(Math.abs(r.left - r.want) < 0.5 && r.right <= r.room, `${pop}: short of the gutter: ${JSON.stringify(r)}`);
+      await page.locator(btn).first().click();
+      await page.waitForSelector(pop, { state: 'hidden' });
+    };
+    await composeGc(page, 'Svg1');
+    await edge('.fig-backdrop .color-swatch[data-sw="0"]', '.cp-popup', 'beside');
+    await edge('.fig-backdrop [data-rich-act="chars"]', '.char-popup', 'chars');
+    await closeComposer(page);
+    assert.deepEqual(errors, []);
+    assert.deepEqual(await csp(), []);
+  } finally { await close(); }
+});
+
 test('SEM composer: opens on a group, exports SVG and PNG, refuses a second, closes on Escape', async ()=>{
   const { page, errors, csp, close } = await env.page();
   try {

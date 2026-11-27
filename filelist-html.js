@@ -72,13 +72,16 @@ export function rowHtml(f, i, callbacks, note, U){
 
 // The include box's tick, in its item of a row's menu.
 const TICK = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5 12.5 10 17.5 19 6.5"/></svg>';
-/* A row's menu (filelist-model.js rowMenu): a button an item, pressing the row's control
-   (data-ctl), its words after its control's icon (the box's: its tick, ticked; else its
-   place, empty); a line before those that take the trace away, red as the row's × is. */
+/* A row's menu (filelist-model.js rowMenu; every list's, v585: utils.js wireRowMenu): a button
+   an item, pressing the row's control (data-ctl), its words after its control's icon (`ic`, the
+   control's own markup; else the trace list's, by its control; a box's or a round button's: its
+   tick, ticked, else its place, empty), its control's tooltip (`title`) where it has one of its
+   own; a control disabled, its item aria-disabled (it does nothing); a line before those that
+   take the row's thing away, red as the row's × is. */
 export const menuHtml = (items, U)=> items.map(m=>{
   if (m.sep) return '<div class="an-menu-sep" role="separator"></div>';
-  const box = m.checked != null, ic = box ? (m.checked ? TICK : '') : U[BTN[m.ctl][1]](15);
-  return `<button type="button" role="${box ? 'menuitemcheckbox' : 'menuitem'}"${box ? ` aria-checked="${m.checked}"` : ''}${m.danger ? ' class="is-danger"' : ''} data-ctl="${U.esc(m.ctl)}"><span class="rm-ic" aria-hidden="true">${ic}</span>${U.esc(m.label)}</button>`;
+  const box = m.checked != null, ic = box ? (m.checked ? TICK : '') : m.ic != null ? m.ic : U[BTN[m.ctl][1]](15);
+  return `<button type="button" role="${box ? (m.radio ? 'menuitemradio' : 'menuitemcheckbox') : 'menuitem'}"${box ? ` aria-checked="${m.checked}"` : ''}${m.disabled ? ' aria-disabled="true"' : ''}${m.title ? ` title="${U.esc(m.title)}"` : ''}${m.danger ? ' class="is-danger"' : ''} data-ctl="${U.esc(m.ctl)}"><span class="rm-ic" aria-hidden="true">${ic}</span>${U.esc(m.label)}</button>`;
 }).join('');
 
 /* The whole list: its head, a row a trace, and, with every trace left out (nIn none), why

@@ -19,7 +19,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { start, openModule, loadFiles, settle, download, moduleState, history } from './helpers.mjs';
+import { start, openModule, loadFiles, settle, download, moduleState, history, saveAs, banner, answer } from './helpers.mjs';
 
 let env;
 before(async ()=>{ env = await start(); });
@@ -360,6 +360,164 @@ test('macOS: a Ctrl+click on a grip, a row\'s or a file\'s, opens the row\'s men
     await ctrlClick(page, row(page, 'epr', 0).locator('.fpart-grip').last(), r1.y + r1.height/2);
     assert.deepEqual([await opened(page), await parts(), (await history(page, 'epr')).index], [1, p0, e0], 'the menu open, the file in its row, no step');
     await page.keyboard.press('Escape');
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+/* ---- v585: the other lists whose rows have actions (utils.js wireRowMenu, ctlMenu) ----
+   The Rietveld card's phases (its CIFs: the tick, or in the standard's window the choice, the
+   download, the ×), the standard's file in XRPD's standard's window (its ×), GC's Calibration
+   window's standards (gctcd-ui.test.mjs) and the Projects list (Export .csv, Export
+   .datatreat, Delete): a row's menu read off its own controls, in their names and states, the
+   red ones last after a line, a control disabled its item disabled (doing nothing); opened,
+   named, keyed and closed as the trace list's, each item doing what its control does, through
+   its handler. */
+// What a row's controls (`sel`) say its menu should be: [role, words, aria-checked, red, aria-disabled], the red last after a line.
+const fromCtls = (loc, sel)=> loc.evaluate((r, sel)=>{
+  const all = [...r.querySelectorAll(sel)].map(c=>{ const box = c.type === 'checkbox' || c.type === 'radio';
+    return [box ? (c.type === 'radio' ? 'menuitemradio' : 'menuitemcheckbox') : 'menuitem', c.getAttribute('aria-label') || c.title, box ? String(c.checked) : null,
+      c.classList.contains('is-danger'), c.disabled || c.getAttribute('aria-disabled') === 'true' ? 'true' : null]; });
+  const keep = all.filter(a=> !a[3]), take = all.filter(a=> a[3]);
+  return [...keep, ...(keep.length && take.length ? ['sep'] : []), ...take];
+}, sel);
+// (its words after its icon: the Projects' icons hold letters of their own, CSV, JSON)
+const shownItems = page => page.$$eval('.row-menu > *', els=> els.map(e=> e.getAttribute('role') === 'separator' ? 'sep'
+  : [e.getAttribute('role'), e.lastChild.textContent, e.getAttribute('aria-checked'), e.classList.contains('is-danger'), e.getAttribute('aria-disabled')]));
+// The menu's name, the row's state while it is open, and whether the focus is on the row.
+const menuOf = page => page.$eval('.row-menu', m=> [m.getAttribute('role'), m.getAttribute('aria-label'), getComputedStyle(m).position]);
+const rowState = loc => loc.evaluate(r=> [r.getAttribute('aria-haspopup'), r.getAttribute('aria-expanded'), r.classList.contains('menu-on'), r.tabIndex]);
+const onRow = loc => loc.evaluate(r=> document.activeElement === r);
+const item = (page, words)=> page.locator('.row-menu [data-ctl]', { hasText: words });
+
+test('v585: the Rietveld card\'s phases: a row\'s menu of its tick, its download and its ×, read off them; each item its control\'s; the keys; Ctrl+Z', async ()=>{
+  const { page, errors, close } = await env.page();
+  const P = '#xrdR2', ROW = k => page.locator(`${P}PhaseList .rv-cif`).nth(k), phases = async ()=> (await moduleState(page, 'xrd')).cards.find(c=> c.id === 2).states.rietveld.phases;
+  try {
+    await load(page, 'xrd');
+    await page.setInputFiles(P + 'CifInput', [env.fx.cif, env.fx.tetra]);
+    await page.waitForFunction(p=> document.querySelectorAll(p + 'PhaseList .rv-cif').length === 2, P); await settle(page);
+    for (const k of [0, 1]){
+      await ROW(k).locator('.rv-cif-f').click({ button: 'right' });
+      assert.equal(await opened(page), 1, `phase ${k}: the menu`);
+      const want = await fromCtls(ROW(k), 'input, button'), name = await ROW(k).evaluate(r=> r.title.split(' · ')[0]);
+      assert.deepEqual(await shownItems(page), want, `phase ${k}: its controls, in their names and states`);
+      assert.deepEqual(want.map(a=> a === 'sep' ? a : [a[0], a[2], a[3], a[4]]), [['menuitemcheckbox', 'true', false, null], ['menuitem', null, false, null], 'sep', ['menuitem', null, true, null]]);
+      assert.deepEqual(want.filter(a=> a !== 'sep').map(a=> a[1]), [`Refine ${name} on this pattern`, `Download the CIF of ${name}`, `Remove ${name}`]);
+      assert.deepEqual(await menuOf(page), ['menu', name, 'fixed']);
+      assert.deepEqual(await rowState(ROW(k)), ['menu', 'true', true, -1]);
+      await page.keyboard.press('Escape');
+      assert.deepEqual([await opened(page), await onRow(ROW(k))], [0, true], `phase ${k}: Escape, the focus back on its row`);
+    }
+    // Each item as its control: the tick (a step, undone), the download (its bytes), the × (undone).
+    const h0 = (await history(page, 'xrd')).index, ph0 = await phases();
+    await ROW(1).click({ button: 'right' }); await item(page, 'Refine').click(); await settle(page);
+    const byMenu = await phases();
+    assert.deepEqual([(await history(page, 'xrd')).index, await ROW(1).locator('input[data-on]').isChecked()], [h0 + 1, false], 'the tick: off, a step');
+    await page.keyboard.press('Control+z'); await settle(page);
+    assert.deepEqual(await phases(), ph0);
+    await ROW(1).locator('input[data-on]').click(); await settle(page);
+    assert.deepEqual(await phases(), byMenu, 'as its control does');
+    await page.keyboard.press('Control+z'); await settle(page);
+    const dMenu = await download(page, async ()=>{ await ROW(0).click({ button: 'right' }); await item(page, 'Download').click(); });
+    const dBtn = await download(page, ()=> ROW(0).locator('[data-dl]').click());
+    assert.deepEqual([dMenu.name, dMenu.buf.equals(dBtn.buf), (await history(page, 'xrd')).index], [dBtn.name, true, h0], 'the download: its button\'s, no step');
+    // The keys: Shift+F10 from the row's tick, ↓ to the ×, Enter; the next row focused.
+    await ROW(0).locator('input[data-on]').focus();
+    await page.keyboard.press('Shift+F10');
+    assert.equal(await opened(page), 1, 'Shift+F10');
+    await page.keyboard.press('End'); await page.keyboard.press('Enter'); await settle(page);
+    assert.deepEqual([await page.locator(`${P}PhaseList .rv-cif`).count(), (await history(page, 'xrd')).index, await onRow(ROW(0))], [1, h0 + 1, true], 'removed by its ×, the row in its place focused');
+    // Ctrl+Z with the menu open: closed, then undone.
+    await ROW(0).click({ button: 'right' });
+    await page.keyboard.press('Control+z'); await settle(page);
+    assert.deepEqual([await opened(page), await page.locator(`${P}PhaseList .rv-cif`).count()], [0, 2], 'Ctrl+Z: closed, the phase back');
+    /* A scroll: one that moves its row closes it; the press's own, the row scrolled into view
+       before the menu opens (its event a frame later), does not (v585: it closed it at once). */
+    await page.evaluate(()=> window.scrollTo(0, 0)); await settle(page);
+    await ROW(0).locator('.rv-cif-f').click({ button: 'right' }); await settle(page);
+    assert.equal(await opened(page), 1, 'scrolled into view by the press: open');
+    await page.evaluate(()=> window.scrollBy(0, 40)); await settle(page);
+    assert.equal(await opened(page), 0, 'a scroll moving its row: closed');
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+test('v585: the standard\'s window: its phase\'s menu (its choice, the built-in\'s × disabled) and its file\'s (its ×); Escape closes the menu, not the window', async ()=>{
+  const { page, errors, close } = await env.page();
+  const S = '#xrdStdR', W = '#xrdStdRv', LAB = page.locator(`${S}PhaseList .rv-cif`).first(), FILE = page.locator(`${W} .xrd-std-file .xrd-std-row`);
+  try {
+    await load(page, 'xrd');
+    await page.click('#xrdR2Std'); await page.waitForSelector(W, { state: 'visible' }); await settle(page);
+    await LAB.click({ button: 'right' });
+    const want = await fromCtls(LAB, 'input, button');
+    assert.deepEqual(await shownItems(page), want);
+    assert.deepEqual(want.map(a=> a === 'sep' ? a : [a[0], a[2], a[3], a[4]]), [['menuitemradio', 'true', false, null], ['menuitem', null, false, null], 'sep', ['menuitem', null, true, 'true']], 'the choice; the built-in\'s × disabled');
+    assert.equal(await item(page, 'Remove').getAttribute('title'), 'Built in: it cannot be removed', 'why, in its tooltip');
+    await item(page, 'Remove').click({ force: true }); await settle(page);
+    assert.deepEqual([await opened(page), await page.locator(`${S}PhaseList .rv-cif`).count()], [1, 1], 'a disabled item does nothing, the menu open');
+    await page.keyboard.press('Escape');
+    assert.deepEqual([await opened(page), await page.isVisible(W), await onRow(LAB)], [0, true, true], 'Escape: the menu closed, the window open');
+    // The standard's file: its × alone, red, no line; named by its file; Enter removes it, undone.
+    await page.setInputFiles(W + 'Files', env.fx.std);
+    await FILE.waitFor(); await settle(page);
+    const h0 = (await history(page, 'xrd')).index;
+    await FILE.locator('.xrd-std-name').click({ button: 'right' });
+    assert.deepEqual(await shownItems(page), [['menuitem', 'Remove the standard', null, true, null]]);
+    assert.deepEqual(await shownItems(page), await fromCtls(FILE, 'button'));
+    assert.deepEqual([(await menuOf(page))[1], ...(await rowState(FILE))], ['s11.xrdml', 'menu', 'true', true, -1]);
+    await page.locator(`${W} .xrd-std-head`).click({ position: { x: 4, y: 4 } });
+    assert.deepEqual([await opened(page), await page.isVisible(W)], [0, true], 'a press elsewhere in the window closes it');
+    await FILE.focus(); await page.keyboard.press('ContextMenu');
+    assert.equal(await opened(page), 1, 'the ContextMenu key');
+    await page.keyboard.press('Enter'); await settle(page);
+    assert.deepEqual([await FILE.count(), (await history(page, 'xrd')).index, await page.isVisible(W)], [0, h0 + 1, true], 'removed, a step');
+    await page.keyboard.press('Control+z'); await settle(page);
+    assert.equal(await FILE.count(), 1, 'undone');
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+test('v585: the Projects list: a row\'s menu of its buttons, Delete last and red; a finger held; the browser\'s in a name typed in; closed by a press elsewhere, Ctrl+Z, the list drawn again', async ()=>{
+  const { page, ctx, errors, close } = await env.page({ touch: true });
+  const ROW = page.locator('#sessListWrap tr.sess-row').first();
+  try {
+    await load(page, 'tauc');
+    await saveAs(page, 'P <1>');
+    await page.click('#nav button[data-tab="projects"]'); await ROW.waitFor(); await settle(page);
+    await ROW.locator('.pill').click({ button: 'right' });
+    const want = await fromCtls(ROW, '.row-acts button');
+    assert.deepEqual(await shownItems(page), want);
+    assert.deepEqual(want, [['menuitem', 'Export .csv', null, false, null], ['menuitem', 'Export .datatreat', null, false, null], 'sep', ['menuitem', 'Delete', null, true, null]]);
+    assert.deepEqual([(await menuOf(page))[1], ...(await rowState(ROW))], ['P <1>', 'menu', 'true', true, -1]);
+    // Export .datatreat: its button's file; Delete: its question, declined.
+    const dMenu = await download(page, ()=> item(page, 'Export .datatreat').click());
+    const dBtn = await download(page, ()=> ROW.locator('.pr-json').click());
+    assert.equal(dMenu.name, dBtn.name);
+    assert.deepEqual(JSON.parse(dMenu.buf.toString('utf8')).state, JSON.parse(dBtn.buf.toString('utf8')).state, 'its project');
+    await ROW.locator('.pill').click({ button: 'right' }); await item(page, 'Delete').click();
+    assert.equal((await banner(page)).text, 'Delete project “P <1>”? This cannot be undone.');
+    await answer(page, 'x');
+    assert.equal(await page.locator('#sessListWrap tr.sess-row').count(), 1, 'declined: kept');
+    // A finger held on it: the menu at the finger, the click it ends with eaten (the project not opened).
+    const cdp = await ctx.newCDPSession(page), b = await ROW.locator('.pill').boundingBox(), p = { x: b.x + b.width/2, y: b.y + b.height/2 };
+    const touch = (type, q)=> cdp.send('Input.dispatchTouchEvent', { type, touchPoints: q ? [{ x: q.x, y: q.y, id: 1 }] : [] });
+    await touch('touchStart', p); await page.waitForTimeout(750); await touch('touchEnd'); await settle(page);
+    assert.deepEqual([await opened(page), await page.isVisible('#sessListWrap')], [1, true], 'held: the menu, the list still on show');
+    const m = await page.locator('.row-menu').boundingBox();
+    assert.ok(Math.abs(m.x - p.x) < 1 && Math.abs(m.y - p.y) < 1, `at the finger: ${JSON.stringify([m, p])}`);
+    // Closed by a press elsewhere, by Ctrl+Z, by the list drawn again (a sort header pressed by a script).
+    await page.mouse.click(5, 5);
+    assert.equal(await opened(page), 0, 'a press elsewhere');
+    await ROW.locator('.pill').click({ button: 'right' }); await page.keyboard.press('Control+z');
+    assert.equal(await opened(page), 0, 'Ctrl+Z');
+    await ROW.locator('.pill').click({ button: 'right' });
+    await page.evaluate(()=> document.querySelector('#sessListWrap .sess-sort').click());
+    await page.waitForFunction(()=> !document.querySelector('.row-menu'));
+    // The name field typed in: the browser's own menu.
+    await page.evaluate(()=>{ window.__cm = []; window.addEventListener('contextmenu', e=> window.__cm.push(e.defaultPrevented)); });
+    await ROW.locator('.proj-rename').click();
+    await ROW.locator('.proj-rename').click({ button: 'right' });
+    assert.deepEqual([await page.evaluate(()=> window.__cm.pop()), await opened(page)], [false, 0], 'a name typed in: its own');
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });

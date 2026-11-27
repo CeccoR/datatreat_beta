@@ -66,7 +66,7 @@ const ids = new WeakMap();
 let nid = 0;
 const objId = o => o == null || typeof o !== 'object' ? String(o) : ids.get(o) || (ids.set(o, ++nid), nid);
 const U = { settings, objId, ...Object.fromEntries(['fmtNum', 'csvLine', 'cumtrapz', 'maxArr', 'minArr', 'meanArr', 'stdArr', 'exactKey', 'num', 'oneOf', 'dateOf', 'arrOf', 'without', 'wideCsv'].map(k=> [k, PAGE[k]])) };
-const HU = { esc: PAGE.esc, num: PAGE.num, plotWrap: PAGE.plotWrap, CSV_ICON: PAGE.CSV_ICON, alertHtml: PAGE.alertHtml };
+const HU = { esc: PAGE.esc, num: PAGE.num, plotWrap: PAGE.plotWrap, CSV_ICON: PAGE.CSV_ICON };
 // The drop zone's boxes of what the reading of the files said, as modkit.js draws them.
 const boxes = all => PAGE.notesHtml(H.fileNotes(all, HU), w=> 'gc-dismiss-' + w);
 const near = (a, b, tol, what)=> assert.ok(Math.abs(a - b) <= tol*Math.max(1, Math.abs(b)), `${what}: ${a} against ${b}`);
@@ -139,7 +139,7 @@ const fixture = (k, o)=> decodeText(new Uint8Array(gcCsv(o)));
 /* A card as gc.js composes the model: its tables (no Integration card above), its mean rates,
    its CSVs, named `n`. */
 function card(P, files, all = files, n = 'Production Rate'){
-  const nk = M.normKey(P, files), dataTables = files.map((f, h)=> M.dataTable(M.tablesOf(U, P, f, h, P.lightOnDates[h], nk), f, null));
+  const dataTables = files.map((f, h)=> M.dataTable(M.tablesOf(U, P, f, h, P.lightOnDates[h]), f, null));
   const costResults = M.computeRates(P, dataTables);
   return { dataTables, costResults, csvs: M.csvEntries(U, P, n, dataTables, costResults, M.samplesOf(all, files), files) };
 }
@@ -205,7 +205,7 @@ test('the flow, the rates and the production by hand, by mass and by area; the m
   const P = M.newParams([f]);
   assert.deepEqual([P.ms, P.As, P.Qs, P.Ts, P.Ps, P.startArr, P.endArr, P.lightOnDates.map(iso)], [[15], [1], [2], [25], [M.P_ATM], [0], [24], ['2026-11-13T10:00:00']]);
   const Fmol = 2/1000*60/M.molarVolume(25, M.P_ATM), flow = 0.05/100*Fmol*1e6, rate = flow/15*1000;
-  const t = M.tablesOf(U, P, f, 0, P.lightOnDates[0], 'm'), q = t.gas.h2;
+  const t = M.tablesOf(U, P, f, 0, P.lightOnDates[0]), q = t.gas.h2;
   assert.deepEqual(q.inj, [-1, 0, 1, 2, 3, 4], 'light-on first, with no reading before it');
   assert.deepEqual([q.pct[0], q.Fm[0], q.t[1]], [0, 0, 60.6/3600]);
   near(q.flow[2], flow, 1e-14, 'µmol/h'); near(q.Fm[2], rate, 1e-14, 'µmol g⁻¹ h⁻¹');
@@ -213,21 +213,20 @@ test('the flow, the rates and the production by hand, by mass and by area; the m
   near(q.cum[5], rate*(tEnd - 60.6/3600) + rate*60.6/3600/2, 1e-12, 'the production by trapezoids');
   // By area: µmol cm⁻² h⁻¹, the flow over A.
   const Pa = { ...M.newParams([f]), normBy: 'A', aShared: 2.5 };
-  near(M.tablesOf(U, Pa, f, 0, Pa.lightOnDates[0], M.normKey(Pa, [f])).gas.h2.Fm[3], flow/2.5, 1e-14, 'by area');
-  /* v581: m or A chosen (normBy), each its own values; not normalised (none) where an included
-     sample has none of the one chosen (null: its field left empty), the rates as they flow,
-     in µmol h⁻¹ and µmol; the labels follow. */
-  assert.deepEqual([M.normKey(P, [f]), M.normKey(Pa, [f]), M.PER], ['m', 'A', ['m', 'A']]);
-  const Pn = { ...M.newParams([f, f]), normBy: 'A', aMode: 'one', As: [2, null], startShared: 0.5, endShared: 1 };
-  assert.deepEqual([M.normKey(Pn, [f, f]), M.lacking(Pn, [f, f]).length, M.valOf(Pn, 1), M.perOf(Pn, 0, 'none')], ['none', 1, null, 1]);
-  near(M.tablesOf(U, Pn, f, 0, Pn.lightOnDates[0], 'none').gas.h2.Fm[3], flow, 1e-14, 'not normalised: the flow');
-  assert.equal(M.normKey({ ...Pn, normBy: 'm' }, [f, f]), 'm', 'the masses there: by mass, the areas kept');
-  assert.equal(M.normKey({ ...Pn, aShared: 0, aMode: 'all' }, [f]), 'none', 'an area of 0: none');
-  assert.deepEqual([M.NORM.none.rateCsv, M.NORM.none.cumCsv, M.NORM.none.unitCsv, M.NORM.m.rateCsv, M.NORM.A.cumCsv], ['Production Rate (umol h^-1)', 'Production (umol)', 'umol h^-1', 'Production Rate (umol g^-1 h^-1)', 'Production (umol cm^-2)']);
-  assert.ok(M.NORM.none.rateSvg.startsWith('Production Rate (µmol h<tspan') && M.NORM.none.cumSvg === 'Production (µmol)');
+  near(M.tablesOf(U, Pa, f, 0, Pa.lightOnDates[0]).gas.h2.Fm[3], flow/2.5, 1e-14, 'by area');
+  /* v585 (the user's decision): m or A chosen (normBy), each its own values, every sample
+     its value: the rates always normalised by it, never as they flow (v581–v584's none gone,
+     its info, its µmol h⁻¹ and µmol). A value missing (a project's null or none, a sample
+     added) takes the default, 15 mg and 1 cm² (the masses' to v580). */
+  assert.deepEqual([M.PER, Object.keys(M.NORM)], [['m', 'A'], ['m', 'A']]);
+  assert.deepEqual([M.NORM.m.rateCsv, M.NORM.A.cumCsv, M.NORM.A.unitCsv], ['Production Rate (umol g^-1 h^-1)', 'Production (umol cm^-2)', 'umol cm^-2 h^-1']);
+  const Pn = M.newParams([f, f]);
+  M.restoreParams(U, Pn, { normBy: 'A', aMode: 'one', As: [2, null], startShared: 0.5, endShared: 1 }, [f, f]);
+  assert.deepEqual([Pn.As, M.valOf(Pn, 1)], [[2, 1], 1], 'an area none: 1 cm²');
   const cn = card(Pn, [f, f]), info = csvOf(cn, 'gc_info.csv'), mr = csvOf(cn, 'mean_rates.csv');
-  assert.deepEqual([info[0][1], info[1][1], info[2][1], mr[0][1]], ['A (cm^2)', '2', '', 'Mean H2 Production Rate (umol h^-1)']);
-  near(cn.costResults[0].rate.h2, flow, 1e-9, 'its mean rate: the flow');
+  assert.deepEqual([info[0][1], info[1][1], info[2][1], mr[0][1]], ['A (cm^2)', '2', '1', 'Mean H2 Production Rate (umol cm^-2 h^-1)']);
+  near(cn.costResults[0].rate.h2, flow/2, 1e-9, 'its mean rate: the flow over its 2 cm²');
+  near(cn.costResults[1].rate.h2, flow, 1e-9, 'the other\'s over 1 cm²');
   // The mean rate over [0.5, 1] h: the line integrated exactly, over the length.
   P.startShared = 0.5; P.endShared = 1;
   const c = card(P, [f]);
@@ -282,7 +281,7 @@ test('a card\'s parameters: all and one, the toggle and its refusal, the state r
   assert.equal(M.intervalWhy(P, files, 'end', 6, false, 0), null);
   assert.deepEqual(['1,5', '-', '+.', ' 2 ', 'x'].map(M.parseIntervalField), [1.5, null, null, 2, null]);
   // The state saved and read back as it was.
-  P.normBy = 'A'; P.ms[0] = null; P.pUnit = 'psi'; P.delayAuto = false; P.delayMan = 30; P.gasSel = { a: ['o2'], r: ['h2', 'o2'] };
+  P.normBy = 'A'; P.ms[0] = 9; P.pUnit = 'psi'; P.delayAuto = false; P.delayMan = 30; P.gasSel = { a: ['o2'], r: ['h2', 'o2'] };
   const s = M.snapshotOf(P), Q = M.newParams(files);
   M.restoreParams(U, Q, JSON.parse(JSON.stringify(s)), files);
   assert.deepEqual(M.snapshotOf(Q), s);
@@ -291,16 +290,19 @@ test('a card\'s parameters: all and one, the toggle and its refusal, the state r
   M.restoreParams(U, R, { mMode: 'x', mShared: -1, qShared: 0, tShared: -300, pShared: 1e307*M.P_ATM, Ps: [0, 2e5], pUnit: 'hPa', normBy: 'volume', delayMan: -2, As: ['1', 3], aShared: 0, lightOnDates: ['x', 0], gasSel: { a: ['co2'] } }, files);
   assert.deepEqual([R.mMode, R.mShared, R.qShared, R.tShared, R.pShared, R.Ps, R.pUnit, R.normBy, R.delayMan, R.As, R.aShared, R.lightOnDates.map(iso), R.gasSel],
     ['all', 15, 2, 25, M.P_ATM, [M.P_ATM, 2e5], 'atm', 'm', 60.6, [1, 3], 1, [iso(M.firstInjection(files[0])), '1970-01-01T00:00:00'], { a: [], r: ['h2', 'o2'] }]);
-  // (v581: v540–v580's `norm`, a parameter no longer, ignored: m; a mass or an area none, null, kept so)
+  // (v581: v540–v580's `norm`, a parameter no longer, ignored: m. v585: a mass or an area none,
+  // null as v581–v584 saved one left empty, 0, '' or missing, the default: 15 mg, 1 cm²)
   M.restoreParams(U, R, { mMode: 'one', mShared: null, ms: [null, 4], norm: 'area', As: [null, 2], aShared: null }, files);
-  assert.deepEqual([R.normBy, R.mShared, R.ms, R.As, R.aShared, 'norm' in M.snapshotOf(R)], ['m', null, [null, 4], [null, 2], null, false]);
+  assert.deepEqual([R.normBy, R.mShared, R.ms, R.As, R.aShared, 'norm' in M.snapshotOf(R)], ['m', 15, [15, 4], [1, 2], 1, false]);
+  M.restoreParams(U, R, { ms: [0, ''], As: [-1], mShared: '', aShared: 'x' }, files);
+  assert.deepEqual([R.mShared, R.ms, R.As, R.aShared], [15, [15, 15], [1, 1], 1]);
   assert.deepEqual(M.shownGases(R, files, 'a').map(g=> g.key), ['h2', 'o2'], 'none chosen there: every gas there');
   // The per-sample arrays' entries as the file list makes them.
   const sl = M.slotsOf(U, R, 3);
   assert.deepEqual(sl.map(x=> x.key), ['3:m', '3:A', '3:Q', '3:T', '3:p', '3:start', '3:end', '3:lightOn']);
   assert.deepEqual(sl.map(x=> x.make(undefined, files[0])).map(v=> v instanceof Date ? iso(v) : v), [15, 1, 2, 25, M.P_ATM, 0, 24, iso(M.firstInjection(files[0]))]);
   assert.deepEqual(sl.map(x=> x.make(-1)).map(v=> v instanceof Date ? iso(v) : v), [15, 1, 2, -1, M.P_ATM, -1, -1, '1969-12-31T23:59:59']);
-  assert.deepEqual(sl.slice(0, 2).map(x=> x.make(null)), [null, null], 'a mass and an area held none, none');
+  assert.deepEqual(sl.slice(0, 2).map(x=> x.make(null)), [15, 1], 'a mass and an area held none: the defaults (v585)');
   assert.deepEqual(sl.map(x=> x.make('x')).slice(5), [0, 24, null]);
   // The cards: none, one of the defaults; a card's settings, the entries of the files left out dropped.
   assert.deepEqual(M.cardsOf(null), [{ id: 1, type: 'rate' }]);
@@ -465,12 +467,10 @@ test('the cards\' markup, the parameter table and the alerts, every label escape
   assert.equal(H.paramTableHtml(P, [], HU), '');
   P.normBy = 'A';
   assert.ok(H.paramTableHtml(P, [f], HU).includes('data-f="a"') && H.paramTableHtml(P, [f], HU).includes('<option value="A" selected>A (cm²)</option>'));
-  // (v581: a sample with none of the one chosen: an info under the parameters naming it; a value none shown empty)
-  assert.equal(H.normInfoHtml(P, [f], HU), '');
-  P.aShared = null;
-  assert.equal(H.normInfoHtml(P, [f], HU), '<div class="alert info compact">' + ALERT_ICON.info + 'No A for &lt;b&gt;&amp;&quot;: the rates are not normalised, in µmol h⁻¹ and µmol.</div>');
-  assert.ok(H.paramTableHtml(P, [f], HU).includes('<input class="gcShared" data-f="a" type="text" inputmode="decimal" value=""'), 'none: empty');
-  assert.ok(H.cardBody({ id: 4 }, HU).includes('id="gc4NormInfo"'));
+  // (v585: every sample its value, nothing said under the parameters; v581–v584 an info there
+  // where one had none, the rates not normalised)
+  assert.ok(H.paramTableHtml(P, [f], HU).includes('<input class="gcShared" data-f="a" type="text" inputmode="decimal" value="1"'), 'its 1 cm²');
+  assert.ok(!H.cardBody({ id: 4 }, HU).includes('NormInfo') && !('normInfoHtml' in H) && !/not normalised|none \(/.test(H.gcInfo('') + H.paramTableHtml(P, [f], HU)));
   // The drop zone's alerts (v567, utils.js FILE ALERTS): one box to check (the pairs, the rows
   // left out, the empty cells), one of how the files were read (day/month, the alternative
   // export); each file's until its box's × marks it seen (v572, alerts.js).
@@ -502,8 +502,14 @@ test('the cards\' markup, the parameter table and the alerts, every label escape
   // (v584: an integration that failed, a compact error first, each sample's line with the job's
   // message, ALERTS-REVIEW.md R1–R4; to v583 "not done yet" in the warning)
   const fx = H.srcAlertsHtml([{ label: 'F<1>', src: { gas: null, why: 'its integration failed', failed: 'out of <memory>.' } }, { label: 'B', src: { gas: null, why: 'its integration was stopped before its end' } }], 'Int <1>', HU);
-  assert.ok(fx.startsWith('<div class="alert bad compact">✕ The GC software\'s table used instead of the re-integration (Int &lt;1&gt;):<br>F&lt;1&gt;: the integration failed: out of &lt;memory&gt;.</div><div class="alert warn">'), fx);
+  assert.ok(fx.startsWith('<div class="alert bad compact">✕ The GC software\'s table used instead of the re-integration (Int &lt;1&gt;):<br>F&lt;1&gt;: the integration failed: out of &lt;memory&gt;.</div><div class="alert warn compact">'), fx);
   assert.ok(fx.includes('B: its integration was stopped before its end') && !fx.includes('F&lt;1&gt;: its integration failed'), 'the stopped one in the warning, the failed one not');
+  /* v585: said of the card's analysis, worked out again with it: every box compact, with no ×
+     (ALERTS-REVIEW.md R1–R3; to v584 the info and the warning the drop zone's, with a × that
+     held until the next drawing), each its header first, its lines under it. */
+  assert.equal(src, '<div class="alert info compact">' + ALERT_ICON.info + 'H₂ and O₂ re-integrated from the raw chromatograms (Int &lt;1&gt;), the times from the tables:<br>A: H₂ by the GC software&#39;s scale (k = 41235)<br>The GC software\'s scale (k): its risks are in the instructions of Int &lt;1&gt;.</div>'
+    + '<div class="alert warn compact">⚠ The GC software\'s table used instead of the re-integration (Int &lt;1&gt;):<br>A, O₂: no &lt;cal&gt;<br>B: 2 rows, 3 chromatograms</div>');
+  assert.ok(![src, fx].some(h=> /alert-dismiss|close-x|data-dismiss/.test(h)), 'no ×');
 });
 
 /* ---- The fixtures as v556's page analysed them ----

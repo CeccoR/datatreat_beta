@@ -135,11 +135,15 @@ export const ROW_ACTS = [
   { ctl: 'row-del', title: 'Remove', danger: true },
 ];
 /* The menu of a row's trace f: an item an action ({ ctl, label }; the box's `checked` as the
-   trace is included, `danger`), in the order of the actions; those that take the trace away
-   last, after a line ({ sep: true }) where others go before them. */
+   trace is included, `danger`), in the order of the actions (menuOrder). */
 export function rowMenu(U, f, acts = ROW_ACTS){
-  const item = a => ({ ctl: a.ctl, label: a.title, ...(a.box ? { checked: U.isIncluded(f) } : {}), ...(a.danger ? { danger: true } : {}) });
-  const keep = acts.filter(a=> !a.danger).map(item), take = acts.filter(a=> a.danger).map(item);
+  return menuOrder(acts.map(a=> ({ ctl: a.ctl, label: a.title, ...(a.box ? { checked: U.isIncluded(f) } : {}), ...(a.danger ? { danger: true } : {}) })));
+}
+/* A row's menu in its order (every list's, v585: utils.js wireRowMenu): its items as they
+   come, those that take the row's thing away (`danger`) last, after a line ({ sep: true })
+   where others go before them. */
+export function menuOrder(items){
+  const keep = items.filter(m=> !m.danger), take = items.filter(m=> m.danger);
   return keep.length && take.length ? [...keep, { sep: true }, ...take] : [...keep, ...take];
 }
 /* A key pressed in a menu of n items, the focus on item `at` (-1: none of them): the item the

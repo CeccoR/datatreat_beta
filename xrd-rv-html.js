@@ -119,7 +119,8 @@ function fitLineHtml(list, r, done, used, std){
 }
 // The phases' list (renderPhases): a row a phase, ticked for the pattern on show f (the
 // standard's: the one chosen, pick), the one whose structure is on show (sel) marked;
-// dlIcon and xIcon: utils.js DL_SVG and X_SVG.
+// dlIcon and xIcon: utils.js DL_SVG and X_SVG. A row takes the focus and has a menu of its
+// controls (v585: xrd-rv.js wirePhaseList).
 function phaseRowsHtml(list, { p, std, pick, sel, f, lab6, dlIcon: DL_ICON, xIcon: X_SVG }){
   return list.length ? list.map(q=>{
     const builtIn = q === lab6, on = std ? q.id === pick : !(f && own(q.off, f.name));
@@ -127,7 +128,7 @@ function phaseRowsHtml(list, { p, std, pick, sel, f, lab6, dlIcon: DL_ICON, xIco
     const pickEl = std
       ? `<input type="radio" name="${p}Pick" data-pick="${esc(q.id)}"${on ? ' checked' : ''} aria-label="Refine the standard with ${esc(q.prep.name)}">`
       : `<input type="checkbox" data-on="${esc(q.id)}"${on ? ' checked' : ''} aria-label="Refine ${esc(q.prep.name)} on this pattern">`;
-    return `<div class="rv-cif${q.id === sel ? ' is-sel' : ''}" data-sel="${esc(q.id)}" title="${esc(q.prep.name)}${q.file ? ' · ' + esc(q.file) : builtIn ? ' · built in' : ''}">${pickEl}`
+    return `<div class="rv-cif${q.id === sel ? ' is-sel' : ''}" data-sel="${esc(q.id)}" tabindex="-1" aria-haspopup="menu" title="${esc(q.prep.name)}${q.file ? ' · ' + esc(q.file) : builtIn ? ' · built in' : ''}">${pickEl}`
       + `<span class="rv-key" style="background:${esc(q.color)}"></span><span class="rv-cif-f">${formulaPretty(formulaOf(q.prep))}</span>`
       + `<span class="rv-cif-sg"${q.prep.sgFrom === 'atoms' ? ' title="Found from the atoms: the file is in P1"' : ''}>${esc(sgPretty(q.prep.sg) || '—')}</span>`
       // (its CIF downloaded, the built-in LaB6's too: never disabled, a run changes nothing of it)

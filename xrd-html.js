@@ -33,9 +33,9 @@ export const stdModalHtml = (id, title, info, u)=> `
       </div>
     </div>`;
 // The standard's file in both windows: its whole name (the plot under it has no
-// caption: it is the one file), and × to take it away.
+// caption: it is the one file), and × to take it away; a menu of that × (v585: utils.js STD_ROWS).
 export const stdFileHtml = (stdFile, u)=> stdFile
-  ? `<div class="xrd-std-row"><span class="txt-mini">Standard</span><span class="xrd-std-name">${u.esc(stdFile.name)}</span><button type="button" class="peak-del is-danger idle-dim" data-std-del title="Remove the standard">${u.X_SVG(13)}</button></div>` : '';
+  ? `<div class="xrd-std-row" tabindex="-1" aria-haspopup="menu"><span class="txt-mini">Standard</span><span class="xrd-std-name">${u.esc(stdFile.name)}</span><button type="button" class="peak-del is-danger idle-dim" data-std-del title="Remove the standard">${u.X_SVG(13)}</button></div>` : '';
 /* What the reading of the standard's file said (alerts.js notes, v573: worked out from the
    standard in its windows, each until its box's × marks it seen; to v572 the words of the
    drop, gone at the next undo or restore): of a file of several scans, the one taken (its

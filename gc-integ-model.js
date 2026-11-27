@@ -413,8 +413,8 @@ export function valuesFor(U, S, C, f){
   if (n !== rows) return { why: `${plural(rows, 'injection')} in the table, ${plural(n, 'chromatogram')}`, integ: true };
   const res = resIn(S, C, keyOf(U, tcd, C.method));
   if (!res || res.some(x=> !x)){
-    if (progressOf(U, S, C).state === 'failed') return { why: 'its integration failed', failed: S.failed, waiting: true };
-    return { why: C.halted ? 'its integration was stopped before its end' : 'its integration is not done yet', waiting: true };
+    if (progressOf(U, S, C).state === 'failed') return { why: 'its integration failed', failed: S.failed };
+    return { why: C.halted ? 'its integration was stopped before its end' : 'its integration is not done yet' };
   }
   const vk = U.exactKey([keyOf(U, tcd, C.method), calKey(U, C), Object.keys(f.gas).map(k=> [k, U.objId(f.gas[k])]), U.objId(res)]);
   if (C.valuesKept.has(vk)) return C.valuesKept.get(vk);

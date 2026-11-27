@@ -1,4 +1,4 @@
-import { settings, fmtNum, csvLine, cumtrapz, maxArr, minArr, meanArr, stdArr, alertHtml, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, esc, registerModule, keeper, objId, exactKey } from './utils.js';
+import { settings, fmtNum, csvLine, cumtrapz, maxArr, minArr, meanArr, stdArr, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, esc, registerModule, keeper, objId, exactKey } from './utils.js';
 import { Plot, svgEl } from './plot.js';
 import { cardInfo, fileSafe, nameDownloads } from './cards.js';
 import { moduleKit, wideCsv, isObj, num, oneOf, dateOf, arrOf, without, cardList } from './modkit.js';
@@ -33,7 +33,7 @@ import * as H from './gc-html.js';
 // utils.js's and modkit.js's helpers the model takes (gc-model.js U), and what the markup
 // takes (gc-html.js u).
 const U = { settings, fmtNum, csvLine, cumtrapz, maxArr, minArr, meanArr, stdArr, objId, exactKey, num, oneOf, dateOf, arrOf, without, wideCsv };
-const HU = { esc, num, plotWrap, CSV_ICON, alertHtml };
+const HU = { esc, num, plotWrap, CSV_ICON };
 const GC_INFO = H.gcInfo(cardInfo(false, true));
 
 /* A sample's tables (gc-model.js tablesOf: each gas's times, readings, flows and their
@@ -408,24 +408,25 @@ function modeToggled(S, C, btn){
   renderTable(S, C); compute(S, C); S.kit.commit();
 }
 // m/A/Q/T/p inputs (shared + per-sample) — recompute the whole series on a valid change.
-// (`blank`: m and A, a field left empty is none, null: v581)
-function wireNum(S, C, inp, apply, min = 0.001, max = null, blank = false){
-  guardNumericInput(inp, { min, max, blank });
+function wireNum(S, C, inp, apply, min = 0.001, max = null){
+  guardNumericInput(inp, { min, max });
   const shared = inp.classList.contains('gcShared');
   inp.addEventListener('change', ()=>{
-    apply(inp.value.trim() === '' ? null : +inp.value);
+    apply(+inp.value);
     if (shared) mirrorShared(C, inp.dataset.f, inp.value);
     compute(S, C); S.kit.commit();
   });
 }
 function wireNums(S, C, wrap){
   const P = C.P, all = sel => wrap.querySelectorAll(sel);
-  // m, or A where it is in force (v540): above 0, or empty, none (v581).
-  all('.gcShared[data-f="m"]').forEach(inp=> P.mMode==='all' && wireNum(S, C, inp, v=> P.mShared=v, 0.001, null, true));
+  /* m, or A where it is in force (v540): at least 0.001, as Q; empty, 0, below or no number
+     refused (v585, the user's decision: every sample its value; v581–v584 took empty as none,
+     the rates then not normalised). */
+  all('.gcShared[data-f="m"]').forEach(inp=> P.mMode==='all' && wireNum(S, C, inp, v=> P.mShared=v));
   all('.gcShared[data-f="q"]').forEach(inp=> P.qMode==='all' && wireNum(S, C, inp, v=> P.qShared=v));
-  all('.gcCell[data-f="m"]').forEach(inp=>{ if(P.mMode==='one'){ const i=+inp.dataset.i; wireNum(S, C, inp, v=> P.ms[i]=v, 0.001, null, true); }});
-  all('.gcShared[data-f="a"]').forEach(inp=> P.aMode==='all' && wireNum(S, C, inp, v=> P.aShared=v, 0.001, null, true));
-  all('.gcCell[data-f="a"]').forEach(inp=>{ if(P.aMode==='one'){ const i=+inp.dataset.i; wireNum(S, C, inp, v=> P.As[i]=v, 0.001, null, true); }});
+  all('.gcCell[data-f="m"]').forEach(inp=>{ if(P.mMode==='one'){ const i=+inp.dataset.i; wireNum(S, C, inp, v=> P.ms[i]=v); }});
+  all('.gcShared[data-f="a"]').forEach(inp=> P.aMode==='all' && wireNum(S, C, inp, v=> P.aShared=v));
+  all('.gcCell[data-f="a"]').forEach(inp=>{ if(P.aMode==='one'){ const i=+inp.dataset.i; wireNum(S, C, inp, v=> P.As[i]=v); }});
   all('.gcCell[data-f="q"]').forEach(inp=>{ if(P.qMode==='one'){ const i=+inp.dataset.i; wireNum(S, C, inp, v=> P.Qs[i]=v); }});
   all('.gcShared[data-f="t"]').forEach(inp=> P.tMode==='all' && wireNum(S, C, inp, v=> P.tShared=v, -273));
   all('.gcCell[data-f="t"]').forEach(inp=>{ if(P.tMode==='one'){ const i=+inp.dataset.i; wireNum(S, C, inp, v=> P.Ts[i]=v, -273); }});
@@ -512,7 +513,7 @@ const noSample = (S, C)=>{ if (S.files.length) return false; blank(S, C); return
 function blank(S, C){
   C.dataTables = []; C.costResults = []; C.plot1 = null; C.prevView = null;
   ['Svg1', 'SvgRate', 'SvgCum', 'SvgBar'].forEach(id=> unplot(C.$(id)));
-  ['Legend', 'ResLegend', 'BarLegend', 'Src', 'NormInfo'].forEach(id=>{ C.$(id).innerHTML = ''; });
+  ['Legend', 'ResLegend', 'BarLegend', 'Src'].forEach(id=>{ C.$(id).innerHTML = ''; });
   gasEls(C).forEach(el=>{ el.innerHTML = ''; });
   showRates(S, C);
 }
@@ -532,20 +533,17 @@ function compute(S, C, preserveView){
   if (drawable(S)) renderPlots(S, C); else updateRegression(S, C);
 }
 // The data, from the card's parameters and each sample's source of values (srcFor), kept
-// (tablesKept), normalised by what the samples have of the quantity chosen (gc-model.js
-// normKey); where they came from said at the card's top, the samples lacking it under the
-// parameters (v581).
+// (tablesKept); where they came from said at the card's top.
 function computeTables(S, C){
-  const P = C.P, nk = M.normKey(P, S.files);
+  const P = C.P;
   C.dataTables = S.files.map((f,h)=>{
     const src = srcFor(S, C.a, f), G = src && src.gas ? src.gas : f.gas;
     const ks = Object.keys(G), lightOn = P.lightOnDates[h];
-    const key = M.tablesKey(U, P, f, h, G, lightOn, nk);
-    const made = tablesKept(ks.length ? G[ks[0]] : null, key, ()=> M.tablesOf(U, P, f, h, lightOn, nk, G));
+    const key = M.tablesKey(U, P, f, h, G, lightOn);
+    const made = tablesKept(ks.length ? G[ks[0]] : null, key, ()=> M.tablesOf(U, P, f, h, lightOn, G));
     return M.dataTable(made, f, src);
   });
   paintSrc(S, C);
-  C.$('NormInfo').innerHTML = H.normInfoHtml(P, S.files, HU);
 }
 // (gc-html.js srcAlertsHtml, naming the Integration card above)
 function paintSrc(S, C){
@@ -617,8 +615,8 @@ function onGasChip(S, C, e){
 }
 
 /* ---- The card's plots ---- */
-// What the card's rates are in (gc-model.js NORM): by mass, by area, or not normalised.
-const units = (S, C)=> M.NORM[M.normKey(C.P, S.files)];
+// What the card's rates are in (gc-model.js NORM): by mass or by area.
+const units = C => M.NORM[C.P.normBy];
 /* One line per sample per gas, the sample's colour throughout and the gas told by
    the dash pattern, so a sample stays recognisable across both gases. The name
    carries the gas only when more than one is on show (gc-model.js seriesName). */
@@ -634,7 +632,7 @@ function drawGasLines(plot, tables, shown, key){
 }
 function renderPlots(S, C){
   const legend = C.$('Legend'); legend.innerHTML='';
-  C.plot1 = new Plot(C.$('Svg1'), {xlabel:'Time (h)', ylabelSvg:units(S, C).rateSvg});
+  C.plot1 = new Plot(C.$('Svg1'), {xlabel:'Time (h)', ylabelSvg:units(C).rateSvg});
   const resLegend = C.$('ResLegend'); resLegend.innerHTML='';
   legend.innerHTML   = C.dataTables.map(d=> H.gasLegendHtml(d, M.shownGases(C.P, S.files, 'a'), HU)).join('');
   resLegend.innerHTML = C.dataTables.map(d=> H.gasLegendHtml(d, M.shownGases(C.P, S.files, 'r'), HU)).join('');
@@ -714,7 +712,7 @@ function refreshRows(C){
 function drawResultPlots(S, C){
   const cut = M.cutTables(C.P, C.dataTables), x = M.cutRange(U, cut);
   if (!x) return;
-  const shown = M.shownGases(C.P, S.files, 'r'), N = units(S, C);
+  const shown = M.shownGases(C.P, S.files, 'r'), N = units(C);
   resultPlot(C, 'SvgRate', N.rateSvg, 'Fm', cut, shown, x);
   resultPlot(C, 'SvgCum',  N.cumSvg,  'FmInt', cut, shown, x);
 }
@@ -737,7 +735,7 @@ function resultPlot(C, id, ylabelSvg, key, cut, shown, [tmin, tmax]){
    show draws nothing: the section's visibility is updateRegression's. */
 function drawBarChart(S, C){
   const svg = C.$('SvgBar'), sm = M.sampleRates(U, C.costResults, M.samplesOf(S.all, S.files));
-  valueBars(svg, { cats: sm, digits: 2, yLabel: units(S, C).rateSvg, legend: C.$('BarLegend'),
+  valueBars(svg, { cats: sm, digits: 2, yLabel: units(C).rateSvg, legend: C.$('BarLegend'),
     series: M.barSeries(M.shownGases(C.P, S.files, 'r'), sm),
     chips: svg.closest('.plot-wrap').querySelector('.gc-gas-sel') });
 }

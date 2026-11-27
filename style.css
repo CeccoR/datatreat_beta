@@ -1654,18 +1654,27 @@ button.an-add:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .an-menu button:hover { background: var(--panel2); color: var(--accent); }
 .an-menu button.is-current { color: var(--accent); }
 .an-menu button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-/* A trace list's row menu (v579, utils.js): the kinds' menu, each item after its control's
-   icon (the include box's tick, or its place), a line before the remove, red on hover as the
-   row's × (.is-danger) and on the keyboard's focus. Its row lit while it is open; a row given
-   the focus back by it ringed as the menu's items are. Laid over the page: nothing moves. */
+/* A row's menu (v579 the trace list's; v585 every list whose rows have actions: utils.js
+   wireRowMenu): the kinds' menu, each item after its control's icon (a box's tick, or its
+   place; a button's own, drawn in the icon's box whatever its size), a line before the
+   remove, red on hover as the row's × (.is-danger) and on the keyboard's focus; an item whose
+   control is disabled greyed. Its row lit while it is open (the trace list's as before, the
+   others as their hover lights them, a file row of a standards' window by its border); a row
+   given the focus back by it ringed as the menu's items are. Laid over the page: nothing moves. */
 .an-menu-sep { height: 1px; margin: 3px 6px; background: var(--line); }
 .row-menu button { display: flex; align-items: center; gap: 10px; }
 .row-menu .rm-ic { flex: none; display: inline-flex; width: 15px; height: 15px; color: var(--muted); }
+.row-menu .rm-ic svg { width: 100%; height: 100%; }
 .row-menu button:hover .rm-ic, .row-menu button:focus-visible .rm-ic { color: inherit; }
 .row-menu button.is-danger:focus-visible { color: var(--bad); }
+.row-menu button[aria-disabled="true"] { opacity: .45; cursor: default; }
+.row-menu button[aria-disabled="true"]:hover { background: none; color: var(--text); }
 .file-row.menu-on > td { background: var(--panel2); }
-.file-row.menu-on .idle-dim { opacity: 1; }
-.file-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.rv-cif.menu-on, tr.peak-row.menu-on { background: var(--panel); }
+.sess-row.menu-on { background: var(--line); }
+.xrd-std-row.menu-on { border-color: var(--accent); }
+.menu-on .idle-dim { opacity: 1; }
+:is(.file-row, .rv-cif, .xrd-std-row, tr.peak-row, .sess-row)[aria-haspopup="menu"]:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 /* ===== The sample selector (snav.js, v545; v546): `‹ n/N ›` and the name with its
    down-arrow, in a line. The arrows and the count are one group of ONE fixed width in
    every module, as wide as `‹ 000/000 ›` needs (the count's pill 7ch of its 10px font,
@@ -2474,8 +2483,6 @@ h5.instr-math-head { margin-top: 14px; padding-top: 10px; border-top: 1px solid 
 .gc-param-wrap .gc-all-row .fname { color: var(--muted); }
 .gc-param-wrap input[disabled] { opacity: .35; }
 .gc-param-wrap input[readonly] { opacity: .6; cursor: default; }
-/* Under the parameters, where the rates are not normalised (v581): its samples, a compact info. */
-.gc-norm-info .alert { margin: 8px 0 0; overflow-wrap: anywhere; }
 /* The injection delay's row sits a step above the table, on its columns. Locked by
    Auto its value is still the one in force, so it reads like the read-only echoes,
    not like a cell that does not apply. */

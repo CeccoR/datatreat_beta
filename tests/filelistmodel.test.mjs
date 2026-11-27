@@ -164,6 +164,16 @@ test('a row\'s actions: its controls and its menu made from one list (v579)', ()
   const classes = new Set([...row.matchAll(/class="([^"]*)"/g)].flatMap(m=> m[1].split(' ')));
   assert.deepEqual([...html.matchAll(/data-ctl="([^"]*)"/g)].map(m=> classes.has(m[1])), [true, true, true], 'each item a control of the row');
   assert.ok(H.menuHtml([{ ctl: 'dl-file', label: 'a <b> & "c"' }], U).includes('</span>a &lt;b&gt; &amp; &quot;c&quot;</button>'), 'its words escaped');
+  /* v585: every list's (utils.js wireRowMenu, ctlMenu): the order on its own (menuOrder), the red
+     last after a line; an item of a round button (menuitemradio), of a control disabled
+     (aria-disabled), with its control's tooltip (escaped) and its own icon (`ic`, the control's
+     markup, for a button of a list but the trace list's). */
+  assert.deepEqual(seen(M.menuOrder([{ ctl: 'x', danger: true }, { ctl: 'a' }, { ctl: 'b', checked: false }])), ['a', 'b:false', '|', 'x!']);
+  assert.deepEqual([M.menuOrder([]), seen(M.menuOrder([{ ctl: 'x', danger: true }]))], [[], ['x!']], 'a line only between the two');
+  assert.equal(H.menuHtml([{ ctl: '0', label: 'Pick', checked: true, radio: true }, { ctl: '1', label: 'Get', ic: '<svg class="mine"></svg>' }, { sep: true }, { ctl: '2', label: 'Drop', ic: '<i></i>', danger: true, disabled: true, title: 'Built in: <no>' }], U),
+    '<button type="button" role="menuitemradio" aria-checked="true" data-ctl="0"><span class="rm-ic" aria-hidden="true">' + html.split('"><span class="rm-ic" aria-hidden="true">')[1].split('</span>')[0] + '</span>Pick</button>'
+    + '<button type="button" role="menuitem" data-ctl="1"><span class="rm-ic" aria-hidden="true"><svg class="mine"></svg></span>Get</button><div class="an-menu-sep" role="separator"></div>'
+    + '<button type="button" role="menuitem" aria-disabled="true" title="Built in: &lt;no&gt;" class="is-danger" data-ctl="2"><span class="rm-ic" aria-hidden="true"><i></i></span>Drop</button>');
 });
 
 /* =========================================================
