@@ -14,7 +14,8 @@
      the zoom the card had on the other); with nothing stepped, the zoom kept; a file left out,
      taken in or removed, or an undo, while it is folded, the same (21b, v569);
    - a card's kinds' menu closed by an undo or a redo; a kind picked for a card gone does
-     nothing (22, v569). */
+     nothing (22, v569); closed with its card closed from the keyboard, a scroll leaving it
+     closed (22b, v570). */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { start, openModule, loadFiles, settle, moduleState, history, undo, switchTab } from './helpers.mjs';
@@ -393,6 +394,41 @@ test('22: a card\'s kinds\' menu closed by an undo or a redo; a kind picked for 
     if (await open()) await page.click('.an-menu:not([hidden]) [data-kind="tauc"]');
     await settle(page);
     assert.deepEqual([await ids(page, 'tauc'), (await history(page, 'tauc')).index], [[1], s0 + 1], 'nothing switched, no step but the close');
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+/* ---- 22b (v570): a card's kinds' menu closed with its card ----
+   Open on a card's title, the card closed from the keyboard (its × reached and Enter): the menu
+   closes with it, its anchor let go (to v569 it stayed open, a kind picked doing nothing, and a
+   scroll put it at the window's top left, its anchor gone). A scroll and a resize then leave it
+   closed; the other card's menu opens on its own title as before. */
+test('22b: a card\'s kinds\' menu closes with its card closed from the keyboard; a scroll leaves it closed', async ()=>{
+  const { page, errors, close } = await env.page({ viewport: { width: 1400, height: 640 } });
+  try {
+    await openModule(page, 'tauc');
+    await loadFiles(page, 'tauc', env.fx.files.tauc);
+    const open = ()=> page.locator('.an-menu:not([hidden])').count();
+    await page.click('#taucAddAn'); await page.click('.an-menu:not([hidden]) [data-kind="urbach"]'); await page.waitForTimeout(500); await settle(page);
+    assert.deepEqual(await ids(page, 'tauc'), [1, 2]);
+    await page.locator(card('tauc', 2) + ' .an-type').scrollIntoViewIfNeeded();
+    await page.click(card('tauc', 2) + ' .an-type');
+    assert.equal(await open(), 1, 'the menu open');
+    await page.focus(card('tauc', 2) + ' .an-close'); await page.keyboard.press('Enter'); await settle(page);
+    assert.deepEqual(await ids(page, 'tauc'), [1]);
+    assert.equal(await open(), 0, 'closed with its card');
+    assert.equal(await page.locator('#tab-tauc .cp-anchored, .cp-anchored').count(), 0, 'no anchor lit');
+    await page.evaluate(()=> window.scrollBy(0, 200)); await still(page);
+    await page.setViewportSize({ width: 1300, height: 600 }); await settle(page);
+    assert.equal(await open(), 0, 'closed after a scroll and a resize');
+    // The first card's menu, as before: under its title.
+    await page.locator(card('tauc', 1) + ' .an-type').scrollIntoViewIfNeeded();
+    await page.click(card('tauc', 1) + ' .an-type');
+    assert.equal(await open(), 1);
+    const [m, t] = await Promise.all(['.an-menu:not([hidden])', card('tauc', 1) + ' .an-type'].map(s=> page.locator(s).boundingBox()));
+    assert.ok(m.y >= t.y + t.height - 1 || m.y + m.height <= t.y + 1, JSON.stringify([m, t]));
+    await page.keyboard.press('Escape');
+    assert.equal(await open(), 0);
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });

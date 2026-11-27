@@ -780,6 +780,23 @@ was proposed; nothing here is in the code yet.
   `_build` (117); xrd-cryst.js's `checkComposition` (120); xrd-widths.js's `fitPeak` (109);
   xrd-rietveld.js's `wppmLineOf` (90), `shapeOf` (85), `phasePattern` (80), `solveLinear`
   (77). The others when work takes us into them.
+- **The figure composer: lines saved thinner than their field takes (found in v570, as v569
+  has it).** To v569 the width for every series took 0.1 where a line's own field takes 0.2
+  (v570 fixed the field: its range the meeting of the series'). A line's width of 0.1–0.19
+  set there is saved with the figure (the plot's memory, a preset, a Figure card's figure)
+  and opens as it was: its own field shows the 0.15 it would refuse (checked on v570 in the
+  browser: GC's rates over time, the memory's lines at 0.15, the field showing 0.15 and
+  refusing it typed). v570 puts a bar's width read back inside its range (1 at most), not a
+  line's. Proposed: a line's width read back put inside 0.2–6 the same way
+  (figure-model.js `widthRange`, figure.js `applySettings`). Left as it is meanwhile.
+- **A pen's other buttons start a drag (found in v570, from the code).** The drags that take
+  a mouse's primary button alone (the trace list's grips, the composer's, a plot's draggable
+  lines, the colour picker, the cards' grips, the 3D views) refuse the other buttons of a
+  mouse only (`pointerType === 'mouse'`): a pen's barrel button (button 2) or its eraser (5)
+  still starts them, where the plots' pan and zoom, SEM's crop and groups, the tabs and the
+  composer's preview refuse every button but 0 of any pointer. Not checked with a pen.
+  Proposed: one rule, button 0 of any pointer (a touch's and a pen's tip are 0). Left as it
+  is meanwhile.
 - **The browser storage is shared with every page of the same origin.** On GitHub Pages
   the app lives at `ceccor.github.io/datatreat_beta/`, and every project published under
   `ceccor.github.io` is the same origin: any of them can read and write DataTreat's

@@ -14,7 +14,8 @@
    (between points as near, to half a pixel, the nearest in y), on a line or a scatter,
    hovered, clicked or locked: a scatter's point at the pointer's x far above it taken over
    one under the pointer a little further in x; a lock follows the pointer's x whatever its
-   y; ← and → still one point each. */
+   y; ← and → still one point each.
+   v570: a draggable line (plot.js vline) takes a mouse's primary button alone. */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { start, openModule, loadFiles, settle, history, moduleState } from './helpers.mjs';
@@ -310,6 +311,44 @@ test('XRPD\'s Scherrer plot: a click on a peak selects it, as before, and locks 
     const m = await page.$eval(S, s=>{ const P = s._plot, r = s.getBoundingClientRect(); return { x: r.left + P.margin.l + 3, y: r.top + P.margin.t + 3 }; });
     await page.mouse.click(m.x, m.y); await settle(page);
     assert.equal(await page.locator('#xrdA1PeakBox tr.selected').count(), 0, 'cleared');
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+/* v570: a draggable line of a plot (plot.js vline: DRS's interval lines, GC's integration
+   window) takes a mouse's primary button alone, as every drag of the app: its grip or the line
+   pressed with the right or the middle button and moved, the line stays, no step (to v569 any
+   button dragged it, a step of the history); the left one moves it, a step. */
+test('a plot\'s draggable line: the left button drags it, the right and the middle ones do nothing (v570)', async ()=>{
+  const { page, errors, close } = await env.page();
+  try {
+    await openModule(page, 'tauc'); await loadFiles(page, 'tauc', env.fx.files.tauc);
+    const S = '#an1Svg';
+    await page.$eval(S, s=> s.scrollIntoView({ block: 'center' })); await settle(page);
+    const xs = ()=> page.$$eval(S + ' .plot-goverlay circle', cs=> cs.map(c=> +(+c.getAttribute('cx')).toFixed(3)));
+    const x0 = await xs(), h0 = (await history(page, 'tauc')).index;
+    assert.equal(x0.length, 4, 'four lines, each its grip');
+    // The second line's grip (or the line itself, below it) pressed with `button`, moved 40 px.
+    const drag = async (button, onLine)=>{
+      const g = await page.locator(S + ' .plot-goverlay circle').nth(1).boundingBox();
+      const x = g.x + g.width/2, y = g.y + g.height/2 + (onLine ? 60 : 0);
+      assert.ok(await page.evaluate(([x, y])=>{ const e = document.elementFromPoint(x, y); return !!e && !!e.closest('.plot-goverlay'); }, [x, y]), 'on the line');
+      await page.mouse.move(x, y);
+      await page.mouse.down({ button });
+      await page.mouse.move(x + 40, y, { steps: 8 });
+      await page.mouse.up({ button });
+      await settle(page);
+    };
+    for (const b of ['right', 'middle']) for (const onLine of [false, true]){
+      await drag(b, onLine);
+      assert.deepEqual(await xs(), x0, `the ${b} button on the ${onLine ? 'line' : 'grip'}: the line as it was`);
+      assert.equal((await history(page, 'tauc')).index, h0, `the ${b} button: no step`);
+    }
+    await drag('left', false);
+    const x1 = await xs();
+    assert.ok(Math.abs(x1[1] - x0[1] - 40) < 2, JSON.stringify([x0, x1]));
+    assert.deepEqual([x1[0], x1[2], x1[3]], [x0[0], x0[2], x0[3]], 'the others as they were');
+    assert.equal((await history(page, 'tauc')).index, h0 + 1, 'the left button: a step');
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });

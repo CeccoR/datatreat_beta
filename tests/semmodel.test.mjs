@@ -1,19 +1,19 @@
 /* SEM's calculations (sem-model.js) and its words and markup that need no page (sem-html.js),
    in Node: no browser (v558). The crop's rules (an image's crop fitted, whole pixels inside
-   it, its sides at least 64 px or the image's, a ratio held; resized by every handle, free
-   and locked; typed, re-ratioed, reset, dragged and dragged back; its handles and what a
-   press takes), the editor's view (fitted, zoomed, kept and given back), the levels, each
-   normalisation and its curve (brightness, contrast and gamma against a hand calculation),
-   the settings read back, their scope; the groups (images placed by pixel size, named by
-   their magnification, an excluded image deciding nothing, moved, a new one, reset with
-   their figures and settings kept), what the figure takes of an image at common and own
+   it, its sides at least 64 px or the image's, a ratio held and read back (v570); resized by
+   every handle, free and locked; typed, re-ratioed, reset, dragged and dragged back; its
+   handles and what a press takes), the editor's view (fitted, zoomed, kept and given back),
+   the levels, each normalisation and its curve (brightness, contrast and gamma against a hand
+   calculation), the settings read back, their scope; the groups (images placed by pixel size,
+   named by their magnification, an excluded image deciding nothing, moved, a new one, reset
+   with their figures and settings kept), what the figure takes of an image at common and own
    scale; the state saved and read back (as saved, a v517 project's base64, ids made again,
-   files twice or lost, a crop of pixels made square since, malformed values everywhere);
-   the alerts' lines; the Image box, the groups and the options, every name escaped. Then the
-   three fixtures as v557's page analysed them (its CSV, every byte), and 60 cases (random
-   images, states and a few steps each: the crop typed, re-ratioed and reset, links, the
-   scope and settings, groups moved, renamed, scaled, added, removed and reset, files left
-   out, relabelled and removed, the alerts dismissed) as v557's sem.js gave them, run from its
+   files twice or lost, a crop of pixels made square since, malformed values everywhere); the
+   alerts' lines; the Image box, the groups and the options, every name escaped. Then the three
+   fixtures as v557's page analysed them (its CSV, every byte), and 60 cases (random images,
+   states and a few steps each: the crop typed, re-ratioed and reset, links, the scope and
+   settings, groups moved, renamed, scaled, added, removed and reset, files left out,
+   relabelled and removed, the alerts dismissed) as v557's sem.js gave them, run from its
    source on a page of stubs: the state, the CSV, the markup, each image's curve and what the
    figure takes, their digests in tests/golden/semmodel.json (npm run test:update writes them
    anew after a change meant to alter them). utils.js's and modkit.js's helpers, which need a
@@ -216,6 +216,37 @@ test('the crop: fitted, resized by every handle, typed, re-ratioed, reset and dr
   assert.deepEqual(M.zoomedTo(v0, { x0: 300, y0: 150, x1: 0, y1: 0 }, 600, 300), { s: 6, ox: 0, oy: 0 });
   assert.equal(M.zoomedAt(v0, im, 600, 300, 0, 0, 1e6).s, 32);
   assert.equal(M.zoomedAt(v0, im, 600, 300, 0, 0, 1e-6).s, 1.5);
+});
+
+/* v570: a crop made at a ratio reads back as that ratio (aspectOf), on a tiny image too, where
+   fitCrop's whole pixels put it more than 1 % off (50 × 38 at 4:3: to v569 read as free, the
+   selector saying 4:3); a crop of sides at least 64 px reads as with 1 % alone. Restored with
+   no ratio of its own, such a crop takes its ratio; its image's whole crop, the default, too. */
+test('the crop\'s ratio read back: what fitCrop makes at a ratio, on tiny images too; crops of 64 px and more as before (v570)', ()=>{
+  assert.equal(M.aspectOf(50, 38), '4:3');
+  assert.equal(M.aspectOf(62, 47), '4:3');
+  assert.equal(M.aspectOf(43, 29), '3:2');
+  assert.deepEqual([M.aspectOf(50, 37), M.aspectOf(52, 38), M.aspectOf(48, 40)], ['free', 'free', 'free'], 'a pixel more than the rounding: free');
+  const R = rng(570), int = (a, b)=> a + Math.floor(R.u()*(b - a + 1));
+  for (let k = 0; k < 20000; k++){
+    // images from 8 px (under it, 3 × 2 and the like are a crop of two ratios at once)
+    const W = int(8, k % 2 ? 90 : 600), H = int(8, k % 3 ? 90 : 600), a = ['1:1', '4:3', '3:2'][k % 3];
+    const c = M.fitCrop({ x: 0, y: 0, w: int(-10, 700) + R.u(), h: int(-10, 700) + R.u() }, W, H, M.ASPECTS[a]);
+    assert.equal(M.aspectOf(c.w, c.h), a, JSON.stringify([W, H, a, c]));
+  }
+  // Sides of 64 px and more (a crop as the rules make it, on an image that holds one): as v569
+  // read them, 1 % alone.
+  const old = (w, h)=> Object.keys(M.ASPECTS).find(k=> M.ASPECTS[k] && Math.abs(w/h/M.ASPECTS[k] - 1) < 0.01) || 'free';
+  for (let w = 64; w <= 400; w++) for (let h = 64; h <= 400; h++) if (M.aspectOf(w, h) !== old(w, h)) assert.fail(`${w} × ${h}: ${M.aspectOf(w, h)}, was ${old(w, h)}`);
+  // A tiny image, 50 × 38: its whole crop (the default) at 4:3; a crop restored with no ratio
+  // of its own (a project made before the ratio was kept) read as 4:3, kept as it is.
+  const b = new Uint8Array(makeTiff({ W: 50, H: 38, strip: 0, sign: 'Tiny', pixelNm: 300, mag: 400, seed: 11 }));
+  const t = M.newFile('t.tif', readTescanTiff(b, 't.tif', { head: true }), new Ref(hashBytes(b), b));
+  assert.deepEqual([t.crop, t.aspect], [{ x: 0, y: 0, w: 50, h: 38 }, '4:3']);
+  const T = newS(); T.allFiles = [t]; filesChanged(T);
+  const s0 = M.snapshotOf(T).files[0];
+  const Q = newS(); restore(Q, { files: [{ ...s0, raw: t.raw, cropDef: false, crop: { x: 0, y: 0, w: 50, h: 38 }, aspect: undefined }] });
+  assert.deepEqual([Q.allFiles[0].crop, Q.allFiles[0].aspect], [{ x: 0, y: 0, w: 50, h: 38 }, '4:3']);
 });
 
 /* ---- Intensity ---- */

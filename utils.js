@@ -212,7 +212,8 @@ class ColorPickerUI {
     this._hNum = hslNums[0]; this._sNum = hslNums[1]; this._lNum = hslNums[2];
     this._recentEl = el.querySelector('.cp-recent');
 
-    // 2D map — pointer drag
+    // 2D map — pointer drag (a mouse's primary button alone: to v569 the right one picked a
+    // colour too, v570)
     const onMapMove = e=>{
       const r = this._map.getBoundingClientRect();
       this._hsv.s = Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));
@@ -220,18 +221,20 @@ class ColorPickerUI {
       this._emit();
     };
     this._map.addEventListener('pointerdown', e=>{
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
       e.preventDefault(); this._map.setPointerCapture(e.pointerId); onMapMove(e);
       this._map.addEventListener('pointermove', onMapMove);
       this._map.addEventListener('pointerup', ()=>this._map.removeEventListener('pointermove', onMapMove), {once:true});
     });
 
-    // Hue slider — pointer drag
+    // Hue slider — pointer drag (the primary button alone, as the map)
     const onHueMove = e=>{
       const r = this._hue.getBoundingClientRect();
       this._hsv.h = Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));
       this._emit();
     };
     this._hue.addEventListener('pointerdown', e=>{
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
       e.preventDefault(); this._hue.setPointerCapture(e.pointerId); onHueMove(e);
       this._hue.addEventListener('pointermove', onHueMove);
       this._hue.addEventListener('pointerup', ()=>this._hue.removeEventListener('pointermove', onHueMove), {once:true});

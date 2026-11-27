@@ -59,8 +59,13 @@ export function sameBytes(a, b){
 export const MIN_CROP = 64;
 // The crop's width:height when locked.
 export const ASPECTS = { '1:1': 1, '4:3': 4/3, '3:2': 3/2, free: null };
-// The ratio named by a crop of w × h, if it is one of the locks (within 1 %).
-export const aspectOf = (w, h) => Object.keys(ASPECTS).find(k=> ASPECTS[k] && Math.abs(w/h/ASPECTS[k] - 1) < 0.01) || 'free';
+/* The ratio named by a crop of w × h, if it is one of the locks: within 1 %, or a side the
+   other's at the ratio to the pixel, as fitCrop rounds it (v570: to v569 1 % alone, and a
+   crop fitCrop made at a ratio on a tiny image, 50 × 38 at 4:3, read as free). Within half a
+   pixel a side of 51 px or more is within 1 % already: a crop of sides at least MIN_CROP
+   reads as it did. */
+const atRatio = (w, h, r)=> Math.abs(w/h/r - 1) < 0.01 || Math.round(h*r) === w || Math.round(w/r) === h;
+export const aspectOf = (w, h) => Object.keys(ASPECTS).find(k=> ASPECTS[k] && atRatio(w, h, ASPECTS[k])) || 'free';
 /* The least width of a crop at ratio r on an image W × H: its sides at least MIN_CROP (or
    the image's) where the image holds such a crop at r, else the widest it holds at r. The
    ratio wins: the least sides give way where both cannot hold (v569: to v568 they won, and

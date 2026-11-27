@@ -1077,6 +1077,9 @@ function applySettings(snap){
     const e = saved[pair[i]], rest = e && e.rest;
     if (!rest) return;
     for (const k in rest) if (!IDENTITY.includes(k)) s[k] = rest[k];
+    // (a bar's width inside its field's range: to v568 the field for every series gave bars
+    // up to 6, kept and shown in a field that refused it, v570)
+    if (s.kind === 'bar') s.width = FM.barWidth(s.width);
     if (rest.divOf && e.bx && snap.cats){
       const div = new Map();
       e.bx.forEach((x, j)=>{ if (moveX.has(x)) div.set(moveX.get(x), rest.divOf[j]); });
@@ -1766,8 +1769,8 @@ function allSeriesHtml(){
   const DASH_MIX = dash === null, MARK_MIX = marker === null;
   // (a bar's width at most its category's slot, as its own field takes it: with a bar among
   // the series the field takes no more, v569; to v568 up to a line's 6, every bar then wider
-  // than its slot)
-  const bars = barMode(), anyBar = F.series.some(s=> s.kind === 'bar');
+  // than its slot. Its least, a line's 0.2 with a line among them, v570: FM.everyWidthRange)
+  const bars = barMode(), anyBar = F.series.some(s=> s.kind === 'bar'), [wLo, wHi] = FM.everyWidthRange(F.series);
   return `
     <div class="fig-serie fig-serie-caps">
       <span class="fig-grip fig-grip-off"></span>
@@ -1788,7 +1791,7 @@ function allSeriesHtml(){
                         title="Apply a texture palette to every series">${texPalIcon()}</button>` : ''}
       <button type="button" class="btn btn-sm primary fig-restore" data-restore
               title="Drop the names typed here and take the project's own again">Restore</button>
-      <input type="text" inputmode="decimal" data-num="1" data-all="width" data-min="0.1" data-max="${anyBar ? 1 : 6}"
+      <input type="text" inputmode="decimal" data-num="1" data-all="width" data-min="${wLo}" data-max="${wHi}"
              value="${w === null ? '' : esc(w)}" placeholder="—" title="Line / bar width for every series${anyBar ? ' (a bar\'s: a fraction of the category slot, at most 1)' : ''}">
       ${bars ? '' : `
         <select data-all="dash" title="Line style for every series">
@@ -1823,8 +1826,8 @@ function serieRowHtml(s, i){
         : `<button class="color-swatch" data-sw="${i}" data-color="${esc(s.color)}" style="background:${esc(s.color)}" title="Pick color"></button>`}
       <input type="text" data-sk="label" data-s="${i}" value="${esc(s.label)}" class="fig-slabel">
       ${s.kind === 'bar'
-        ? `${numField(`data-sk="width" data-s="${i}" title="Bar width (fraction of the category slot)"`, s.width, 0.1, 1)}`
-        : `${numField(`data-sk="width" data-s="${i}" title="Line width"`, s.width, 0.2, 6)}
+        ? `${numField(`data-sk="width" data-s="${i}" title="Bar width (fraction of the category slot)"`, s.width, ...FM.widthRange(s))}`
+        : `${numField(`data-sk="width" data-s="${i}" title="Line width"`, s.width, ...FM.widthRange(s))}
            <select data-sk="dash" data-s="${i}" title="Line style">
              ${Object.entries(DASHES).map(([v,n])=>`<option value="${v}"${s.dash===v?' selected':''}>${n}</option>`).join('')}
            </select>
@@ -2328,7 +2331,9 @@ function wireRowDrag(rowSel, { swapIn, onDrop }){
   rows.forEach(row=>{
     const handle = row.querySelector('.fig-grip');
     if (!handle) return;
+    // (a mouse's primary button alone, as the trace list's grips: to v569 any, v570)
     handle.addEventListener('pointerdown', e=>{
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
       e.preventDefault();
       from = row;
       row.classList.add('dragging');
@@ -2390,6 +2395,7 @@ function wireBarDrag(){
     const handle = chip.querySelector('.fig-grip') || chip;
     let dragging = false;
     handle.addEventListener('pointerdown', e=>{
+      if (e.pointerType === 'mouse' && e.button !== 0) return;   // (the primary button alone, v570)
       e.preventDefault();
       dragging = true;
       chip.classList.add('dragging');

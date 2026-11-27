@@ -48,9 +48,14 @@ function kindMenu(kinds, layer){
   const ac = new AbortController();
   const K = { el, ac, anchor: null, pick: null, centred: false };
   wireMenu(K, ac.signal);
-  return { el, open: (a, onPick, opts)=> openMenu(K, a, onPick, opts), close: ()=> closeMenu(K), destroy(){ closeMenu(K); ac.abort(); el.remove(); } };
+  return { el, open: (a, onPick, opts)=> openMenu(K, a, onPick, opts), close: ()=> closeMenu(K), destroy(){ closeMenu(K); ac.abort(); el.remove(); },
+    // closed where it is open on an element of `node` (a card closed: unmount)
+    closeIn(node){ if (K.anchor && node.contains(K.anchor)) closeMenu(K); } };
 }
+// (an anchor no longer in the page closes it, whatever took it away: to v569 a scroll then
+// put it at the window's top left, v570)
 function placeMenu(K){
+  if (!K.anchor.isConnected){ closeMenu(K); return; }
   const r = K.anchor.getBoundingClientRect(), w = K.el.offsetWidth, h = K.el.offsetHeight;
   const at = M.menuAt(r, w, h, window.innerWidth, window.innerHeight, K.centred);
   K.el.style.left = at.left + 'px';
@@ -263,6 +268,9 @@ function mount(D, a, p){
 function unmount(D, a, fade){
   const card = D.live.get(a.id);
   if (!card) return;
+  // (its kinds' menu, open on its title, closed with it: to v569 a card closed from the
+  // keyboard left it open, a pick doing nothing, v570)
+  if (D.menu) D.menu.closeIn(card);
   if (fade) leave(D, a.id, card);
   stopGrow(card);
   card.remove();

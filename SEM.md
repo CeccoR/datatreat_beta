@@ -190,6 +190,7 @@ to the default. A drag on the frame in the editor unticks it.
   - Shrunk, the image is drawn smoothed; enlarged past 2×, its pixels stay sharp.
 - **The fields.** X, Y, width and height, in pixels. A value that would run past the image's edge brings the crop back inside it. The crop's size in µm is in the image's details.
 - **The ratio.** 1:1, 4:3, 3:2 or free, applied as width:height. An image starts at the ratio of its default crop (1:1 on the user's files), or free.
+  - A crop is read at a ratio within 1 % of it, or where one side is the other's at the ratio to the pixel, as the crop's whole pixels round it (v570: to v569 1 % alone, and a crop made at a ratio on a tiny image, 50 × 38 at 4:3, read as free; a crop of sides of 64 px or more reads as before).
   - A locked ratio holds while resizing. A corner scales both sides by the mean of the pointer's two moves; a side sets the other dimension about its middle.
   - A typed side sets the other side.
   - A new ratio keeps the crop's width and middle where it can, else its height.

@@ -613,7 +613,11 @@ class Plot{
       // Grip dot near the top for an easy drag target
       const grip = svgEl('circle',{cx:x0, cy:m.t+15, r:7.5, fill:entry.color, 'cursor':'ew-resize'});
       this.gOverlay.appendChild(grip);
-      const startDrag = e=>{ e.preventDefault(); e.stopPropagation(); this._dragVline(entry, e.pointerId); };
+      // (a mouse's primary button alone, as every drag's: to v569 any, the right one too, v570)
+      const startDrag = e=>{
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        e.preventDefault(); e.stopPropagation(); this._dragVline(entry, e.pointerId);
+      };
       hit.addEventListener('pointerdown', startDrag);
       grip.addEventListener('pointerdown', startDrag);
     }

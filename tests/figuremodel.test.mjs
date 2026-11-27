@@ -7,7 +7,8 @@
    switch (one a log axis cannot take giving way to the automatic one), handed over as the
    automatic one goes off (the figure's, a group's, the one on show), a range by hand as it
    stands or as it starts; the axes' settings for the panels edited (axes made where a panel
-   had none); a setting for every series (a dash 'solid' none, any other key the symbol); a
+   had none); a setting for every series (a dash 'solid' none, any other key the symbol), the
+   widths' ranges (a series' own, every series' their meeting, a bar's read back: v570); a
    division's name, colour and fill (the first's colour the series'), the colours a pick
    reaches (a bar's divisions cleared), the divisions' colours and fills cleared as by
    division goes off, the colours a palette would keep, a fill as its picker opens on it and
@@ -83,6 +84,18 @@ test('the ranges: a log switch, handed over, a group\'s, by hand', ()=>{
   assert.notEqual(P.xMan[0], r.xOf[0], 'a copy');
   assert.equal(FM.rangeAuto(P, true, false, 4, true, ranges), false, 'no such panel');
   assert.deepEqual([FM.manOf(P, 'yMan', 1, r), FM.manOf(P, 'yMan', 0, r), FM.manOf(P, 'xMan', 1, r)], [[7, 8], [0, 1], [1, 9]]);
+});
+
+/* v570: a width field's range: a bar's [0.1, 1], a line's [0.2, 6]; the field for every series
+   their meeting ([0.2, 1] with both: to v569 its least 0.1, a line's 0.2 refused by its own
+   field); a bar's width read back put inside its range, one inside it as it was. */
+test('the widths\' ranges: a series\' own, every series\' (their meeting), a bar\'s read back (v570)', ()=>{
+  assert.deepEqual([FM.widthRange(curve('a')), FM.widthRange(bar('b'))], [[0.2, 6], [0.1, 1]]);
+  assert.deepEqual(FM.everyWidthRange([curve('a'), curve('b')]), [0.2, 6], 'lines alone');
+  assert.deepEqual(FM.everyWidthRange([bar('a'), bar('b')]), [0.1, 1], 'bars alone');
+  assert.deepEqual(FM.everyWidthRange([curve('a'), bar('b')]), [0.2, 1], 'both');
+  assert.deepEqual([3, 1.0001, 1, 0.8, 0.1, 0.05, 0].map(FM.barWidth), [1, 1, 1, 0.8, 0.1, 0.1, 0.1]);
+  assert.ok(Number.isNaN(FM.barWidth(NaN)));
 });
 
 test('every series, the axes, the divisions, the colours and fills, a rich field', ()=>{
