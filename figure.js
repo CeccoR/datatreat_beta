@@ -1,4 +1,4 @@
-import { svgEl, niceTicks, fmtTick, SUB_DROP, TILT_DY } from './plot.js';
+import { svgEl, niceRun, fmtTick, SUB_DROP, TILT_DY } from './plot.js';
 import { colorPickerUI, palettePickerUI, CP_PALETTES, X_SVG, tiltFits, flashFieldInvalid, numRule, dropGap, esc, saveBlob, boxHtml } from './utils.js';
 import { tabOf, TABS } from './tabs.js';
 import * as FL from './figure-layout.js';
@@ -332,7 +332,7 @@ function buildModel(plot, opts){
    the open figure's model, and what it cannot load in Node (the text measured in the
    figure's font, plot.js's ticks and numbers, utils.js's tilt test). The model is read
    when asked, so the one context serves every figure the composer opens. */
-const C = { get F(){ return F; }, textW, niceTicks, fmtTick, tiltFits };
+const C = { get F(){ return F; }, textW, niceRun, fmtTick, tiltFits };
 // What the controls ask of them, on the open figure.
 const majorTicks = (lo, hi, step)=> FL.majorTicks(C, lo, hi, step);
 const axisTicks = (ax, lo, hi)=> FL.axisTicks(C, ax, lo, hi);
@@ -1913,6 +1913,7 @@ function controlsHtml(){
     ${autoNum('X minors per major','minorX','minorXAuto',0,20, autoMinorsOf('x'))}
     ${chk('Y minors per major chosen automatically','minorYAuto')}
     ${autoNum('Y minors per major','minorY','minorYAuto',0,20, autoMinorsOf('y'))}
+    <div class="fig-ticknote"></div>
     <div class="fig-subhead">Grid</div>
     ${chk('Vertical lines (X ticks)','x','g')}
     ${chk('Horizontal lines (Y ticks)','y','g')}
@@ -2371,6 +2372,7 @@ function wireSeriesDrag(){
   wireRowDrag('.fig-serie[data-s]', { onDrop(row, t){
     const f = +row.dataset.s, moved = F.series[f];
     if (!moved) return;
+    const was = beforeEdit();
     // Before the series of the row the gap is over; after the group's last one; or,
     // in an empty group, at the end.
     const before = t.g < t.gRows.length ? F.series[+t.gRows[t.g].dataset.s] : null;
@@ -2380,6 +2382,7 @@ function wireSeriesDrag(){
     F.series.splice(at, 0, moved);
     moved.panel = +t.gp.dataset.pg;
     redealPalettes();
+    if (refuseAction(was, `.fig-serie[data-s="${f}"]`, 'the series not moved.')) return;
     pushUndo(); refresh(true);
   } });
   wireBarDrag();
@@ -2518,8 +2521,9 @@ function wireControls(){
    is already let go, and writing into it threw (to v485). */
 function runControl(t){
   if (rebuilding || !F || !t.isConnected) return;
+  const was = beforeEdit();
   const rebuild = applyControl(t);
-  if (rebuild === null) return;
+  if (rebuild === null || refuseControl(was, t, rebuild)) return;
   // Echo the committed value back with a decimal point, so a comma typed by hand
   // is accepted but never left standing in the field.
   if (t.dataset.num && !rebuild){
@@ -2528,6 +2532,64 @@ function runControl(t){
   }
   pushUndo();
   refresh(rebuild);
+}
+
+/* ---- Ticks a setting by hand cannot have (v580) ------------------------------
+   An edit that would put a setting by hand into a tick fault (figure-layout.js tickFaults:
+   a step too fine for its range, a range too narrow for its values…), or change one that
+   stands in a fault already, is refused as a value its field cannot take: the figure goes
+   back to what it was, with no step in the history, and the control to what it showed,
+   flashed, why under it (utils.js flashFieldInvalid). The step, the minors, the range, the
+   log switch, sharing, a series shown, a panel added or removed, a series moved: whatever
+   the edit. To v579 it was taken and the axis drew its automatic ticks (v566). A fault the
+   data alone brings, or settings brought back (a project, the plot's memory, a preset), is
+   noted under the Ticks instead (noteTicks), the setting kept, and drawn again once the
+   range lets it. */
+// The faults the open figure's settings by hand stand in.
+const faultsNow = ()=> FL.tickFaults(C, computeRanges());
+// The figure before an edit: its snapshot, and the keys of its faults.
+const beforeEdit = ()=> ({ snap: snapshot(), keys: new Set(faultsNow().map(f=> f.key)) });
+// A fault the edit since `was` brought, or undefined.
+const newFault = was => faultsNow().find(f=> !was.keys.has(f.key));
+// The control of the sidebar rebuilt that stands where `el` stood: the same data attributes.
+const twinOf = el => controlsEl.querySelector(el.tagName + [...el.attributes].filter(a=> a.name.startsWith('data-'))
+  .map(a=> `[${a.name}="${CSS.escape(a.value)}"]`).join(''));
+// What a control shows: a select's option, a field's text.
+const shownIn = el => el.tagName === 'SELECT' ? el.selectedOptions[0].text : String(el.value).trim();
+// The figure back to what it was before an edit, the sidebar rebuilt on it, its note too.
+function backTo(was){ applySnapshot(was.snap); rebuildControls(); markMixedToggles(); noteTicks(); }
+/* A control's edit (runControl) refused, if it brought a fault: true. A number typed is set
+   back where it stands, the caret kept; any other control is shown as it was by the sidebar
+   rebuilt. What became of it: what was typed or picked not taken and what is kept, or a
+   switch left as it was. */
+function refuseControl(was, t, rebuild){
+  const f = newFault(was);
+  if (!f) return false;
+  const typed = shownIn(t);
+  let at = t;
+  if (t.dataset.num && !rebuild){ applySnapshot(was.snap); t.value = t.defaultValue; }
+  else { backTo(was); at = twinOf(t) || t; }
+  flashFieldInvalid(at, FM.tickRefused(f, t.type === 'checkbox' ? (t.checked ? 'left unticked.' : 'left ticked.')
+    : `${typed} not taken; ${shownIn(at)} kept.`));
+  return true;
+}
+// A button's or a drag's edit refused, if it brought a fault: true. `sel` finds what to
+// flash in the sidebar rebuilt; `tail` says what became of the edit.
+function refuseAction(was, sel, tail){
+  const f = newFault(was);
+  if (!f) return false;
+  backTo(was);
+  const at = controlsEl.querySelector(sel);
+  if (at) flashFieldInvalid(at, FM.tickRefused(f, tail));
+  return true;
+}
+// The line under the Ticks while a setting by hand stands in a fault: a compact warning,
+// worked out at each drawing.
+function noteTicks(){
+  const el = controlsEl && controlsEl.querySelector('.fig-ticknote');
+  if (!el) return;
+  const html = boxHtml('warn', faultsNow().map(f=> esc(FM.tickNote(f))));
+  if (el.innerHTML !== html) el.innerHTML = html;
 }
 
 /* Routes one control to the model and says whether the sidebar has to be rebuilt (null:
@@ -2819,15 +2881,19 @@ function onDivButton(divB){
 }
 // A panel added in the first free cell (the grid grown if needed), with its share of the series.
 function addPanel(){
+  const was = beforeEdit();
   const spot = FM.newPanelCell(F);
   F.panels.push(newPanel(spot[0], spot[1]));
   distributeSeries();
   redealPalettes();
+  if (refuseAction(was, '[data-add-panel]', 'no panel added.')) return;
   pushUndo(); refresh(true);
 }
 function delPanel(i){
+  const was = beforeEdit();
   if (!FM.dropPanel(F, i)) return;
   redealPalettes();
+  if (refuseAction(was, `[data-del-panel="${i}"]`, 'the panel kept.')) return;
   pushUndo(); refresh(true);
 }
 
@@ -3002,7 +3068,10 @@ function plotKind(plot, opts){
     draw(svg, forExport){ renderInto(svg, forExport ? '#000000' : '#1a2327', '#ffffff'); return { W: F.wmm, H: F.hmm }; },
     dimText: plotDimText,
     // The plot's size, while the margins choose it, shown as they chose it.
-    afterRender(){ if (controlsEl && F.plotAuto) controlsEl.querySelectorAll('[data-auto-plot]').forEach(el=>{ el.value = lastInner[el.dataset.autoPlot]; }); },
+    afterRender(){
+      if (controlsEl && F.plotAuto) controlsEl.querySelectorAll('[data-auto-plot]').forEach(el=>{ el.value = lastInner[el.dataset.autoPlot]; });
+      noteTicks();
+    },
     controlsHtml,
     val: (at, key)=> at === 'g' ? F.grid[key] : at === 'dl' ? F.dataLabels[key] : at === 'f' ? F.font[key] : F[key],
     afterRebuild: wireSeriesDrag,

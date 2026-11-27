@@ -3010,6 +3010,9 @@ input.fig-slabel { flex: 1; min-width: 40px; padding: 3px 5px; font-size: 13px; 
   border-top: 1px solid var(--line); padding-top: 9px;
 }
 .fig-sec > .fig-subhead:first-of-type { border-top: none; padding-top: 0; margin-top: 4px; }
+/* Under the Ticks, while a setting by hand is not drawn as set (v580, figure.js noteTicks). */
+.fig-ticknote { margin: 6px 0 2px; }
+.fig-ticknote:empty { display: none; }
 /* Series grouped by the panel they are drawn in; a series moves by being dragged
    from one group into another. */
 .fig-group {

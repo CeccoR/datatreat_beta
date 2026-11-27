@@ -9,7 +9,7 @@
    path and symbols, the value labels and their ink, the tick marks, the numbers that give
    way to a neighbour's, the category names in runs, the axis titles, the legends, the
    shared titles, the texture tiles and the colours. Text is measured a fixed width a
-   character (no browser, no fonts); plot.js's niceTicks and fmtTick and utils.js's
+   character (no browser, no fonts); plot.js's niceRun and fmtTick and utils.js's
    tiltFits, which need a page to load, are taken from their source as they stand there.
    Then drawFigure as a whole, figure.js run from its source on a page that records every
    element, its attributes in the order they were set (every number by its shortest
@@ -41,11 +41,11 @@ function decl(file, name){
   for (; k < src.length; k++){ if (src[k] === '{') d++; else if (src[k] === '}' && !--d) break; }
   return src.slice(i, k + 1);
 }
-const { niceTicks, fmtTick } = new Function(['niceStep', 'niceTicks', 'fmtTick'].map(n => decl('plot.js', n)).join('\n') + '\nreturn { niceTicks, fmtTick };')();
+const { niceRun, fmtTick } = new Function(['niceStep', 'niceRun', 'fmtTick'].map(n => decl('plot.js', n)).join('\n') + '\nreturn { niceRun, fmtTick };')();
 const tiltFits = new Function(decl('utils.js', 'tiltFits') + '\nreturn tiltFits;')();
 // A character is 0.55 of the font's size wide.
 const textW = (s, px) => String(s).length * 0.55 * px;
-const ctx = F => ({ F, textW, niceTicks, fmtTick, tiltFits });
+const ctx = F => ({ F, textW, niceRun, fmtTick, tiltFits });
 const near = (a, b, tol, what) => assert.ok(Math.abs(a - b) <= tol, `${what}: ${a} against ${b}`);
 
 /* ---- A figure as figure.js buildModel makes one, and series as the plots give them ---- */
@@ -134,12 +134,12 @@ test('the ticks: a step snapped to its grid, the nice ones, a log axis\'s decade
 });
 
 /* What hung the tab to v565, run in a worker stopped after 10 s, so that a loop that never ends
-   fails the test and not the run: `cases` gets figure-layout.js (L) and plot.js's niceTicks and
-   fixedTicks (T), and its source is all that reaches the worker. */
+   fails the test and not the run: `cases` gets figure-layout.js (L) and plot.js's niceRun,
+   niceTicks and fixedTicks (T), and its source is all that reaches the worker. */
 function inWorker(cases){
-  const plot = ['niceStep', 'niceTicks', 'fixedTicks'].map(n => decl('plot.js', n)).join('\n');
+  const plot = ['niceStep', 'niceRun', 'niceTicks', 'fixedTicks'].map(n => decl('plot.js', n)).join('\n');
   const src = `const { parentPort, workerData: w } = require('node:worker_threads');
-import(w.url).then(L => { const T = new Function(w.plot + '\\nreturn { niceTicks, fixedTicks };')();
+import(w.url).then(L => { const T = new Function(w.plot + '\\nreturn { niceRun, niceTicks, fixedTicks };')();
   const t0 = performance.now(), out = new Function('return ' + w.cases)()(L, T);
   parentPort.postMessage({ out, ms: performance.now() - t0 }); });`;
   const url = new URL('../figure-layout.js', import.meta.url).href;
@@ -154,7 +154,7 @@ import(w.url).then(L => { const T = new Function(w.plot + '\\nreturn { niceTicks
 test('the ticks never hang: a step too fine for its values, none, below zero, no number, too many minors (v566)', async ()=>{
   const { out, ms } = await inWorker((L, T) => {
     const C = F => ({ F: { xLog: false, yLog: false, cats: [], xStepAuto: true, xStep: 0, yStepAuto: true, yStep: 0,
-      minorXAuto: true, minorX: 4, minorYAuto: true, minorY: 4, ...F }, niceTicks: T.niceTicks });
+      minorXAuto: true, minorX: 4, minorYAuto: true, minorY: 4, ...F }, niceRun: T.niceRun });
     const A = C({}), lo = 0.95e14, hi = 1.55e14;
     // The report: values about 1e14, a Y step of 10 by hand, the minors on.
     const M = C({ yStepAuto: false, yStep: 10 }), maj = L.axisTicks(M, 'y', lo, hi);
@@ -213,6 +213,83 @@ test('the ticks of a step that fits, as v565 had them: 400 majors and 20 minors 
   assert.deepEqual(big, R(11, i => 1e14 + i * 1000));
   assert.deepEqual(L.minorTicks(big, 1e14, 1e14 + 1e4, 4), R(50, i => 1e14 + (i + 1) * 200).filter((_, i) => (i + 1) % 5));
   assert.deepEqual(L.axisTicks(ctx(model({ yStepAuto: false, yStep: 1000 })), 'y', 1e14, 1e14 + 1e4), big);
+});
+
+/* v580: the one test of an axis the composer refuses an edit by and notes a setting by hand
+   with (axisFault), from the guards' own plans: each fault, nothing on what draws as set (a
+   step that fits, 400 majors with 20 minors each, 1e14 in steps of 1000, a step of 0); the
+   drawing agreeing with it on random ranges (a step's fault: the automatic ticks drawn; a
+   minors' fault: none); and the faults a figure's settings by hand stand in (tickFaults):
+   once a figure, none where nothing is by hand, their keys following the settings by hand
+   in them (the step, the minors' count, a range by hand) and not the data. */
+test('the ticks not drawn as set: each guard\'s fault, the drawing agreeing, the faults of the settings by hand (v580)', ()=>{
+  const Y = (F, lo, hi)=> L.axisFault(ctx(model(F)), 'y', lo, hi);
+  const hand = s => ({ yStepAuto: false, yStep: s });
+  // drawn as set
+  assert.equal(Y(hand(1), 0, 399), '');
+  assert.equal(Y({ ...hand(1), minorYAuto: false, minorY: 20 }, 0, 399), '');
+  assert.equal(Y(hand(1000), 1e14, 1e14 + 1e4), '');
+  assert.equal(Y({}, 0.95e14, 1.55e14), '');
+  assert.equal(Y(hand(0), 0, 10), '', 'a step of 0: the automatic ticks, as its field means it');
+  assert.equal(Y({ yLog: true }, -300, 300), '');
+  // the step's: too many majors, majors that coincide, no number of 0 or more, no end to the range
+  assert.equal(Y(hand(1), 0, 400), 'many');
+  assert.equal(Y(hand(10), 0.95e14, 1.55e14), 'many', 'v566\'s report');
+  assert.equal(Y(hand(100), 1e14, 1e14 + 1e4), 'same');
+  assert.equal(Y(hand(1e-4), 1e9, 1e9 + 0.01), 'same');
+  for (const s of [-1, NaN, Infinity, null]) assert.equal(Y(hand(s), 0, 10), 'step', String(s));
+  assert.equal(Y(hand(1), 0, Infinity), 'range');
+  assert.equal(Y(hand(1), NaN, 1), 'range');
+  // the range's: a few float spacings wide (the automatic ticks cut short); a log axis past
+  // 1000 decades, with no end, 2^52 decades out
+  assert.equal(Y({}, 1e12, 1e12 + 3e-4), 'narrow');
+  assert.equal(Y({ yLog: true }, 0, 1000.5), 'decades');
+  assert.equal(Y({ yLog: true }, -Infinity, 2), 'decades');
+  assert.equal(Y({ yLog: true }, 2 ** 52, 2 ** 52 + 10), 'decades');
+  // the minors': too fine for the floats, too many
+  assert.equal(Y({}, 1e12, 1e12 + 0.01), 'fine');
+  assert.equal(Y({ yLog: true, minorYAuto: false, minorY: 1e9 }, 0, 2), 'minors');
+
+  // the drawing agreeing, on random ranges and steps
+  let seed = 580;
+  const rnd = ()=> (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+  const seen = new Set();
+  for (let i = 0; i < 4000; i++){
+    const c = (rnd() < 0.5 ? -1 : 1) * Math.pow(10, rnd() * 27 - 12), w = Math.abs(c) * Math.pow(10, rnd() * 15 - 15);
+    const lo = c - w * rnd(), hi = lo + w, step = [w / (1 + rnd() * 600), w * rnd() * 1e-3, -w, 0][i % 4];
+    const F = { ...hand(step), minorYAuto: false, minorY: Math.floor(rnd() * 21) };
+    const C = ctx(model(F)), A = ctx(model({ ...F, yStepAuto: true }));
+    const fault = L.axisFault(C, 'y', lo, hi), maj = L.axisTicks(C, 'y', lo, hi);
+    seen.add(fault);
+    if (['step', 'many', 'same', 'range'].includes(fault)) assert.deepEqual(maj, L.axisTicks(A, 'y', lo, hi), 'the automatic ticks drawn');
+    // (each tick snapped to twelve digits)
+    else if (step > 0 && !fault) assert.ok(maj.every((t, k)=> !k || Math.abs(t - maj[k-1] - step) <= step * 1e-9 + Math.abs(t) * 2e-11), 'the step drawn');
+    if (fault === 'fine' || fault === 'minors') assert.deepEqual(L.axisMinors(C, 'y', maj, lo, hi), [], 'no minors drawn');
+  }
+  assert.ok(['', 'fine', 'many', 'same', 'step'].every(f=> seen.has(f)), [...seen].join());
+
+  // the faults by hand: a Y step of 10 on data about 1e14 (the range automatic: the data's
+  // doing) in two panels, said once
+  const at14 = (extra = {}) => model({ rows: 2, panels: [panel(0, 0), panel(1, 0)], shareY: false, ...extra,
+    series: [curve('a', [0, 1, 2], [1e14, 1.2e14, 1.5e14]), curve('b', [0, 1], [1.1e14, 1.3e14], { panel: 1 })] });
+  const faults = F => L.tickFaults(ctx(F), L.computeRanges(ctx(F)));
+  const ten = faults(at14(hand(10)));
+  assert.deepEqual(ten.map(f=> [f.ax, f.code, f.step]), [['y', 'many', 10]]);
+  assert.deepEqual(faults(at14()), [], 'nothing by hand: none');
+  assert.deepEqual(faults(model({ series: [curve('n', [0, 1], [1e12, 1e12 + 0.008])] })), [], 'the automatic minors too fine, nothing by hand: none');
+  // the key: the step by hand in it, the data not; a range by hand's bounds in it
+  const other = model({ ...hand(10), series: [curve('c', [0, 1], [2e14, 3e14])] });
+  assert.equal(faults(other)[0].key, ten[0].key, 'other data, the same step: the same key');
+  assert.notEqual(faults(at14(hand(5)))[0].key, ten[0].key, 'another step: another key');
+  assert.equal(faults(at14({ ...hand(10), minorYAuto: false, minorY: 2 }))[0].key, ten[0].key, 'the minors by hand: not in the step\'s fault');
+  const byHand = r => faults(model({ ...hand(1), yAuto: false, ymin: r[0], ymax: r[1], series: [curve('d', [0, 1], [0, 1])] }));
+  assert.deepEqual(byHand([0, 300]), []);
+  assert.equal(byHand([0, 500])[0].code, 'many');
+  assert.notEqual(byHand([0, 500])[0].key, byHand([0, 600])[0].key, 'a range by hand\'s bounds in the key');
+  // a range by hand alone, the ticks automatic: too narrow for its values
+  assert.deepEqual(faults(model({ yAuto: false, ymin: 1e12, ymax: 1e12 + 3e-4, series: [curve('e', [0, 1], [0, 1])] })).map(f=> f.code), ['narrow']);
+  // the minors by hand on data too narrow for theirs
+  assert.deepEqual(faults(model({ minorYAuto: false, minorY: 4, series: [curve('n', [0, 1], [1e12, 1e12 + 0.008])] })).map(f=> f.code), ['fine']);
 });
 
 test('the ranges: the data with its error bars and boxes, bars on zero, logs, sharing groups, manual ones', ()=>{
@@ -494,7 +571,7 @@ test('the legends, the shared titles, the tiles, the colours, the symbols, the r
 /* ---- drawFigure as a whole, on a page that records what it is given ----
    figure.js needs a page to load (utils.js, plot.js), so its source is run here as it
    stands, its imports handed in: figure-layout.js and figure-model.js themselves, plot.js's
-   svgEl, niceTicks, fmtTick, SUB_DROP and TILT_DY and utils.js's tiltFits, CP_PALETTES, esc
+   svgEl, niceRun, fmtTick, SUB_DROP and TILT_DY and utils.js's tiltFits, CP_PALETTES, esc
    and X_SVG from their source, the rest (pickers, the tabs) inert. The page: elements that
    keep their attributes in the order they were set, their text and their children, and a
    canvas that measures text a fixed width a character. */
@@ -519,8 +596,8 @@ function constDecl(file, name){
   assert.ok(i >= 0, name + ' in ' + file);
   return src.slice(i, src[src.indexOf('=', i) + 2] === '[' ? src.indexOf('\n];', i) + 3 : src.indexOf('\n', i));
 }
-const PLOT = new Function('document', ['niceStep', 'niceTicks', 'fmtTick', 'svgEl'].map(n => decl('plot.js', n)).join('\n') + '\n'
-  + ['SUB_DROP', 'TILT_DY'].map(n => constDecl('plot.js', n)).join('\n') + '\nreturn { niceTicks, fmtTick, svgEl, SUB_DROP, TILT_DY };')(PAGE);
+const PLOT = new Function('document', ['niceStep', 'niceRun', 'fmtTick', 'svgEl'].map(n => decl('plot.js', n)).join('\n') + '\n'
+  + ['SUB_DROP', 'TILT_DY'].map(n => constDecl('plot.js', n)).join('\n') + '\nreturn { niceRun, fmtTick, svgEl, SUB_DROP, TILT_DY };')(PAGE);
 const UTIL = new Function(decl('utils.js', 'tiltFits') + '\n' + ['esc', 'CP_PALETTES', 'X_SVG'].map(n => constDecl('utils.js', n)).join('\n')
   + '\nreturn { tiltFits, esc, CP_PALETTES, X_SVG, colorPickerUI: {}, palettePickerUI: {}, flashFieldInvalid(){}, numRule(){ return \'\'; }, boxHtml(){ return \'\'; }, dropGap(){}, saveBlob(){} };')();
 /* figure.js's source (or another's: an older version's, given as text), run with its imports

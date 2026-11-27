@@ -5,7 +5,8 @@
    sidebar, a panel placed and spanned, added in the first free cell and removed, a range
    handed over as the automatic one leaves it and carried across a log switch, a setting
    given to every series, a division's own settings, a fill as the picker shows it and as
-   it takes it back, the colours a palette would keep, text put into a rich field. figure.js
+   it takes it back, the colours a palette would keep, text put into a rich field, the words
+   for ticks a setting by hand cannot have (v580). figure.js
    reads the fields, refuses what they cannot take and redraws; what the figure draws is
    worked out in figure-layout.js.
 ========================================================= */
@@ -189,4 +190,25 @@ export function richInsert(value, a, b, text, wrap){
   const sel = value.slice(a, b);
   const ins = wrap ? `${wrap}{${sel}}` : text;
   return { value: value.slice(0, a) + ins + value.slice(b), caret: a + ins.length - (wrap && !sel ? 1 : 0) };
+}
+
+/* The words for a tick fault (figure-layout.js tickFaults: { ax, code, step }, v580): why an
+   edit was refused, said under its control before what became of the edit (tail: "1e14 not
+   taken; 10 kept."), and the line under the Ticks while a setting by hand stands in a fault
+   that no edit brought (the data changed, a project or a preset applied), the setting kept:
+   its subject, what is wrong and what is drawn instead. */
+const TICK_WORDS = {
+  step:    [A => `${A} step not a number of 0 or more`, 'step', 'not a number of 0 or more', 'the automatic ticks drawn'],
+  range:   [A => `No end to the ${A} range`, 'step', 'the range has no end', 'the automatic ticks drawn'],
+  many:    [A => `Too many ${A} ticks for this range`, 'step', 'too many ticks for this range', 'the automatic ticks drawn'],
+  same:    [A => `${A} ticks too close to tell apart at these values`, 'step', 'ticks too close to tell apart at these values', 'the automatic ticks drawn'],
+  narrow:  [A => `${A} range too narrow for its values`, 'range', 'too narrow for its values', 'only some ticks drawn'],
+  decades: [A => `Too many decades on ${A}`, 'range', 'too many decades', 'no ticks drawn'],
+  minors:  [A => `Too many ${A} minor ticks for this range`, 'minor ticks', 'too many for this range', 'none drawn'],
+  fine:    [A => `${A} minor ticks too close to tell apart at these values`, 'minor ticks', 'too close to tell apart at these values', 'none drawn'],
+};
+export const tickRefused = (f, tail)=> `${TICK_WORDS[f.code][0](f.ax.toUpperCase())}: ${tail}`;
+export function tickNote(f){
+  const [, subject, what, drawn] = TICK_WORDS[f.code];
+  return `${f.ax.toUpperCase()} ${subject}${subject === 'step' && typeof f.step === 'number' ? ' ' + f.step : ''}: ${what}: ${drawn}.`;
 }

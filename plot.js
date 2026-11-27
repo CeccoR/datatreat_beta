@@ -10,8 +10,10 @@ function niceStep(rough){
   const nice = f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10;
   return nice * Math.pow(10, exp);
 }
-function niceTicks(min, max, n){
-  if (max <= min) return [min];
+/* The nice ticks of a range, and whether the guard below cut them short (cut: v580, for the
+   figure composer to refuse a range by hand that does it, figure-layout.js majorPlan). */
+function niceRun(min, max, n){
+  if (max <= min) return { ticks: [min], cut: false };
   const step = niceStep((max - min) / n);
   const start = Math.ceil(min / step - 1e-9) * step;
   const ticks = [];
@@ -20,10 +22,11 @@ function niceTicks(min, max, n){
     if (r >= min - step * 1e-9 && r <= max + step * 1e-9) ticks.push(r);
     // A range a few float spacings wide (1e17 to 1e17 + 16) has a step that leaves v where
     // it is: the ticks so far. To v565 the loop ran on until the array ran out of memory.
-    if (v + step === v) break;
+    if (v + step === v) return { ticks, cut: true };
   }
-  return ticks;
+  return { ticks, cut: false };
 }
+function niceTicks(min, max, n){ return niceRun(min, max, n).ticks; }
 function fixedTicks(min, max, step){
   // Past 1000 ticks the step does not fit the range (a malformed project's 1e308 nm, say):
   // the nice ticks instead. To v496 the loop ran on until the array ran out of memory.
@@ -1391,5 +1394,5 @@ function linkX(plots){ plots.forEach(p=>{ p._linked = plots; }); }
 
 
 export {
-  niceTicks, fmtTick, axisReadout, svgEl, SUB_DROP, TILT_DY, Plot, linkX
+  niceRun, niceTicks, fmtTick, axisReadout, svgEl, SUB_DROP, TILT_DY, Plot, linkX
 };

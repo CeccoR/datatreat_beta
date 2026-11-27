@@ -3,14 +3,16 @@
    PNG of the size its footer says), takes the focus (Enter does not press the button
    behind), refuses a second composer of either kind while one is open (the first stays
    usable), and closes on Escape with the focus back on the button that opened it. A plot's
-   stays responsive with a tick step far too fine for its values (v566). Its width for every
-   series takes what each series' own field takes (v569, v570), bars saved wider than their
-   slot open at 1 (v570), lines saved thinner than 0.2 at 0.2 (v571), and its grips and the
-   colour picker take a mouse's primary button alone (v570); an export that fails says why in
-   a compact error in its footer (v571). */
+   stays responsive with a tick step far too fine for its values (v566), and refuses an edit
+   that would leave a setting by hand out of its ticks, keeping one the data alone stop
+   fitting, with a note (v580). Its width for every series takes what each series' own field
+   takes (v569, v570), bars saved wider than their slot open at 1 (v570), lines saved thinner
+   than 0.2 at 0.2 (v571), and its grips and the colour picker take a mouse's primary button
+   alone (v570); an export that fails says why in a compact error in its footer (v571). */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { start, openModule, loadFiles, download, settle, keep } from './helpers.mjs';
+import { gcCsv } from './fixtures.mjs';
 
 let env;
 before(async ()=>{ env = await start(); });
@@ -74,34 +76,217 @@ test('plots composer: opens, exports SVG and PNG, refuses a second, closes on Es
   } finally { await close(); }
 });
 
+/* The composer on a plot of one line, made up (xs 0–19; ys as given), its figure's markup,
+   the floating rule of a refused field (utils.js flashFieldInvalid) and a field's text. */
+async function composeLine(page, ys){
+  await page.evaluate(ys=> import('./figure.js').then(f=>{
+    const xs = ys.map((_, i)=> i);
+    f.openFigureEditor({ _stored: [{ type: 'line', xs, ys, label: 'line', color: '#3aa0ff' }] }, { name: 'line' });
+  }), ys);
+  await page.waitForSelector('.fig-backdrop .fig-svg path');
+}
+const drawnFig = page => page.evaluate(()=> document.querySelector('.fig-backdrop .fig-svg').innerHTML);
+const floatRule = page => page.evaluate(()=> { const r = document.querySelector('.field-rule-float'); return r ? r.textContent : null; });
+const shown = (page, at)=> page.locator(`.fig-backdrop input[${at}]`).inputValue();
+/* A control brought into view first, its scroll's event let go by: a scroll closes the
+   floating rule (utils.js flashFieldInvalid), and one Playwright makes as it clicks comes
+   after the click's handler has put the rule up. */
+async function inView(page, el){
+  await el.scrollIntoViewIfNeeded();
+  await settle(page);
+  return el;
+}
+// A number typed into a field and committed with Enter (bounded: to v565 the tab hung there);
+// then a pause past the history's 250 ms, so that each edit is a step of its own.
+async function commitNum(page, at, v){
+  const f = await inView(page, page.locator(`.fig-backdrop input[${at}]`));
+  await f.fill(v);
+  await f.press('Enter', { timeout: 10000 });
+  await settle(page);
+  await page.waitForTimeout(300);
+}
+// A checkbox or a button clicked (a series' own checkbox, drawn as an icon, by its label).
+async function tick(page, at, tag = 'input'){
+  const box = page.locator(`.fig-backdrop ${tag}[${at}]`);
+  await (await inView(page, (await box.isVisible()) ? box : box.locator('xpath=..'))).click();
+  await settle(page);
+  await page.waitForTimeout(300);
+}
+const ys20 = Array.from({ length: 20 }, (_, i)=> i);
+const NOTE = '⚠ Y step 10: too many ticks for this range: the automatic ticks drawn.';
+
 /* A Y step by hand far too fine for its values: 1e14 in steps of 10, the grid's minors on. To
-   v565 the minors were walked to for ever and the tab hung; now the page answers at once and
-   the axis keeps its automatic ticks (figure-layout.js MAX_TICKS), while a step that fits, on
-   X, is followed. */
-test('plots composer: a tick step too fine for its values leaves the page responsive', async ()=>{
+   v565 the minors were walked to for ever and the tab hung; v566 took the step and drew the
+   automatic ticks; from v580 the step is refused (figure-layout.js tickFaults): the field goes
+   back to the 0 it showed (the automatic ticks), why under it, the figure as it was, the page
+   answering at once; a step that fits, on X, is followed. */
+test('plots composer: a tick step too fine for its values refused at once, the automatic ticks kept (v566, v580)', async ()=>{
   const { page, errors, csp, close } = await env.page();
   try {
-    await page.evaluate(async ()=>{
-      const f = await import('./figure.js');
+    await composeLine(page, ys20.map(x=> 1e14 + x * 3e12));
+    await tick(page, 'data-g="y"');
+    await tick(page, 'data-g="minor"');
+    const auto = await drawnFig(page);
+    await tick(page, 'data-k="yStepAuto"');
+    await commitNum(page, 'data-k="yStep"', '10');
+    assert.equal(await shown(page, 'data-k="yStep"'), '0', 'the step before: 0, the automatic ticks');
+    assert.equal(await floatRule(page), 'Too many Y ticks for this range: 10 not taken; 0 kept.');
+    assert.equal(await drawnFig(page), auto, 'the figure as it was');
+    await tick(page, 'data-k="xStepAuto"');
+    await commitNum(page, 'data-k="xStep"', '2');
+    assert.equal(await shown(page, 'data-k="xStep"'), '2');
+    assert.notEqual(await drawnFig(page), auto, 'a step that fits followed');
+    assert.deepEqual(errors, []);
+    assert.deepEqual(await csp(), []);
+  } finally { await close(); }
+});
+
+/* v580: a step by hand too dense for its range goes back to the step by hand before it (to
+   v579 the axis drew its automatic ticks and kept the step typed), as does one whose ticks
+   coincide at their values; the history has no step for it: Ctrl+Z takes back the step
+   before, Ctrl+Y brings it back. */
+test('plots composer: a step too dense refused, the step by hand before kept, no step in the history (v580)', async ()=>{
+  const { page, errors, csp, close } = await env.page();
+  try {
+    await composeLine(page, ys20);
+    await tick(page, 'data-k="yStepAuto"');
+    await commitNum(page, 'data-k="yStep"', '0.1');
+    const fits = await drawnFig(page);
+    await commitNum(page, 'data-k="yStep"', '0.001');
+    assert.equal(await shown(page, 'data-k="yStep"'), '0.1');
+    assert.equal(await floatRule(page), 'Too many Y ticks for this range: 0.001 not taken; 0.1 kept.');
+    assert.equal(await drawnFig(page), fits, 'the step before drawn');
+    await page.keyboard.press('Control+z'); await settle(page);
+    assert.equal(await shown(page, 'data-k="yStep"'), '0', 'Ctrl+Z: the step before 0.1');
+    await page.keyboard.press('Control+y'); await settle(page);
+    assert.equal(await shown(page, 'data-k="yStep"'), '0.1', 'Ctrl+Y: 0.1 again');
+    assert.equal(await drawnFig(page), fits);
+    // ticks that coincide at their values: a range by hand at 1e9 (set with the automatic
+    // step), a step of 1e-4
+    await tick(page, 'data-k="yStepAuto"');
+    await tick(page, 'data-rauto="y"');
+    await commitNum(page, 'data-k="ymax"', '1000000000.01');
+    await commitNum(page, 'data-k="ymin"', '1000000000');
+    await tick(page, 'data-k="yStepAuto"');
+    assert.equal(await shown(page, 'data-k="yStep"'), '0.1');
+    await commitNum(page, 'data-k="yStep"', '0.0001');
+    assert.equal(await shown(page, 'data-k="yStep"'), '0.1');
+    assert.equal(await floatRule(page), 'Y ticks too close to tell apart at these values: 0.0001 not taken; 0.1 kept.');
+    assert.deepEqual(errors, []);
+    assert.deepEqual(await csp(), []);
+  } finally { await close(); }
+});
+
+/* v580: a bound of a range by hand that would make the step by hand too dense, refused, the
+   bound before kept, one that fits taken; the step by hand's switch, its step not fitting
+   the range any more: unticking it refused, the automatic step kept (to v579 both taken,
+   the automatic ticks drawn). */
+test('plots composer: a bound too wide for the step by hand refused; the automatic step kept when the step does not fit (v580)', async ()=>{
+  const { page, errors, csp, close } = await env.page();
+  try {
+    await composeLine(page, ys20);
+    await tick(page, 'data-k="yStepAuto"');
+    await commitNum(page, 'data-k="yStep"', '0.1');
+    await tick(page, 'data-rauto="y"');
+    assert.deepEqual([await shown(page, 'data-k="ymin"'), await shown(page, 'data-k="ymax"')], ['-0.95', '19.95']);
+    await commitNum(page, 'data-k="ymax"', '1e11');
+    assert.equal(await shown(page, 'data-k="ymax"'), '19.95');
+    assert.equal(await floatRule(page), 'Too many Y ticks for this range: 1e11 not taken; 19.95 kept.');
+    await commitNum(page, 'data-k="ymax"', '30');
+    assert.equal(await shown(page, 'data-k="ymax"'), '30', 'a bound the step fits taken');
+    // the step automatic, the range widened: the step by hand no longer fits it
+    await tick(page, 'data-k="yStepAuto"');
+    await commitNum(page, 'data-k="ymax"', '1000');
+    const auto = await drawnFig(page);
+    await tick(page, 'data-k="yStepAuto"');
+    assert.equal(await page.locator('.fig-backdrop input[data-k="yStepAuto"]').isChecked(), true, 'the automatic step kept');
+    assert.equal(await floatRule(page), 'Too many Y ticks for this range: left ticked.');
+    assert.equal(await drawnFig(page), auto);
+    assert.equal(await page.locator('.fig-backdrop .fig-ticknote').innerHTML(), '', 'no note: no setting by hand left out');
+    assert.deepEqual(errors, []);
+    assert.deepEqual(await csp(), []);
+  } finally { await close(); }
+});
+
+/* v580: any other edit that would leave a step by hand out is refused the same way: the Y log
+   switch going off with a step of 2 (decades per major, then a linear step on values up to
+   1e6), the Y range shared again and a panel removed, each bringing a series of 3000–4000
+   into a range a Y step of 10 fits in each panel alone (to v579 each taken, the automatic
+   ticks drawn). */
+test('plots composer: the log switch, sharing and a panel removed refused where they would leave the step by hand out (v580)', async ()=>{
+  const { page, errors, csp, close } = await env.page();
+  try {
+    await composeLine(page, ys20.map(x=> 1 + x * 5e4));
+    await tick(page, 'data-k="yLog"');
+    await tick(page, 'data-k="yStepAuto"');
+    await commitNum(page, 'data-k="yStep"', '2');
+    const log = await drawnFig(page);
+    await tick(page, 'data-k="yLog"');
+    assert.equal(await page.locator('.fig-backdrop input[data-k="yLog"]').isChecked(), true, 'still logarithmic');
+    assert.equal(await floatRule(page), 'Too many Y ticks for this range: left ticked.');
+    assert.equal(await drawnFig(page), log);
+    await closeComposer(page);
+    // two series, each in a panel of its own, the Y range not shared
+    await page.evaluate(()=> import('./figure.js').then(f=>{
       const xs = Array.from({ length: 20 }, (_, i)=> i);
-      f.openFigureEditor({ _stored: [{ type: 'line', xs, ys: xs.map(x=> 1e14 + x * 3e12), label: 'big', color: '#3aa0ff' }] }, { name: 'big' });
-    });
+      f.openFigureEditor({ _stored: [{ type: 'line', xs, ys: xs.map(x=> x / 2), label: 'low', color: '#3aa0ff' },
+                                     { type: 'line', xs, ys: xs.map(x=> 3000 + x * 50), label: 'high', color: '#d62728' }] }, { name: 'two' });
+    }));
     await page.waitForSelector('.fig-backdrop .fig-svg path');
-    const drawn = ()=> page.evaluate(()=> document.querySelector('.fig-backdrop .fig-svg').innerHTML);
-    const step = async (k, v)=>{
-      await page.click(`.fig-backdrop input[data-k="${k}Auto"]`);
-      const field = page.locator(`.fig-backdrop input[data-k="${k}"]`);
-      await field.fill(v);
-      await field.press('Enter', { timeout: 10000 });
-      assert.equal(await field.inputValue({ timeout: 10000 }), v);
-    };
-    await page.click('.fig-backdrop input[data-g="y"]');
-    await page.click('.fig-backdrop input[data-g="minor"]');
-    const auto = await drawn();
-    await step('yStep', '10');
-    assert.equal(await drawn(), auto, 'the automatic ticks');
-    await step('xStep', '2');
-    assert.notEqual(await drawn(), auto, 'a step that fits followed');
+    await tick(page, 'data-k="shareY"');
+    await tick(page, 'data-add-panel', 'button');
+    await tick(page, 'data-k="yStepAuto"');
+    await commitNum(page, 'data-k="yStep"', '10');
+    assert.equal(await shown(page, 'data-k="yStep"'), '10', 'each panel\'s range fits it');
+    const two = await drawnFig(page);
+    await tick(page, 'data-k="shareY"');
+    assert.equal(await page.locator('.fig-backdrop input[data-k="shareY"]').isChecked(), false, 'not shared');
+    assert.equal(await floatRule(page), 'Too many Y ticks for this range: left unticked.');
+    await tick(page, 'data-del-panel="1"', 'button');
+    assert.equal(await page.locator('.fig-backdrop .fig-panel').count(), 2, 'the panel kept');
+    assert.equal(await floatRule(page), 'Too many Y ticks for this range: the panel kept.');
+    assert.equal(await drawnFig(page), two);
+    assert.deepEqual(errors, []);
+    assert.deepEqual(await csp(), []);
+  } finally { await close(); }
+});
+
+/* v580: a step by hand that the data alone stops fitting (GC's rates: a step of 10 fits one
+   file's, a hundred times higher with a file added) is kept: the plot's memory gives it back
+   as it was, the axis drawn with its automatic ticks and a note under the Ticks saying so;
+   the added file's series hidden, the range fits it again: drawn, the note gone; shown again
+   by hand, an edit: refused. Closed, the memory still holds the step. */
+test('plots composer: a step by hand the data no longer fits kept and noted, drawn again once it fits (v580)', async ()=>{
+  const { page, errors, csp, close } = await env.page();
+  try {
+    await openModule(page, 'gc');
+    await loadFiles(page, 'gc', [env.fx.files.gc[0]]);
+    await composeGc(page, 'Svg1');
+    await tick(page, 'data-k="yStepAuto"');
+    await commitNum(page, 'data-k="yStep"', '10');
+    assert.equal(await shown(page, 'data-k="yStep"'), '10');
+    await closeComposer(page);
+    await loadFiles(page, 'gc', [env.fx.put('high.csv', gcCsv({ h2: [5, 12], seed: 9 }))]);
+    await composeGc(page, 'Svg1');
+    assert.equal(await page.locator('.fig-backdrop input[data-k="yStepAuto"]').isChecked(), false);
+    assert.equal(await shown(page, 'data-k="yStep"'), '10', 'the step kept');
+    assert.equal(await page.textContent('.fig-backdrop .fig-ticknote .alert.warn.compact'), NOTE);
+    const auto = await drawnFig(page);
+    // the added file's series hidden: the step fits the range again
+    const high = await page.locator('.fig-backdrop input[data-sk="label"]').evaluateAll(xs=> xs.map(x=> +x.dataset.s).filter((_, i)=> /high/.test(xs[i].value)));
+    assert.ok(high.length >= 1, 'the added file among the series');
+    for (const s of high) await tick(page, `data-sk="show"][data-s="${s}"`);
+    assert.equal(await page.locator('.fig-backdrop .fig-ticknote').innerHTML(), '', 'the note gone');
+    const fits = await drawnFig(page);
+    assert.notEqual(fits, auto, 'the step drawn');
+    // shown again by hand, an edit that would leave the step out: refused
+    await tick(page, `data-sk="show"][data-s="${high[0]}"`);
+    assert.equal(await page.locator(`.fig-backdrop input[data-sk="show"][data-s="${high[0]}"]`).isChecked(), false);
+    assert.equal(await floatRule(page), 'Too many Y ticks for this range: left unticked.');
+    assert.equal(await drawnFig(page), fits);
+    await closeComposer(page);
+    const kept = await page.evaluate(()=> Object.values(JSON.parse(localStorage.getItem('dt-figure-memory'))).map(m=> [m.scalars.yStepAuto, m.scalars.yStep]));
+    assert.deepEqual(kept, [[false, 10]]);
     assert.deepEqual(errors, []);
     assert.deepEqual(await csp(), []);
   } finally { await close(); }
