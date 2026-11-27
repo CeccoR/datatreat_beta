@@ -23,6 +23,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
+import { Worker } from 'node:worker_threads';
 import { fileURLToPath } from 'node:url';
 import * as L from '../figure-layout.js';
 import * as FM from '../figure-model.js';
@@ -96,7 +97,11 @@ test('the ticks: a step snapped to its grid, the nice ones, a log axis\'s decade
   assert.deepEqual(L.majorTicks(C, 0, 0.5, 0.1), [0, 0.1, 0.2, 0.3, 0.4, 0.5]);
   assert.deepEqual(L.majorTicks(C, -0.25, 0.3, 0.1), [-0.2, -0.1, 0, 0.1, 0.2, 0.3]);
   assert.deepEqual(L.majorTicks(C, 0.3, 9.7, 0), [2, 4, 6, 8]);
-  assert.equal(L.majorTicks(C, 0, 1e6, 1).length, 400, 'at most 400');
+  // at most 400: a step that makes more is not followed, the automatic ticks instead (v566)
+  assert.deepEqual(L.majorTicks(C, 0, 399, 1), R(400, i => i));
+  assert.deepEqual(L.majorTicks(C, 0, 400, 1), L.majorTicks(C, 0, 400, 0));
+  assert.deepEqual(L.majorTicks(C, 0, 400, 0).map(t => t + 0), [0, 100, 200, 300, 400]);
+  assert.deepEqual(L.majorTicks(C, 0, 1e6, 1), L.majorTicks(C, 0, 1e6, 0));
   // the switch wins over the field
   assert.deepEqual(L.axisTicks(ctx(model({ xStep: 7 })), 'x', 0, 30).map(t => t + 0), [0, 10, 20, 30]);
   assert.deepEqual(L.axisTicks(ctx(model({ xStep: 7, xStepAuto: false })), 'x', 0, 30), [0, 7, 14, 21, 28]);
@@ -126,6 +131,88 @@ test('the ticks: a step snapped to its grid, the nice ones, a log axis\'s decade
   assert.deepEqual(L.tickParts(LC, 'y', Math.log10(5), [0]), { base: '5' });
   assert.equal(L.tickW(LC, 'y', -2, dec, 10), 2 * 5.5 + 2 * 0.55 * 7.2);
   assert.deepEqual([L.shownOf(LC, 'y', 2), L.takenOf(LC, 'y', 100), L.takenOf(LC, 'y', -1), L.shownOf(C, 'y', 2)], [100, 2, null, 2]);
+});
+
+/* What hung the tab to v565, run in a worker stopped after 10 s, so that a loop that never ends
+   fails the test and not the run: `cases` gets figure-layout.js (L) and plot.js's niceTicks and
+   fixedTicks (T), and its source is all that reaches the worker. */
+function inWorker(cases){
+  const plot = ['niceStep', 'niceTicks', 'fixedTicks'].map(n => decl('plot.js', n)).join('\n');
+  const src = `const { parentPort, workerData: w } = require('node:worker_threads');
+import(w.url).then(L => { const T = new Function(w.plot + '\\nreturn { niceTicks, fixedTicks };')();
+  const t0 = performance.now(), out = new Function('return ' + w.cases)()(L, T);
+  parentPort.postMessage({ out, ms: performance.now() - t0 }); });`;
+  const url = new URL('../figure-layout.js', import.meta.url).href;
+  return new Promise((ok, fail) => {
+    const wk = new Worker(src, { eval: true, workerData: { url, plot, cases: String(cases) } });
+    const timer = setTimeout(() => { wk.terminate(); fail(new Error('still running after 10 s: a loop that never ends')); }, 10000);
+    wk.once('message', m => { clearTimeout(timer); wk.terminate(); ok(m); });
+    wk.once('error', e => { clearTimeout(timer); fail(e); });
+  });
+}
+
+test('the ticks never hang: a step too fine for its values, none, below zero, no number, too many minors (v566)', async ()=>{
+  const { out, ms } = await inWorker((L, T) => {
+    const C = F => ({ F: { xLog: false, yLog: false, cats: [], xStepAuto: true, xStep: 0, yStepAuto: true, yStep: 0,
+      minorXAuto: true, minorX: 4, minorYAuto: true, minorY: 4, ...F }, niceTicks: T.niceTicks });
+    const A = C({}), lo = 0.95e14, hi = 1.55e14;
+    // The report: values about 1e14, a Y step of 10 by hand, the minors on.
+    const M = C({ yStepAuto: false, yStep: 10 }), maj = L.axisTicks(M, 'y', lo, hi);
+    return {
+      reported: [maj, L.axisMinors(M, 'y', maj, lo, hi)], auto: [L.axisTicks(A, 'y', lo, hi), L.axisMinors(A, 'y', L.axisTicks(A, 'y', lo, hi), lo, hi)],
+      // the majors v565 gave for it: 400, up to ten at a time the same twelve digits
+      dupMinors: L.minorTicks([lo, lo, lo, lo, lo, lo + 100], lo, hi, 4),
+      // a step under the values' float spacing: 1e17 + 1 is 1e17
+      e17: L.majorTicks(A, 1e17, 1.5e17, 1), e17auto: L.majorTicks(A, 1e17, 1.5e17, 0),
+      e17minors: [L.minorTicks([1e17, 1e17], 1e17, 1.5e17, 4), L.minorTicks([1e17, 1e17 + 16, 1e17 + 32], 1e17, 1.5e17, 4)],
+      // a range a few float spacings wide: niceTicks' and fixedTicks' steps leave v where it is
+      nice: [T.niceTicks(1e17, 1e17 + 16, 4), T.niceTicks(-1e17 - 16, -1e17, 5)], fixed: T.fixedTicks(1e17, 1e17 + 1600, 5),
+      // no step, one below zero, majors that run down
+      zero: [L.majorTicks(A, 0, 10, 0), L.minorTicks([5, 5, 5], 0, 10, 4), T.fixedTicks(0, 10, 0)],
+      neg: [L.majorTicks(A, 0, 10, -1), L.minorTicks([10, 0], 0, 10, 4), T.fixedTicks(0, 10, -1)],
+      // no number, or no end
+      nan: [L.majorTicks(A, NaN, 1, 1), L.majorTicks(A, 0, NaN, 1), L.minorTicks([0, NaN], 0, 1, 4), L.minorTicks([0, 1], NaN, 1, 4), T.niceTicks(NaN, 1, 4)],
+      inf: [L.majorTicks(A, 0, Infinity, 1), L.majorTicks(A, -Infinity, 0, 1), T.niceTicks(0, Infinity, 4), T.niceTicks(-Infinity, Infinity, 4)],
+      infBounds: L.minorTicks([0, 1, 2], -Infinity, Infinity, 4),
+      // a log axis over more decades than finite numbers span, or to no end
+      log: [L.axisTicks(C({ yLog: true }), 'y', 0, 1e300), L.axisTicks(C({ yLog: true }), 'y', -Infinity, 2), L.axisTicks(C({ yLog: true }), 'y', NaN, 2)],
+      // minors by the billion (a malformed project's count)
+      many: [L.minorTicks([0, 1, 2], 0, 2, 1e9), L.axisMinors(C({ yLog: true, minorYAuto: false, minorY: 1e9 }), 'y', [0, 1, 2], 0, 2)],
+    };
+  });
+  assert.ok(ms < 2000, `the cases took ${ms} ms`);
+  // the step is not followed: the automatic ticks and their minors, as with the switch on
+  assert.deepEqual(out.reported, out.auto);
+  assert.deepEqual(out.auto[0], [1e14, 1.2e14, 1.4e14]);
+  assert.deepEqual(out.auto[1], [96, 104, 108, 112, 116, 124, 128, 132, 136, 144, 148, 152].map(v => v * 1e12));
+  assert.deepEqual(out.dupMinors, []);
+  assert.deepEqual(out.e17, out.e17auto);
+  assert.deepEqual(out.e17minors, [[], []]);
+  assert.deepEqual(out.nice, [[1e17], [-1e17 - 16]]);
+  assert.ok(out.fixed.length >= 1 && out.fixed.length <= 2, 'stopped where the step no longer moves');
+  assert.deepEqual(out.zero.map(a => a.map(t => t + 0)), [[0, 2, 4, 6, 8, 10], [], [0, 2, 4, 6, 8, 10]]);
+  assert.deepEqual(out.neg, out.zero);
+  assert.deepEqual(out.nan, [[], [], [], [], []]);
+  assert.deepEqual(out.inf, [[], [], [], []]);
+  // bounds with no end: the minors of the majors' span and an interval past each end, as ever
+  assert.deepEqual(out.infBounds, L.minorTicks([0, 1, 2], -1, 3, 4));
+  assert.equal(out.infBounds.length, 16);
+  assert.deepEqual(out.log, [[], [], []]);
+  assert.deepEqual(out.many, [[], []]);
+});
+
+test('the ticks of a step that fits, as v565 had them: 400 majors and 20 minors to each, 1e14 in steps of 1000', ()=>{
+  const C = ctx(model());
+  const maj = L.majorTicks(C, 0, 399, 1), minors = L.minorTicks(maj, 0, 399, 20);
+  assert.equal(minors.length, 399 * 20);
+  assert.deepEqual([minors[0], minors[19], minors[20], minors.at(-1)], [0.047619047619047616, 0.9523809523809523, 1.0476190476190474, 398.9523809523809]);
+  // the range narrower than the majors: only the minors inside it
+  assert.deepEqual(L.minorTicks([0, 10, 20], 3, 17, 4), [4, 6, 8, 12, 14, 16]);
+  // twelve digits at 1e14 are a thousand apart: a step of 1000 is followed, its minors with it
+  const big = L.majorTicks(C, 1e14, 1e14 + 1e4, 1000);
+  assert.deepEqual(big, R(11, i => 1e14 + i * 1000));
+  assert.deepEqual(L.minorTicks(big, 1e14, 1e14 + 1e4, 4), R(50, i => 1e14 + (i + 1) * 200).filter((_, i) => (i + 1) % 5));
+  assert.deepEqual(L.axisTicks(ctx(model({ yStepAuto: false, yStep: 1000 })), 'y', 1e14, 1e14 + 1e4), big);
 });
 
 test('the ranges: the data with its error bars and boxes, bars on zero, logs, sharing groups, manual ones', ()=>{

@@ -194,17 +194,30 @@ export const rangeGroup = (C, i, key)=> C.F.panels.map((_, k)=> k).filter(k=> ra
 export const stepX = C => C.F.xStepAuto ? 0 : C.F.xStep;
 export const stepY = C => C.F.yStepAuto ? 0 : C.F.yStep;
 
+/* How many ticks an axis can have (v566). A step set by hand that would put more than
+   MAX_TICKS majors in the range, or majors its values' twelve digits cannot tell apart
+   (1e14 in steps of 10), is not followed: the axis takes its automatic ticks, as
+   plot.js's fixedTicks does past 1000. Minors that would be more than MAX_MINORS, or
+   that have no step (majors that coincide, or that run down) or one too fine for the
+   values' floats, are left out. A log axis wider than MAX_DECADES (finite numbers span
+   632) has no ticks. To v565 the majors were cut at the first 400, and the minors walked
+   to one at a time from below, which a step of 0 or one under the values' float spacing
+   never got past: the tab hung. */
+export const MAX_TICKS = 400, MAX_MINORS = 20000, MAX_DECADES = 1000;
+
 // Major ticks for a range: a fixed step when the user set one, else a nice default.
 export function majorTicks(C, lo, hi, step){
-  if (!(step > 0)) return C.niceTicks(lo, hi, 4).filter(t=> t >= lo && t <= hi);
+  const nice = ()=> C.niceTicks(lo, hi, 4).filter(t=> t >= lo && t <= hi);
+  if (!(step > 0)) return nice();
   const out = [], first = Math.ceil(lo / step) * step;
   // Snap to the step grid so 0.30000000000000004 never reaches a tick label.
-  for (let k = 0; out.length < 400; k++){
+  for (let k = 0; k <= MAX_TICKS; k++){
     const v = first + k * step;
     if (v > hi + step * 1e-9) break;
     out.push(Math.abs(v) < step * 1e-9 ? 0 : +v.toPrecision(12));
   }
-  return out;
+  // One too many, or two that coincide (a NaN, which never compares, too).
+  return out.length > MAX_TICKS || out.some((t, i)=> i && !(t > out[i-1])) ? nice() : out;
 }
 
 export const xLog = C => !!C.F.xLog && !(C.F.cats && C.F.cats.length);
@@ -223,6 +236,7 @@ export const pow10 = t => +Math.pow(10, t).toPrecision(12);
 export function axisTicks(C, ax, lo, hi){
   const step = ax === 'x' ? stepX(C) : stepY(C);
   if (!isLog(C, ax)) return majorTicks(C, lo, hi, step);
+  if (!(hi - lo <= MAX_DECADES)) return [];
   const k = Math.max(1, Math.round(step) || 1), dec = [];
   for (let n = Math.ceil(lo - 1e-9); n <= hi + 1e-9; n++) if (n % k === 0) dec.push(n);
   if (dec.length >= 2){ dec.dec = true; return dec; }
@@ -257,22 +271,30 @@ export function axisMinors(C, ax, majors, lo, hi){
   const ends = [majors[0] - (majors[1] - majors[0]), ...majors,
                 majors[majors.length-1] + (majors[majors.length-1] - majors[majors.length-2])];
   const out = [];
+  if ((ends.length - 1) * n > MAX_MINORS) return out;
   for (let i = 0; i + 1 < ends.length; i++)
     for (let j = 1; j <= n; j++){ const t = at(ends[i], ends[i+1], j); if (t >= lo && t <= hi) out.push(t); }
   return out;
 }
-// `n` minor ticks between each pair of majors, extended one interval past both ends.
-// Positions that land on a major are dropped — a minor tick under a major one is
-// invisible except for the shorter mark poking out of it.
+/* `n` minor ticks between each pair of majors, extended one interval past both ends.
+   Positions that land on a major are dropped — a minor tick under a major one is
+   invisible except for the shorter mark poking out of it. The k of the first and the
+   last one in [lo, hi] are worked out, two either side for the rounding, and only
+   those tried (to v565 every k from -div up, see MAX_TICKS). */
 export function minorTicks(majors, lo, hi, n){
   n = Math.max(0, Math.round(n));
   if (majors.length < 2 || !n) return [];
   const div = n + 1, step = (majors[1] - majors[0]) / div, out = [];
-  const first = majors[0];
-  for (let k = -div; ; k++){
+  const first = majors[0], end = majors[majors.length-1] + div * step;
+  const k0 = Math.max(-div, Math.floor((lo - first) / step) - 2);
+  const k1 = Math.ceil((Math.min(hi, end) - first) / step) + 2;
+  // Too fine for the values' floats: under 2^-49 of them, a few float spacings apart.
+  const fine = step < Math.max(Math.abs(first), Math.abs(end)) * Math.pow(2, -49);
+  if (!(step > 0) || fine || !Number.isSafeInteger(k0) || !Number.isSafeInteger(k1) || k1 - k0 > MAX_MINORS) return out;
+  for (let k = k0; k <= k1; k++){
     const v = first + k * step;
     if (v > hi + step / 2) break;
-    if (v > majors[majors.length-1] + div * step) break;
+    if (v > end) break;
     if (v < lo) continue;
     if (v > hi) continue;
     if (((k % div) + div) % div === 0) continue;   // sits on a major

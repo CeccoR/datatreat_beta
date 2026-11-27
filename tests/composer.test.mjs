@@ -2,7 +2,8 @@
    It opens, exports an SVG and a PNG (read back: an svg element with the drawing in it, a
    PNG of the size its footer says), takes the focus (Enter does not press the button
    behind), refuses a second composer of either kind while one is open (the first stays
-   usable), and closes on Escape with the focus back on the button that opened it. */
+   usable), and closes on Escape with the focus back on the button that opened it. A plot's
+   stays responsive with a tick step far too fine for its values (v566). */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { start, openModule, loadFiles, download, settle, keep } from './helpers.mjs';
@@ -64,6 +65,39 @@ test('plots composer: opens, exports SVG and PNG, refuses a second, closes on Es
     await page.keyboard.press('Escape');
     await page.waitForFunction(()=> !document.querySelector('.fig-backdrop'));
     assert.ok(await page.evaluate(()=> document.activeElement && document.activeElement.title === 'Figure composer (advanced export)'), 'focus back on the button');
+    assert.deepEqual(errors, []);
+    assert.deepEqual(await csp(), []);
+  } finally { await close(); }
+});
+
+/* A Y step by hand far too fine for its values: 1e14 in steps of 10, the grid's minors on. To
+   v565 the minors were walked to for ever and the tab hung; now the page answers at once and
+   the axis keeps its automatic ticks (figure-layout.js MAX_TICKS), while a step that fits, on
+   X, is followed. */
+test('plots composer: a tick step too fine for its values leaves the page responsive', async ()=>{
+  const { page, errors, csp, close } = await env.page();
+  try {
+    await page.evaluate(async ()=>{
+      const f = await import('./figure.js');
+      const xs = Array.from({ length: 20 }, (_, i)=> i);
+      f.openFigureEditor({ _stored: [{ type: 'line', xs, ys: xs.map(x=> 1e14 + x * 3e12), label: 'big', color: '#3aa0ff' }] }, { name: 'big' });
+    });
+    await page.waitForSelector('.fig-backdrop .fig-svg path');
+    const drawn = ()=> page.evaluate(()=> document.querySelector('.fig-backdrop .fig-svg').innerHTML);
+    const step = async (k, v)=>{
+      await page.click(`.fig-backdrop input[data-k="${k}Auto"]`);
+      const field = page.locator(`.fig-backdrop input[data-k="${k}"]`);
+      await field.fill(v);
+      await field.press('Enter', { timeout: 10000 });
+      assert.equal(await field.inputValue({ timeout: 10000 }), v);
+    };
+    await page.click('.fig-backdrop input[data-g="y"]');
+    await page.click('.fig-backdrop input[data-g="minor"]');
+    const auto = await drawn();
+    await step('yStep', '10');
+    assert.equal(await drawn(), auto, 'the automatic ticks');
+    await step('xStep', '2');
+    assert.notEqual(await drawn(), auto, 'a step that fits followed');
     assert.deepEqual(errors, []);
     assert.deepEqual(await csp(), []);
   } finally { await close(); }

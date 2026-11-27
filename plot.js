@@ -18,16 +18,22 @@ function niceTicks(min, max, n){
   for (let v = start; v <= max + step * 1e-9; v += step){
     const r = Math.round(v / step) * step;
     if (r >= min - step * 1e-9 && r <= max + step * 1e-9) ticks.push(r);
+    // A range a few float spacings wide (1e17 to 1e17 + 16) has a step that leaves v where
+    // it is: the ticks so far. To v565 the loop ran on until the array ran out of memory.
+    if (v + step === v) break;
   }
   return ticks;
 }
 function fixedTicks(min, max, step){
   // Past 1000 ticks the step does not fit the range (a malformed project's 1e308 nm, say):
   // the nice ticks instead. To v496 the loop ran on until the array ran out of memory.
-  if (!((max - min) / step <= 1000)) return niceTicks(min, max, 5);
+  if (!(step > 0) || !((max - min) / step <= 1000)) return niceTicks(min, max, 5);
   const ticks = [];
   const start = Math.ceil(min / step - 1e-9) * step;
-  for (let v = start; v <= max + step * 1e-9; v += step) ticks.push(Math.round(v / step) * step);
+  for (let v = start; v <= max + step * 1e-9; v += step){
+    ticks.push(Math.round(v / step) * step);
+    if (v + step === v) break;   // (as in niceTicks)
+  }
   return ticks;
 }
 // A read-out's number: no decimals from 1000 up, three from 1, three significant digits below.
@@ -783,11 +789,13 @@ class Plot{
   }
   /* A log y-axis (opts.yLog): the values drawn are the log10 of the data, ticked at
      the whole decades in view and labelled as powers of ten. Less than two decades in
-     view, it falls back to nice steps of the exponent, labelled with the value. */
+     view, it falls back to nice steps of the exponent, labelled with the value; so too
+     over 1000 decades, which no finite numbers span (to v565 a range with no end counted
+     its decades for ever). */
   yTicksIn(lo, hi){
     if (!this._opts.yLog) return niceTicks(lo, hi, 5);
     const dec = [];
-    for (let n = Math.ceil(lo - 1e-9); n <= Math.floor(hi + 1e-9); n++) dec.push(n);
+    if (hi - lo <= 1000) for (let n = Math.ceil(lo - 1e-9); n <= Math.floor(hi + 1e-9); n++) dec.push(n);
     return dec.length >= 2 ? dec : niceTicks(lo, hi, 5);
   }
   yTickText(t, yv){
@@ -1206,7 +1214,8 @@ function cleanCopy(svgNode, currentView){
       }
       if (xTicks.length >= 2){
         const step = xTicks[1]-xTicks[0];
-        for (let xv = xTicks[0]-step/2; xv <= rx2+step/2; xv += step){
+        // (a step that no longer moves xv stops the loop, as in niceTicks)
+        for (let xv = xTicks[0]-step/2; xv <= rx2+step/2 && xv + step > xv; xv += step){
           const px = toSvgX(xv);
           if (px < m.l-1 || px > w-m.r+1) continue;
           addLine(px,h-m.b+SO, px,h-m.b-SI, 0.9);
@@ -1224,7 +1233,7 @@ function cleanCopy(svgNode, currentView){
         addLine(w-m.r+PO, py, w-m.r-PI, py, 1.2); // right
       }
       // On a log axis ticked by decades the minor ticks are the 2…9 of each.
-      const decades = plotObj._opts.yLog && yTicks.every(v=> Number.isInteger(v));
+      const decades = plotObj._opts.yLog && ry2 - ry1 <= 1000 && yTicks.every(v=> Number.isInteger(v));
       if (decades){
         for (let n = Math.floor(ry1); n <= Math.ceil(ry2); n++) for (let k = 2; k <= 9; k++){
           const py = toSvgY(n + Math.log10(k));
@@ -1234,7 +1243,7 @@ function cleanCopy(svgNode, currentView){
         }
       } else if (yTicks.length >= 2){
         const step = yTicks[1]-yTicks[0];
-        for (let yv = yTicks[0]-step/2; yv <= ry2+step/2; yv += step){
+        for (let yv = yTicks[0]-step/2; yv <= ry2+step/2 && yv + step > yv; yv += step){
           const py = toSvgY(yv);
           if (py < m.t-1 || py > h-m.b+1) continue;
           addLine(m.l-SO,   py, m.l+SI,   py, 0.9);

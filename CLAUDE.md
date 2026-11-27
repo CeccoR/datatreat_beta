@@ -4,8 +4,12 @@
 - Reply to the user in Italian, tersely.
 - Implementation goes to background agents; they commit, push, and check Pages.
 - After every push, check the "pages build and deployment" run for the pushed commit.
-- Tests: run the full suite (`npm test`) every 5 changes, or at once for a big change; otherwise
-  `npm run lint` and the tests related to the change.
+- Write clean code from the first draft, as if the lint rules applied while writing (no unused
+  variables, imports or exports, no dead code, no duplicated helpers, consistent style), not
+  cleaned up afterwards.
+- Test cadence, counted over changes (commits): 1, 2, LINT, 4, 5, SUITE, then again. The 3rd
+  change of each six runs `npm run lint`, the 6th the full suite (`npm test`); every change runs
+  the tests related to it. A big change, or a user request, runs lint and the full suite at once.
 - Never commit untested or half-done work: the branch deploys to GitHub Pages.
 - Never commit the user's data (files they upload, screenshots of them), symlinks, nested git
   repositories or `.claude/worktrees`. Tests use synthetic fixtures only.
