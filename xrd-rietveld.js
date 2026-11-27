@@ -1352,35 +1352,56 @@ function alongLabel(q, R0, dir, vec){
    interval lo–hi and each axis's 95 % radius (below). The fields of the check, the minima and
    the keep test are null for a result carried from before v523. */
 function bodyShapeOf(model, v, k, res){
+  const S = bodySetup(model, v, k, res);
+  bodyTurns(S);
+  bodyDims(S);
+  S.round = S.B.rot === 2 && !bodyApart(S, 0, 2);
+  S.groups = bodyGroups(S);
+  bodyAxes(S);
+  const kind = bodyKind(S), across = bodyAcross(S), misfit = bodyMisfit(S), sets = bodySets(S), minima = bodyMinima(S, sets);
+  const { type, q, dims, groups, axes, info, dirs, refIx } = S, [Dx, Dy, Dz] = S.dimAlong;
+  return { type, kind, dims, groups, axes, sets, across, misfit, minima, keep: info && info.keep || null, family: info && info.family || null, solid: { type, dims: [Dx, Dy, Dz], frame: [bodyCol(S, 0), bodyCol(S, 1), bodyCol(S, 2)], cell: cellAxes(q, dirs[refIx].R) } };
+}
+/* bodyShapeOf's state S: the model, the vector and the result; the phase q, its body (type,
+   B: BODIES's), its widths W and their dimensions (dimsOf), its frame R; then what the
+   stages add (the turns' esds, the dimensions along x, y, z, the pairs, the groups, the
+   axes). */
+function bodySetup(model, v, k, res){
   const q = model.phases[k], type = q.shapeType, B = BODIES[type], lam = model.lines[0].lam;
-  const Dof = W => W > 0 ? K_SCHERRER*lam/(W*D2R)/10 : Infinity;
   const names = [...q.iW, ...q.iR].map(i=> model.par[i].name);
   const ix = res && res.free ? names.map(nm=> res.free.indexOf(nm)) : null;
-  const cov = (a, b) => ix && res.cov && ix[a] >= 0 && ix[b] >= 0 ? res.cov[ix[a]][ix[b]] : NaN;
   const W = q.iW.map(i=> v[i]), nW = W.length;
-  // A width on its bound 0 is a dimension with no broadening along it: unbounded, but
-  // at least Dmin (from W + 2σ).
   // Held on the lattice (freeShape's info): the free fit's sizes and axes are as
   // likely, so the difference from them is added to the esds — the held refinement's
   // own covariance lacks the orientation (sizes 5–11σ off where the frame was wrong).
   const info = res && res.shapes ? res.shapes[q.id] : null, held = !!(info && info.held);
-  const dimsOf = W.map((w, i)=> { const D = Dof(w), s = Math.sqrt(cov(i, i));
-    const Dmin = Number.isFinite(D) || !(s > 0) ? NaN : Dof(w + 2*s);
+  const S = { model, v, k, res, q, type, B, lam, ix, W, nW, info, held };
+  // A width on its bound 0 is a dimension with no broadening along it: unbounded, but
+  // at least Dmin (from W + 2σ).
+  S.dimsOf = W.map((w, i)=> { const D = bodyDof(S, w), s = Math.sqrt(bodyCov(S, i, i));
+    const Dmin = Number.isFinite(D) || !(s > 0) ? NaN : bodyDof(S, w + 2*s);
     let Desd = w > 0 ? D*s/w : NaN;
-    if (held && info.freeW && Number.isFinite(D)) Desd = Math.hypot(Desd, D - Dof(info.freeW[i]));
+    if (held && info.freeW && Number.isFinite(D)) Desd = Math.hypot(Desd, D - bodyDof(S, info.freeW[i]));
     // An unbounded dimension's lower limit, when it says anything (≥ 1 nm).
     return { D, Desd, Dmin: Dmin >= 1 ? Dmin : NaN }; });
-  const R = bodyFrame(q, v), col = i => [R[i], R[3 + i], R[6 + i]];
-  // The axes' angular esds, by profile (turnEsds): the body turned about its own axes
-  // (a body of revolution: not about its own).
+  S.R = bodyFrame(q, v);
+  return S;
+}
+const bodyDof = (S, W) => W > 0 ? K_SCHERRER*S.lam/(W*D2R)/10 : Infinity;
+// The covariance of the body's parameters a and b (its widths, then its turns) in the result.
+const bodyCov = (S, a, b) => { const { ix, res } = S; return ix && res.cov && ix[a] >= 0 && ix[b] >= 0 ? res.cov[ix[a]][ix[b]] : NaN; };
+const bodyCol = (S, i) => [S.R[i], S.R[3 + i], S.R[6 + i]];
+// The axes' angular esds, by profile (turnEsds): the body turned about its own axes
+// (a body of revolution: not about its own). Refined again at each turn: every parameter
+// free in the fit (the sizes, the strain and its Stephens terms, a size distribution,
+// faults, the ADPs, the cell, the scales, the background, a preferred orientation…; with
+// the Stephens terms held, the tilt esds of synthetic SrTiO3 and rutile discs had come out
+// 4–29 % small, the cell and the rest adding 0.2 % at most), and the turns about the other
+// axes, from the turned frame (r = 0 there). → S.about, S.turns, S.sig (by body axis).
+function bodyTurns(S){
+  const { model, v, res, q, R } = S;
   const mulM = (P, Q) => [0,1,2].flatMap(i=> [0,1,2].map(j=> P[3*i]*Q[j] + P[3*i + 1]*Q[3 + j] + P[3*i + 2]*Q[6 + j]));
   const about = q.iR.length === 2 ? [0, 1] : [0, 1, 2];
-  // Refined again at each turn: every parameter free in the fit (the sizes, the strain
-  // and its Stephens terms, a size distribution, faults, the ADPs, the cell, the
-  // scales, the background, a preferred orientation…; with the Stephens terms held, the
-  // tilt esds of synthetic SrTiO3 and rutile discs had come out 4–29 % small, the cell
-  // and the rest adding 0.2 % at most), and the turns about the other axes, from the
-  // turned frame (r = 0 there).
   const reopt = res && res.free ? res.free.filter(nm=> model.index[nm] != null && !q.iR.includes(model.index[nm])) : [];
   const turns = turnEsds(model, v, res, about, (b, phi)=>{
     const vv = v.slice(), e = [0, 0, 0]; e[b] = 1;
@@ -1388,137 +1409,159 @@ function bodyShapeOf(model, v, k, res){
     quatOfMat(mulM(R, turnAbout(e, phi))).forEach((t, i)=> { vv[q.iQ[i]] = t; });
     return vv;
   }, b=> reopt.concat(q.iR.filter((_, j)=> j !== b).map(i=> model.par[i].name))), sigP = turns.esd;
-  const sig = [0, 1, 2].map(b=> about.includes(b) ? sigP[about.indexOf(b)] : NaN);
-  const tiltEsd = i => { const [j, l] = [0, 1, 2].filter(t=> t !== i), e = Math.sqrt((sig[j]**2 + sig[l]**2)/2)*R2D;
-    return held && info.freeOff && Number.isFinite(e) ? Math.max(e, info.freeOff[i]) : e; };
-  // The body's dimensions along x, y, z, and which axes have directions of their own.
+  S.about = about; S.turns = turns;
+  S.sig = [0, 1, 2].map(b=> about.includes(b) ? sigP[about.indexOf(b)] : NaN);
+}
+// Axis i's angular esd: over the two turns that tilt it; held, at least the free fit's angle.
+function bodyTiltEsd(S, i){
+  const { sig, held, info } = S;
+  const [j, l] = [0, 1, 2].filter(t=> t !== i), e = Math.sqrt((sig[j]**2 + sig[l]**2)/2)*R2D;
+  return held && info.freeOff && Number.isFinite(e) ? Math.max(e, info.freeOff[i]) : e;
+}
+// The body's dimensions along x, y, z, and which axes have directions of their own (roles).
+function bodyDims(S){
+  const { B, type, dimsOf, model, res, q, nW } = S;
   const [Dx, Dy, Dz] = B.axes(dimsOf.map(d=> d.D));
-  const roles = type === 'spheroid' ? [['axis', 2]] : type === 'cylinder' ? [['axis', 2]] : type === 'ellcyl' || type === 'sqbox' ? [['axis', 2], ['a', 0], ['b', 1]] : [['a', 0], ['b', 1], ['c', 2]];
+  S.roles = type === 'spheroid' ? [['axis', 2]] : type === 'cylinder' ? [['axis', 2]] : type === 'ellcyl' || type === 'sqbox' ? [['axis', 2], ['a', 0], ['b', 1]] : [['a', 0], ['b', 1], ['c', 2]];
   const dimNames = { ellipsoid: ['a', 'b', 'c'], spheroid: ['equatorial', 'polar'], cylinder: ['diameter', 'height'], ellcyl: ['a', 'b', 'height'], box: ['a', 'b', 'c'], sqbox: ['side', 'height'] }[type];
-  const dims = dimsOf.map((d, i)=> ({ name: dimNames[i], ...d }));
-  const dimAlong = [Dx, Dy, Dz], dimEsdAlong = B.axes(dimsOf.map(d=> d.Desd)), dimMinAlong = B.axes(dimsOf.map(d=> d.Dmin));
-  // Two dimensions not told apart (widths within 2σ) make a solid of revolution about
-  // the third axis: the turn about it is free, and the pair have no directions — an
-  // elliptic cylinder's circular cross-section, an ellipsoid's pair, a spheroid or a
-  // cylinder as wide as it is long (no axis at all). A box's edges always have theirs
-  // (a square turned is another solid): whether the data fix them is its angular
-  // esd's to say. An axis is shown with a direction only under 30° of esd.
-  // Apart: the difference of two widths over its esd, their covariance included (a
-  // body of revolution's two axes across share one width).
-  // A ball's axes (an ellipsoid's, a spheroid's) and an elliptic cylinder's cross-section
-  // set a member's width as √(W_a²u_a² + W_b²u_b² …): two equal leave the turn between
-  // them without effect, and their difference over its linear esd misreads the pattern,
-  // by an amount that goes with the crystal: on synthetic plates and needles with two
-  // equal axes it told them apart in 13 of 62 draws on rutile and ZnO (8 of 28 rutile
-  // ellipsoids, mean z² 3.0), in none of 40 on SrTiO3 (mean z² 0.5). Where the smaller
-  // width's linear esd exceeds the width, its ±σ reaches the bound 0, where such a width
-  // has no curvature, and the esd means nothing at all (20–840° on synthetic ellipsoids
-  // and elliptic cylinders; ±14606° for a spheroid's equator in a test fit of the user's
-  // 37D SrTiO3, which had made a plate 2.5 nm thick a near-sphere; ±0.9° for a 150 nm
-  // ellipsoid axis at 0.0005°, 2.2σ from a 4 nm thickness). For these pairs the pattern
-  // decides, as a profile: the two set to one common width w, every other parameter free
-  // in the fit refined again there (4 iterations, as the angular esds' profile; 20 moved
-  // z by 0.02 at most), Δχ² from the fit to the profile's least χ² (6 of the 62 apart).
-  // The group's width and esd are the linear ones where those hold (over the 28 rutile
-  // ellipsoids mean (error/esd)² 0.95, 1.7 from the profile's curvature), else the
-  // profile's least χ² and curvature (with the rest held instead of refined again, the
-  // common width of equal 150 nm axes had come out up to 14 esd off; refined, 0.97 rms
-  // over 16 synthetic plates). A face's width (a box's, a cylinder's, an elliptic
-  // cylinder's height) acts to first order, through the kink of the column length, and its
-  // esd holds on 0 (a box's, 0.03–0.05° beside 0.02° for the others): the full covariance
-  // decides there (on synthetic boxes the profile had told equal edges apart at 3.2 where
-  // the covariance gives 2.0, and put a pair's mean 3.3 esd off).
-  // Either way z is set against the 2σ (95.45 %) quantile of χ² with as many degrees of
-  // freedom as equal widths take away: the difference, and the turns it leaves without
-  // effect where the fit has them free (held on the lattice, none) — an ellipsoid's or an
-  // elliptic section's about the third axis, both of a spheroid's (a sphere then), a box's
-  // about its third edge, which equal edges leave only the square's fourfold to act
-  // through (the linear z of equal box edges, mean z² 1.9 over 62 draws on rutile, ZnO,
-  // corundum and an orthorhombic phase, as two degrees of freedom give, had told 9 apart;
-  // now 3). z = 2 there. A square box as high as it is wide is a cube, whose turns all
-  // still act, as a cylinder's as high as it is wide: none taken away.
-  // Up to v426 the linear z decided every pair at 2, and where one width was on 0 the
-  // other's own esd alone: on synthetic 150 × 150 × 4 nm boxes, ellipsoids and elliptic
-  // cylinders the two equal in-plane widths were told apart in all 9 draws of 32 where one
-  // fell on 0.
-  const Q2S = [4, 6.18, 8.02];
-  const turnsFree = !!(res && res.free) && q.iR.some(i=> res.free.includes(model.par[i].name));
-  const freedOf = (a, b) => !turnsFree ? 0 : type === 'spheroid' ? 2 : type === 'ellipsoid' || type === 'box' || (type === 'ellcyl' && a + b === 1) ? 1 : 0;
-  // Each body axis's width: two widths (a body of revolution, a square box) put the first
-  // on x and y.
-  const wIx = nW === 2 ? [0, 0, 1] : [0, 1, 2];
-  const nu = res && res.stats ? res.stats.chi2 : NaN, pairs = new Map();
-  let chiFit = NaN;
-  const pairOf = (a, b) => {
-    const key = Math.min(a, b) + ',' + Math.max(a, b);
-    if (pairs.has(key)) return pairs.get(key);
-    const sm = W[a] <= W[b] ? a : b, wl = Math.max(W[a], W[b]), ss = Math.sqrt(cov(sm, sm));
-    const second = B.base === 'ball' || (type === 'ellcyl' && sm < 2), linear = ss <= W[sm], q2 = Q2S[freedOf(a, b)];
-    const s = Math.sqrt(cov(a, a) + cov(b, b) - 2*cov(a, b));
-    let out = { z: Number.isFinite(s) && s > 0 ? 2*Math.abs(W[a] - W[b])/(s*Math.sqrt(q2)) : Infinity, w: (W[a] + W[b])/2, sd: Math.sqrt(Math.max(0, cov(a, a) + cov(b, b) + 2*cov(a, b)))/2 };
-    if (second && Number.isFinite(nu) && wl > 0 && res.free){
-      const at = w => { const vv = Float64Array.from(v); vv[q.iW[a]] = w; vv[q.iW[b]] = w; return vv; };
-      const f = w => evaluate(model, at(w)).chi2;
-      if (!Number.isFinite(chiFit)) chiFit = evaluate(model, v).chi2;
-      // Where to start: the best common width with the rest held (golden section over
-      // [0, 1.5·the larger]).
-      const g = (Math.sqrt(5) - 1)/2;
-      let lo = 0, hi = 1.5*wl, x1 = hi - g*(hi - lo), x2 = lo + g*(hi - lo), f1 = f(x1), f2 = f(x2);
-      for (let it = 0; it < 24; it++){
-        if (f1 < f2){ hi = x2; x2 = x1; f2 = f1; x1 = hi - g*(hi - lo); f1 = f(x1); }
-        else { lo = x1; x1 = x2; f1 = f2; x2 = lo + g*(hi - lo); f2 = f(x2); }
-      }
-      // The profile: three points h apart, a parabola through them, again around its
-      // vertex while that lies outside them (at most 4 times).
-      const rest = res.free.filter(nm=> nm !== model.par[q.iW[a]].name && nm !== model.par[q.iW[b]].name);
-      const keep = { v: model.v.slice(), esd: model.esd, cov: model.cov }, prof = new Map();
-      const P = w => { if (prof.has(w)) return prof.get(w);
-        let c = f(w);
-        try { setParams(model, at(w)); refine(model, { free: rest, maxIter: 4, audit: false }); c = Math.min(c, evaluate(model, model.v).chi2); } catch(e){}
-        prof.set(w, c); return c; };
-      let w = (lo + hi)/2, sd = NaN;
-      try {
-        const h = Math.max(0.1*w, 0.02*wl);
-        // Already 10σ apart there (a plate's thickness against its breadth): told apart,
-        // and no group to measure.
-        for (let it = P(w) - chiFit > 100*nu ? 4 : 0; it < 4; it++){
-          const x1 = Math.max(0, w - h), x2 = x1 + h, x3 = x2 + h, p1 = P(x1), p2 = P(x2), p3 = P(x3);
-          const d1 = (p2 - p1)/h, c = ((p3 - p2)/h - d1)/h;
-          if (!(c > 0)){ w = p3 < p1 ? x3 + h : Math.max(0, x1 - h); continue; }
-          sd = Math.sqrt(2*nu/c);
-          const xv = Math.max(0, (x1 + x2)/2 - d1/c);
-          if (xv >= x1 && xv <= x3){ P(xv); break; }
-          w = Math.max(x1 - 2*h, Math.min(xv, x3 + 2*h));
-        }
-      } finally { setParams(model, keep.v); model.esd = keep.esd; model.cov = keep.cov; }
-      let pm = Infinity;
-      for (const [x, p] of prof) if (p < pm){ pm = p; w = x; }
-      const z = 2*Math.sqrt(Math.max(0, pm - chiFit)/(nu*q2));
-      out = linear ? { ...out, z } : { z, w, sd, scan: true };
+  S.dims = dimsOf.map((d, i)=> ({ name: dimNames[i], ...d }));
+  S.dimAlong = [Dx, Dy, Dz]; S.dimEsdAlong = B.axes(dimsOf.map(d=> d.Desd)); S.dimMinAlong = B.axes(dimsOf.map(d=> d.Dmin));
+  // For the pairs (bodyPair): whether the fit has the turns free; each body axis's width
+  // (two widths, a body of revolution or a square box, put the first on x and y); χ²_ν.
+  S.turnsFree = !!(res && res.free) && q.iR.some(i=> res.free.includes(model.par[i].name));
+  S.wIx = nW === 2 ? [0, 0, 1] : [0, 1, 2];
+  S.nu = res && res.stats ? res.stats.chi2 : NaN; S.pairs = new Map(); S.chiFit = NaN;
+}
+/* Two dimensions not told apart (widths within 2σ) make a solid of revolution about
+   the third axis: the turn about it is free, and the pair have no directions — an
+   elliptic cylinder's circular cross-section, an ellipsoid's pair, a spheroid or a
+   cylinder as wide as it is long (no axis at all). A box's edges always have theirs
+   (a square turned is another solid): whether the data fix them is its angular
+   esd's to say. An axis is shown with a direction only under 30° of esd.
+   Apart: the difference of two widths over its esd, their covariance included (a
+   body of revolution's two axes across share one width).
+   A ball's axes (an ellipsoid's, a spheroid's) and an elliptic cylinder's cross-section
+   set a member's width as √(W_a²u_a² + W_b²u_b² …): two equal leave the turn between
+   them without effect, and their difference over its linear esd misreads the pattern,
+   by an amount that goes with the crystal: on synthetic plates and needles with two
+   equal axes it told them apart in 13 of 62 draws on rutile and ZnO (8 of 28 rutile
+   ellipsoids, mean z² 3.0), in none of 40 on SrTiO3 (mean z² 0.5). Where the smaller
+   width's linear esd exceeds the width, its ±σ reaches the bound 0, where such a width
+   has no curvature, and the esd means nothing at all (20–840° on synthetic ellipsoids
+   and elliptic cylinders; ±14606° for a spheroid's equator in a test fit of the user's
+   37D SrTiO3, which had made a plate 2.5 nm thick a near-sphere; ±0.9° for a 150 nm
+   ellipsoid axis at 0.0005°, 2.2σ from a 4 nm thickness). For these pairs the pattern
+   decides, as a profile (bodyPairProfile): the two set to one common width w, every other
+   parameter free in the fit refined again there (4 iterations, as the angular esds'
+   profile; 20 moved z by 0.02 at most), Δχ² from the fit to the profile's least χ² (6 of
+   the 62 apart). The group's width and esd are the linear ones where those hold (over the
+   28 rutile ellipsoids mean (error/esd)² 0.95, 1.7 from the profile's curvature), else the
+   profile's least χ² and curvature (with the rest held instead of refined again, the
+   common width of equal 150 nm axes had come out up to 14 esd off; refined, 0.97 rms
+   over 16 synthetic plates). A face's width (a box's, a cylinder's, an elliptic
+   cylinder's height) acts to first order, through the kink of the column length, and its
+   esd holds on 0 (a box's, 0.03–0.05° beside 0.02° for the others): the full covariance
+   decides there (on synthetic boxes the profile had told equal edges apart at 3.2 where
+   the covariance gives 2.0, and put a pair's mean 3.3 esd off).
+   Either way z is set against the 2σ (95.45 %) quantile of χ² with as many degrees of
+   freedom as equal widths take away (BODY_Q2S, bodyFreed): the difference, and the turns
+   it leaves without effect where the fit has them free (held on the lattice, none) — an
+   ellipsoid's or an elliptic section's about the third axis, both of a spheroid's (a
+   sphere then), a box's about its third edge, which equal edges leave only the square's
+   fourfold to act through (the linear z of equal box edges, mean z² 1.9 over 62 draws on
+   rutile, ZnO, corundum and an orthorhombic phase, as two degrees of freedom give, had
+   told 9 apart; now 3). z = 2 there. A square box as high as it is wide is a cube, whose
+   turns all still act, as a cylinder's as high as it is wide: none taken away.
+   Up to v426 the linear z decided every pair at 2, and where one width was on 0 the
+   other's own esd alone: on synthetic 150 × 150 × 4 nm boxes, ellipsoids and elliptic
+   cylinders the two equal in-plane widths were told apart in all 9 draws of 32 where one
+   fell on 0.
+   bodyPair(S, a, b) → { z, w (their common width), sd, scan (from the profile) }, once a pair. */
+const BODY_Q2S = [4, 6.18, 8.02];
+const bodyFreed = (S, a, b) => { const { type } = S; return !S.turnsFree ? 0 : type === 'spheroid' ? 2 : type === 'ellipsoid' || type === 'box' || (type === 'ellcyl' && a + b === 1) ? 1 : 0; };
+function bodyPair(S, a, b){
+  const key = Math.min(a, b) + ',' + Math.max(a, b);
+  if (S.pairs.has(key)) return S.pairs.get(key);
+  const { W, B, type, nu, res } = S, cov = (i, j)=> bodyCov(S, i, j);
+  const sm = W[a] <= W[b] ? a : b, wl = Math.max(W[a], W[b]), ss = Math.sqrt(cov(sm, sm));
+  const second = B.base === 'ball' || (type === 'ellcyl' && sm < 2), linear = ss <= W[sm], q2 = BODY_Q2S[bodyFreed(S, a, b)];
+  const s = Math.sqrt(cov(a, a) + cov(b, b) - 2*cov(a, b));
+  let out = { z: Number.isFinite(s) && s > 0 ? 2*Math.abs(W[a] - W[b])/(s*Math.sqrt(q2)) : Infinity, w: (W[a] + W[b])/2, sd: Math.sqrt(Math.max(0, cov(a, a) + cov(b, b) + 2*cov(a, b)))/2 };
+  if (second && Number.isFinite(nu) && wl > 0 && res.free){
+    const { z, w, sd } = bodyPairProfile(S, a, b, wl, q2);
+    out = linear ? { ...out, z } : { z, w, sd, scan: true };
+  }
+  S.pairs.set(key, out);
+  return out;
+}
+// The pair (a, b) set to one common width w: the profile of χ² in w, every other free
+// parameter refined again at each point (bodyPair's comment). → { z, w (the least χ²'s), sd
+// (from its curvature) }. The model is left as it was.
+function bodyPairProfile(S, a, b, wl, q2){
+  const { model, v, q, res, nu } = S;
+  const at = w => { const vv = Float64Array.from(v); vv[q.iW[a]] = w; vv[q.iW[b]] = w; return vv; };
+  const f = w => evaluate(model, at(w)).chi2;
+  if (!Number.isFinite(S.chiFit)) S.chiFit = evaluate(model, v).chi2;
+  const [lo, hi] = goldenStart(f, wl);
+  // The profile: three points h apart, a parabola through them, again around its
+  // vertex while that lies outside them (at most 4 times).
+  const rest = res.free.filter(nm=> nm !== model.par[q.iW[a]].name && nm !== model.par[q.iW[b]].name);
+  const keep = { v: model.v.slice(), esd: model.esd, cov: model.cov }, prof = new Map();
+  const P = w => { if (prof.has(w)) return prof.get(w);
+    let c = f(w);
+    try { setParams(model, at(w)); refine(model, { free: rest, maxIter: 4, audit: false }); c = Math.min(c, evaluate(model, model.v).chi2); } catch(e){}
+    prof.set(w, c); return c; };
+  let w = (lo + hi)/2, sd = NaN;
+  try {
+    const h = Math.max(0.1*w, 0.02*wl);
+    // Already 10σ apart there (a plate's thickness against its breadth): told apart,
+    // and no group to measure.
+    for (let it = P(w) - S.chiFit > 100*nu ? 4 : 0; it < 4; it++){
+      const x1 = Math.max(0, w - h), x2 = x1 + h, x3 = x2 + h, p1 = P(x1), p2 = P(x2), p3 = P(x3);
+      const d1 = (p2 - p1)/h, c = ((p3 - p2)/h - d1)/h;
+      if (!(c > 0)){ w = p3 < p1 ? x3 + h : Math.max(0, x1 - h); continue; }
+      sd = Math.sqrt(2*nu/c);
+      const xv = Math.max(0, (x1 + x2)/2 - d1/c);
+      if (xv >= x1 && xv <= x3){ P(xv); break; }
+      w = Math.max(x1 - 2*h, Math.min(xv, x3 + 2*h));
     }
-    pairs.set(key, out);
-    return out;
-  };
-  const zr = (i, j) => wIx[i] === wIx[j] ? 0 : pairOf(wIx[i], wIx[j]).z;
-  const apart = (i, j) => zr(i, j) > 2;
-  const round = B.rot === 2 && !apart(0, 2);
-  // Dimensions not told apart, of a kind the solid can swap (an ellipsoid's axes, a
-  // box's edges, an elliptic cylinder's cross-section): their mean is measured, and
-  // each alone is not. Swapping them has no first-order effect, so their widths are
-  // anticorrelated (−1.0000): a 12 × 12 nm box section on a fourfold axis read 13 ± 107
-  // and 13 ± 106 nm, its mean 12.80(42). The group's mean width and its esd come from
-  // the full covariance, as the v420 ellipsoid's groups; the members' own esds are
-  // dropped. The closest pair first, then the third against the pair's mean (against
-  // each alone, the pair's huge esds had grouped a 4 nm edge with them). (Here a body's
-  // axes are its widths', B.axes the identity.) A pair with a width on 0 is one too when
-  // not told apart; where its esds cannot say (above), its common width is the profile's.
-  const groups = [];
+  } finally { setParams(model, keep.v); model.esd = keep.esd; model.cov = keep.cov; }
+  let pm = Infinity;
+  for (const [x, p] of prof) if (p < pm){ pm = p; w = x; }
+  return { z: 2*Math.sqrt(Math.max(0, pm - S.chiFit)/(nu*q2)), w, sd };
+}
+// Where the profile starts: the best common width with the rest held (golden section over
+// [0, 1.5·the larger]). → its last bracket [lo, hi].
+function goldenStart(f, wl){
+  const g = (Math.sqrt(5) - 1)/2;
+  let lo = 0, hi = 1.5*wl, x1 = hi - g*(hi - lo), x2 = lo + g*(hi - lo), f1 = f(x1), f2 = f(x2);
+  for (let it = 0; it < 24; it++){
+    if (f1 < f2){ hi = x2; x2 = x1; f2 = f1; x1 = hi - g*(hi - lo); f1 = f(x1); }
+    else { lo = x1; x1 = x2; f1 = f2; x2 = lo + g*(hi - lo); f2 = f(x2); }
+  }
+  return [lo, hi];
+}
+// z of body axes i and j (0 for axes of one width), and whether they are told apart.
+const bodyZ = (S, i, j) => S.wIx[i] === S.wIx[j] ? 0 : bodyPair(S, S.wIx[i], S.wIx[j]).z;
+const bodyApart = (S, i, j) => bodyZ(S, i, j) > 2;
+/* Dimensions not told apart, of a kind the solid can swap (an ellipsoid's axes, a
+   box's edges, an elliptic cylinder's cross-section): their mean is measured, and
+   each alone is not. Swapping them has no first-order effect, so their widths are
+   anticorrelated (−1.0000): a 12 × 12 nm box section on a fourfold axis read 13 ± 107
+   and 13 ± 106 nm, its mean 12.80(42). The group's mean width and its esd come from
+   the full covariance, as the v420 ellipsoid's groups; the members' own esds are
+   dropped. The closest pair first, then the third against the pair's mean (against
+   each alone, the pair's huge esds had grouped a 4 nm edge with them). (Here a body's
+   axes are its widths', B.axes the identity.) A pair with a width on 0 is one too when
+   not told apart; where its esds cannot say (above), its common width is the profile's. */
+function bodyGroups(S){
+  const { type, W, held, info, dims } = S, cov = (i, j)=> bodyCov(S, i, j), groups = [];
   if (type === 'ellipsoid' || type === 'box' || type === 'ellcyl'){
     const swap = type === 'ellcyl' ? [[0, 1]] : [[0, 1], [0, 2], [1, 2]];
-    const near = swap.filter(([i, j])=> (W[i] > 0 || W[j] > 0) && pairOf(i, j).w > 0 && !apart(i, j)).sort((x, y)=> zr(...x) - zr(...y));
+    const near = swap.filter(([i, j])=> (W[i] > 0 || W[j] > 0) && bodyPair(S, i, j).w > 0 && !bodyApart(S, i, j)).sort((x, y)=> bodyZ(S, ...x) - bodyZ(S, ...y));
     if (near.length){
       let g = near[0];
-      const k = [0, 1, 2].find(i=> !g.includes(i)), P = pairOf(g[0], g[1]);
+      const k = [0, 1, 2].find(i=> !g.includes(i)), P = bodyPair(S, g[0], g[1]);
       if (type !== 'ellcyl' && W[k] > 0){
         // the third's width less the pair's mean, and its variance (with the pair's own
         // covariance with it where the linear esds hold)
@@ -1528,54 +1571,67 @@ function bodyShapeOf(model, v, k, res){
       }
       const n = g.length, w = n === 2 ? P.w : g.reduce((t, i)=> t + W[i], 0)/n;
       let c = 0; for (const i of g) for (const j of g) c += cov(i, j);
-      const D = Dof(w), sd = n === 2 ? P.sd : Math.sqrt(Math.max(0, c))/n;
+      const D = bodyDof(S, w), sd = n === 2 ? P.sd : Math.sqrt(Math.max(0, c))/n;
       let Desd = D*sd/w;
-      if (held && info.freeW) Desd = Math.hypot(Desd, D - Dof(g.reduce((t, i)=> t + info.freeW[i], 0)/n));
+      if (held && info.freeW) Desd = Math.hypot(Desd, D - bodyDof(S, g.reduce((t, i)=> t + info.freeW[i], 0)/n));
       for (const i of g){ dims[i].Desd = NaN; dims[i].group = 0; }
       groups.push({ axes: g, D, Desd });
     }
   }
-  const groupOf = i => groups.findIndex(g=> g.axes.includes(i));
-  // An axis has a direction of its own unless the turn about another is free: a box's
-  // edges always have theirs (a square turned is another solid; whether the data fix
-  // them is its angular esd's to say).
-  const own = i => type === 'ellipsoid' || (type === 'ellcyl' && i < 2) ? groupOf(i) < 0 : type === 'box' || type === 'sqbox' || !round;
-  // The reference for the lattice frame: the body's axis, an ellipsoid's lone axis, or
-  // its (a box's) shortest.
+  return groups;
+}
+const bodyGroupOf = (S, i) => S.groups.findIndex(g=> g.axes.includes(i));
+// An axis has a direction of its own unless the turn about another is free: a box's
+// edges always have theirs (a square turned is another solid; whether the data fix
+// them is its angular esd's to say).
+const bodyOwn = (S, i) => S.type === 'ellipsoid' || (S.type === 'ellcyl' && i < 2) ? bodyGroupOf(S, i) < 0 : S.type === 'box' || S.type === 'sqbox' || !S.round;
+// The axes with their lattice directions, in one frame (framedAxes) from the reference:
+// the body's axis, an ellipsoid's lone axis, or its (a box's) shortest. → S.order, S.dirs,
+// S.refIx, S.axes.
+function bodyAxes(S){
+  const { type, q, held, roles, dimAlong, dimEsdAlong, dimMinAlong } = S, own = i => bodyOwn(S, i);
   const shortest = [0, 1, 2].sort((a, b)=> dimAlong[a] - dimAlong[b])[0];
   const refAxis = type === 'box' ? shortest : type === 'ellipsoid' ? ([0, 1, 2].filter(own).length === 1 ? [0, 1, 2].find(own) : shortest) : 2;
-  const order = roles.map(([, i])=> i), dirs = order.map(i=> lattDirection(q, col(i), held));
+  const order = roles.map(([, i])=> i), dirs = order.map(i=> lattDirection(q, bodyCol(S, i), held));
   const refIx = Math.max(0, order.indexOf(refAxis)), framed = framedAxes(q, dirs, refIx);
-  const axes = roles.map(([role, i], n)=> { const esdAngle = tiltEsd(i);
-    return { role, axis: i, ...framed[n], D: dimAlong[i], Desd: groupOf(i) >= 0 ? NaN : dimEsdAlong[i], Dmin: dimMinAlong[i], e: col(i), esdAngle, group: groupOf(i), own: own(i),
+  const axes = roles.map(([role, i], n)=> { const esdAngle = bodyTiltEsd(S, i);
+    return { role, axis: i, ...framed[n], D: dimAlong[i], Desd: bodyGroupOf(S, i) >= 0 ? NaN : dimEsdAlong[i], Dmin: dimMinAlong[i], e: bodyCol(S, i), esdAngle, group: bodyGroupOf(S, i), own: own(i),
       resolved: own(i) && Number.isFinite(esdAngle) && esdAngle <= 30 }; });
-  // The kind: a body of revolution flat or long; a box like the ellipsoid.
-  // A box or an elliptic cylinder by its three dimensions, as the ellipsoid (a thin
-  // elliptic cylinder is a plate whichever of its dimensions is the thin one).
-  // Dimensions not told apart count as their group's mean, as the v420 ellipsoid's do (a
-  // synthetic 150 × 150 × 4 nm box whose edges read 99 and 488 nm, not told apart, had been
-  // called triaxial).
-  let kind;
+  Object.assign(S, { order, dirs, refIx, axes });
+}
+// The kind: a body of revolution flat or long; a box like the ellipsoid.
+// A box or an elliptic cylinder by its three dimensions, as the ellipsoid (a thin
+// elliptic cylinder is a plate whichever of its dimensions is the thin one).
+// Dimensions not told apart count as their group's mean, as the v420 ellipsoid's do (a
+// synthetic 150 × 150 × 4 nm box whose edges read 99 and 488 nm, not told apart, had been
+// called triaxial).
+function bodyKind(S){
+  const { type, dimAlong, groups } = S;
   if (type === 'box' || type === 'sqbox' || type === 'ellcyl' || type === 'ellipsoid'){
-    const [a, b, c] = dimAlong.map((d, i)=> groupOf(i) >= 0 ? groups[groupOf(i)].D : d).sort((x, y)=> x - y);
+    const [a, b, c] = dimAlong.map((d, i)=> bodyGroupOf(S, i) >= 0 ? groups[bodyGroupOf(S, i)].D : d).sort((x, y)=> x - y);
     // (a square box: its side and height not told apart, a cube)
-    const same = groups.some(g=> g.axes.length === 3) || (type === 'sqbox' && !apart(0, 2));
-    kind = same || a/c > 0.8 ? (type === 'ellipsoid' ? 'isometric' : 'equant') : a/b < 0.5 && b/c < 0.5 ? 'triaxial' : a/b < 0.5 ? 'plate' : b/c < 0.5 ? 'needle' : 'anisotropic';
-  } else {
-    const same = zr(0, 2) < 2;
-    kind = same || Math.min(Dz, Dx)/Math.max(Dz, Dx) > 0.8 ? (type === 'spheroid' ? 'near-sphere' : 'equant') : Dz < Dx ? (type === 'spheroid' ? 'oblate' : 'disc') : (type === 'spheroid' ? 'prolate' : 'rod');
+    const same = groups.some(g=> g.axes.length === 3) || (type === 'sqbox' && !bodyApart(S, 0, 2));
+    return same || a/c > 0.8 ? (type === 'ellipsoid' ? 'isometric' : 'equant') : a/b < 0.5 && b/c < 0.5 ? 'triaxial' : a/b < 0.5 ? 'plate' : b/c < 0.5 ? 'needle' : 'anisotropic';
   }
-  // Across the axis: the crystal's directions normal to the axis's lattice direction
-  // (normal to the axis itself, [1-10] of a disc 7° off [110] fell outside the 5°).
-  // (the lone axis likewise of an ellipsoid whose pair, or an elliptic cylinder whose
-  // cross-section, is not told apart: a body of revolution too; a box always has three).
+  const [Dx, , Dz] = dimAlong, same = bodyZ(S, 0, 2) < 2;
+  return same || Math.min(Dz, Dx)/Math.max(Dz, Dx) > 0.8 ? (type === 'spheroid' ? 'near-sphere' : 'equant') : Dz < Dx ? (type === 'spheroid' ? 'oblate' : 'disc') : (type === 'spheroid' ? 'prolate' : 'rod');
+}
+// Across the axis: the crystal's directions normal to the axis's lattice direction
+// (normal to the axis itself, [1-10] of a disc 7° off [110] fell outside the 5°).
+// (the lone axis likewise of an ellipsoid whose pair, or an elliptic cylinder whose
+// cross-section, is not told apart: a body of revolution too; a box always has three).
+function bodyAcross(S){
+  const { B, q, axes, dirs, order } = S, own = i => bodyOwn(S, i);
   const lone = B.rot === 3 && [0, 1, 2].filter(own).length === 1 ? [0, 1, 2].find(own) : -1;
-  const across = B.rot === 2 && axes[0].resolved ? latticeAcross(q, dirs[0].vec, dirs[0].R).map(d=> ({ ...d, esdAngle: tiltEsd(2) }))
-    : lone >= 0 && axes[order.indexOf(lone)].resolved ? latticeAcross(q, dirs[order.indexOf(lone)].vec, dirs[order.indexOf(lone)].R).map(d=> ({ ...d, esdAngle: tiltEsd(lone) })) : [];
-  // The per-line check (freeShape's info.check, SHAPE_CHECK) as misfit; where it fired, the
-  // jackknife over lines (lineJack): each dimension D·e^(±2 sd) (jackLo, jackHi; an infinite sd
-  // opens the upper end alone, an unbounded dimension keeps its own), each axis 2·rms turn
-  // (jackTurn). (A result carried from before v523 has no check.)
+  return B.rot === 2 && axes[0].resolved ? latticeAcross(q, dirs[0].vec, dirs[0].R).map(d=> ({ ...d, esdAngle: bodyTiltEsd(S, 2) }))
+    : lone >= 0 && axes[order.indexOf(lone)].resolved ? latticeAcross(q, dirs[order.indexOf(lone)].vec, dirs[order.indexOf(lone)].R).map(d=> ({ ...d, esdAngle: bodyTiltEsd(S, lone) })) : [];
+}
+// The per-line check (freeShape's info.check, SHAPE_CHECK) as misfit; where it fired, the
+// jackknife over lines (lineJack): each dimension D·e^(±2 sd) (jackLo, jackHi; an infinite sd
+// opens the upper end alone, an unbounded dimension keeps its own), each axis 2·rms turn
+// (jackTurn). (A result carried from before v523 has no check.)
+function bodyMisfit(S){
+  const { info, res, model, k, v, dims, axes } = S;
   const chk = info && info.check;
   let misfit = null;
   if (chk){
@@ -1586,67 +1642,77 @@ function bodyShapeOf(model, v, k, res){
       axes.forEach(ax=> { ax.jackTurn = 2*jk.turn[ax.axis]; });
     }
   }
-  /* Directions as an unordered set (research/free-shape/round2/STEP4.md): a box's edges not told apart, and a square box's two
-     sides (with its height when that is not told apart from them: a cube), give their directions
-     as a set, with the error of the turn about the set's normal (the third axis; a cube's, the rms
-     of the three turns). A turn is lost only where it is a true symmetry of the solid: an
-     ellipsoid's or an elliptic section's equal pair, a body of revolution's (no directions there,
-     as above). Each axis's set: its index in sets, else −1. */
+  return misfit;
+}
+/* Directions as an unordered set (research/free-shape/round2/STEP4.md): a box's edges not told apart, and a square box's two
+   sides (with its height when that is not told apart from them: a cube), give their directions
+   as a set, with the error of the turn about the set's normal (the third axis; a cube's, the rms
+   of the three turns). A turn is lost only where it is a true symmetry of the solid: an
+   ellipsoid's or an elliptic section's equal pair, a body of revolution's (no directions there,
+   as above). Each axis's set: its index in sets, else −1. */
+function bodySets(S){
+  const { type, groups, sig, held, info, axes } = S;
   const sets = [];
   if (type === 'box' && groups.length) sets.push(groups[0].axes.slice());
-  if (type === 'sqbox') sets.push(apart(0, 2) ? [0, 1] : [0, 1, 2]);
-  const setList = sets.map(S=> { const nrm = S.length === 2 ? [0, 1, 2].find(i=> !S.includes(i)) : -1;
+  if (type === 'sqbox') sets.push(bodyApart(S, 0, 2) ? [0, 1] : [0, 1, 2]);
+  const setList = sets.map(set=> { const nrm = set.length === 2 ? [0, 1, 2].find(i=> !set.includes(i)) : -1;
     const e = (nrm >= 0 ? sig[nrm] : Math.sqrt((sig[0]**2 + sig[1]**2 + sig[2]**2)/3))*R2D;
-    return { axes: S, normal: nrm, esdAngle: held && info.freeOff && Number.isFinite(e) ? Math.max(e, ...S.map(i=> info.freeOff[i])) : e }; });
-  axes.forEach(ax=> { ax.set = sets.findIndex(S=> S.includes(ax.axis)); });
-  /* The minima stage (SHAPE_MINIMA): the second error, the spread over the true minima within
-     delta of the lowest (the reported fit's own value included): each dimension's range (betweenLo,
-     betweenHi) and each axis's (each set's) largest angle to its paired axis (betweenDeg, °), the
-     minima paired with the reported fit by minimaMatch; unique when one minimum lies within delta
-     (then no second error); explored false where the stage's cap or its max left one out.
-     minima.list: each minimum within keep, { delta, n, dims, angle (its largest axis angle to the
-     reported fit, °) }. */
-  let minima = null;
-  if (info && info.minima && info.minima.length){
-    const fit = { W, R }, wIx = nW === 2 ? [0, 0, 1] : [0, 1, 2];
-    // Δ*: delta, or deltaMisfit where the per-line check fired (the fit has a misfit)
-    const dStar = chk && chk.flagged ? SHAPE_MINIMA.deltaMisfit : SHAPE_MINIMA.delta;
-    const all = info.minima.map(m=> ({ m, p: minimaMatch(q, fit, { W: m.W, R: m.R }, false) })), inD = all.filter(x=> x.m.delta <= dStar);
-    dims.forEach((d, j)=> { const i = wIx.indexOf(j), Ds = [d.D, ...inD.map(x=> Dof(x.p.Wb[i]))]; d.betweenLo = Math.min(...Ds); d.betweenHi = Math.max(...Ds); });
-    groups.forEach(g=> { const Ds = [g.D, ...inD.map(x=> Dof(g.axes.reduce((t, i)=> t + x.p.Wb[i], 0)/g.axes.length))]; g.betweenLo = Math.min(...Ds); g.betweenHi = Math.max(...Ds); });
-    const angOf = ix => { const a = inD.flatMap(x=> ix.map(i=> x.p.ang[i])).filter(Number.isFinite); return a.length ? Math.max(...a)*R2D : 0; };
-    axes.forEach(ax=> { ax.betweenDeg = angOf([ax.axis]); });
-    setList.forEach(S=> { S.betweenDeg = angOf(S.axes); });
-    minima = { delta: dStar, n: inD.length, unique: inD.length <= 1, explored: info.minimaStage ? info.minimaStage.explored !== false : true,
-      list: all.map(({ m, p })=> ({ delta: m.delta, n: m.n, dims: m.W.map(Dof), angle: Math.max(0, ...p.ang.filter(Number.isFinite))*R2D })) };
-    /* The two errors as one 95 % interval: each dimension's lo–hi, the hull of its local interval
-       D·e^(±2κσ) (σ = Desd/D, the curvature's; κ = SHAPE_MINIMA.kappa; a group's member: the
-       group's interval and its members' values), the minima's range, and where the check fired the
-       jackknife's (jackLo–jackHi). Each axis's radius (°): the larger reading of the turns that
-       tilt it where their profiles rise by SHAPE_RADIUS_T·χ²_ν (turnRead; where a profile has no
-       reading, as a held fit's turn may not, esdAngle·√SHAPE_RADIUS_T; a held fit's at least
-       2·freeOff), betweenDeg and, where the check fired, jackTurn; a set's, the largest of
-       2·esdAngle, betweenDeg and its axes' jackTurn. */
-    const kap = SHAPE_MINIMA.kappa;
-    dims.forEach((d, j)=> {
-      const g = groups.find(t=> t.axes.includes(j)), sd = Number.isFinite(d.Desd) ? d.Desd/d.D : g && Number.isFinite(g.Desd) ? g.Desd/g.D : NaN;
-      const at = (D, t) => Number.isFinite(D) ? (Number.isFinite(sd) ? D*Math.exp(2*t*kap*sd) : D) : t > 0 ? Infinity : (Number.isFinite(d.Dmin) ? d.Dmin : D);
-      const lo = [at(g && !Number.isFinite(d.Desd) ? g.D : d.D, -1), d.betweenLo, ...(g && !Number.isFinite(d.Desd) ? g.axes.map(i=> dims[i].D) : []), ...(Number.isFinite(d.jackLo) ? [d.jackLo] : [])];
-      const hi = [at(g && !Number.isFinite(d.Desd) ? g.D : d.D, 1), d.betweenHi, ...(g && !Number.isFinite(d.Desd) ? g.axes.map(i=> dims[i].D) : []), ...(d.jackHi != null ? [d.jackHi] : [])];
-      d.sLocal = kap*sd; d.lo = Math.min(...lo); d.hi = Math.max(...hi);
-    });
-    const read = b => { const t = turns.prof.find(x=> x.b === b); return t ? Math.max(turnRead(t.plus, SHAPE_RADIUS_T), turnRead(t.minus, SHAPE_RADIUS_T)) : NaN; };
-    const tiltBy = i => { const r = about.filter(b=> b !== i).map(read); return r.some(x=> !Number.isFinite(x)) ? NaN : Math.max(0, ...r); };
-    axes.forEach(ax=> {
-      let r = tiltBy(ax.axis);
-      if (!Number.isFinite(r)) r = Number.isFinite(tiltEsd(ax.axis)) ? tiltEsd(ax.axis)*Math.sqrt(SHAPE_RADIUS_T) : 0;
-      if (held && info.freeOff) r = Math.max(r, 2*info.freeOff[ax.axis]);
-      ax.radius = Math.max(r, ax.betweenDeg, Number.isFinite(ax.jackTurn) ? ax.jackTurn : 0);
-    });
-    setList.forEach(S=> { const jt = Math.max(0, ...axes.filter(ax=> S.axes.includes(ax.axis) && Number.isFinite(ax.jackTurn)).map(ax=> ax.jackTurn));
-      S.radius = Math.max(Number.isFinite(S.esdAngle) ? 2*S.esdAngle : 0, S.betweenDeg, jt); });
-  }
-  return { type, kind, dims, groups, axes, sets: setList, across, misfit, minima, keep: info && info.keep || null, family: info && info.family || null, solid: { type, dims: [Dx, Dy, Dz], frame: [col(0), col(1), col(2)], cell: cellAxes(q, dirs[refIx].R) } };
+    return { axes: set, normal: nrm, esdAngle: held && info.freeOff && Number.isFinite(e) ? Math.max(e, ...set.map(i=> info.freeOff[i])) : e }; });
+  axes.forEach(ax=> { ax.set = sets.findIndex(set=> set.includes(ax.axis)); });
+  return setList;
+}
+/* The minima stage (SHAPE_MINIMA): the second error, the spread over the true minima within
+   delta of the lowest (the reported fit's own value included): each dimension's range (betweenLo,
+   betweenHi) and each axis's (each set's) largest angle to its paired axis (betweenDeg, °), the
+   minima paired with the reported fit by minimaMatch; unique when one minimum lies within delta
+   (then no second error); explored false where the stage's cap or its max left one out.
+   minima.list: each minimum within keep, { delta, n, dims, angle (its largest axis angle to the
+   reported fit, °) }. Then the 95 % intervals (bodyIntervals). null without the stage's record. */
+function bodyMinima(S, setList){
+  const { info, q, W, R, nW, dims, groups, axes } = S;
+  if (!(info && info.minima && info.minima.length)) return null;
+  const fit = { W, R }, wIx = nW === 2 ? [0, 0, 1] : [0, 1, 2], chk = info && info.check;
+  // Δ*: delta, or deltaMisfit where the per-line check fired (the fit has a misfit)
+  const dStar = chk && chk.flagged ? SHAPE_MINIMA.deltaMisfit : SHAPE_MINIMA.delta;
+  const all = info.minima.map(m=> ({ m, p: minimaMatch(q, fit, { W: m.W, R: m.R }, false) })), inD = all.filter(x=> x.m.delta <= dStar);
+  dims.forEach((d, j)=> { const i = wIx.indexOf(j), Ds = [d.D, ...inD.map(x=> bodyDof(S, x.p.Wb[i]))]; d.betweenLo = Math.min(...Ds); d.betweenHi = Math.max(...Ds); });
+  groups.forEach(g=> { const Ds = [g.D, ...inD.map(x=> bodyDof(S, g.axes.reduce((t, i)=> t + x.p.Wb[i], 0)/g.axes.length))]; g.betweenLo = Math.min(...Ds); g.betweenHi = Math.max(...Ds); });
+  const angOf = ix => { const a = inD.flatMap(x=> ix.map(i=> x.p.ang[i])).filter(Number.isFinite); return a.length ? Math.max(...a)*R2D : 0; };
+  axes.forEach(ax=> { ax.betweenDeg = angOf([ax.axis]); });
+  setList.forEach(set=> { set.betweenDeg = angOf(set.axes); });
+  const minima = { delta: dStar, n: inD.length, unique: inD.length <= 1, explored: info.minimaStage ? info.minimaStage.explored !== false : true,
+    list: all.map(({ m, p })=> ({ delta: m.delta, n: m.n, dims: m.W.map(w=> bodyDof(S, w)), angle: Math.max(0, ...p.ang.filter(Number.isFinite))*R2D })) };
+  bodyIntervals(S, setList);
+  return minima;
+}
+/* The two errors as one 95 % interval: each dimension's lo–hi, the hull of its local interval
+   D·e^(±2κσ) (σ = Desd/D, the curvature's; κ = SHAPE_MINIMA.kappa; a group's member: the
+   group's interval and its members' values), the minima's range, and where the check fired the
+   jackknife's (jackLo–jackHi). Each axis's radius (°): the larger reading of the turns that
+   tilt it where their profiles rise by SHAPE_RADIUS_T·χ²_ν (turnRead; where a profile has no
+   reading, as a held fit's turn may not, esdAngle·√SHAPE_RADIUS_T; a held fit's at least
+   2·freeOff), betweenDeg and, where the check fired, jackTurn; a set's, the largest of
+   2·esdAngle, betweenDeg and its axes' jackTurn. */
+function bodyIntervals(S, setList){
+  const { dims, groups, turns, about, axes, held, info } = S;
+  const kap = SHAPE_MINIMA.kappa;
+  dims.forEach((d, j)=> {
+    const g = groups.find(t=> t.axes.includes(j)), sd = Number.isFinite(d.Desd) ? d.Desd/d.D : g && Number.isFinite(g.Desd) ? g.Desd/g.D : NaN;
+    const at = (D, t) => Number.isFinite(D) ? (Number.isFinite(sd) ? D*Math.exp(2*t*kap*sd) : D) : t > 0 ? Infinity : (Number.isFinite(d.Dmin) ? d.Dmin : D);
+    const lo = [at(g && !Number.isFinite(d.Desd) ? g.D : d.D, -1), d.betweenLo, ...(g && !Number.isFinite(d.Desd) ? g.axes.map(i=> dims[i].D) : []), ...(Number.isFinite(d.jackLo) ? [d.jackLo] : [])];
+    const hi = [at(g && !Number.isFinite(d.Desd) ? g.D : d.D, 1), d.betweenHi, ...(g && !Number.isFinite(d.Desd) ? g.axes.map(i=> dims[i].D) : []), ...(d.jackHi != null ? [d.jackHi] : [])];
+    d.sLocal = kap*sd; d.lo = Math.min(...lo); d.hi = Math.max(...hi);
+  });
+  const read = b => { const t = turns.prof.find(x=> x.b === b); return t ? Math.max(turnRead(t.plus, SHAPE_RADIUS_T), turnRead(t.minus, SHAPE_RADIUS_T)) : NaN; };
+  const tiltBy = i => { const r = about.filter(b=> b !== i).map(read); return r.some(x=> !Number.isFinite(x)) ? NaN : Math.max(0, ...r); };
+  axes.forEach(ax=> {
+    let r = tiltBy(ax.axis);
+    if (!Number.isFinite(r)) r = Number.isFinite(bodyTiltEsd(S, ax.axis)) ? bodyTiltEsd(S, ax.axis)*Math.sqrt(SHAPE_RADIUS_T) : 0;
+    if (held && info.freeOff) r = Math.max(r, 2*info.freeOff[ax.axis]);
+    ax.radius = Math.max(r, ax.betweenDeg, Number.isFinite(ax.jackTurn) ? ax.jackTurn : 0);
+  });
+  setList.forEach(set=> { const jt = Math.max(0, ...axes.filter(ax=> set.axes.includes(ax.axis) && Number.isFinite(ax.jackTurn)).map(ax=> ax.jackTurn));
+    set.radius = Math.max(Number.isFinite(set.esdAngle) ? 2*set.esdAngle : 0, set.betweenDeg, jt); });
 }
 /* lattDirection(q, e) → { dir, label, angle, tc, R, family, vec }: the lattice direction
    [uvw] of a Cartesian unit vector e, u ∝ Bᵀe, in the conventional cell when there is
@@ -2121,6 +2187,44 @@ function latticeStretch(constraint, cell, names, lat0, r){
    The model owns copies; the phases' objects are not modified. */
 function buildModel({ x, y, varMul = null, instr = null, phases = [], prof = {}, bgDegree = BG_DEGREE, bgInv, cellRange, shapeLine } = {}){
   const n = x.length, latRange = Math.max(LAT_RANGE, 2*fitSettings({ cellRange }).cellRange);
+  const pt = patternPoints(x, y, varMul), { X, x0, x1, countScale } = pt;
+  const ins = instrumentOf(instr), { lines } = ins;
+  // Background basis: Chebyshev in u ∈ [−1, 1] over the pattern, and 1/2θ (air scatter).
+  const N = Math.max(0, Math.round(bgDegree));
+  const basis = bgBasis(X, N, x0, x1);
+  // Parameter registry (addPar). step: the central-difference step (in the parameter's
+  // units); linear: its Jacobian column is exact (scales, background).
+  const par = [];
+  const P = Object.assign({ zero: 0, disp: 0, U: 0, V: 0, W: 0.002, X: 0, Y: 0.03, asym: 0, Xs: 0, Ys: 0 }, prof);
+  const axial = globalParams(par, P, instr || {}, pt, N);
+  const ph = modelPhases(par, phases, { lines, x1, latRange, ysMax: ins.ysMax, shapeLine, P });
+  const index = {};
+  par.forEach((p, i)=> { index[p.name] = i; });
+  return {
+    x: X, y: pt.Yo, w: pt.w, n, x0, x1, rev: pt.rev, lines, lineName: ins.lineName, cos2M: ins.cos2M, radius: ins.radius, bgDegree: N, basis, instrMissing: !instr,
+    countScale: countScale < 1 ? countScale : null,
+    phases: ph, par, index, v: Float64Array.from(par, p=> p.value),
+    iZero: index.zero, iDisp: index.disp, iTr: index.transp, iProf: ['U','V','W','X','Y'].map(k=> index[k]), iAsym: index.asym,
+    axial, iAx: index.axL,
+    iBg: par.map((p, i)=> p.group === 'bg' ? i : -1).filter(i=> i >= 0),
+    useInv: bgInvOn(x0, bgInv),
+    win: WIN_FWHM, noise0: pt.noise0, latRange,
+    // The FCJ counts' keys (lineNodes): (k·rStride + r)·4 + j, a member's ·64 (at most 24 a
+    // family, Friedel mates merged). A fixed 65536 shared keys between two phases once one
+    // listed more reflections (a triclinic cell over about 1.6·10⁴ Å³ to 150° in Cu Kα).
+    rStride: Math.max(1, ...ph.map(q=> q.nRefl)),
+    esd: {}, cov: null,
+    // what it was built from (by reference): a sibling with another solid (siblingModel,
+    // the free shape's family)
+    build: { x, y, varMul, instr, phases, prof, bgDegree, bgInv, cellRange, shapeLine },
+  };
+}
+// A parameter of the model's registry.
+function addPar(par, name, value, lo, hi, step, extra){ par.push({ name, value, lo, hi, step, refine: false, linear: false, group: 'global', phase: -1, ...extra }); }
+/* The pattern's points (buildModel): 2θ ascending, the target and the weights.
+   → { n, rev, X, Yo, w, countScale, noise0, x0, x1 }. */
+function patternPoints(x, y, varMul){
+  const n = x.length;
   // A scan recorded downwards is held ascending inside (the windows are found by bisection)
   // and handed back in its own order by calc().
   const rev = n > 1 && x[0] > x[n-1], at = i => rev ? n - 1 - i : i;
@@ -2166,8 +2270,11 @@ function buildModel({ x, y, varMul = null, instr = null, phases = [], prof = {},
   // The typical point's noise (the median σ, in the units of y): how far a line's tail is
   // drawn (lineHalf).
   const sig = okPts.map(i=> 1/Math.sqrt(w[i])).sort((a, b)=> a - b), noise0 = sig[sig.length >> 1];
-  const x0 = X[0], x1 = X[n-1];
-
+  return { n, rev, X, Yo, w, countScale, noise0, x0: X[0], x1: X[n-1] };
+}
+// The instrument (buildModel): the lines, the polarisation, the radius, the widest size
+// broadening. → { lines, lineName, cos2M, radius, ysMax }.
+function instrumentOf(instr){
   // Wavelengths: the file's, else Cu. A Kα1-only file (ratio 0) has one line.
   const ins = instr || {};
   const lam1 = ins.lam1 > 0 ? ins.lam1 : CU.lam1;
@@ -2192,10 +2299,11 @@ function buildModel({ x, y, varMul = null, instr = null, phases = [], prof = {},
   const radius = ins.radius > 0 ? ins.radius : 240;
   // The widest a size may make a line: crystallites of D_MIN, whatever the wavelength.
   const ysMax = K_SCHERRER*lam1/D_MIN*R2D;
-
-  // Background basis: Chebyshev in u ∈ [−1, 1] over the pattern, and 1/2θ (air scatter).
-  const N = Math.max(0, Math.round(bgDegree));
-  const basis = [];
+  return { lines, lineName, cos2M, radius, ysMax };
+}
+// The background's basis: Chebyshev T₀…T_N in u ∈ [−1, 1] over the pattern, then 1/2θ.
+function bgBasis(X, N, x0, x1){
+  const n = X.length, basis = [];
   for (let k = 0; k <= N; k++) basis.push(new Float64Array(n));
   const inv = new Float64Array(n), T = new Float64Array(N + 1), span = (x1 - x0) || 1;
   for (let i = 0; i < n; i++){
@@ -2204,14 +2312,13 @@ function buildModel({ x, y, varMul = null, instr = null, phases = [], prof = {},
     inv[i] = X[i] > 0 ? 1/X[i] : 0;
   }
   basis.push(inv);
-
-  // Parameter registry. step: the central-difference step (in the parameter's units);
-  // linear: its Jacobian column is exact (scales, background).
-  const par = [];
-  const add = (name, value, lo, hi, step, extra) => par.push({ name, value, lo, hi, step, refine: false, linear: false, group: 'global', phase: -1, ...extra });
-  const P = Object.assign({ zero: 0, disp: 0, U: 0, V: 0, W: 0.002, X: 0, Y: 0.03, asym: 0, Xs: 0, Ys: 0 }, prof);
-  add('zero', P.zero, -2, 2, 1e-5);
-  add('disp', P.disp, -3, 3, 1e-5);
+  return basis;
+}
+// The instrument's parameters and the background's (buildModel), from the starting values
+// P; → the Soller model's geometry where the file gives both Sollers (axial), else null.
+function globalParams(par, P, ins, { Yo, w }, N){
+  addPar(par, 'zero', P.zero, -2, 2, 1e-5);
+  addPar(par, 'disp', P.disp, -3, 3, 1e-5);
   /* A shift of 2θ as sin 2θ (°), the form of the sample's transparency (−90/(π·μ·R)°):
      refined on the standard with its zero and displacement, held at the standard's on a
      sample, as its zero (autoRefine). On the user's LaB6, with the Soller model, each
@@ -2222,111 +2329,106 @@ function buildModel({ x, y, varMul = null, instr = null, phases = [], prof = {},
      600–1100 cm⁻¹ as packed) gives −0.001 to −0.002°: the rest is the instrument's, of
      that form, and the samples share it. Alone, with FCJ, it took the standard's χ²_ν from
      4.37 to 3.43. */
-  add('transp', P.transp || 0, -1, 1, 1e-5);
-  add('U', P.U, 0, 20, 1e-6, { group: 'profile' });
-  add('V', P.V, -20, 20, 1e-6, { group: 'profile' });
-  add('W', P.W, 0, 20, 1e-6, { group: 'profile' });
-  add('X', P.X, 0, 10, 1e-6, { group: 'profile' });
-  add('Y', P.Y, 0, 10, 1e-6, { group: 'profile' });
+  addPar(par, 'transp', P.transp || 0, -1, 1, 1e-5);
+  addPar(par, 'U', P.U, 0, 20, 1e-6, { group: 'profile' });
+  addPar(par, 'V', P.V, -20, 20, 1e-6, { group: 'profile' });
+  addPar(par, 'W', P.W, 0, 20, 1e-6, { group: 'profile' });
+  addPar(par, 'X', P.X, 0, 10, 1e-6, { group: 'profile' });
+  addPar(par, 'Y', P.Y, 0, 10, 1e-6, { group: 'profile' });
   // (S + H)/L of the axial divergence (fcjNodes). Its effect goes as its square, so at 0
   // its derivative vanishes: a refinement of it starts from a typical value (autoRefine).
-  add('asym', P.asym, 0, 0.2, 1e-4, { group: 'profile' });
+  addPar(par, 'asym', P.asym, 0, 0.2, 1e-4, { group: 'profile' });
   // The Soller model of the axial divergence where the file gives both Sollers (sollerNodes):
   // their acceptances, the source's length, and the sample's and receiver's, refined.
   const sol = ins.soller || {}, p1 = +sol.incident, p2 = +sol.diffracted, Lx = ins.focusLength > 0 ? ins.focusLength : AX_SOURCE;
   const axial = p1 > 0 && p2 > 0 && p1 < 0.5 && p2 < 0.5 ? { p1, p2, Lx, LxAssumed: !(ins.focusLength > 0) } : null;
-  if (axial) add('axL', P.axL > 0 ? P.axL : AX_START, AX_MIN, AX_MAX, 1e-3, { group: 'profile' });
+  if (axial) addPar(par, 'axL', P.axL > 0 ? P.axL : AX_START, AX_MIN, AX_MAX, 1e-3, { group: 'profile' });
   // A starting level for the background: the low tail of the counts.
   const sorted = Array.from(Yo).filter((v, i)=> w[i] > 0).sort((a, b)=> a - b);
   const level = sorted.length ? sorted[Math.floor(0.1*sorted.length)] : 0;
-  for (let k = 0; k <= N; k++) add('bg' + k, k ? 0 : level, -Infinity, Infinity, 1, { linear: true, group: 'bg', basis: k });
-  add('bgInv', 0, -Infinity, Infinity, 1, { linear: true, group: 'bg', basis: N + 1 });
-
-  // Phases: reflections listed once, so the hkl list, and the multiplicities with it, stay
-  // fixed while the cell moves. A growing cell brings lines from beyond the end into the
-  // range (a shrinking one only takes lines out): the list goes down to the end's d over
-  // the most the bounds let a d grow (latticeStretch), and never stops above dFull, 0.9 of
-  // it (1 − LAT_RANGE: lines just beyond the end reach in with their tails). Those below
-  // dFull at the file's cell are drawn only once the cell has grown them to it (growFade).
-  const lamMax = Math.max(...lines.map(l=> l.lam));
-  const thLim = Math.min(89.9, (x1 + 2)/2)*D2R;
+  for (let k = 0; k <= N; k++) addPar(par, 'bg' + k, k ? 0 : level, -Infinity, Infinity, 1, { linear: true, group: 'bg', basis: k });
+  addPar(par, 'bgInv', 0, -Infinity, Infinity, 1, { linear: true, group: 'bg', basis: N + 1 });
+  return axial;
+}
+// Phases: reflections listed once, so the hkl list, and the multiplicities with it, stay
+// fixed while the cell moves. A growing cell brings lines from beyond the end into the
+// range (a shrinking one only takes lines out): the list goes down to the end's d over
+// the most the bounds let a d grow (latticeStretch), and never stops above dFull, 0.9 of
+// it (1 − LAT_RANGE: lines just beyond the end reach in with their tails). Those below
+// dFull at the file's cell are drawn only once the cell has grown them to it (growFade).
+function modelPhases(par, phases, M){
+  const lamMax = Math.max(...M.lines.map(l=> l.lam));
+  const thLim = Math.min(89.9, (M.x1 + 2)/2)*D2R;
   const dLim = lamMax/(2*Math.sin(thLim)), dFull = (1 - LAT_RANGE)*dLim;
   const pfxSeen = new Set();
-  const ph = phases.map((p, k)=>{
-    // The free shape's size line (fit setting shapeLine) where the phase does not say its own.
-    if (typeof p.lorentzShape !== 'boolean') p = { ...p, lorentzShape: shapeLine !== 'exact' };
-    const id = p.id != null ? p.id : k, pfx = 'p' + id + '.';
-    // Two phases under one prefix would share every parameter name: one of them could not
-    // be reached by name, and getParams would give it the other's values.
-    if (pfxSeen.has(pfx)) throw new Error(`Two phases share the id ${id}.`);
-    pfxSeen.add(pfx);
-    const cell = idealCell(p.constraint, p.cell), names = latticeNames(p.constraint), lat0 = latticeParams(p.constraint, cell);
-    const dmin = Math.min(dFull, dLim/latticeStretch(p.constraint, cell, names, lat0, latRange)), list = reflections(cell, p.ops, dmin);
-    const nFull = list.filter(r=> r.d >= dFull).length;     // (sorted by d, largest first)
-    const atoms = p.atoms || [];
-    const q = { id, name: p.name || '', pfx, cell, constraint: p.constraint, ops: p.ops, atoms,
-      mass: Number.isFinite(p.mass) ? p.mass : cellMass(atoms), latNames: names,
-      h: Int32Array.from(list, r=> r.h), k: Int32Array.from(list, r=> r.k), l: Int32Array.from(list, r=> r.l),
-      lab: tickLabels(list, p.ops, p.constraint && p.constraint.basis),
-      mult: Float64Array.from(list, r=> r.mult), nRefl: list.length, nFull, dFull, dmin, f2key: null, f2: null, iScale: -1, iB: -1, iXs: -1, iYs: -1, iLat: [],
-      // options given but not usable, said with the results (autoRefine)
-      specWarn: [] };
-    q.iScale = par.length; add(pfx + 'scale', 1e-3, 0, Infinity, 1, { linear: true, group: 'phase', phase: k, kind: 'scale' });
-    // Starting values from latticeParams: the conventional cell's when the constraint
-    // refines a non-standard cell through it (xrd-cryst classify).
-    names.forEach((nm, i)=>{
-      const v0 = lat0[i], [lo, hi] = latBounds(nm, v0, latRange);
-      q.iLat.push(par.length);
-      add(pfx + nm, v0, lo, hi, isAngleName(nm) ? 1e-5 : 1e-6*v0, { group: 'phase', phase: k, kind: 'lattice', lat: nm });
-    });
-    q.iB = par.length; add(pfx + 'B', 0, -2, 10, 1e-4, { group: 'phase', phase: k, kind: 'B' });
-    q.iXs = par.length; add(pfx + 'Xs', P.Xs, 0, 10, 1e-6, { group: 'phase', phase: k, kind: 'size' });
-    q.iYs = par.length; add(pfx + 'Ys', P.Ys, 0, ysMax, 1e-6, { group: 'phase', phase: k, kind: 'size' });
-    /* Size or strain broadening switched off (p.size false, p.strain 'off'): autoRefine
-       holds its Ys or Xs at 0. The free shape and WPPM are models of the size: with it
-       off there is nothing for them to model, and they are not set up. */
-    q.sizeOff = p.size === false; q.strainOff = p.strain === 'off';
-    if (q.sizeOff){
-      const what = [shapeTypeOf(p.shape) && `the free shape (${shapeTypeOf(p.shape)})`, PROFILES.includes(p.profile) && p.profile !== 'lorentz' && `WPPM${p.profile === 'lognormal' ? ' (log-normal sizes)' : ''}`].filter(Boolean);
-      if (what.length) q.specWarn.push(`${what.join(' and ')} ${what.length > 1 ? 'need' : 'needs'} the crystallite size, which is switched off: ignored`);
-      p = { ...p, shape: false, profile: 'lorentz' };
-    }
-    if (shapeTypeOf(p.shape)) shapeSetup(q, p, cell, list, (nm, value, lo, hi, extra)=> add(pfx + nm, value, lo, hi, 1e-6, { group: 'phase', phase: k, kind: 'shape', ...extra }), ()=> par.length, ysMax);
-    // A preferred orientation (March–Dollase): its axis (hkl, or 'auto': autoRefine picks
-    // it), its r refined from the texture stage on (1, none, until then).
-    const po = textureOf(p.po);
-    if (!po && p.po != null && p.po !== false && String(p.po).trim() !== '') q.specWarn.push(`the preferred orientation ${JSON.stringify(p.po)} cannot be read (an axis as '110', '1 -1 0' or '[1 1 0]', or 'auto'): refined without`);
-    if (po){
-      memberVectors(q, p, cell, list);
-      q.poSpec = po; q.poHkl = po === 'auto' ? null : po;
-      q.iPO = par.length; add(pfx + 'PO', 1, 0.2, 5, 1e-4, { group: 'phase', phase: k, kind: 'texture' });
-    }
-    broadeningSetup(q, p, cell, list, (nm, value, lo, hi, step, extra)=> add(pfx + nm, value, lo, hi, step, { group: 'phase', phase: k, ...extra }), ()=> par.length);
-    adpSetup(q, p, cell, (nm, value, lo, hi, step, extra)=> add(pfx + nm, value, lo, hi, step, { group: 'phase', phase: k, ...extra }), ()=> par.length);
-    occSetup(q, p, cell, (nm, value, lo, hi, step, extra)=> add(pfx + nm, value, lo, hi, step, { group: 'phase', phase: k, ...extra }), ()=> par.length);
-    return q;
+  return phases.map((p, k)=> modelPhase(par, p, k, { ...M, dLim, dFull, pfxSeen }));
+}
+// One phase of the model: its reflections, its own parameters, its options set up.
+function modelPhase(par, p, k, M){
+  const { dLim, dFull, latRange } = M;
+  // The free shape's size line (fit setting shapeLine) where the phase does not say its own.
+  if (typeof p.lorentzShape !== 'boolean') p = { ...p, lorentzShape: M.shapeLine !== 'exact' };
+  const id = p.id != null ? p.id : k, pfx = 'p' + id + '.';
+  // Two phases under one prefix would share every parameter name: one of them could not
+  // be reached by name, and getParams would give it the other's values.
+  if (M.pfxSeen.has(pfx)) throw new Error(`Two phases share the id ${id}.`);
+  M.pfxSeen.add(pfx);
+  const cell = idealCell(p.constraint, p.cell), names = latticeNames(p.constraint), lat0 = latticeParams(p.constraint, cell);
+  const dmin = Math.min(dFull, dLim/latticeStretch(p.constraint, cell, names, lat0, latRange)), list = reflections(cell, p.ops, dmin);
+  const nFull = list.filter(r=> r.d >= dFull).length;     // (sorted by d, largest first)
+  const atoms = p.atoms || [];
+  const q = { id, name: p.name || '', pfx, cell, constraint: p.constraint, ops: p.ops, atoms,
+    mass: Number.isFinite(p.mass) ? p.mass : cellMass(atoms), latNames: names,
+    h: Int32Array.from(list, r=> r.h), k: Int32Array.from(list, r=> r.k), l: Int32Array.from(list, r=> r.l),
+    lab: tickLabels(list, p.ops, p.constraint && p.constraint.basis),
+    mult: Float64Array.from(list, r=> r.mult), nRefl: list.length, nFull, dFull, dmin, f2key: null, f2: null, iScale: -1, iB: -1, iXs: -1, iYs: -1, iLat: [],
+    // options given but not usable, said with the results (autoRefine)
+    specWarn: [] };
+  phaseCoreParams(par, q, k, { names, lat0, latRange, P: M.P, ysMax: M.ysMax });
+  phaseOptions(par, q, p, k, { cell, list, ysMax: M.ysMax });
+  return q;
+}
+// A phase's scale, lattice, ΔB and Lorentzian widths.
+function phaseCoreParams(par, q, k, { names, lat0, latRange, P, ysMax }){
+  const { pfx } = q;
+  q.iScale = par.length; addPar(par, pfx + 'scale', 1e-3, 0, Infinity, 1, { linear: true, group: 'phase', phase: k, kind: 'scale' });
+  // Starting values from latticeParams: the conventional cell's when the constraint
+  // refines a non-standard cell through it (xrd-cryst classify).
+  names.forEach((nm, i)=>{
+    const v0 = lat0[i], [lo, hi] = latBounds(nm, v0, latRange);
+    q.iLat.push(par.length);
+    addPar(par, pfx + nm, v0, lo, hi, isAngleName(nm) ? 1e-5 : 1e-6*v0, { group: 'phase', phase: k, kind: 'lattice', lat: nm });
   });
-
-  const index = {};
-  par.forEach((p, i)=> { index[p.name] = i; });
-  return {
-    x: X, y: Yo, w, n, x0, x1, rev, lines, lineName, cos2M, radius, bgDegree: N, basis, instrMissing: !instr,
-    countScale: countScale < 1 ? countScale : null,
-    phases: ph, par, index, v: Float64Array.from(par, p=> p.value),
-    iZero: index.zero, iDisp: index.disp, iTr: index.transp, iProf: ['U','V','W','X','Y'].map(k=> index[k]), iAsym: index.asym,
-    axial, iAx: index.axL,
-    iBg: par.map((p, i)=> p.group === 'bg' ? i : -1).filter(i=> i >= 0),
-    useInv: bgInvOn(x0, bgInv),
-    win: WIN_FWHM, noise0, latRange,
-    // The FCJ counts' keys (lineNodes): (k·rStride + r)·4 + j, a member's ·64 (at most 24 a
-    // family, Friedel mates merged). A fixed 65536 shared keys between two phases once one
-    // listed more reflections (a triclinic cell over about 1.6·10⁴ Å³ to 150° in Cu Kα).
-    rStride: Math.max(1, ...ph.map(q=> q.nRefl)),
-    esd: {}, cov: null,
-    // what it was built from (by reference): a sibling with another solid (siblingModel,
-    // the free shape's family)
-    build: { x, y, varMul, instr, phases, prof, bgDegree, bgInv, cellRange, shapeLine },
-  };
+  q.iB = par.length; addPar(par, pfx + 'B', 0, -2, 10, 1e-4, { group: 'phase', phase: k, kind: 'B' });
+  q.iXs = par.length; addPar(par, pfx + 'Xs', P.Xs, 0, 10, 1e-6, { group: 'phase', phase: k, kind: 'size' });
+  q.iYs = par.length; addPar(par, pfx + 'Ys', P.Ys, 0, ysMax, 1e-6, { group: 'phase', phase: k, kind: 'size' });
+}
+// A phase's options: the size or strain switched off, the free shape, the preferred
+// orientation, the broadening models, the displacements per site, the occupancies.
+function phaseOptions(par, q, p, k, { cell, list, ysMax }){
+  const { pfx } = q;
+  /* Size or strain broadening switched off (p.size false, p.strain 'off'): autoRefine
+     holds its Ys or Xs at 0. The free shape and WPPM are models of the size: with it
+     off there is nothing for them to model, and they are not set up. */
+  q.sizeOff = p.size === false; q.strainOff = p.strain === 'off';
+  if (q.sizeOff){
+    const what = [shapeTypeOf(p.shape) && `the free shape (${shapeTypeOf(p.shape)})`, PROFILES.includes(p.profile) && p.profile !== 'lorentz' && `WPPM${p.profile === 'lognormal' ? ' (log-normal sizes)' : ''}`].filter(Boolean);
+    if (what.length) q.specWarn.push(`${what.join(' and ')} ${what.length > 1 ? 'need' : 'needs'} the crystallite size, which is switched off: ignored`);
+    p = { ...p, shape: false, profile: 'lorentz' };
+  }
+  if (shapeTypeOf(p.shape)) shapeSetup(q, p, cell, list, (nm, value, lo, hi, extra)=> addPar(par, pfx + nm, value, lo, hi, 1e-6, { group: 'phase', phase: k, kind: 'shape', ...extra }), ()=> par.length, ysMax);
+  // A preferred orientation (March–Dollase): its axis (hkl, or 'auto': autoRefine picks
+  // it), its r refined from the texture stage on (1, none, until then).
+  const po = textureOf(p.po);
+  if (!po && p.po != null && p.po !== false && String(p.po).trim() !== '') q.specWarn.push(`the preferred orientation ${JSON.stringify(p.po)} cannot be read (an axis as '110', '1 -1 0' or '[1 1 0]', or 'auto'): refined without`);
+  if (po){
+    memberVectors(q, p, cell, list);
+    q.poSpec = po; q.poHkl = po === 'auto' ? null : po;
+    q.iPO = par.length; addPar(par, pfx + 'PO', 1, 0.2, 5, 1e-4, { group: 'phase', phase: k, kind: 'texture' });
+  }
+  broadeningSetup(q, p, cell, list, (nm, value, lo, hi, step, extra)=> addPar(par, pfx + nm, value, lo, hi, step, { group: 'phase', phase: k, ...extra }), ()=> par.length);
+  adpSetup(q, p, cell, (nm, value, lo, hi, step, extra)=> addPar(par, pfx + nm, value, lo, hi, step, { group: 'phase', phase: k, ...extra }), ()=> par.length);
+  occSetup(q, p, cell, (nm, value, lo, hi, step, extra)=> addPar(par, pfx + nm, value, lo, hi, step, { group: 'phase', phase: k, ...extra }), ()=> par.length);
 }
 
 // The parameter vector from a {name: value} object (missing names keep the model's
@@ -3046,116 +3148,14 @@ const LAM_MIN = CHOL_TOL/10;
    count at the size that damping beyond the default start cut them from (gnScale): 1 for
    any start up to 10⁻³, and for the damping that rejections add, as before. */
 const LAM_START = 1e-3;
+/* refineHeld(model, opts): one pass of Levenberg–Marquardt (refine's), the FCJ counts held.
+   Its stages share L, the refinement's state (lmSetup): the model and options, the free
+   parameters, the current vector v and its evaluation st, λ, the iteration, whether and why
+   it converged, the trial buffers, the linear parameters' solve. */
 function refineHeld(model, opts){
-  const t0 = Date.now();
-  const names = opts.free || model.par.filter(p=> p.refine).map(p=> p.name);
-  const free = [...new Set(names.map(nm=> model.index[nm]).filter(i=> i != null))];
-  const m = free.length, maxIter = opts.maxIter || 40, n = model.n;
-  const [iU, iV, iW] = model.iProf;
-  const vFree = free.includes(iV);
-  // V's lower bound: its box, and with V refined the bound that keeps H_G² ≥ 0.
-  const loOf = (j, vv) => j === iV && vFree ? Math.max(model.par[iV].lo, vFloor(model, vv[iU], vv[iW])) : model.par[j].lo;
-  const project = vv => { if (vFree){ const lo = loOf(iV, vv); if (vv[iV] < lo) vv[iV] = lo; } return vv; };
-  let v = project(clampInto(model, model.v.slice()));
-  let st = evaluate(model, v);
-  const lam0 = opts.lambda || LAM_START, tol = opts.shiftTol > 0 ? opts.shiftTol : 0.01;
-  const gnScale = l => Math.max(1, (1 + Math.min(l, lam0))/(1 + LAM_START));
-  let lam = lam0, it = 0, converged = false, why = '';
-  const cols = free.map(()=> new Float64Array(n));
-  let trial = null, trialZ = null;
-  const onBound = (j, g) => { const p = model.par[j]; return (v[j] <= loOf(j, v) && g < 0) || (v[j] >= p.hi && g > 0); };
-  const chiRed = c => c/Math.max(1, rStats(model, st.yc, st.bg).N - m);
-  /* The free linear parameters (scales, background) solved exactly, the rest held, when
-     the steps have stopped. The 1/2θ term and the Chebyshev terms are nearly collinear:
-     along such a direction a damped step is cut to almost nothing while its shift is
-     still far under 1 % of its (large) esd, and the refinement stopped with χ² up to 17
-     above its minimum on synthetic plates, all of it in the background. When the solve
-     gains more than a hundredth of χ²_ν the steps go on from there (at most 3 times),
-     with λ back at its start: after 'no step lowers χ²' twelve rejections had left it
-     at 10³ or more, a step a thousandth of Gauss–Newton's passed the shift test at once,
-     and the refinement stopped 5–10 esd short of the minimum. */
-  const lin = free.filter(j=> model.par[j].linear);
-  const linSt = { pats: null, bg: new Float64Array(n), yc: new Float64Array(n) };
-  let linLeft = lin.length ? 3 : 0;
-  const linSolve = () => {
-    linLeft--;
-    linSt.pats = st.pats;
-    const vl = v.slice(), before = st.chi2;
-    solveLinear(model, vl, linSt, lin);
-    if (!(linSt.chi2 < before)) return false;
-    v = vl; st.bg.set(linSt.bg); st.yc.set(linSt.yc); st.chi2 = linSt.chi2;
-    return before - linSt.chi2 > 0.01*chiRed(before);
-  };
-  for (; m && !opts.covOnly && it < maxIter; it++){
-    jacobian(model, v, st, free, cols, !!opts.forward);
-    const { A, g } = normalEq(model, cols, st);
-    const act = [];
-    for (let a = 0; a < m; a++) if (A[a*m + a] > 0 && !onBound(free[a], g[a])) act.push(a);
-    if (!act.length){ converged = true; why = 'nothing to move'; break; }
-    const { As, gs, D, k } = scaled(A, g, m, act);
-    // esds at this point, for the shift/esd test
-    const chInv = cholInverse(cholesky(As, k), k), cr = chiRed(st.chi2);
-    let accepted = false, maxRatio;
-    /* 12 tries, and on until λ reaches 10k: a correlation-scaled matrix of k parameters
-       has no eigenvalue above k, so from there the step is a short one down the gradient,
-       which lowers χ² unless the gradient is rounding. (From LAM_MIN, 12 tries alone
-       reach only λ = 10; from v426's floor of 10⁻⁹ they reached 10³.) */
-    for (let tries = 0; tries < 12 || (lam < 10*k && tries < 30); tries++){
-      const M = As.slice();
-      for (let a = 0; a < k; a++) M[a*k + a] += lam;
-      const ch = cholesky(M, k), ds = cholSolve(ch, gs, k);
-      let vn = v.slice(), maxRatioZ = 0;
-      const clamped = [];
-      maxRatio = 0;
-      // A parameter with a largest step (a body's turn, maxStep: where a turn has no
-      // first-order effect — an axis on a symmetric direction — the Gauss–Newton step is
-      // unbounded, and a first step of 4 rad threw the axis anywhere) is held to it, on
-      // its own: shortening the whole step instead froze every other parameter with a
-      // turn whose column was numerical noise (a sphere's sizes stopped 30 % off).
-      for (let a = 0; a < k; a++){
-        const j = free[act[a]], p = model.par[j];
-        let d = ds[a]/D[a];
-        if (p.maxStep && Math.abs(d) > p.maxStep){ d = Math.sign(d)*p.maxStep; clamped.push(j); }
-        let nv = v[j] + d;
-        if (nv < p.lo) nv = p.lo; else if (nv > p.hi) nv = p.hi;
-        const sig = Math.sqrt(Math.max(0, chInv[a*k + a])*cr)/D[a], r = sig > 0 ? Math.abs(nv - v[j])/sig : 0;
-        maxRatio = Math.max(maxRatio, r);
-        if (clamped[clamped.length - 1] !== j) maxRatioZ = Math.max(maxRatioZ, r);
-        vn[j] = nv;
-      }
-      project(vn);
-      trial = evaluate(model, vn, trial);
-      // Rejected with a clamped turn: the same step without it. At a kink of χ² (a
-      // faceted body exactly on a symmetric orientation) a turn's column is noise, its
-      // step stays far over maxStep however large λ, and every trial carried it: the
-      // refinement stopped there with every other parameter frozen (a cylinder's sizes
-      // 30 % off, and the angular profiles of held solids 3–5× too narrow).
-      let next = trial.chi2 < st.chi2 ? trial : null;
-      if (!next && clamped.length){
-        const vz = vn.slice();
-        for (const j of clamped) vz[j] = v[j];
-        project(vz);
-        trialZ = evaluate(model, vz, trialZ);
-        if (trialZ.chi2 < st.chi2){ next = trialZ; vn = vz; maxRatio = maxRatioZ; }
-      }
-      if (next){
-        const rel = (st.chi2 - next.chi2)/next.chi2;
-        v = vn; const t = st; st = next;
-        if (next === trial) trial = t; else trialZ = t;
-        const lamUsed = lam;
-        lam = Math.max(lam/10, LAM_MIN);
-        accepted = true;
-        if (maxRatio*gnScale(lamUsed) < tol || rel < 1e-9){ converged = true; why = `shifts below ${+(tol*100).toPrecision(2)} % of the esds`; }
-        break;
-      }
-      lam *= 10;
-    }
-    if (opts.onProgress) opts.onProgress((it + 1)/maxIter, { iteration: it + 1, chi2: chiRed(st.chi2), lambda: lam });
-    if (!accepted){ converged = true; why = 'no step lowers χ²'; }
-    if (converged && linLeft > 0 && linSolve()){ converged = false; why = ''; lam = lam0; continue; }
-    if (converged){ if (accepted) it++; break; }
-  }
-  if (!converged && linLeft > 0) linSolve();
+  const L = lmSetup(model, opts, Date.now());
+  lmIterations(L);
+  if (!L.converged && L.linLeft > 0) lmLinSolve(L);
   /* Final covariance at the solution, over every free parameter, those on a bound too:
      held there, such a parameter would make the esds of the ones correlated with it
      conditional, too small (in the synthetic tests, the sizes of the runs whose strain
@@ -3166,45 +3166,201 @@ function refineHeld(model, opts){
      in atBound, for the reader to take the value as a limit. U, V, W with H_G² on its
      floor have no meaningful curvature (∂y/∂W ∝ 1/√W there, the esd follows the
      difference step): esd NaN, and listed in atBound. */
-  if (!opts.noCov) st = evaluate(model, v, st);
-  const esd = {}, atBound = [], esdHeld = {};
-  let corr = null, cov = null, tied = [];
-  if (m && !opts.noCov){
-    jacobian(model, v, st, free, cols);
-    const { A, g } = normalEq(model, cols, st);
-    const act = [];
-    for (let a = 0; a < m; a++){
-      const j = free[a], p = model.par[j];
-      if ((v[j] <= loOf(j, v) || v[j] >= p.hi) && onBound(j, g[a])) atBound.push(p.name);
-      if (A[a*m + a] > 0) act.push(a);
-    }
-    const { As, D, k } = scaled(A, g, m, act);
-    const ch = cholesky(As, k), inv = cholInverse(ch, k);
-    const stats = rStats(model, st.yc, st.bg, m);
-    corr = Array.from({ length: m }, (_, a)=> Array.from({ length: m }, (_, b)=> a === b ? 1 : NaN));
-    cov = Array.from({ length: m }, ()=> new Array(m).fill(NaN));
-    act.forEach((a, ia)=> act.forEach((b, ib)=> {
-      const c = inv[ia*k + ib];
-      cov[a][b] = c/(D[ia]*D[ib])*stats.chi2;
-      corr[a][b] = c/Math.sqrt(inv[ia*k + ia]*inv[ib*k + ib]);
-    }));
-    free.forEach((j, a)=> { esd[model.par[j].name] = Math.sqrt(cov[a][a]); });
-    ch.bad.forEach(b=> { const nm = model.par[free[act[b]]].name; esd[nm] = NaN; });
-    // The others of each dropped combination: not determined either, only the combination
-    // is (their rows are conditional on the dropped one held: kept as esdHeld).
-    ch.tied.forEach(t=> {
-      if (t.length < 2) return;
-      tied.push(t.map(b=> model.par[free[act[b]]].name));
-      for (const b of t.slice(1)){
-        const a = act[b], nm = model.par[free[a]].name;
-        if (!(nm in esdHeld)) esdHeld[nm] = esd[nm];
-        esd[nm] = NaN;
-        for (let c = 0; c < m; c++){ cov[a][c] = cov[c][a] = NaN; if (c !== a) corr[a][c] = corr[c][a] = NaN; }
-      }
-    });
-    if ([iU, iV, iW].some(j=> free.includes(j)) && hgFloored(model, v, free))
-      for (const j of [iU, iV, iW]) if (free.includes(j)){ const nm = model.par[j].name; esd[nm] = NaN; if (!atBound.includes(nm)) atBound.push(nm); }
+  if (!opts.noCov) L.st = evaluate(model, L.v, L.st);
+  const C = { esd: {}, atBound: [], esdHeld: {}, corr: null, cov: null, tied: [] };
+  if (L.m && !opts.noCov) lmCovariance(L, C);
+  return lmResult(L, C);
+}
+// The refinement's state: the free parameters (by index), the start projected into the
+// bounds and evaluated, λ, the buffers.
+function lmSetup(model, opts, t0){
+  const names = opts.free || model.par.filter(p=> p.refine).map(p=> p.name);
+  const free = [...new Set(names.map(nm=> model.index[nm]).filter(i=> i != null))];
+  const m = free.length, maxIter = opts.maxIter || 40, n = model.n;
+  const [iU, iV, iW] = model.iProf;
+  const L = { model, opts, t0, free, m, maxIter, n, iU, iV, iW, vFree: free.includes(iV) };
+  L.v = lmProject(L, clampInto(model, model.v.slice()));
+  L.st = evaluate(model, L.v);
+  L.lam0 = opts.lambda || LAM_START; L.tol = opts.shiftTol > 0 ? opts.shiftTol : 0.01;
+  Object.assign(L, { lam: L.lam0, it: 0, converged: false, why: '', cols: free.map(()=> new Float64Array(n)), trial: null, trialZ: null });
+  /* The free linear parameters (scales, background) solved exactly, the rest held, when
+     the steps have stopped (lmLinSolve). */
+  L.lin = free.filter(j=> model.par[j].linear);
+  L.linSt = { pats: null, bg: new Float64Array(n), yc: new Float64Array(n) };
+  L.linLeft = L.lin.length ? 3 : 0;
+  return L;
+}
+// V's lower bound: its box, and with V refined the bound that keeps H_G² ≥ 0.
+const lmLo = (L, j, vv) => j === L.iV && L.vFree ? Math.max(L.model.par[L.iV].lo, vFloor(L.model, vv[L.iU], vv[L.iW])) : L.model.par[j].lo;
+const lmProject = (L, vv) => { if (L.vFree){ const lo = lmLo(L, L.iV, vv); if (vv[L.iV] < lo) vv[L.iV] = lo; } return vv; };
+// The shift test's scale for a step taken at λ = l (LAM_START).
+const lmGn = (L, l) => Math.max(1, (1 + Math.min(l, L.lam0))/(1 + LAM_START));
+// Parameter j on a bound, the gradient g pushing it out.
+const lmOnBound = (L, j, g) => { const p = L.model.par[j], v = L.v; return (v[j] <= lmLo(L, j, v) && g < 0) || (v[j] >= p.hi && g > 0); };
+const lmChiRed = (L, c) => c/Math.max(1, rStats(L.model, L.st.yc, L.st.bg).N - L.m);
+/* The free linear parameters (scales, background) solved exactly, the rest held, when
+   the steps have stopped. The 1/2θ term and the Chebyshev terms are nearly collinear:
+   along such a direction a damped step is cut to almost nothing while its shift is
+   still far under 1 % of its (large) esd, and the refinement stopped with χ² up to 17
+   above its minimum on synthetic plates, all of it in the background. When the solve
+   gains more than a hundredth of χ²_ν the steps go on from there (at most 3 times),
+   with λ back at its start: after 'no step lowers χ²' twelve rejections had left it
+   at 10³ or more, a step a thousandth of Gauss–Newton's passed the shift test at once,
+   and the refinement stopped 5–10 esd short of the minimum. */
+function lmLinSolve(L){
+  L.linLeft--;
+  const { model, linSt, lin } = L;
+  linSt.pats = L.st.pats;
+  const vl = L.v.slice(), before = L.st.chi2;
+  solveLinear(model, vl, linSt, lin);
+  if (!(linSt.chi2 < before)) return false;
+  L.v = vl; L.st.bg.set(linSt.bg); L.st.yc.set(linSt.yc); L.st.chi2 = linSt.chi2;
+  return before - linSt.chi2 > 0.01*lmChiRed(L, before);
+}
+// The iterations: each the normal equations at v (lmSystem), damped steps tried until one
+// lowers χ² (lmTries), the linear solve where they stop.
+function lmIterations(L){
+  for (; L.m && !L.opts.covOnly && L.it < L.maxIter; L.it++){
+    const eq = lmSystem(L);
+    if (!eq){ L.converged = true; L.why = 'nothing to move'; break; }
+    const accepted = lmTries(L, eq);
+    if (L.opts.onProgress) L.opts.onProgress((L.it + 1)/L.maxIter, { iteration: L.it + 1, chi2: lmChiRed(L, L.st.chi2), lambda: L.lam });
+    if (!accepted){ L.converged = true; L.why = 'no step lowers χ²'; }
+    if (L.converged && L.linLeft > 0 && lmLinSolve(L)){ L.converged = false; L.why = ''; L.lam = L.lam0; continue; }
+    if (L.converged){ if (accepted) L.it++; break; }
   }
+}
+// The normal equations at v over the parameters free to move (act: not on a bound pushed
+// out), correlation-scaled, and the esds there for the shift test; null when none can move.
+function lmSystem(L){
+  const { model, free, cols, m } = L;
+  jacobian(model, L.v, L.st, free, cols, !!L.opts.forward);
+  const { A, g } = normalEq(model, cols, L.st);
+  const act = [];
+  for (let a = 0; a < m; a++) if (A[a*m + a] > 0 && !lmOnBound(L, free[a], g[a])) act.push(a);
+  if (!act.length) return null;
+  const { As, gs, D, k } = scaled(A, g, m, act);
+  // esds at this point, for the shift/esd test
+  const chInv = cholInverse(cholesky(As, k), k), cr = lmChiRed(L, L.st.chi2);
+  return { act, As, gs, D, k, chInv, cr };
+}
+/* 12 tries, and on until λ reaches 10k: a correlation-scaled matrix of k parameters
+   has no eigenvalue above k, so from there the step is a short one down the gradient,
+   which lowers χ² unless the gradient is rounding. (From LAM_MIN, 12 tries alone
+   reach only λ = 10; from v426's floor of 10⁻⁹ they reached 10³.) → whether one was
+   accepted. */
+function lmTries(L, eq){
+  for (let tries = 0; tries < 12 || (L.lam < 10*eq.k && tries < 30); tries++){
+    const step = lmStepAt(L, eq), next = lmTrial(L, step);
+    if (next){ lmAccept(L, next, step); return true; }
+    L.lam *= 10;
+  }
+  return false;
+}
+// The step damped by λ: the new vector in the bounds, the largest shift over its esd (and
+// without the clamped turns').
+function lmStepAt(L, { act, As, gs, D, k, chInv, cr }){
+  const { model, free, v } = L;
+  const M = As.slice();
+  for (let a = 0; a < k; a++) M[a*k + a] += L.lam;
+  const ch = cholesky(M, k), ds = cholSolve(ch, gs, k);
+  const vn = v.slice(), clamped = [];
+  let maxRatio = 0, maxRatioZ = 0;
+  // A parameter with a largest step (a body's turn, maxStep: where a turn has no
+  // first-order effect — an axis on a symmetric direction — the Gauss–Newton step is
+  // unbounded, and a first step of 4 rad threw the axis anywhere) is held to it, on
+  // its own: shortening the whole step instead froze every other parameter with a
+  // turn whose column was numerical noise (a sphere's sizes stopped 30 % off).
+  for (let a = 0; a < k; a++){
+    const j = free[act[a]], p = model.par[j];
+    let d = ds[a]/D[a];
+    if (p.maxStep && Math.abs(d) > p.maxStep){ d = Math.sign(d)*p.maxStep; clamped.push(j); }
+    let nv = v[j] + d;
+    if (nv < p.lo) nv = p.lo; else if (nv > p.hi) nv = p.hi;
+    const sig = Math.sqrt(Math.max(0, chInv[a*k + a])*cr)/D[a], r = sig > 0 ? Math.abs(nv - v[j])/sig : 0;
+    maxRatio = Math.max(maxRatio, r);
+    if (clamped[clamped.length - 1] !== j) maxRatioZ = Math.max(maxRatioZ, r);
+    vn[j] = nv;
+  }
+  lmProject(L, vn);
+  return { vn, maxRatio, maxRatioZ, clamped };
+}
+// The step evaluated; rejected with a clamped turn, the same step without it. At a kink of
+// χ² (a faceted body exactly on a symmetric orientation) a turn's column is noise, its
+// step stays far over maxStep however large λ, and every trial carried it: the
+// refinement stopped there with every other parameter frozen (a cylinder's sizes
+// 30 % off, and the angular profiles of held solids 3–5× too narrow). → the evaluation
+// that lowers χ², or null.
+function lmTrial(L, step){
+  const { model } = L;
+  L.trial = evaluate(model, step.vn, L.trial);
+  let next = L.trial.chi2 < L.st.chi2 ? L.trial : null;
+  if (!next && step.clamped.length){
+    const vz = step.vn.slice();
+    for (const j of step.clamped) vz[j] = L.v[j];
+    lmProject(L, vz);
+    L.trialZ = evaluate(model, vz, L.trialZ);
+    if (L.trialZ.chi2 < L.st.chi2){ next = L.trialZ; step.vn = vz; step.maxRatio = step.maxRatioZ; }
+  }
+  return next;
+}
+// A step taken: v and its evaluation moved on (the old one the trial's buffer), λ lowered,
+// converged when its shifts are under the tolerance of their esds.
+function lmAccept(L, next, step){
+  const rel = (L.st.chi2 - next.chi2)/next.chi2;
+  L.v = step.vn; const t = L.st; L.st = next;
+  if (next === L.trial) L.trial = t; else L.trialZ = t;
+  const lamUsed = L.lam;
+  L.lam = Math.max(L.lam/10, LAM_MIN);
+  if (step.maxRatio*lmGn(L, lamUsed) < L.tol || rel < 1e-9){ L.converged = true; L.why = `shifts below ${+(L.tol*100).toPrecision(2)} % of the esds`; }
+}
+// The covariance at the solution (refineHeld's comment), into C: the esds, the parameters
+// on a bound, the correlations; then those not determined (lmTied).
+function lmCovariance(L, C){
+  const { model, free, cols, m, v, st } = L;
+  jacobian(model, v, st, free, cols);
+  const { A, g } = normalEq(model, cols, st);
+  const act = [];
+  for (let a = 0; a < m; a++){
+    const j = free[a], p = model.par[j];
+    if ((v[j] <= lmLo(L, j, v) || v[j] >= p.hi) && lmOnBound(L, j, g[a])) C.atBound.push(p.name);
+    if (A[a*m + a] > 0) act.push(a);
+  }
+  const { As, D, k } = scaled(A, g, m, act);
+  const ch = cholesky(As, k), inv = cholInverse(ch, k);
+  const stats = rStats(model, st.yc, st.bg, m);
+  const corr = C.corr = Array.from({ length: m }, (_, a)=> Array.from({ length: m }, (_, b)=> a === b ? 1 : NaN));
+  const cov = C.cov = Array.from({ length: m }, ()=> new Array(m).fill(NaN));
+  act.forEach((a, ia)=> act.forEach((b, ib)=> {
+    const c = inv[ia*k + ib];
+    cov[a][b] = c/(D[ia]*D[ib])*stats.chi2;
+    corr[a][b] = c/Math.sqrt(inv[ia*k + ia]*inv[ib*k + ib]);
+  }));
+  free.forEach((j, a)=> { C.esd[model.par[j].name] = Math.sqrt(cov[a][a]); });
+  lmTied(L, C, ch, act);
+}
+// The parameters the factorisation dropped (esd NaN), and the others of each dropped
+// combination: not determined either, only the combination is (their rows are conditional
+// on the dropped one held: kept as esdHeld). U, V, W with H_G² on its floor: NaN, at a bound.
+function lmTied(L, C, ch, act){
+  const { model, free, m, v, iU, iV, iW } = L, { esd, esdHeld, cov, corr, atBound } = C;
+  ch.bad.forEach(b=> { const nm = model.par[free[act[b]]].name; esd[nm] = NaN; });
+  ch.tied.forEach(t=> {
+    if (t.length < 2) return;
+    C.tied.push(t.map(b=> model.par[free[act[b]]].name));
+    for (const b of t.slice(1)){
+      const a = act[b], nm = model.par[free[a]].name;
+      if (!(nm in esdHeld)) esdHeld[nm] = esd[nm];
+      esd[nm] = NaN;
+      for (let c = 0; c < m; c++){ cov[a][c] = cov[c][a] = NaN; if (c !== a) corr[a][c] = corr[c][a] = NaN; }
+    }
+  });
+  if ([iU, iV, iW].some(j=> free.includes(j)) && hgFloored(model, v, free))
+    for (const j of [iU, iV, iW]) if (free.includes(j)){ const nm = model.par[j].name; esd[nm] = NaN; if (!atBound.includes(nm)) atBound.push(nm); }
+}
+// The model at the solution, and the result.
+function lmResult(L, C){
+  const { model, free, m, v, st, opts } = L, { esd, esdHeld, corr, cov, atBound, tied } = C;
   model.v = v; model.par.forEach((p, i)=> { p.value = v[i]; });
   const stats = rStats(model, st.yc, st.bg, m);
   /* No more weighted points than free parameters: the fit can pass through every point,
@@ -3221,7 +3377,7 @@ function refineHeld(model, opts){
   const freeNames = free.map(j=> model.par[j].name);
   return { params: getParams(model), esd, corr, cov, free: freeNames, atBound,
            undetermined: opts.noCov ? [] : freeNames.filter(nm=> !Number.isFinite(esd[nm]) && !atBound.includes(nm)), tied, esdHeld,
-           stats, iterations: it, converged, why, ms: Date.now() - t0 };
+           stats, iterations: L.it, converged: L.converged, why: L.why, ms: Date.now() - L.t0 };
 }
 
 /* ---------- starting points ---------- */
@@ -5135,8 +5291,35 @@ function freeShape(model, k, res, free, opts){
   return r;
 }
 function freeShapeRun(model, k, res, free, opts){
-  const q = model.phases[k], pf = q.pfx, vIso = model.v.slice(), B = BODIES[q.shapeType];
-  const rejectWith = o => ({ ...o, check: lineCheck(model, k, vIso, res.stats.P) });
+  const S = shapeRunSetup(model, k, res, free, opts);
+  S.specs = shapeSpecs(S);
+  S.names = free.filter(nm=> nm !== S.q.pfx + 'Ys').concat(S.names);
+  S.steps = S.nSets*(S.specs.length + S.nFull) + 2;
+  const sets = shapeBriefs(S);
+  const brief = sets.flat();
+  for (const b of brief) S.ends.push({ ...b, kind: b.kind || 'brief' });
+  for (const set of sets) set.sort((a, b)=> a.chi - b.chi);
+  brief.sort((a, b)=> a.chi - b.chi);
+  // Every brief refinement threw: nothing was refined (not a ΔBIC of +∞).
+  if (!brief.length){ setParams(model, S.vIso); return null; }
+  const { keep, early } = shapeKeepStart(S, brief);
+  if (early){ setParams(model, S.vIso); return shapeReject(S, { rejected: true, dBIC: keep.dPheld*Math.log(S.N) - keep.gainBrief, early: true, keep: early }); }
+  // Each set's best nFull (one set: the best nFull of all).
+  for (const set of sets) for (const b of set.slice(0, S.nFull)){ const c = shapeFull(S, b.v, b.kind); if (c != null) S.finals.push(c); }
+  if (!S.best){ setParams(model, S.vIso); return null; }
+  shapeExactAndHeld(S);
+  shapeKeepTest(S, keep);
+  if (!keep.kept){ setParams(model, S.vIso); return shapeReject(S, { rejected: true, dBIC: S.dBIC, keep }); }
+  const minima = shapeMinimaStage(S, keep);
+  shapeTick(S);
+  return shapeResult(S, keep, minima);
+}
+/* freeShapeRun's state S: the model, the phase and its body, the isotropic fit (vIso, res),
+   the free parameters, the settings, every refinement end of the search (ends: the minima
+   stage's candidates), the body's own parameters (names), the sphere-like start's mean
+   width (w0); then the stages' (the starts, the progress, the best fit, held or free). */
+function shapeRunSetup(model, k, res, free, opts){
+  const q = model.phases[k], vIso = model.v.slice(), B = BODIES[q.shapeType];
   /* The settings (autoRefine's opts.fit): how many of the starts go to convergence; the
      brief refinements' 8 iterations, or maxIter when fewer; the full ones' 1.5 × maxIter
      (60 by default: a body's turns take longer than a stage), λ and the shift test as
@@ -5151,19 +5334,10 @@ function freeShapeRun(model, k, res, free, opts){
   const lmBrief = { maxIter: Math.min(8, F.maxIter), shiftTol: F.shiftTol, lambda: F.lambda, forward: true, noCov: true };
   const lmCentral = { maxIter: Math.round(1.5*F.maxIter), shiftTol: F.shiftTol, lambda: F.lambda };
   const lmFull = { ...lmCentral, noCov: true };
-  // Every refinement end of the search, with its vector and kind: the minima stage's candidates.
-  const ends = [];
-  const N = res.stats.N, chiTot = r => r.stats.chi2*Math.max(1, r.stats.N - r.stats.P);
   const y0 = Math.max(vIso[q.iYs], 1e-3);
-  const unit = t => { const n = Math.hypot(...t); return t.map(x=> x/n); };
-  const cross = (a, b) => [a[1]*b[2] - a[2]*b[1], a[2]*b[0] - a[0]*b[2], a[0]*b[1] - a[1]*b[0]];
-  const dot = (a, b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
-  // a turned SHAPE_TILT.by rad toward b (both unit, b across a)
-  const turnTo = (a, b) => unit(a.map((t, i)=> Math.cos(SHAPE_TILT.by)*t + Math.sin(SHAPE_TILT.by)*b[i]));
   const axesLow = lowIndexAxes(q);
   // The body's own parameters; its widths along x, y, z as its own W parameters.
-  let names = [...q.iW, ...q.iR].map(i=> model.par[i].name);
-  const Wof = (wx, wy, wz) => B.W.length === 2 ? [(wx + wy)/2, wz] : [wx, wy, wz];
+  const names = [...q.iW, ...q.iR].map(i=> model.par[i].name);
   // Its mean width with every W = 1 (over the sphere of directions): the sphere-like
   // start has the isotropic fit's width y0 on average.
   let kappa = 0;
@@ -5171,228 +5345,258 @@ function freeShapeRun(model, k, res, free, opts){
     const z = 1 - (2*i + 1)/M, rr = Math.sqrt(1 - z*z), ph = i*2.399963229728653, t = [rr*Math.cos(ph), rr*Math.sin(ph), z];
     kappa += (B.base === 'ball' ? 1 : 0.75/columnLengthV(B.base, t))/M;
   }
-  const w0 = y0/kappa;
-  // The starts: functions that write one into v.
-  const put = (W, R) => v => {
-    W.forEach((t, i)=> { v[q.iW[i]] = t; });
-    q.iR.forEach(i=> { v[i] = 0; });
-    quatOfMat(R).forEach((t, i)=> { v[q.iQ[i]] = t; });
-  };
-  // The frame with z along e and x along a low-index direction across it (else any), tilted
-  // (SHAPE_TILT): z toward the part across e of the direction d (the set's: shapeTilt), x turned about z.
-  const frameAlong = (e0, d) => {
-    const e = unit(e0), ac = d.map((t, i)=> t - dot(d, e)*e[i]);
-    const z = turnTo(e, unit(Math.hypot(...ac) > 1e-3 ? ac : cross(e, Math.abs(e[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0])));
-    const x0 = axesLow.find(a=> Math.abs(dot(a, e)) < 0.1) || cross(e, Math.abs(e[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0]);
-    const xu = unit(x0.map((t, i)=> t - dot(x0, z)*z[i])), xo = turnTo(xu, cross(z, xu)), y = cross(z, xo);
-    return [xo[0], y[0], z[0],  xo[1], y[1], z[1],  xo[2], y[2], z[2]];
-  };
-  // The class's distinct starts: the sphere-like one, and a plate and a needle per low-index
-  // family (11 in the six lower classes, 9 in −3m, 6/m and 6/mmm, 7 in cubic). Random starts
-  // beside them had cost 15 % of the evaluations and changed no outcome (AB.md §4.2), and
-  // bought less than the line starts below (round 3's POINT5.md): none since v524. Each start
-  // as its widths, its axis and its kind, tilted by its set (startsOf).
-  const specs = [{ W: Wof(w0, w0, w0), e: axesLow[0] || [0, 0, 1] }];
-  for (const e of axesLow) specs.push({ W: Wof(0.5*w0, 0.7*w0, 2.5*w0), e }, { W: Wof(1.2*w0, 1.6*w0, 0.4*w0), e });
+  return { model, k, res, free, opts, q, vIso, B, nFull, nSets, lmBrief, lmCentral, lmFull, ends: [], N: res.stats.N, axesLow, names, w0: y0/kappa,
+    done: 0, finals: [], best: null, held: false, dBICheld: NaN, freeOff: null, freeW: null, bestFree: null };
+}
+// The rejected search's record, with the isotropic fit's per-line check.
+const shapeReject = (S, o) => ({ ...o, check: lineCheck(S.model, S.k, S.vIso, S.res.stats.P) });
+const shapeWof = (S, wx, wy, wz) => S.B.W.length === 2 ? [(wx + wy)/2, wz] : [wx, wy, wz];
+const unitV = t => { const n = Math.hypot(...t); return t.map(x=> x/n); };
+const crossV = (a, b) => [a[1]*b[2] - a[2]*b[1], a[2]*b[0] - a[0]*b[2], a[0]*b[1] - a[1]*b[0]];
+const dotV = (a, b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+// a turned SHAPE_TILT.by rad toward b (both unit, b across a)
+const turnTo = (a, b) => unitV(a.map((t, i)=> Math.cos(SHAPE_TILT.by)*t + Math.sin(SHAPE_TILT.by)*b[i]));
+// A start: a function that writes the widths W and the frame R into v.
+const shapePut = (S, W, R) => v => {
+  const { q } = S;
+  W.forEach((t, i)=> { v[q.iW[i]] = t; });
+  q.iR.forEach(i=> { v[i] = 0; });
+  quatOfMat(R).forEach((t, i)=> { v[q.iQ[i]] = t; });
+};
+// The frame with z along e and x along a low-index direction across it (else any), tilted
+// (SHAPE_TILT): z toward the part across e of the direction d (the set's: shapeTilt), x turned about z.
+function shapeFrameAlong(S, e0, d){
+  const e = unitV(e0), ac = d.map((t, i)=> t - dotV(d, e)*e[i]);
+  const z = turnTo(e, unitV(Math.hypot(...ac) > 1e-3 ? ac : crossV(e, Math.abs(e[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0])));
+  const x0 = S.axesLow.find(a=> Math.abs(dotV(a, e)) < 0.1) || crossV(e, Math.abs(e[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0]);
+  const xu = unitV(x0.map((t, i)=> t - dotV(x0, z)*z[i])), xo = turnTo(xu, crossV(z, xu)), y = crossV(z, xo);
+  return [xo[0], y[0], z[0],  xo[1], y[1], z[1],  xo[2], y[2], z[2]];
+}
+// The class's distinct starts: the sphere-like one, and a plate and a needle per low-index
+// family (11 in the six lower classes, 9 in −3m, 6/m and 6/mmm, 7 in cubic). Random starts
+// beside them had cost 15 % of the evaluations and changed no outcome (AB.md §4.2), and
+// bought less than the line starts below (round 3's POINT5.md): none since v524. Each start
+// as its widths, its axis and its kind, tilted by its set (shapeStartsOf).
+function shapeSpecs(S){
+  const { axesLow, w0 } = S;
+  const specs = [{ W: shapeWof(S, w0, w0, w0), e: axesLow[0] || [0, 0, 1] }];
+  for (const e of axesLow) specs.push({ W: shapeWof(S, 0.5*w0, 0.7*w0, 2.5*w0), e }, { W: shapeWof(S, 1.2*w0, 1.6*w0, 0.4*w0), e });
   // On the lines: a plate on the normals of the most broadened, a needle on those of the least
   // broadened (lineBroadening, |z| > 2), a lattice direction among the low-index starts' left out.
-  {
-    const lb = lineBroadening(model, k, vIso), lowLab = new Set(axesLow.map(e=> lattDirection(q, e).label)), seen = new Set();
-    const pickDir = (list, sel) => { const out = [];
-      for (const sg of list){ if (out.length >= SHAPE_LINE_STARTS) break; if (!sel(sg)) continue;
-        const ld = lattDirection(q, sg.g); if ((ld.angle <= SNAP_DEG && lowLab.has(ld.label)) || seen.has(ld.label)) continue; seen.add(ld.label); out.push(sg); }
-      return out; };
-    const most = pickDir([...lb].sort((a, b)=> b.delta - a.delta), sg=> sg.z > 2), least = pickDir([...lb].sort((a, b)=> a.delta - b.delta), sg=> sg.z < -2);
-    for (const sg of most) specs.push({ W: Wof(1.2*w0, 1.6*w0, 0.4*w0), e: sg.g, kind: 'line' });
-    for (const sg of least) specs.push({ W: Wof(0.5*w0, 0.7*w0, 2.5*w0), e: sg.g, kind: 'line' });
+  const { model, k, q, vIso } = S;
+  const lb = lineBroadening(model, k, vIso), lowLab = new Set(axesLow.map(e=> lattDirection(q, e).label)), seen = new Set();
+  const pickDir = (list, sel) => { const out = [];
+    for (const sg of list){ if (out.length >= SHAPE_LINE_STARTS) break; if (!sel(sg)) continue;
+      const ld = lattDirection(q, sg.g); if ((ld.angle <= SNAP_DEG && lowLab.has(ld.label)) || seen.has(ld.label)) continue; seen.add(ld.label); out.push(sg); }
+    return out; };
+  const most = pickDir([...lb].sort((a, b)=> b.delta - a.delta), sg=> sg.z > 2), least = pickDir([...lb].sort((a, b)=> a.delta - b.delta), sg=> sg.z < -2);
+  for (const sg of most) specs.push({ W: shapeWof(S, 1.2*w0, 1.6*w0, 0.4*w0), e: sg.g, kind: 'line' });
+  for (const sg of least) specs.push({ W: shapeWof(S, 0.5*w0, 0.7*w0, 2.5*w0), e: sg.g, kind: 'line' });
+  return specs;
+}
+// The starts of set j (0: SHAPE_TILT's; 1…, the setting shapeTiltSets's), tilted toward shapeTilt(j).
+const shapeStartsOf = (S, j) => S.specs.map(s=> { const f = shapePut(S, s.W, shapeFrameAlong(S, s.e, shapeTilt(j))); if (s.kind) f.kind = s.kind; return f; });
+// The orientation reached becomes the reference, r = 0: the chart is fresh at the
+// start of each full refinement, far from |r| = π.
+const shapeRebase = (S, v) => { const { q } = S, vv = v.slice(), R = bodyFrame(q, v); q.iR.forEach(i=> { vv[i] = 0; }); quatOfMat(R).forEach((t, i)=> { vv[q.iQ[i]] = t; }); return vv; };
+const shapeTick = S => { S.done++; if (S.opts.onShape) S.opts.onShape(Math.min(1, S.done/S.steps)); };
+/* The body set on the lattice: its best-placed axis exactly on its lattice
+   direction; a body with three axes, its next one on each of the simplest lattice
+   directions exactly normal to the first, and on those nearest its own (a projection
+   of its own nearest direction had left a held axis 7° off its label, and the free
+   fit's in-plane frame had held a plate on [1-13]); a body of revolution, its axis
+   alone. [] when no axis is within SNAP_DEG of a lattice direction. */
+function shapeSnaps(S, v){
+  const { q, B } = S, R = bodyFrame(q, v), col = i => [R[i], R[3 + i], R[6 + i]];
+  // The first axis held: the most telling (its width the farthest from the other
+  // two: a plate's normal), not merely the nearest to a lattice direction — an
+  // in-plane axis 0.5° from [1-13] had held a plate's whole frame there.
+  const Wx = B.axes(q.iW.map(i=> v[i])), gap = i => Math.min(...[0, 1, 2].filter(j=> j !== i).map(j=> Math.abs(Wx[i] - Wx[j])));
+  const cand = (B.rot === 2 ? [2] : [0, 1, 2]).map(i=> ({ i, ...lattDirection(q, col(i)) })).filter(c=> c.angle <= SNAP_DEG).sort((a, b)=> gap(b.i) - gap(a.i));
+  if (!cand.length) return [];
+  const p = cand[0].i, cp = cand[0].vec.map(t=> t*Math.sign(dotV(cand[0].vec, col(p)) || 1));
+  const frameOf = (s, ds) => shapeSnapFrame(S, v, { p, cp, s, ds, col });
+  if (B.rot === 2) return [frameOf(p === 2 ? 0 : 2, col(p === 2 ? 0 : 2))];
+  // The 3 simplest, and the simplest within SNAP_DEG of each of the other two axes,
+  // as the first axis is chosen (a box whose edges lay on [120] and [-210] about
+  // [001] had been tried on [100], [010] and [110] alone, and stayed free). Each
+  // candidate goes to whichever of the other two axes it is nearer.
+  const others = [0, 1, 2].filter(i=> i !== p), all = latticeAcross(q, cp, null, 0.01, 64), pick = all.slice(0, 3);
+  for (const s of others){
+    const c = all.find(c=> Math.abs(dotV(c.vec, col(s))) >= Math.cos(SNAP_DEG*D2R));
+    if (c && !pick.includes(c)) pick.push(c);
   }
-  // The starts of set j (0: SHAPE_TILT's; 1…, the setting shapeTiltSets's), tilted toward shapeTilt(j).
-  const startsOf = j => specs.map(s=> { const f = put(s.W, frameAlong(s.e, shapeTilt(j))); if (s.kind) f.kind = s.kind; return f; });
-  // The orientation reached becomes the reference, r = 0: the chart is fresh at the
-  // start of each full refinement, far from |r| = π.
-  const rebase = v => { const vv = v.slice(), R = bodyFrame(q, v); q.iR.forEach(i=> { vv[i] = 0; }); quatOfMat(R).forEach((t, i)=> { vv[q.iQ[i]] = t; }); return vv; };
-  // The body set on the lattice: its best-placed axis exactly on its lattice
-  // direction; a body with three axes, its next one on each of the simplest lattice
-  // directions exactly normal to the first, and on those nearest its own (a projection
-  // of its own nearest direction had left a held axis 7° off its label, and the free
-  // fit's in-plane frame had held a plate on [1-13]); a body of revolution, its axis
-  // alone. [] when no axis is within SNAP_DEG of a lattice direction.
-  const snaps = v => {
-    const R = bodyFrame(q, v), col = i => [R[i], R[3 + i], R[6 + i]];
-    // The first axis held: the most telling (its width the farthest from the other
-    // two: a plate's normal), not merely the nearest to a lattice direction — an
-    // in-plane axis 0.5° from [1-13] had held a plate's whole frame there.
-    const Wx = B.axes(q.iW.map(i=> v[i])), gap = i => Math.min(...[0, 1, 2].filter(j=> j !== i).map(j=> Math.abs(Wx[i] - Wx[j])));
-    const cand = (B.rot === 2 ? [2] : [0, 1, 2]).map(i=> ({ i, ...lattDirection(q, col(i)) })).filter(c=> c.angle <= SNAP_DEG).sort((a, b)=> gap(b.i) - gap(a.i));
-    if (!cand.length) return [];
-    const p = cand[0].i, cp = cand[0].vec.map(t=> t*Math.sign(dot(cand[0].vec, col(p)) || 1));
-    const frameOf = (s, ds) => {
-      let cs = unit(ds.map((t, j)=> t - dot(ds, cp)*cp[j]));
-      if (dot(cs, col(s)) < 0) cs = cs.map(t=> -t);
-      const t = 3 - p - s, cyc = (s - p + 3) % 3 === 1, ct = cyc ? cross(cp, cs) : cross(cs, cp);
-      const C = []; C[p] = cp; C[s] = cs; C[t] = ct;
-      const vv = v.slice();
-      q.iR.forEach(i=> { vv[i] = 0; });
-      quatOfMat([C[0][0], C[1][0], C[2][0], C[0][1], C[1][1], C[2][1], C[0][2], C[1][2], C[2][2]]).forEach((x, i)=> { vv[q.iQ[i]] = x; });
-      return vv;
-    };
-    if (B.rot === 2) return [frameOf(p === 2 ? 0 : 2, col(p === 2 ? 0 : 2))];
-    // The 3 simplest, and the simplest within SNAP_DEG of each of the other two axes,
-    // as the first axis is chosen (a box whose edges lay on [120] and [-210] about
-    // [001] had been tried on [100], [010] and [110] alone, and stayed free). Each
-    // candidate goes to whichever of the other two axes it is nearer.
-    const others = [0, 1, 2].filter(i=> i !== p), all = latticeAcross(q, cp, null, 0.01, 64), pick = all.slice(0, 3);
-    for (const s of others){
-      const c = all.find(c=> Math.abs(dot(c.vec, col(s))) >= Math.cos(SNAP_DEG*D2R));
-      if (c && !pick.includes(c)) pick.push(c);
-    }
-    return pick.map(({ vec })=>{
-      const s = Math.abs(dot(vec, col(others[0]))) >= Math.abs(dot(vec, col(others[1]))) ? others[0] : others[1];
-      return frameOf(s, vec);
-    });
-  };
-  names = free.filter(nm=> nm !== pf + 'Ys').concat(names);
-  const steps = nSets*(specs.length + nFull) + 2;
-  let done = 0;
-  const tick = ()=> { done++; if (opts.onShape) opts.onShape(Math.min(1, done/steps)); };
-  // Each set's brief refinements (sets), in turn; brief, all of them.
+  return pick.map(({ vec })=>{
+    const s = Math.abs(dotV(vec, col(others[0]))) >= Math.abs(dotV(vec, col(others[1]))) ? others[0] : others[1];
+    return frameOf(s, vec);
+  });
+}
+// v with the body's axis p held on cp, its axis s on the direction ds made normal to it.
+function shapeSnapFrame(S, v, { p, cp, s, ds, col }){
+  const { q } = S;
+  let cs = unitV(ds.map((t, j)=> t - dotV(ds, cp)*cp[j]));
+  if (dotV(cs, col(s)) < 0) cs = cs.map(t=> -t);
+  const t = 3 - p - s, cyc = (s - p + 3) % 3 === 1, ct = cyc ? crossV(cp, cs) : crossV(cs, cp);
+  const C = []; C[p] = cp; C[s] = cs; C[t] = ct;
+  const vv = v.slice();
+  q.iR.forEach(i=> { vv[i] = 0; });
+  quatOfMat([C[0][0], C[1][0], C[2][0], C[0][1], C[1][1], C[2][1], C[0][2], C[1][2], C[2][2]]).forEach((x, i)=> { vv[q.iQ[i]] = x; });
+  return vv;
+}
+// Each set's brief refinements (sets), in turn. → sets: [{ v, chi, kind? }] by set.
+function shapeBriefs(S){
+  const { model, q, vIso, names, lmBrief, nSets } = S;
   const sets = [];
   for (let j = 0; j < nSets; j++){
     const set = [];
-    for (const put of startsOf(j)){
+    for (const put of shapeStartsOf(S, j)){
       const vv = vIso.slice(); vv[q.iYs] = 0;
       put(vv);
       setParams(model, vv);
-      try { const r = refine(model, { free: names, ...lmBrief, audit: false }); set.push({ v: model.v.slice(), chi: chiTot(r), ...(put.kind ? { kind: 'brief-' + put.kind } : null) }); } catch(e){}
-      tick();
+      try { const r = refine(model, { free: names, ...lmBrief, audit: false }); set.push({ v: model.v.slice(), chi: chiTotal(r), ...(put.kind ? { kind: 'brief-' + put.kind } : null) }); } catch(e){}
+      shapeTick(S);
     }
     sets.push(set);
   }
-  const brief = sets.flat();
-  for (const b of brief) ends.push({ ...b, kind: b.kind || 'brief' });
-  for (const set of sets) set.sort((a, b)=> a.chi - b.chi);
-  brief.sort((a, b)=> a.chi - b.chi);
-  // Every brief refinement threw: nothing was refined (not a ΔBIC of +∞).
-  if (!brief.length){ setParams(model, vIso); return null; }
-  /* The keep test's threshold (SHAPE_KEEP), the same whatever the route: the gain over
-     χ²_{k+1}(1 − alpha) + margin, k the terms the class lets the pattern see (laueTerms). The
-     brief refinements already reach the shape's gain (the best one's χ² within 0.2 χ²_ν of the
-     converged fit on synthetic plates, needles and spheres): under early × the threshold, the
-     full refinements are not run — on isotropic samples they were most of the time, for a
-     shape then rejected. The ΔBIC given is the held route's, the lowest the trial shapes
-     allow. */
-  const dP = names.length - free.length, dPmin = dP - q.iR.length, gain = (chiTot(res) - brief[0].chi)/Math.max(1, res.stats.chi2);
+  return sets;
+}
+/* The keep test's threshold (SHAPE_KEEP), the same whatever the route: the gain over
+   χ²_{k+1}(1 − alpha) + margin, k the terms the class lets the pattern see (laueTerms). The
+   brief refinements already reach the shape's gain (the best one's χ² within 0.2 χ²_ν of the
+   converged fit on synthetic plates, needles and spheres): under early × the threshold, the
+   full refinements are not run — on isotropic samples they were most of the time, for a
+   shape then rejected. The ΔBIC given is the held route's, the lowest the trial shapes
+   allow. → { keep: the keep test's record so far, early: where it ends here, that record
+   with its threshold, else null }. */
+function shapeKeepStart(S, brief){
+  const { res, names, free, q } = S;
+  const dP = names.length - free.length, dPmin = dP - q.iR.length, gain = (chiTotal(res) - brief[0].chi)/Math.max(1, res.stats.chi2);
   const KP = SHAPE_KEEP, kVis = laueTerms(q), need = chi2Upper(kVis + 1, KP.alpha) + KP.margin;
   const keep = { k: kVis, nu: Math.max(1, res.stats.chi2), gainBrief: gain, dPfree: dP, dPheld: dPmin, need };
-  if (!(gain > KP.early*need)){ setParams(model, vIso); return rejectWith({ rejected: true, dBIC: dPmin*Math.log(N) - gain, early: true, keep: { ...keep, early: KP.early*need } }); }
-  let best = null;
-  const finals = [];
-  // A full refinement from v; kept as the best when it is.
-  const full = (v, kind) => {
-    setParams(model, rebase(v));
-    let r; try { r = refine(model, { free: names, ...lmFull }); } catch(e){ return null; }
-    ends.push({ v: model.v.slice(), chi: chiTot(r), kind: kind ? 'full-' + kind.slice(6) : 'full' });
-    if (!best || chiTot(r) < chiTot(best.res)) best = { res: r, v: model.v.slice() };
-    tick();
-    return chiTot(r);
-  };
-  // Each set's best nFull (one set: the best nFull of all).
-  for (const set of sets) for (const b of set.slice(0, nFull)){ const c = full(b.v, b.kind); if (c != null) finals.push(c); }
-  if (!best){ setParams(model, vIso); return null; }
-  // ΔBIC against the isotropic fit, with χ² divided by its χ²_ν (so that the model's own
-  // misfit is not taken for evidence).
-  const bic = r => (chiTot(r) - chiTot(res))/Math.max(1, res.stats.chi2) + (r.stats.P - res.stats.P)*Math.log(N);
-  let held = false, dBICfree, dBICheld = NaN, freeOff = null, freeW = null, bestFree = null;
-  /* Refined again with its exact faces (the rounded ones only steered the search; an
-     ellipsoid's or a spheroid's ball has none, and is never rounded), its axes free; then set
-     on the lattice, its orientation held — a crystallite's faces are lattice planes more often
-     than not, and a held axis is two or three parameters fewer. A frame that a rotation of
-     the class takes onto one tried already ends where that one did, the refinement being
-     equivariant, and is not refined again (sameFrame). The lower ΔBIC is kept. */
+  return { keep, early: gain > KP.early*need ? null : { ...keep, early: KP.early*need } };
+}
+// A full refinement from v; kept as the best when it is. → its χ², or null when it threw.
+function shapeFull(S, v, kind){
+  const { model, names, lmFull } = S;
+  setParams(model, shapeRebase(S, v));
+  let r; try { r = refine(model, { free: names, ...lmFull }); } catch(e){ return null; }
+  S.ends.push({ v: model.v.slice(), chi: chiTotal(r), kind: kind ? 'full-' + kind.slice(6) : 'full' });
+  if (!S.best || chiTotal(r) < chiTotal(S.best.res)) S.best = { res: r, v: model.v.slice() };
+  shapeTick(S);
+  return chiTotal(r);
+}
+// ΔBIC against the isotropic fit, with χ² divided by its χ²_ν (so that the model's own
+// misfit is not taken for evidence).
+const shapeBic = (S, r) => (chiTotal(r) - chiTotal(S.res))/Math.max(1, S.res.stats.chi2) + (r.stats.P - S.res.stats.P)*Math.log(S.N);
+// A full refinement of the names nm from v (rebased). → { res, v } or null.
+function shapeRefineFrom(S, v, nm){
+  const { model, lmFull } = S;
+  setParams(model, shapeRebase(S, v));
+  try { const r = refine(model, { free: nm, ...lmFull }); return { res: r, v: model.v.slice() }; } catch(e){ return null; }
+}
+/* Refined again with its exact faces (the rounded ones only steered the search; an
+   ellipsoid's or a spheroid's ball has none, and is never rounded), its axes free; then set
+   on the lattice, its orientation held — a crystallite's faces are lattice planes more often
+   than not, and a held axis is two or three parameters fewer. A frame that a rotation of
+   the class takes onto one tried already ends where that one did, the refinement being
+   equivariant, and is not refined again (sameFrame). The lower ΔBIC is kept (shapeHeldTest). */
+function shapeExactAndHeld(S){
+  const { model, q, B, names } = S;
   model.shapeSoft = null;
-  const refineFrom = (v, nm) => { setParams(model, rebase(v)); try { const r = refine(model, { free: nm, ...lmFull }); return { res: r, v: model.v.slice() }; } catch(e){ return null; } };
-  if (B.base !== 'ball'){ const ex = refineFrom(best.v, names); if (ex){ best = ex; ends.push({ v: ex.v, chi: chiTot(ex.res), kind: 'exact' }); } }
-  tick();
-  dBICfree = bic(best.res);
+  if (B.base !== 'ball'){ const ex = shapeRefineFrom(S, S.best.v, names); if (ex){ S.best = ex; S.ends.push({ v: ex.v, chi: chiTotal(ex.res), kind: 'exact' }); } }
+  shapeTick(S);
+  S.dBICfree = shapeBic(S, S.best.res);
   let sn = null;
-  const tried = [], same = sameFrame(q, best.v);
-  for (const vs of snaps(best.v)){
+  const tried = [], same = sameFrame(q, S.best.v);
+  for (const vs of shapeSnaps(S, S.best.v)){
     const R = bodyFrame(q, vs);
     if (tried.some(T=> same(T, R))) continue;
     tried.push(R);
-    const r = refineFrom(vs, names.filter(nm=> !q.iR.some(i=> model.par[i].name === nm)));
-    if (r) ends.push({ v: r.v, chi: chiTot(r.res), kind: 'held' });
-    if (r && (!sn || chiTot(r.res) < chiTot(sn.res))) sn = r;
+    const r = shapeRefineFrom(S, vs, names.filter(nm=> !q.iR.some(i=> model.par[i].name === nm)));
+    if (r) S.ends.push({ v: r.v, chi: chiTotal(r.res), kind: 'held' });
+    if (r && (!sn || chiTotal(r.res) < chiTotal(sn.res))) sn = r;
   }
-  if (sn){
-    dBICheld = bic(sn.res);
-    // Held only where the data allow it as well: the free orientation no better than
-    // the held one by more than a 95 % χ² for its 2 or 3 turns. The BIC alone gave
-    // three turns' discount (25) to boxes whose true faces were 8° off ⟨111⟩. Δχ² in the
-    // free fit's own noise, χ²_ν floored at 1: the isotropic fit's, which the misfit the
-    // shape removes inflates (3.2 for a synthetic 16 × 12 × 2.4 nm box, 9–16 for thinner
-    // bodies), had held that box with its faces 4° off the frame in 3 draws of 3 (Δχ²
-    // 10–23 over its three turns), and every on-lattice case is held either way. (Held
-    // below the free fit in χ², the free search ended in a worse valley, the free
-    // orientation including the held one: the minima stage refines the free fit again from
-    // the held frame's end, and tests the held frame against the lowest free minimum.)
-    const gain = (chiTot(sn.res) - chiTot(best.res))/Math.max(1, best.res.stats.chi2);
-    if (dBICheld < dBICfree && gain <= (q.iR.length === 2 ? 5.99 : 7.81)){
-      // How far the free orientation's axes were from the held ones (°).
-      const Rf = bodyFrame(q, best.v), Rh = bodyFrame(q, sn.v);
-      freeOff = [0, 1, 2].map(i=> Math.acos(Math.min(1, Math.abs(Rf[i]*Rh[i] + Rf[3 + i]*Rh[3 + i] + Rf[6 + i]*Rh[6 + i])))*R2D);
-      freeW = q.iW.map(i=> best.v[i]);
-      bestFree = best; best = sn; held = true;
-    }
+  if (sn) shapeHeldTest(S, sn);
+}
+// How far the free orientation's axes (in v) were from the held ones (in vh), °.
+function shapeFreeOff(q, v, vh){
+  const Rf = bodyFrame(q, v), Rh = bodyFrame(q, vh);
+  return [0, 1, 2].map(i=> Math.acos(Math.min(1, Math.abs(Rf[i]*Rh[i] + Rf[3 + i]*Rh[3 + i] + Rf[6 + i]*Rh[6 + i])))*R2D);
+}
+// Held only where the data allow it as well: the free orientation no better than
+// the held one by more than a 95 % χ² for its 2 or 3 turns. The BIC alone gave
+// three turns' discount (25) to boxes whose true faces were 8° off ⟨111⟩. Δχ² in the
+// free fit's own noise, χ²_ν floored at 1: the isotropic fit's, which the misfit the
+// shape removes inflates (3.2 for a synthetic 16 × 12 × 2.4 nm box, 9–16 for thinner
+// bodies), had held that box with its faces 4° off the frame in 3 draws of 3 (Δχ²
+// 10–23 over its three turns), and every on-lattice case is held either way. (Held
+// below the free fit in χ², the free search ended in a worse valley, the free
+// orientation including the held one: the minima stage refines the free fit again from
+// the held frame's end, and tests the held frame against the lowest free minimum.)
+function shapeHeldTest(S, sn){
+  const { q } = S, best = S.best;
+  S.dBICheld = shapeBic(S, sn.res);
+  const gain = (chiTotal(sn.res) - chiTotal(best.res))/Math.max(1, best.res.stats.chi2);
+  if (S.dBICheld < S.dBICfree && gain <= (q.iR.length === 2 ? 5.99 : 7.81)){
+    S.freeOff = shapeFreeOff(q, best.v, sn.v);
+    S.freeW = q.iW.map(i=> best.v[i]);
+    S.bestFree = best; S.best = sn; S.held = true;
   }
-  // The keep test on G, the larger gain of the free and held fits (the free one includes the
-  // held frame), with the per-line check of the fit tested where G passes: where it fires,
-  // ΔBIC < −bic as well.
-  let cb = chiTot(best.res), dBIC = bic(best.res);
-  const g = r => (chiTot(res) - chiTot(r))/keep.nu;
-  Object.assign(keep, { gainFree: bestFree ? g(bestFree.res) : held ? NaN : g(best.res), gainHeld: held ? g(best.res) : Number.isFinite(dBICheld) ? dPmin*Math.log(N) - dBICheld : NaN,
-    held, gain: g(best.res), dP: best.res.stats.P - res.stats.P, dBIC });
+}
+// The keep test on G, the larger gain of the free and held fits (the free one includes the
+// held frame), with the per-line check of the fit tested where G passes: where it fires,
+// ΔBIC < −bic as well. → keep.kept (S.cb, S.dBIC the best fit's χ² and ΔBIC).
+function shapeKeepTest(S, keep){
+  const { model, k, res, held, best, bestFree, dBICheld, N } = S;
+  S.cb = chiTotal(best.res); S.dBIC = shapeBic(S, best.res);
+  const g = r => (chiTotal(res) - chiTotal(r))/keep.nu;
+  Object.assign(keep, { gainFree: bestFree ? g(bestFree.res) : held ? NaN : g(best.res), gainHeld: held ? g(best.res) : Number.isFinite(dBICheld) ? keep.dPheld*Math.log(N) - dBICheld : NaN,
+    held, gain: g(best.res), dP: best.res.stats.P - res.stats.P, dBIC: S.dBIC });
   keep.G = Math.max(keep.gain, Number.isFinite(keep.gainFree) ? keep.gainFree : -Infinity);
-  if (keep.G > need){ const c = lineCheck(model, k, best.v, best.res.stats.P); Object.assign(keep, { flagged: c.flagged, zSeg: c.zSeg, zBin: c.zBin }); }
-  keep.kept = keep.G > need && (!keep.flagged || dBIC < -KP.bic);
-  if (!keep.kept){ setParams(model, vIso); return rejectWith({ rejected: true, dBIC, keep }); }
-  /* The minima stage (SHAPE_MINIMA): the search's ends refined to the same level and merged. A
-     free minimum below the search's free fit takes its place, and the held frame (when held) is
-     tested against it again as above. info.minima: those within keep·ν of the lowest; ν the
-     lowest's χ²_ν floored at 1. */
+  if (keep.G > keep.need){ const c = lineCheck(model, k, best.v, best.res.stats.P); Object.assign(keep, { flagged: c.flagged, zSeg: c.zSeg, zBin: c.zBin }); }
+  keep.kept = keep.G > keep.need && (!keep.flagged || S.dBIC < -SHAPE_KEEP.bic);
+}
+/* The minima stage (SHAPE_MINIMA): the search's ends refined to the same level and merged. A
+   free minimum below the search's free fit takes its place, and the held frame (when held) is
+   tested against it again as above. info.minima: those within keep·ν of the lowest; ν the
+   lowest's χ²_ν floored at 1. → that list (with its stage's record), or null. */
+function shapeMinimaStage(S, keep){
+  const { model, k, q, names, lmCentral } = S;
   let minima = null;
-  const free0 = held ? bestFree : best, nu0 = Math.max(1, free0.res.stats.chi2);
-  const st = shapeMinima(model, k, ends, { names, lm: lmCentral, rebase, nu: nu0, chiTot, flagged: !!keep.flagged });
+  const free0 = S.held ? S.bestFree : S.best, nu0 = Math.max(1, free0.res.stats.chi2);
+  const st = shapeMinima(model, k, S.ends, { names, lm: lmCentral, rebase: v => shapeRebase(S, v), nu: nu0, chiTot: chiTotal, flagged: !!keep.flagged });
   if (st && st.minima.length){
-    const m0 = st.minima[0], nu = Math.max(1, m0.res.stats.chi2), before = chiTot(free0.res);
-    if (chiTot(m0.res) < before){
+    const m0 = st.minima[0], nu = Math.max(1, m0.res.stats.chi2), before = chiTotal(free0.res);
+    if (chiTotal(m0.res) < before){
       const mf = { res: m0.res, v: m0.v };
-      dBICfree = bic(mf.res);
-      if (held){
-        const gain = (chiTot(best.res) - chiTot(mf.res))/Math.max(1, mf.res.stats.chi2);
-        if (dBICheld < dBICfree && gain <= (q.iR.length === 2 ? 5.99 : 7.81)){
-          const Rf = bodyFrame(q, mf.v), Rh = bodyFrame(q, best.v);
-          freeOff = [0, 1, 2].map(i=> Math.acos(Math.min(1, Math.abs(Rf[i]*Rh[i] + Rf[3 + i]*Rh[3 + i] + Rf[6 + i]*Rh[6 + i])))*R2D);
-          freeW = q.iW.map(i=> mf.v[i]);
-        } else { best = mf; held = false; freeOff = null; freeW = null; }
-      } else best = mf;
-      cb = chiTot(best.res);
+      S.dBICfree = shapeBic(S, mf.res);
+      if (S.held){
+        const gain = (chiTotal(S.best.res) - chiTotal(mf.res))/Math.max(1, mf.res.stats.chi2);
+        if (S.dBICheld < S.dBICfree && gain <= (q.iR.length === 2 ? 5.99 : 7.81)){
+          S.freeOff = shapeFreeOff(q, mf.v, S.best.v);
+          S.freeW = q.iW.map(i=> mf.v[i]);
+        } else { S.best = mf; S.held = false; S.freeOff = null; S.freeW = null; }
+      } else S.best = mf;
+      S.cb = chiTotal(S.best.res);
     }
-    const c0 = chiTot(m0.res);
+    const c0 = chiTotal(m0.res);
     minima = st.minima.filter(m=> (m.chi - c0)/nu <= SHAPE_MINIMA.keep).map(m=> ({ chi2: m.chi, delta: (m.chi - c0)/nu, W: m.f.W, R: m.f.R, s: m.f.s, n: m.n, from: m.from }));
     minima.stage = { ends: st.ends, cands: st.cands, refined: st.refined, before, after: c0, left: st.left, skipped: st.skipped, capped: st.capped, explored: st.explored, evals: st.evals, flagged: !!keep.flagged };
   }
-  tick();
-  // The fit kept refined once more by central differences, its covariance from there (else,
-  // should that throw, its covariance alone). Its ΔBIC and outcome are the search's.
-  setParams(model, best.v);
+  return minima;
+}
+// The fit kept refined once more by central differences, its covariance from there (else,
+// should that throw, its covariance alone). Its ΔBIC and outcome are the search's.
+function shapeResult(S, keep, minima){
+  const { model, k, q, res, lmCentral, nSets, specs, finals, N } = S;
+  setParams(model, S.best.v);
   let r = null;
-  try { r = refine(model, { free: best.res.free, ...lmCentral }); } catch(e){ setParams(model, best.v); }
-  if (!r) try { r = refine(model, { free: best.res.free, ...lmCentral, covOnly: true }); } catch(e){ setParams(model, best.v); }
-  if (r){ best = { res: r, v: model.v.slice() }; cb = chiTot(r); }
-  const check = lineCheck(model, k, best.v, best.res.stats.P);
+  try { r = refine(model, { free: S.best.res.free, ...lmCentral }); } catch(e){ setParams(model, S.best.v); }
+  if (!r) try { r = refine(model, { free: S.best.res.free, ...lmCentral, covOnly: true }); } catch(e){ setParams(model, S.best.v); }
+  if (r){ S.best = { res: r, v: model.v.slice() }; S.cb = chiTotal(r); }
+  const { best } = S, check = lineCheck(model, k, best.v, best.res.stats.P);
   return { res: best.res, info: { type: q.shapeType, starts: nSets*specs.length, full: finals.length, ...(nSets > 1 ? { tiltSets: nSets - 1 } : null),
-    chi2Iso: chiTot(res), chi2: cb, Piso: res.stats.P, P: best.res.stats.P, N, chi2redIso: res.stats.chi2, held, dBICfree, dBICheld, freeOff, freeW, check, keep,
+    chi2Iso: chiTotal(res), chi2: S.cb, Piso: res.stats.P, P: best.res.stats.P, N, chi2redIso: res.stats.chi2, held: S.held, dBICfree: S.dBICfree, dBICheld: S.dBICheld, freeOff: S.freeOff, freeW: S.freeW, check, keep,
     ...(minima ? { minima, minimaStage: minima.stage } : null) } };
 }
 

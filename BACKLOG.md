@@ -738,9 +738,40 @@ was proposed; nothing here is in the code yet.
   sessions alone). tests/figuremodel.test.mjs,
   tests/filelistmodel.test.mjs and tests/cell3d.test.mjs keep the calculations' and markup's
   tests and 40 cases each (the views' six) as v563 gave them, shape3d.test.mjs six cases of
-  the shape's events (golden digests). Still long (v564): figure.js's `controlsHtml` (128),
-  `buildModel` (97), `seriesFromPlot` (87); utils.js's colour picker `_build` (117). The
-  others when work takes us into them.
+  the shape's events (golden digests). Done for the long numeric and parsing routines in
+  v565, each in its own file as before, its stages named and its state passed to them as one
+  object: the worker's `summarise` (395 lines, its loop over the phases alone 180) to 12, over
+  `standardGroups` or `specimenGroup`, `phaseGroup` (`latticeLines`, `textureLine`,
+  `shapeLines` with `ellipsoidLines`, `bodyLines`, `bodyAxisLines`, `solidOf` and
+  `isoCompareLine`, `sizeLines`, `strainLines` with `stephensLines` and `planeStrainLines`,
+  `faultLines`, `deltaB` with `siteB` and `siteUij`, `occLines`, `heldLine`) and `fitNotes`;
+  xrd-cryst.js's `findSymmetry` (306) to 11, over the atoms' state (`symAtoms`, `symGrids`), the
+  matching on it (`symFind`, `symMaps`, `symHolds`, `symTryT`, `symSnapFit` …) and each try
+  at a tolerance (`symAttempt`: `symTranslations`, `symLattice`, `symReps`, `symClose`,
+  `symOps`, `symmetrized`), and `parseCif` (231) to 22 (`cifBlockOf`, `cifCell`,
+  `cifSymmetry`, `cellRoundingOf`, `missingAngles`, `closedCell`, `checkOps`, `anisoBOf`,
+  `cifSites`, `symbolOnlyCheck` …); xrd-rietveld.js's `bodyShapeOf` (297) to 11 (`bodySetup`,
+  `bodyTurns`, `bodyDims`, `bodyPair` with `bodyPairProfile`, `bodyGroups`, `bodyAxes`,
+  `bodyKind`, `bodyAcross`, `bodyMisfit`, `bodySets`, `bodyMinima`, `bodyIntervals`),
+  `freeShapeRun` (261) to 24 (`shapeRunSetup`, `shapeSpecs`, `shapeBriefs`, `shapeKeepStart`,
+  `shapeFull`, `shapeExactAndHeld`, `shapeKeepTest`, `shapeMinimaStage`, `shapeResult` …),
+  `buildModel` (209) to 34 (`patternPoints`, `instrumentOf`, `bgBasis`, `globalParams`,
+  `modelPhases`, `modelPhase`, `phaseCoreParams`, `phaseOptions`) and `refineHeld` (177) to
+  19 (`lmSetup`, `lmIterations`, `lmSystem`, `lmTries`, `lmStepAt`, `lmTrial`, `lmAccept`,
+  `lmLinSolve`, `lmCovariance`, `lmTied`, `lmResult`); xrd-widths.js's `measureWidths` (254)
+  to 10 (`widthsSetup`, `peakGroups`, `readPhase`, `readPeak`, `fitWindows`, `notThisPeak`,
+  `othersShare`, `peakRow`, `judgeModels`, `settleRows`, `rowBias`). The longest stage 49
+  lines (`patternPoints`, half of it the weights' comment), the others 34 or fewer; every
+  export as it was. The same operations in the same order, the floating-point sums and
+  products as written, the progress posted in its order: v564's code and this, side by side
+  in Node on the same inputs, every number compared by Object.is (the results, the models
+  after, the worker's every message, the clock's readings and Math.random's calls), and a
+  session in Chromium with the app's own worker, none different; tests/stages.test.mjs keeps
+  83 of the cases as v564 gave them (golden digests). Still long (v565): figure.js's
+  `controlsHtml` (128), `buildModel` (97), `seriesFromPlot` (87); utils.js's colour picker
+  `_build` (117); xrd-cryst.js's `checkComposition` (120); xrd-widths.js's `fitPeak` (109);
+  xrd-rietveld.js's `wppmLineOf` (90), `shapeOf` (85), `phasePattern` (80), `solveLinear`
+  (77). The others when work takes us into them.
 - **The trace list: a row's grip takes the mouse's right button (found in v564, as v563 has
   it).** The ≡ that drags a row to another place in every module's trace list (utils.js
   `wireListDrag`) starts a drag on any button's press: pressed with the right button and let
@@ -760,6 +791,16 @@ was proposed; nothing here is in the code yet.
   field refused, set back to 3). Proposed: the field's range a bar's where every series is a
   bar (and, with lines and bars together, the value cut to each one's range, or the field
   for the lines alone). Left as it is meanwhile (a visible change).
+- **A CIF whose space-group symbol is blank but quoted (found in v565, as v564 has it).** A
+  symbol written as `_symmetry_space_group_name_H-M ' '` (a blank between quotes, as some
+  programs write P1) is read as a name: with symmetry operations listed, `parseCif`'s check
+  of a centred symbol takes the first letter of the empty symbol and throws a TypeError, so
+  the file is refused with "Cannot read properties of undefined (reading 'toUpperCase')"
+  instead of being read (checked on v564 in Node: parseCif and prepPhase on such a file
+  with its operations x, y, z and −x, −y, −z); with none listed, the file is read but the
+  note says "The CIF lists no symmetry operations for : …" and the symbol counts as named
+  (the no-operations test then runs on it). Proposed: a blank symbol (as a blank Hall
+  symbol or name) read as none. Left as it is meanwhile (a visible change).
 - **Iodometry: a file whose bytes cannot be read ends the whole drop (found in v563, as
   v562 has it).** The drop reads each file's bytes (`file.arrayBuffer()`, iodo.js `onDrop`)
   outside the guard that refuses a file it cannot read: a file gone from the disk after it

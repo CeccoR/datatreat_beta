@@ -227,6 +227,8 @@ The XRPD module (`xrd.js`) reads each `.xrdml` file through `readXrdmlScans` (`x
 
 **The file's text** is decoded from its bytes as the modules' text files are (`textdata.js` `decodeText`): UTF-8 with or without its mark, UTF-16 LE or BE by its mark or, without one, by the zero byte beside each character. Up to v493 it was read with `Blob.text()`, UTF-8 alone: a UTF-16 CIF without its mark read as no CIF ("no data_ block found").
 
+**Code** (v565). `parseCif` reads the file in named stages, in the order it reads it and warns: the data block (`cifBlockOf`), the cell (`cifCell`), the group's names and operations (`cifSymmetry`; a magnetic CIF's, `cifMagneticOps`), the rounding the cell's digits hide (`cellRoundingOf`), the angles it lacks (`missingAngles`), the cell checked (`closedCell`), the operations checked (`checkOps`), the anisotropic B's (`anisoBOf`), the sites (`cifSites`, each one `cifSite` with `cifOccupancy` and `cifBiso`), and a group named without its operations (`symbolOnlyCheck`, `symbolShown`). Up to v564 one function: the same operations in the same order, the same results (tests/stages.test.mjs).
+
 **The parser** reads a CIF 1.1 subset, and accepts DDLm tag spellings (`_atom_site.fract_x`). Throughout, it refuses what would give a wrong pattern without an error, and warns where it assumes.
 
 *Block, cell and operations.*
@@ -292,6 +294,8 @@ A mismatch is "the signature of coordinates written for one origin choice (or se
 ### 2.4 Symmetry from the atoms
 
 Whatever operations the CIF has, the engine uses the symmetry it finds in the filled cell (`findSymmetry`). The CIF's operations only fill the cell.
+
+From v565 `findSymmetry` works on a state of the atoms made once (`symAtoms`: their positions and roundings, their groups by species and occupancy, the reference atoms; `symGrids`), matches on it (`symFind`, `symMaps`, `symHolds`, `symTryT`, `symSnapFit`), and tries each tolerance in turn (`symAttempt`: the pure translations, `symTranslations`, made exact, `symLattice`; one translation for each matrix of the lattice's holohedry, `symReps`; the group closed, `symClose`; the operations in order, `symOps`; the atoms at the mean of their images, `symmetrized`). Up to v564 one function's closures, with the same results (tests/stages.test.mjs).
 
 **Lattice symmetry** (`holohedry`, `latticeSymmetry`).
 - It collects every integer matrix with det ±1 and RᵀGR = G within 10⁻⁴ (relative) or, where the written cell's digits hide more, within their rounding (§2.3): each entry uᵀGv − G_ij to the larger of 10⁻⁴·√(G_ii G_jj) and Σ_k e_k |uᵀD_k v − (D_k)_ij|. At most 48. A cell in a standard setting writes its symmetric values alike, so the rounding matters in a non-standard basis: the 530 settings in a random unimodular basis (every other one tried), the cell written with four decimals and its angles with two (the usual precision), kept their whole point group in 96 of 265 cases under 10⁻⁴ alone, the rest falling to a lower system; with the rounding, all 265 (and all at three decimals, against 55). Angles written to 0.1° with lengths to three or four decimals: 134 and 26 of 265 counted exact, all 265 with their 0.05°. A cell written with eight decimals is searched as before.
@@ -417,6 +421,8 @@ y_c = b + Σ_p S_p · pattern_p        (assemble)
 ```
 
 When only linear parameters change (scales, background), only this sum is redone.
+
+The model is built by `buildModel` (v565 in stages: the points and their weights, `patternPoints`, §2.1; the lines and the polarisation, `instrumentOf`; the background's basis, `bgBasis`; the instrument's and the background's parameters, `globalParams`; each phase's reflections and parameters, `modelPhases`, `modelPhase`, `phaseCoreParams`, `phaseOptions`).
 
 ### 3.2 The reflection list
 
@@ -769,6 +775,8 @@ Which ones are free at each stage is decided by the strategy (§6).
 ## 5. Least squares
 
 The solver is `refine` / `refineHeld` (`xrd-rietveld.js`): Levenberg–Marquardt, with a handful of additions that came from failures on real and synthetic data.
+
+From v565 `refineHeld` is in named stages over the refinement's state (`lmSetup`): each iteration the normal equations (`lmSystem`), steps tried at growing damping until one lowers χ² (`lmTries`: `lmStepAt`, `lmTrial`, `lmAccept`), the linear parameters solved where the steps stop (`lmLinSolve`, §5.3); then the covariance (`lmCovariance`, `lmTied`, §5.7) and the result (`lmResult`). Up to v564 one function: the same operations in the same order (tests/autorefine.test.mjs, tests/stages.test.mjs).
 
 ### 5.1 The normal equations
 
@@ -1777,6 +1785,8 @@ On round 2's 77 validation runs the search (with the exact line) made 0.75× v52
 
 **The family** (on request: `freeShape`'s `opts.family`, `'general'` or `'all'`; the card does not ask yet). The solid asked for is searched again, from the same isotropic fit, as its nested partner and the three general members (box, elliptic cylinder, ellipsoid), each in a sibling model (`siblingModel`, `shapeFamily`): about 4.5 times the search. The verdict (`familyVerdict`, `info.family`) takes each family by its best member's χ²; it is determined when the runner-up lies 14 χ²_ν above the winner, 35 where the winner's per-line check fired (the 5 % points of a bootstrap on 45 tuning rows); within the winner the general member only where it beats its special one by the 95 % χ² of its extra parameters (3.84 for the box, 5.99 for the elliptic cylinder and the ellipsoid; 25 where its check fired). On round 2's validation truths no clean truth was given a wrong family (0 of 33); three flagged error rows were, by 64–147 χ²_ν (research/free-shape/round2/STEP5.md, VALIDATION.md §8).
 
+**Code** (v565). `freeShapeRun` is in named stages over the search's state (`shapeRunSetup`): the starts (`shapeSpecs`), the brief refinements (`shapeBriefs`), the keep test's threshold and the early end (`shapeKeepStart`), the full refinements (`shapeFull`), the exact faces and the frames on the lattice (`shapeExactAndHeld`, `shapeSnaps`, `shapeHeldTest`), the keep test (`shapeKeepTest`), the minima stage (`shapeMinimaStage`) and the fit kept (`shapeResult`). Up to v564 one function: the same refinements in the same order (tests/stages.test.mjs).
+
 ### 10.6 Flat faces: rounded for the search, exact for the result
 
 **The problem.** A flat face makes the column length kink wherever a direction lies in it. Every member of a family lying in a face is then a V-shaped valley of χ² in the orientation, which least squares cannot settle into. A disc on the user's SrTiO₃ stopped anywhere between χ² 6364 and 6427, depending on its start.
@@ -1876,6 +1886,8 @@ Why: swapping them has no first-order effect, so their widths are anticorrelated
 | cylinder | disc, rod, equant | |
 
 Dimensions in a group count as the group's mean, as the v420 ellipsoid's always did. Up to v426 a body's kind read each member's own value: of the 32 synthetic 150 × 150 × 4 nm plates above, 19 were called triaxial (edges not told apart that read 99 and 488 nm, or told apart through a width on 0); now 3 are, the 3 pairs still told apart (two ellipsoids, z 2.1 and 2.1, and an elliptic cylinder, 2.8; a fourth, a box at z 2.3 against z > 2, is grouped against the 2-degree quantile). The thresholds (½, 2, 20 %) are labels; the dimensions are given beside them. Zingg's classification of particle shapes puts its bounds at ⅔ instead; a body of revolution is a disc or a rod past 20 % (it has no "anisotropic" middle).
+
+**Code** (v565). `bodyShapeOf` is in named stages over the body's state (`bodySetup`): the axes' angular esds (`bodyTurns`), the dimensions along x, y, z (`bodyDims`), each pair told apart or not (`bodyPair`, its profile `bodyPairProfile`), the groups (`bodyGroups`), the axes and their lattice directions (`bodyAxes`), the kind (`bodyKind`), the directions across the axis (`bodyAcross`), the per-line check and the jackknife (`bodyMisfit`), the sets (`bodySets`), the minima and the 95 % intervals (`bodyMinima`, `bodyIntervals`). Up to v564 one function, with the same results (tests/stages.test.mjs).
 
 ### 10.10 Directions
 
@@ -2006,6 +2018,8 @@ W_p = \frac{S_p\,(ZMV)_p}{\sum_q S_q\,(ZMV)_q}
 ## 12. Peak widths and the tests that use them
 
 After a sample's refinement, `measureWidths` (`xrd-widths.js`) fits every reflection of each detected phase alone. Three tests then read what the widths themselves say, before any model of the shape.
+
+From v565 `measureWidths` is in named stages over the measurement's state (`widthsSetup`): the peaks grouped (`peakGroups`), each phase's read (`readPhase`; each peak `readPeak`: its windows and fits, `fitWindows`, whether it is the reflection's, `notThisPeak`, its row, `peakRow` with `othersShare`), each phase's isotropic model judged (`judgeModels`), the rows settled (`settleRows`, `rowBias`). Up to v564 one function, with the same results (tests/stages.test.mjs).
 
 ### 12.1 Isolating a peak
 
@@ -2169,6 +2183,8 @@ An exception gives an error message. A failure of the peak widths only adds a wa
 **The history during a run.** A run holds the module's undo history (`utils.js` `UndoStack.hold`) from the state on show as it starts: a sample card's as its Refine or Refine all starts, or starts waiting for the standard's run (*Refine the standard first*); the standard's as its own starts, from its window or for a sample. While it runs, Ctrl+Z goes down to that state and no lower: there it does nothing, silently (no banner, no message: up to v508 every undo and redo waited for the run's end, a banner saying so). Above it undo and redo go as ever, over the steps taken meanwhile (another card folded, moved or closed, a file's label or colour, a file removed or added, the Results' size by): they cannot touch what the run uses, whose controls are locked (the phases' × and ticks, Settings… read only, + CIF, Clear) from the moment it holds the history, a sample's wait for the standard's run included (up to v508 they were open during the wait, the run taking them as it started after it). A step undone or redone around the running card leaves its panel as it is, not built again: its run, its progress, Cancel, the Settings read only if open, the rows locked; its phases, settings, start and Refinement settings stay as the run took them, and so do the patterns it has written, the state's other results coming in (a file removed meanwhile and brought back by an undo brings its own); what the views show (the phase on show, the Results' size by and normalisation) is the state's. The standard's run, its window open or closed, the same. A redo branch there when the run starts is set aside, as a step would drop it, and comes back if the run ends having written nothing with no step taken meanwhile; under *Refine the standard first*, once the standard's run and the sample's wait have both ended so.
 
 When the run ends, finished, stopped, failed, its card closed or switched, or its tab closed, the history is free again, and the patterns it wrote go in: into every state saved during the run where the card is (by id, a Rietveld card or one switched to Scherrer, which keeps its Rietveld settings) and the pattern is (by name), and as a step of their own inserted right after the state the run started from (that state with them), the steps taken meanwhile after it. So an undo of a step taken during the run never takes the results away: undoing from the end goes back over the steps taken meanwhile (the results in each), then the results (one step), then the steps before the run. A run that wrote nothing (stopped before its first pattern) adds no step. The states are copies where they change: a state's own objects, and the results, frozen and shared by the states (§13.2, *State*), are never changed. With them goes each file's instrument as read from its header, a cache the run keeps on the file as it reads it (the samples' files and the standard's each matched in their own list, the standard possibly bearing a sample's name), so the run's own commit at its end adds nothing, the state on show being the one written (else a step with nothing to see); the project is marked unsaved by it as by an undo. Two runs at once each hold from their own start and give their own step: the standard's run and a sample's waiting for it, the standard's step first, then the sample's, as their results came; two sample cards, each its own, a redo branch the later one set aside (steps of the earlier one's run, undone) taking the earlier one's results too. The history keeps 80 states: a run whose starting state went past them writes its results into every state kept, and gives no step of its own. The tab closed (which stops the run) ends the hold (to v517 a project opened, a new one, or the tab left too).
+
+**Code** (v565). The worker's `summarise` is in named stages over the summary's state: the standard's groups (`standardGroups`) or the specimen's (`specimenGroup`), then each phase's (`phaseGroup`: `latticeLines`, `textureLine`, the shape's `shapeLines`, the size's `sizeLines`, the strain's `strainLines` and `stephensLines`, `faultLines`, `deltaB`, `occLines`, `heldLine`), and the notes on the fit (`fitNotes`). Up to v564 one function's closures: the same lines, rows and warnings in the same order, the same messages (tests/stages.test.mjs).
 
 ### 13.2 The card
 

@@ -505,8 +505,35 @@ function equivIso(Uij, G, Gs){
 // of the sites given no displacement parameter), warnings }. Reads the first data block that
 // has fractional atom sites. Throws (with a message for the user) when the file has no data
 // block, no such atom sites, or no cell: whatever it returns is usable. Everything else it
-// can work around is in `warnings`.
+// can work around is in `warnings`. Its stages, in the order they read the file and warn:
+// the block, the cell, the symmetry, the rounding the cell's digits hide, the angles it
+// lacks, the cell checked, the operations checked, the sites, the formula, a group named
+// without its operations.
 function parseCif(text){
+  const { b, warnings } = cifBlockOf(text);
+  const { cell, noAngle } = cifCell(b);
+  const sg = cifSymmetry(b, warnings);
+  const rnd = cellRoundingOf(b, cell, noAngle);
+  if (noAngle.length) missingAngles(cell, noAngle, sg.ops, rnd, warnings);
+  const { G, Gs } = closedCell(cell, rnd);
+  if (sg.ops.length) checkOps(sg, cell, warnings);
+  const { sites, defaultB } = cifSites(b, warnings, anisoBOf(b, G, Gs));
+  const formulaSum = item(b, '_chemical_formula_sum');
+  const formula = parseFormula(formulaSum);
+  const zz = num(item(b, '_cell_formula_units_z'));
+  const Z = zz > 0 ? zz : null;
+  symbolOnlyCheck({ sg, cell, sites, formula, Z, warnings });
+  const structural = item(b, '_chemical_formula_structural');
+  const name = item(b, '_chemical_name_mineral') || structural
+    || (formula ? formulaText(formula) : null) || item(b, '_chemical_name_common') || b.name;
+  const { hm, hall, itNumber, ops } = sg;
+  return { name: String(name).trim(), block: b.name, cell, hm: hm ? hm.trim() : null, itNumber, hall: hall ? hall.trim() : null,
+           ops, sites, formulaSum: formulaSum ? formulaSum.trim() : null, formulaStructural: structural ? String(structural).trim() : null,
+           formula, Z, defaultB, warnings };
+}
+// The first data block with fractional atom sites, and the warnings so far (the lexer's,
+// and of a file of several structures).
+function cifBlockOf(text){
   const { blocks, warnings: lexWarnings } = cifBlocks(String(text ?? ''));
   if (!blocks.length) throw new Error('Not a CIF: no data_ block found.');
   const withAtoms = blocks.filter(b => column(b, '_atom_site_fract_x'));
@@ -518,16 +545,21 @@ function parseCif(text){
   const b = withAtoms[0];
   const warnings = lexWarnings.slice();
   if (withAtoms.length > 1) warnings.push(`The file holds ${withAtoms.length} structures: the first, data_${b.name}, is used.`);
-
-  // Cell
+  return { b, warnings };
+}
+// The cell as written, and the angles it lacks or gives invalid.
+function cifCell(b){
   const cell = {
     a: num(item(b, '_cell_length_a')), b: num(item(b, '_cell_length_b')), c: num(item(b, '_cell_length_c')),
     alpha: num(item(b, '_cell_angle_alpha')), beta: num(item(b, '_cell_angle_beta')), gamma: num(item(b, '_cell_angle_gamma')),
   };
   if (!(cell.a > 0 && cell.b > 0 && cell.c > 0)) throw new Error('The CIF has no complete unit cell (_cell_length_a, _b, _c).');
   const noAngle = ['alpha','beta','gamma'].filter(k => !(cell[k] > 0 && cell[k] < 180));
-
-  // Symmetry
+  return { cell, noAngle };
+}
+// The group's names and its operations (a magnetic CIF's: cifMagneticOps), each once.
+// → { hm, hall, itNumber, ops, magName, parent }.
+function cifSymmetry(b, warnings){
   const hm = item(b, '_space_group_name_h-m_alt', '_symmetry_space_group_name_h-m', '_space_group_name_h-m');
   const hall = item(b, '_space_group_name_hall', '_symmetry_space_group_name_hall');
   const itn = num(item(b, '_space_group_it_number', '_symmetry_int_tables_number'));
@@ -535,13 +567,18 @@ function parseCif(text){
   const opsCol = column(b, XYZ_TAGS[0]) || column(b, XYZ_TAGS[1]);
   const read = col => { const out = []; for (const s of col || []){ if (isNull(s)) continue; try { out.push(readSymop(s)); } catch(e){ warnings.push(e.message + ' It is ignored.'); } } return out; };
   let [ops] = symopsOf([read(opsCol)]);
-  /* A magnetic CIF (MAGNDATA, ISODISTORT) gives its group as operations and centrings with
-     time reversal: the space-group operations are every centring times every operation,
-     time reversal dropped (it does not move the atoms, and the moments scatter X-rays
-     negligibly); the pairs that differ only by it are one. A superspace (incommensurate)
-     one cannot be read here. */
   const magName = item(b, '_space_group_magn_name_bns', '_space_group_magn_number_bns', '_space_group_magn_name_og', '_space_group_magn_number_og');
   const parent = item(b, '_parent_space_group_name_h-m_alt', '_parent_space_group_it_number');
+  cifMagneticOps(b, ops, { read, magName, warnings });
+  ops = uniqueOps(ops);
+  return { hm, hall, itNumber, ops, magName, parent };
+}
+/* A magnetic CIF (MAGNDATA, ISODISTORT) gives its group as operations and centrings with
+   time reversal: the space-group operations are every centring times every operation,
+   time reversal dropped (it does not move the atoms, and the moments scatter X-rays
+   negligibly); the pairs that differ only by it are one. A superspace (incommensurate)
+   one cannot be read here. Added to ops where the file gives no other. */
+function cifMagneticOps(b, ops, { read, magName, warnings }){
   const magOps = column(b, MAGN_TAGS[0]);
   if (column(b, '_space_group_symop_magn_ssg_operation_algebraic') || column(b, '_space_group_symop_magn_ssg_centering_algebraic'))
     throw new Error('A magnetic CIF of a modulated (superspace) structure: its operations are not read here. A CIF of its average structure, or of a commensurate approximant, is needed.');
@@ -553,64 +590,71 @@ function parseCif(text){
     }
     if (ops.length) warnings.push(`A magnetic CIF${magName ? ` (${String(magName).trim()})` : ''}: its ${uniqueOps(ops).length} space-group operations are taken, without time reversal; the magnetic moments are not used (they scatter X-rays negligibly).`);
   }
-  ops = uniqueOps(ops);
-  // The rounding the written cell may hide: half a unit of the last decimal. Exact: a length
-  // with one decimal or none (as roundingOf), an angle of 60, 90 or 120°, or a whole one. An
-  // angle to 0.1° (older structures: β = 104.5(2)°) is a measurement: counted exact, the 530
-  // settings in a random basis, lengths to three decimals, kept their point group in 134 of 265.
+}
+// The rounding the written cell may hide: half a unit of the last decimal. Exact: a length
+// with one decimal or none (as roundingOf), an angle of 60, 90 or 120°, or a whole one. An
+// angle to 0.1° (older structures: β = 104.5(2)°) is a measurement: counted exact, the 530
+// settings in a random basis, lengths to three decimals, kept their point group in 134 of 265.
+// → { eLen, eAngOf (an angle's value → its rounding), eAng (a cell → its angles' roundings) }.
+function cellRoundingOf(b, cell, noAngle){
   const half = (v, dmin) => { const d = decimalsOf(v); return d >= dmin && d !== Infinity ? 0.5*Math.pow(10, -d) : 0; };
   const eLen = ['a', 'b', 'c'].map(k => half(item(b, '_cell_length_' + k), 2)), eAngOf = new Map();
   for (const k of ['alpha', 'beta', 'gamma']) if (!noAngle.includes(k)) eAngOf.set(cell[k], [60, 90, 120].includes(cell[k]) ? 0 : half(item(b, '_cell_angle_' + k), 1));
   const eAng = c => ['alpha', 'beta', 'gamma'].map(k => eAngOf.get(c[k]) || 0);
-  /* A missing or invalid angle: the one the operations require, when they leave a single
-     choice among 90°, 120°, 60° and the angles given (every R keeps the metric, RᵀGR = G,
-     within the holohedry's tolerance: 1e-4, or the rounding of the written cell where larger);
-     else 90°.
-     A hexagonal file without γ read 90° up to v426, and its 3- and 6-fold operations then
-     merged reflections of different d. Monoclinic β, or any angle a triclinic file omits, the
-     operations do not fix: 90°, warned as before. */
-  if (noAngle.length){
-    const cands = [...new Set([90, 120, 60, ...eAngOf.keys()])];
-    const combos = noAngle.reduce((acc, k)=> acc.flatMap(c => cands.map(v => ({ ...c, [k]: v }))), [{}]);
-    const fits = ops.some(o => !isIdent(o.R)) ? combos.filter(c =>{
-      const tc = { ...cell, ...c }, { G, V } = metric(tc);
-      if (!(V > 1e-6*tc.a*tc.b*tc.c)) return false;
-      const dG = metricRounding(tc, eLen, eAng(tc)), col = (R, i) => [R[i], R[3 + i], R[6 + i]];
-      // (RᵀGR)_ij = r_iᵀ G r_j, r_i the columns of R
-      return ops.every(({ R }) => [0, 1, 2].every(i => [0, 1, 2].every(j =>
-        Math.abs(qf(G, col(R, i), col(R, j)) - G[3*i + j]) <= Math.max(1e-4*Math.sqrt(G[4*i]*G[4*j]), dGuv(dG, col(R, i), col(R, j), [i, j])))));
-    }) : [];
-    const pick = fits.length === 1 ? fits[0] : null;
-    for (const k of noAngle){
-      cell[k] = pick ? pick[k] : 90;
-      warnings.push(pick ? `No valid _cell_angle_${k}: ${cell[k]}°, the angle the symmetry operations require.` : `No valid _cell_angle_${k}: 90° assumed.`);
-    }
+  return { eLen, eAngOf, eAng };
+}
+/* A missing or invalid angle: the one the operations require, when they leave a single
+   choice among 90°, 120°, 60° and the angles given (every R keeps the metric, RᵀGR = G,
+   within the holohedry's tolerance: 1e-4, or the rounding of the written cell where larger);
+   else 90°.
+   A hexagonal file without γ read 90° up to v426, and its 3- and 6-fold operations then
+   merged reflections of different d. Monoclinic β, or any angle a triclinic file omits, the
+   operations do not fix: 90°, warned as before. */
+function missingAngles(cell, noAngle, ops, { eLen, eAngOf, eAng }, warnings){
+  const cands = [...new Set([90, 120, 60, ...eAngOf.keys()])];
+  const combos = noAngle.reduce((acc, k)=> acc.flatMap(c => cands.map(v => ({ ...c, [k]: v }))), [{}]);
+  const fits = ops.some(o => !isIdent(o.R)) ? combos.filter(c =>{
+    const tc = { ...cell, ...c }, { G, V } = metric(tc);
+    if (!(V > 1e-6*tc.a*tc.b*tc.c)) return false;
+    const dG = metricRounding(tc, eLen, eAng(tc)), col = (R, i) => [R[i], R[3 + i], R[6 + i]];
+    // (RᵀGR)_ij = r_iᵀ G r_j, r_i the columns of R
+    return ops.every(({ R }) => [0, 1, 2].every(i => [0, 1, 2].every(j =>
+      Math.abs(qf(G, col(R, i), col(R, j)) - G[3*i + j]) <= Math.max(1e-4*Math.sqrt(G[4*i]*G[4*j]), dGuv(dG, col(R, i), col(R, j), [i, j])))));
+  }) : [];
+  const pick = fits.length === 1 ? fits[0] : null;
+  for (const k of noAngle){
+    cell[k] = pick ? pick[k] : 90;
+    warnings.push(pick ? `No valid _cell_angle_${k}: ${cell[k]}°, the angle the symmetry operations require.` : `No valid _cell_angle_${k}: 90° assumed.`);
   }
-  // Each angle may lie in (0, 180°) and the three still close no cell (120/120/120°
-  // gives V = 0, 60/60/130° a negative G determinant): every d would be NaN.
+}
+// Each angle may lie in (0, 180°) and the three still close no cell (120/120/120°
+// gives V = 0, 60/60/130° a negative G determinant): every d would be NaN. The cell's
+// rounding as its metric's (dG). → its metric.
+function closedCell(cell, { eLen, eAng }){
   const { G, Gs, V } = metric(cell);
   if (!(V > 1e-6*cell.a*cell.b*cell.c)) throw new Error(`The cell angles α, β, γ = ${cell.alpha}°, ${cell.beta}°, ${cell.gamma}° do not form a unit cell.`);
   { const dG = metricRounding(cell, eLen, eAng(cell)); if (dG) cell.dG = dG; }
-  const isP1 = s => /^p\s*1$/i.test(s.trim());
-  // (a magnetic group by its BNS or OG name or number, P1 being '1.1'; or its parent space group)
-  const named = (hm && !isP1(hm)) || itNumber > 1 || (hall && !isP1(hall)) || (magName && !isP1(String(magName)) && String(magName).trim() !== '1.1')
-    || (parent && !isP1(String(parent)) && String(parent).trim() !== '1');
-  if (ops.length){
-    const idIdx = ops.findIndex(o => o.R.every((v, i) => v === IDENT[i]) && o.t.every(v => !v));
-    if (idIdx < 0){ warnings.push('The symmetry operations do not include the identity: it is added.'); ops.unshift({ R: IDENT.slice(), t: [0,0,0] }); }
-    else if (idIdx > 0) ops.unshift(ops.splice(idIdx, 1)[0]);
-    const miss = closureMisses(ops);
-    if (miss.length) warnings.push(`The ${ops.length} symmetry operations do not form a group (e.g. ${symopString(miss[0])} is missing): the list looks incomplete, check the CIF.`);
-    // A centred symbol needs its centring translations in the list.
-    const L = hm ? hm.trim()[0].toUpperCase() : '';
-    // (an R group in hexagonal axes: γ = 120° within 0.01° and its written digits)
-    const hexAx = Math.abs(cell.gamma - 120) < 0.01 + cellSlack(cell).ang[2];
-    const want = { I:1, A:1, B:1, C:1, F:3 }[L] ?? (L === 'R' && hexAx ? 2 : 0);
-    const have = ops.filter(o => o.R.every((v, i) => v === IDENT[i]) && o.t.some(v => v)).length;
-    if (want && have < want) warnings.push(`${hm.trim()} is centred but the operations hold ${have} of its ${want} centring translation${want > 1 ? 's' : ''}: the cell will be filled incompletely.`);
-  }
-
-  // Anisotropic displacements, by label, for sites without an isotropic value.
+  return { G, Gs };
+}
+// The operations: the identity first (added where missing), a group, a centred symbol's
+// centring translations among them.
+function checkOps(sg, cell, warnings){
+  const { ops, hm } = sg;
+  const idIdx = ops.findIndex(o => o.R.every((v, i) => v === IDENT[i]) && o.t.every(v => !v));
+  if (idIdx < 0){ warnings.push('The symmetry operations do not include the identity: it is added.'); ops.unshift({ R: IDENT.slice(), t: [0,0,0] }); }
+  else if (idIdx > 0) ops.unshift(ops.splice(idIdx, 1)[0]);
+  const miss = closureMisses(ops);
+  if (miss.length) warnings.push(`The ${ops.length} symmetry operations do not form a group (e.g. ${symopString(miss[0])} is missing): the list looks incomplete, check the CIF.`);
+  // A centred symbol needs its centring translations in the list.
+  const L = hm ? hm.trim()[0].toUpperCase() : '';
+  // (an R group in hexagonal axes: γ = 120° within 0.01° and its written digits)
+  const hexAx = Math.abs(cell.gamma - 120) < 0.01 + cellSlack(cell).ang[2];
+  const want = { I:1, A:1, B:1, C:1, F:3 }[L] ?? (L === 'R' && hexAx ? 2 : 0);
+  const have = ops.filter(o => o.R.every((v, i) => v === IDENT[i]) && o.t.some(v => v)).length;
+  if (want && have < want) warnings.push(`${hm.trim()} is centred but the operations hold ${have} of its ${want} centring translation${want > 1 ? 's' : ''}: the cell will be filled incompletely.`);
+}
+// Anisotropic displacements, by label, for sites without an isotropic value: B_eq.
+function anisoBOf(b, G, Gs){
   const aniso = new Map();
   const aLab = column(b, '_atom_site_aniso_label');
   if (aLab){
@@ -623,53 +667,22 @@ function parseCif(text){
       if (eq > 0) aniso.set(lab, useU ? EIGHT_PI2*eq : eq);
     });
   }
-
-  // Atom sites
+  return aniso;
+}
+// The atom sites (cifSite), the rounding their digits hide, and what was assumed of them.
+// → { sites, defaultB }.
+function cifSites(b, warnings, aniso){
   const fx = column(b, '_atom_site_fract_x'), fy = column(b, '_atom_site_fract_y'), fz = column(b, '_atom_site_fract_z');
   const n = fx.length;
   const col = tag => { const c = column(b, tag); return c && c.length === n ? c : null; };
-  const lab = col('_atom_site_label'), typ = col('_atom_site_type_symbol'), occ = col('_atom_site_occupancy');
-  const bIso = col('_atom_site_b_iso_or_equiv'), uIso = col('_atom_site_u_iso_or_equiv');
-  const flag = col('_atom_site_calc_flag'), mult = col('_atom_site_symmetry_multiplicity');
+  const C = { fx, fy, fz, lab: col('_atom_site_label'), typ: col('_atom_site_type_symbol'), occ: col('_atom_site_occupancy'),
+    bIso: col('_atom_site_b_iso_or_equiv'), uIso: col('_atom_site_u_iso_or_equiv'), flag: col('_atom_site_calc_flag'), mult: col('_atom_site_symmetry_multiplicity') };
   // Without a type symbol (or with one that names no species) the label is read, the
   // formula's elements choosing between its readings ('HO1': Ho, or an H on O1).
   const fEls = (f => f && new Set(Object.keys(f)))(parseFormula(item(b, '_chemical_formula_sum')));
-  const sites = [], written = [], defaultB = [], fallback = [], mixed = [], doubt = [];
-  for (let i = 0; i < n; i++){
-    const label = lab && !isNull(lab[i]) ? lab[i] : `${typ && !isNull(typ[i]) ? typ[i] : 'X'}${i+1}`;
-    if (flag && /^dum/i.test(flag[i] || '')) continue;   // dummy atoms (ring centroids, …)
-    const typed = !!(typ && !isNull(typ[i])), type = typed ? typ[i] : label;
-    // (a type symbol decides even when it repeats the label: 'Ho' typed Ho is holmium)
-    let sp = typed ? speciesKey(type) : null;
-    if (!sp){
-      sp = labelSpecies(label, fEls);
-      if (sp && sp.alt) doubt.push(`${label} as ${sp.element} (or ${sp.alt})`);
-      else if (sp && sp.inFormula === false) doubt.push(`${label} as ${sp.element}, which the formula lacks`);
-    }
-    if (!sp){ warnings.push(`Site ${label}: no X-ray scattering factor for '${type}', the site is left out.`); continue; }
-    if (sp.fallback) fallback.push(`${type} (${label}), taken as ${sp.key === sp.element ? 'the neutral atom' : sp.key} (${Number.isFinite(sp.charge) ? 'the nearest tabulated charge' : 'its charge not read'})`);
-    else if (sp.mix) mixed.push(`${type} (${label}) as ${sp.mix.map(([k, w])=> `${+w.toFixed(3)} ${k}`).join(' + ')}`);
-    const x = num(fx[i]), y = num(fy ? fy[i] : null), z = num(fz ? fz[i] : null);
-    if (![x, y, z].every(Number.isFinite)){ warnings.push(`Site ${label}: incomplete coordinates, the site is left out.`); continue; }
-    // Missing, '?' or '.': 1 (the dictionary's default). A negative one, a refined occupancy
-    // of an all but empty site (−0.02(3)), is 0 (v426 made it 1: the site full). Above 1 by
-    // more than a rounding at three decimals, warned and kept.
-    let o = occ ? num(occ[i]) : 1;
-    if (Number.isNaN(o)) o = 1;
-    if (o < 0){ warnings.push(`Site ${label}: occupancy ${o} < 0, taken as 0 (the site is empty).`); o = 0; }
-    if (o > 1.0005) warnings.push(`Site ${label}: occupancy ${o} > 1.`);
-    let B = bIso ? num(bIso[i]) : NaN;
-    if (!Number.isFinite(B) && uIso){ const u = num(uIso[i]); if (Number.isFinite(u)) B = EIGHT_PI2*u; }
-    if (!Number.isFinite(B) && aniso.has(label)) B = aniso.get(label);
-    if (!Number.isFinite(B)){ B = B_DEFAULT; defaultB.push(label); }
-    const m = mult ? num(mult[i]) : NaN;
-    // D scatters as H (speciesKey) but weighs its own: a deuterated cell would otherwise
-    // weigh light in the weight fractions.
-    // (Only a species read as hydrogen: 'DY3+' is dysprosium.)
-    const deut = sp.element === 'H' && /^d/i.test(String(typ && !isNull(typ[i]) ? typ[i] : label).trim());
-    sites.push({ label, type, key: sp.key, element: sp.element, x, y, z, occ: o, Biso: B, mult: m > 0 ? Math.round(m) : null, ...(deut ? { massEl: 'D' } : {}) });
-    written.push([fx[i], fy[i], fz[i], occ && o < 1 ? occ[i] : null]);
-  }
+  const A = { sites: [], written: [], defaultB: [], fallback: [], mixed: [], doubt: [] };
+  for (let i = 0; i < n; i++) cifSite(C, i, { fEls, aniso, warnings, A });
+  const { sites, written, defaultB, fallback, mixed, doubt } = A;
   if (!sites.length) throw new Error('None of the atom sites in the CIF could be read.');
   if (doubt.length) warnings.push(`Element read from the site label, in doubt: ${doubt.join('; ')}. A _atom_site_type_symbol column (or the formula) would settle it.`);
   // The rounding the coordinates and the occupancies may hide, from their digits (a full
@@ -682,60 +695,105 @@ function parseCif(text){
   if (mixed.length) warnings.push(`No tabulated form factor of its own, taken as the tabulated charges around it with the same mean charge: ${mixed.join('; ')}.`);
   if (defaultB.length) warnings.push(`No displacement parameter for ${defaultB.join(', ')}: B = ${B_DEFAULT} Å² assumed.`);
   if (sites.some(s => s.Biso < 0)) warnings.push('Negative displacement parameters in the CIF.');
-
-  const formulaSum = item(b, '_chemical_formula_sum');
-  const formula = parseFormula(formulaSum);
-  const zz = num(item(b, '_cell_formula_units_z'));
-  const Z = zz > 0 ? zz : null;
-
-  /* A space group named without its operations: the sites are then, almost always, only
-     the asymmetric unit, and the operations are not generated from the symbol here. Read
-     as P1 they would fill the cell in part and give a wrong pattern with no error (rutile:
-     2 atoms instead of 6, orthorhombic, (211) the strongest line). So the file is refused
-     unless the listed atoms are evidently the whole cell: they match the formula × Z given,
-     or they show by themselves the crystal system and the lattice centring the symbol
-     names. (A lone special position can still pass that test: a site alone in its cell
-     shows the lattice's full symmetry.) The formula × Z is evidence only with Z given:
-     without it, Z is inferred from the atoms, and an asymmetric unit that holds whole
-     formula units passes by construction (NaCl named Fm-3m, given as Na and Cl, read as
-     one formula unit in P1). A list holding the identity alone, x, y, z, is the same
-     case as none. A centrosymmetric symbol also wants the centre of symmetry: an
-     asymmetric unit of P-1 in general positions shows every triclinic P lattice. */
-  const onlyIdentity = ops.length === 1 && ops[0].R.every((v, i) => v === IDENT[i]) && ops[0].t.every(v => !v);
-  if ((!ops.length || onlyIdentity) && named){
-    const atoms = expandAtoms([], sites), comp = checkComposition(atoms, formula, Z);
-    let whole = comp.checked && comp.ok;
-    const why = [];
-    if (comp.checked && !comp.ok) why.push(`the atoms fill the cell with ${Object.keys(comp.found).map(el => `${el} ${fmtCount(comp.found[el])}`).join(', ')}, not the formula × Z`);
-    else if (!comp.checked || !(Z > 0)){
-      // The lattice letter from the H-M symbol, else from the Hall symbol ('-F 4 2 3'); with
-      // only the IT number, whether the lattice is centred at all.
-      const hallM = hall ? /^\s*(-?)\s*([pabcifr])/i.exec(hall) : null;
-      const want = symbolSystem(hm, itNumber), letter = hm && /^[pabcifr]/i.test(hm.trim()) ? hm.trim()[0].toUpperCase() : hallM ? hallM[2].toUpperCase() : null;
-      const sym = findSymmetry(cell, atoms);
-      const sysOk = !want || sym.system === want || (want === 'trigonal' && sym.system === 'hexagonal');
-      const sl = cellSlack(cell), hexAxes = Math.abs(cell.gamma - 120) < 0.01 + sl.ang[2] && same(cell.a, cell.b, sl.len[0] + sl.len[1]);
-      const wantC = letter === 'R' ? (hexAxes ? 'R' : 'P') : letter;
-      const centredIT = itNumber && CENTRED_IT.has(itNumber) && !(itNumber >= 143 && itNumber <= 167 && !hexAxes);
-      const cenOk = wantC ? sym.centring === wantC : !centredIT || sym.centring !== 'P';
-      const centro = centroOf(hm, itNumber) || (hallM && hallM[1] === '-');
-      const invOk = !centro || sym.ops.some(o => o.R.every((v, i) => v === -IDENT[i]));
-      whole = sysOk && cenOk && invOk;
-      if (!sysOk) why.push(`the atoms show ${sym.system} symmetry, the symbol ${want}`);
-      if (!cenOk) why.push(`the atoms lack the ${wantC || 'lattice'} centring`);
-      if (!invOk) why.push('the atoms lack the centre of symmetry the symbol has');
-    }
-    const groupName = hm ? `the space group ${hm.trim()}` : hall ? `the space group ${hall.trim()}` : itNumber ? `the space group No. ${itNumber}`
-      : magName ? `the magnetic group ${String(magName).trim()}` : `a magnetic group (parent ${String(parent).trim()})`;
-    if (!whole) throw new Error(`The CIF names ${groupName} but lists ${onlyIdentity ? 'only the identity (x, y, z) as its symmetry operations' : 'no symmetry operations'}, and they are not generated from the symbol: the ${sites.length} site${sites.length > 1 ? 's' : ''} given cannot be the whole cell (${why.join('; ')}). A CIF with its operations (_space_group_symop_operation_xyz${magName || parent ? '; in a magnetic CIF, _space_group_symop_magn_operation.xyz' : ''}) is needed: COD, ICSD and the Materials Project (symmetrized CIF) give them${magName || parent ? ', MAGNDATA the magnetic ones' : ''}.`);
-    warnings.push(`The CIF lists ${onlyIdentity ? 'only the identity (x, y, z) as its symmetry operation' : 'no symmetry operations'}${hm ? ` for ${hm.trim()}` : ''}: the atoms are taken as they are (P1), so the cell is filled only if they are all listed.`);
+  return { sites, defaultB };
+}
+// Site i of the columns C: its species, its position, occupancy and B (into A.sites, its
+// written digits into A.written), or left out with a warning.
+function cifSite(C, i, { fEls, aniso, warnings, A }){
+  const { fx, fy, fz, lab, typ, occ, flag, mult } = C;
+  const label = lab && !isNull(lab[i]) ? lab[i] : `${typ && !isNull(typ[i]) ? typ[i] : 'X'}${i+1}`;
+  if (flag && /^dum/i.test(flag[i] || '')) return;   // dummy atoms (ring centroids, …)
+  const typed = !!(typ && !isNull(typ[i])), type = typed ? typ[i] : label;
+  // (a type symbol decides even when it repeats the label: 'Ho' typed Ho is holmium)
+  let sp = typed ? speciesKey(type) : null;
+  if (!sp){
+    sp = labelSpecies(label, fEls);
+    if (sp && sp.alt) A.doubt.push(`${label} as ${sp.element} (or ${sp.alt})`);
+    else if (sp && sp.inFormula === false) A.doubt.push(`${label} as ${sp.element}, which the formula lacks`);
   }
-  const structural = item(b, '_chemical_formula_structural');
-  const name = item(b, '_chemical_name_mineral') || structural
-    || (formula ? formulaText(formula) : null) || item(b, '_chemical_name_common') || b.name;
-  return { name: String(name).trim(), block: b.name, cell, hm: hm ? hm.trim() : null, itNumber, hall: hall ? hall.trim() : null,
-           ops, sites, formulaSum: formulaSum ? formulaSum.trim() : null, formulaStructural: structural ? String(structural).trim() : null,
-           formula, Z, defaultB, warnings };
+  if (!sp){ warnings.push(`Site ${label}: no X-ray scattering factor for '${type}', the site is left out.`); return; }
+  if (sp.fallback) A.fallback.push(`${type} (${label}), taken as ${sp.key === sp.element ? 'the neutral atom' : sp.key} (${Number.isFinite(sp.charge) ? 'the nearest tabulated charge' : 'its charge not read'})`);
+  else if (sp.mix) A.mixed.push(`${type} (${label}) as ${sp.mix.map(([k, w])=> `${+w.toFixed(3)} ${k}`).join(' + ')}`);
+  const x = num(fx[i]), y = num(fy ? fy[i] : null), z = num(fz ? fz[i] : null);
+  if (![x, y, z].every(Number.isFinite)){ warnings.push(`Site ${label}: incomplete coordinates, the site is left out.`); return; }
+  const o = cifOccupancy(C, i, label, warnings), B = cifBiso(C, i, label, aniso, A.defaultB);
+  const m = mult ? num(mult[i]) : NaN;
+  // D scatters as H (speciesKey) but weighs its own: a deuterated cell would otherwise
+  // weigh light in the weight fractions.
+  // (Only a species read as hydrogen: 'DY3+' is dysprosium.)
+  const deut = sp.element === 'H' && /^d/i.test(String(typ && !isNull(typ[i]) ? typ[i] : label).trim());
+  A.sites.push({ label, type, key: sp.key, element: sp.element, x, y, z, occ: o, Biso: B, mult: m > 0 ? Math.round(m) : null, ...(deut ? { massEl: 'D' } : {}) });
+  A.written.push([fx[i], fy[i], fz[i], occ && o < 1 ? occ[i] : null]);
+}
+// A site's occupancy. Missing, '?' or '.': 1 (the dictionary's default). A negative one, a
+// refined occupancy of an all but empty site (−0.02(3)), is 0 (v426 made it 1: the site
+// full). Above 1 by more than a rounding at three decimals, warned and kept.
+function cifOccupancy({ occ }, i, label, warnings){
+  let o = occ ? num(occ[i]) : 1;
+  if (Number.isNaN(o)) o = 1;
+  if (o < 0){ warnings.push(`Site ${label}: occupancy ${o} < 0, taken as 0 (the site is empty).`); o = 0; }
+  if (o > 1.0005) warnings.push(`Site ${label}: occupancy ${o} > 1.`);
+  return o;
+}
+// A site's B: B_iso, else 8π²U_iso, else its anisotropic one's B_eq, else B_DEFAULT (its
+// label then in defaultB).
+function cifBiso({ bIso, uIso }, i, label, aniso, defaultB){
+  let B = bIso ? num(bIso[i]) : NaN;
+  if (!Number.isFinite(B) && uIso){ const u = num(uIso[i]); if (Number.isFinite(u)) B = EIGHT_PI2*u; }
+  if (!Number.isFinite(B) && aniso.has(label)) B = aniso.get(label);
+  if (!Number.isFinite(B)){ B = B_DEFAULT; defaultB.push(label); }
+  return B;
+}
+/* A space group named without its operations: the sites are then, almost always, only
+   the asymmetric unit, and the operations are not generated from the symbol here. Read
+   as P1 they would fill the cell in part and give a wrong pattern with no error (rutile:
+   2 atoms instead of 6, orthorhombic, (211) the strongest line). So the file is refused
+   unless the listed atoms are evidently the whole cell: they match the formula × Z given,
+   or they show by themselves the crystal system and the lattice centring the symbol
+   names (symbolShown). (A lone special position can still pass that test: a site alone in
+   its cell shows the lattice's full symmetry.) The formula × Z is evidence only with Z given:
+   without it, Z is inferred from the atoms, and an asymmetric unit that holds whole
+   formula units passes by construction (NaCl named Fm-3m, given as Na and Cl, read as
+   one formula unit in P1). A list holding the identity alone, x, y, z, is the same
+   case as none. A centrosymmetric symbol also wants the centre of symmetry: an
+   asymmetric unit of P-1 in general positions shows every triclinic P lattice. */
+function symbolOnlyCheck({ sg, cell, sites, formula, Z, warnings }){
+  const { hm, hall, itNumber, ops, magName, parent } = sg;
+  const isP1 = s => /^p\s*1$/i.test(s.trim());
+  // (a magnetic group by its BNS or OG name or number, P1 being '1.1'; or its parent space group)
+  const named = (hm && !isP1(hm)) || itNumber > 1 || (hall && !isP1(hall)) || (magName && !isP1(String(magName)) && String(magName).trim() !== '1.1')
+    || (parent && !isP1(String(parent)) && String(parent).trim() !== '1');
+  const onlyIdentity = ops.length === 1 && ops[0].R.every((v, i) => v === IDENT[i]) && ops[0].t.every(v => !v);
+  if (!((!ops.length || onlyIdentity) && named)) return;
+  const atoms = expandAtoms([], sites), comp = checkComposition(atoms, formula, Z);
+  let whole = comp.checked && comp.ok;
+  const why = [];
+  if (comp.checked && !comp.ok) why.push(`the atoms fill the cell with ${Object.keys(comp.found).map(el => `${el} ${fmtCount(comp.found[el])}`).join(', ')}, not the formula × Z`);
+  else if (!comp.checked || !(Z > 0)) whole = symbolShown(sg, cell, atoms, why);
+  const groupName = hm ? `the space group ${hm.trim()}` : hall ? `the space group ${hall.trim()}` : itNumber ? `the space group No. ${itNumber}`
+    : magName ? `the magnetic group ${String(magName).trim()}` : `a magnetic group (parent ${String(parent).trim()})`;
+  if (!whole) throw new Error(`The CIF names ${groupName} but lists ${onlyIdentity ? 'only the identity (x, y, z) as its symmetry operations' : 'no symmetry operations'}, and they are not generated from the symbol: the ${sites.length} site${sites.length > 1 ? 's' : ''} given cannot be the whole cell (${why.join('; ')}). A CIF with its operations (_space_group_symop_operation_xyz${magName || parent ? '; in a magnetic CIF, _space_group_symop_magn_operation.xyz' : ''}) is needed: COD, ICSD and the Materials Project (symmetrized CIF) give them${magName || parent ? ', MAGNDATA the magnetic ones' : ''}.`);
+  warnings.push(`The CIF lists ${onlyIdentity ? 'only the identity (x, y, z) as its symmetry operation' : 'no symmetry operations'}${hm ? ` for ${hm.trim()}` : ''}: the atoms are taken as they are (P1), so the cell is filled only if they are all listed.`);
+}
+// Do the atoms show by themselves the crystal system, the lattice centring and the centre
+// of symmetry the group's symbol names (symbolOnlyCheck)? What they lack into why.
+function symbolShown({ hm, hall, itNumber }, cell, atoms, why){
+  // The lattice letter from the H-M symbol, else from the Hall symbol ('-F 4 2 3'); with
+  // only the IT number, whether the lattice is centred at all.
+  const hallM = hall ? /^\s*(-?)\s*([pabcifr])/i.exec(hall) : null;
+  const want = symbolSystem(hm, itNumber), letter = hm && /^[pabcifr]/i.test(hm.trim()) ? hm.trim()[0].toUpperCase() : hallM ? hallM[2].toUpperCase() : null;
+  const sym = findSymmetry(cell, atoms);
+  const sysOk = !want || sym.system === want || (want === 'trigonal' && sym.system === 'hexagonal');
+  const sl = cellSlack(cell), hexAxes = Math.abs(cell.gamma - 120) < 0.01 + sl.ang[2] && same(cell.a, cell.b, sl.len[0] + sl.len[1]);
+  const wantC = letter === 'R' ? (hexAxes ? 'R' : 'P') : letter;
+  const centredIT = itNumber && CENTRED_IT.has(itNumber) && !(itNumber >= 143 && itNumber <= 167 && !hexAxes);
+  const cenOk = wantC ? sym.centring === wantC : !centredIT || sym.centring !== 'P';
+  const centro = centroOf(hm, itNumber) || (hallM && hallM[1] === '-');
+  const invOk = !centro || sym.ops.some(o => o.R.every((v, i) => v === -IDENT[i]));
+  if (!sysOk) why.push(`the atoms show ${sym.system} symmetry, the symbol ${want}`);
+  if (!cenOk) why.push(`the atoms lack the ${wantC || 'lattice'} centring`);
+  if (!invOk) why.push('the atoms lack the centre of symmetry the symbol has');
+  return sysOk && cenOk && invOk;
 }
 
 /* ---------- cell contents ---------- */
@@ -1288,9 +1346,21 @@ function centringOf(trans){
        (when step 4 failed at every tolerance) }. */
 function findSymmetry(cell, atoms, tol = 0.01){
   const { G, Gs } = metric(cell);
-  const ident = { R: IDENT.slice(), t: [0,0,0] };
-  const trivial = () => ({ ops:[ident], order:1, pointOrder:1, centring:'P', atoms: atoms || [], lost: 0, ...classify([IDENT], cell) });
+  const trivial = () => ({ ops:[{ R: IDENT.slice(), t: [0,0,0] }], order:1, pointOrder:1, centring:'P', atoms: atoms || [], lost: 0, ...classify([IDENT], cell) });
   if (!atoms || !atoms.length) return trivial();
+  const F = symAtoms(cell, atoms, tol, G, Gs);
+  if (!F) return trivial();
+  F.grids = symGrids(F);
+  let r = null;
+  for (const s of [1, 1/2, 1/4, 1/8]){ r = symAttempt(F, s); if (r.group !== false) break; }
+  return r;
+}
+/* findSymmetry's state F: the cell's metric, the atoms' positions X and roundings E (flat),
+   their groups by species and occupancy (sets; gOf, an atom's group; used, the atoms
+   counted), the reference atoms (ref, of the group with the fewest; x₀ the first's
+   position), the holohedry's order of the matrices (rankOf), and the buffers the matching
+   writes into; null when no atom is counted (every site empty). */
+function symAtoms(cell, atoms, tol, G, Gs){
   const n = atoms.length, eps = epsOf(atoms);
   const X = new Float64Array(3*n), E = new Float64Array(3*n), rho = new Float64Array(n), gOf = new Int32Array(n).fill(-1);
   const groups = new Map();
@@ -1306,7 +1376,7 @@ function findSymmetry(cell, atoms, tol = 0.01){
     if (!groups.has(k)) groups.set(k, []);
     groups.get(k).push(j);
   });
-  if (!groups.size) return trivial();
+  if (!groups.size) return null;
   const sets = [...groups.values()];
   sets.forEach((s, g)=> s.forEach(j => { gOf[j] = g; }));
   const used = Int32Array.from(sets.flat()), nu = used.length;
@@ -1317,10 +1387,15 @@ function findSymmetry(cell, atoms, tol = 0.01){
   const refPos = new Int32Array(n).fill(-1);
   ref.forEach((j, i)=> { refPos[j] = i; });
   const dG = dGof(cell), rank = new Map(holohedry(G, 1e-4, dG).map((R, i)=> [R.join(), i])), rankOf = R => rank.get(R.join()) ?? 1e6;
-
-  // A grid of each group's positions, about one atom to a cell, no cell narrower than a
-  // match (as a fraction of each axis), so a lookup reads two cells per axis.
-  const grids = sets.map((set, g)=>{
+  const eMax = [0, 1, 2].map(i => used.reduce((m, j)=> Math.max(m, eps[j][i]), 0));
+  return { cell, atoms, tol, G, n, eps, X, E, gOf, sets, used, nu, rmax, Ns, ref, i0, x0, refPos, dG, rankOf, eMax,
+    // (maps' matching, and fitOff's offsets)
+    scratch: new Int32Array(n).fill(-1), off: [new Float64Array(nu), new Float64Array(nu), new Float64Array(nu)] };
+}
+// A grid of each group's positions, about one atom to a cell, no cell narrower than a
+// match (as a fraction of each axis), so a lookup reads two cells per axis.
+function symGrids({ sets, Ns, tol, rmax, X }){
+  return sets.map((set, g)=>{
     const c = Math.max(1, Math.round(Math.cbrt(set.length)));
     const nb = Ns.map(N => Math.max(1, Math.min(c, Math.floor(1/(2*(tol + 2*rmax[g])*N)))));
     const nc = nb[0]*nb[1]*nb[2], start = new Int32Array(nc + 1), at = new Int32Array(set.length);
@@ -1331,266 +1406,307 @@ function findSymmetry(cell, atoms, tol = 0.01){
     set.forEach((j, i)=> { items[fill[at[i]]++] = j; });
     return { nb, start, items };
   });
-  // Is d (fractions, wrapped; the image of atom j under R less atom k) within f times the
-  // tolerance beyond the rounding allowed on each axis, s·(eps_k + |R|·eps_j), and that of the
-  // translation tried (et, when it comes from one atom pair)? (What is left of each
-  // component beyond it, in Å.)
-  const over = (v, a) => v > a ? v - a : v < -a ? v + a : 0;
-  const within = (d0, d1, d2, R, j, k, s, f, et) =>{
-    const e0 = over(d0, s*(E[3*k] + Math.abs(R[0])*E[3*j] + Math.abs(R[1])*E[3*j+1] + Math.abs(R[2])*E[3*j+2] + (et ? et[0] : 0)));
-    const e1 = over(d1, s*(E[3*k+1] + Math.abs(R[3])*E[3*j] + Math.abs(R[4])*E[3*j+1] + Math.abs(R[5])*E[3*j+2] + (et ? et[1] : 0)));
-    const e2 = over(d2, s*(E[3*k+2] + Math.abs(R[6])*E[3*j] + Math.abs(R[7])*E[3*j+1] + Math.abs(R[8])*E[3*j+2] + (et ? et[2] : 0)));
-    const B = s*f*tol;
-    return G[0]*e0*e0 + G[4]*e1*e1 + G[8]*e2*e2 + 2*(G[1]*e0*e1 + G[2]*e0*e2 + G[5]*e1*e2) <= B*B;
-  };
-  // The atom of group g nearest to the point y (fractions), the image of atom j under R,
-  // within the tolerance beyond the rounding (within), or −1; looked for within L Å.
-  const find = (y0, y1, y2, g, R, j0, s, L, et) =>{
-    const { nb, start, items } = grids[g], n0 = nb[0], n1 = nb[1], n2 = nb[2];
-    const u0 = mod1(y0), u1 = mod1(y1), u2 = mod1(y2);
-    // the cells the window ±L Å spans on each axis (all of them when it spans the axis)
-    let a0 = Math.floor((u0 - L*Ns[0])*n0), b0 = Math.floor((u0 + L*Ns[0])*n0); if (b0 - a0 + 1 >= n0){ a0 = 0; b0 = n0 - 1; }
-    let a1 = Math.floor((u1 - L*Ns[1])*n1), b1 = Math.floor((u1 + L*Ns[1])*n1); if (b1 - a1 + 1 >= n1){ a1 = 0; b1 = n1 - 1; }
-    let a2 = Math.floor((u2 - L*Ns[2])*n2), b2 = Math.floor((u2 + L*Ns[2])*n2); if (b2 - a2 + 1 >= n2){ a2 = 0; b2 = n2 - 1; }
-    let best = -1, bd = Infinity;
-    for (let p = a0; p <= b0; p++){
-      const P = ((p % n0) + n0) % n0;
-      for (let q = a1; q <= b1; q++){
-        const Q = ((q % n1) + n1) % n1;
-        for (let r = a2; r <= b2; r++){
-          const k = (P*n1 + Q)*n2 + ((r % n2) + n2) % n2;
-          for (let m = start[k]; m < start[k + 1]; m++){
-            const j = items[m];
-            let d0 = u0 - X[3*j], d1 = u1 - X[3*j+1], d2 = u2 - X[3*j+2];
-            d0 -= Math.round(d0); d1 -= Math.round(d1); d2 -= Math.round(d2);
-            const q2 = G[0]*d0*d0 + G[4]*d1*d1 + G[8]*d2*d2 + 2*(G[1]*d0*d1 + G[2]*d0*d2 + G[5]*d1*d2);
-            if (q2 < bd && q2 <= L*L && within(d0, d1, d2, R, j0, j, s, 1, et)){ bd = q2; best = j; }
-          }
+}
+// What is left of v beyond ±a.
+const overBy = (v, a) => v > a ? v - a : v < -a ? v + a : 0;
+// Is d (fractions, wrapped; the image of atom j under R less atom k) within f times the
+// tolerance beyond the rounding allowed on each axis, s·(eps_k + |R|·eps_j), and that of the
+// translation tried (et, when it comes from one atom pair)? (What is left of each
+// component beyond it, in Å.)
+function symWithin(F, d0, d1, d2, R, j, k, s, f, et){
+  const { E, G } = F;
+  const e0 = overBy(d0, s*(E[3*k] + Math.abs(R[0])*E[3*j] + Math.abs(R[1])*E[3*j+1] + Math.abs(R[2])*E[3*j+2] + (et ? et[0] : 0)));
+  const e1 = overBy(d1, s*(E[3*k+1] + Math.abs(R[3])*E[3*j] + Math.abs(R[4])*E[3*j+1] + Math.abs(R[5])*E[3*j+2] + (et ? et[1] : 0)));
+  const e2 = overBy(d2, s*(E[3*k+2] + Math.abs(R[6])*E[3*j] + Math.abs(R[7])*E[3*j+1] + Math.abs(R[8])*E[3*j+2] + (et ? et[2] : 0)));
+  const B = s*f*F.tol;
+  return G[0]*e0*e0 + G[4]*e1*e1 + G[8]*e2*e2 + 2*(G[1]*e0*e1 + G[2]*e0*e2 + G[5]*e1*e2) <= B*B;
+}
+// The atom of group g nearest to the point y (fractions), the image of atom j under R,
+// within the tolerance beyond the rounding (symWithin), or −1; looked for within L Å.
+function symFind(F, y0, y1, y2, g, R, j0, s, L, et){
+  const { X, G, Ns } = F, { nb, start, items } = F.grids[g], n0 = nb[0], n1 = nb[1], n2 = nb[2];
+  const u0 = mod1(y0), u1 = mod1(y1), u2 = mod1(y2);
+  // the cells the window ±L Å spans on each axis (all of them when it spans the axis)
+  let a0 = Math.floor((u0 - L*Ns[0])*n0), b0 = Math.floor((u0 + L*Ns[0])*n0); if (b0 - a0 + 1 >= n0){ a0 = 0; b0 = n0 - 1; }
+  let a1 = Math.floor((u1 - L*Ns[1])*n1), b1 = Math.floor((u1 + L*Ns[1])*n1); if (b1 - a1 + 1 >= n1){ a1 = 0; b1 = n1 - 1; }
+  let a2 = Math.floor((u2 - L*Ns[2])*n2), b2 = Math.floor((u2 + L*Ns[2])*n2); if (b2 - a2 + 1 >= n2){ a2 = 0; b2 = n2 - 1; }
+  let best = -1, bd = Infinity;
+  for (let p = a0; p <= b0; p++){
+    const P = ((p % n0) + n0) % n0;
+    for (let q = a1; q <= b1; q++){
+      const Q = ((q % n1) + n1) % n1;
+      for (let r = a2; r <= b2; r++){
+        const k = (P*n1 + Q)*n2 + ((r % n2) + n2) % n2;
+        for (let m = start[k]; m < start[k + 1]; m++){
+          const j = items[m];
+          let d0 = u0 - X[3*j], d1 = u1 - X[3*j+1], d2 = u2 - X[3*j+2];
+          d0 -= Math.round(d0); d1 -= Math.round(d1); d2 -= Math.round(d2);
+          const q2 = G[0]*d0*d0 + G[4]*d1*d1 + G[8]*d2*d2 + 2*(G[1]*d0*d1 + G[2]*d0*d2 + G[5]*d1*d2);
+          if (q2 < bd && q2 <= L*L && symWithin(F, d0, d1, d2, R, j0, j, s, 1, et)){ bd = q2; best = j; }
         }
       }
     }
-    return best;
-  };
-  // Where (R, t) takes each counted atom, or null when one lands on none of its group.
-  const scratch = new Int32Array(n).fill(-1);
-  const eMax = [0, 1, 2].map(i => used.reduce((m, j)=> Math.max(m, eps[j][i]), 0)), ZERO3 = [0, 0, 0];
-  const maps = (R, t, s, et) =>{
-    // (the largest a match may lie away: the largest rounding allowed, turned by R)
-    const L = s*(tol + boxRadius(G, [0, 1, 2].map(i => eMax[i] + Math.abs(R[3*i])*eMax[0] + Math.abs(R[3*i+1])*eMax[1] + Math.abs(R[3*i+2])*eMax[2] + et[i])));
-    for (let m = 0; m < nu; m++){
-      const j = used[m], x = X[3*j], y = X[3*j+1], z = X[3*j+2];
-      const k = find(R[0]*x + R[1]*y + R[2]*z + t[0], R[3]*x + R[4]*y + R[5]*z + t[1], R[6]*x + R[7]*y + R[8]*z + t[2], gOf[j], R, j, s, L, et);
-      if (k < 0) return null;
-      scratch[j] = k;
+  }
+  return best;
+}
+// Where (R, t) takes each counted atom, or null when one lands on none of its group.
+function symMaps(F, R, t, s, et){
+  const { G, tol, eMax, used, nu, X, gOf, scratch } = F;
+  // (the largest a match may lie away: the largest rounding allowed, turned by R)
+  const L = s*(tol + boxRadius(G, [0, 1, 2].map(i => eMax[i] + Math.abs(R[3*i])*eMax[0] + Math.abs(R[3*i+1])*eMax[1] + Math.abs(R[3*i+2])*eMax[2] + et[i])));
+  for (let m = 0; m < nu; m++){
+    const j = used[m], x = X[3*j], y = X[3*j+1], z = X[3*j+2];
+    const k = symFind(F, R[0]*x + R[1]*y + R[2]*z + t[0], R[3]*x + R[4]*y + R[5]*z + t[1], R[6]*x + R[7]*y + R[8]*z + t[2], gOf[j], R, j, s, L, et);
+    if (k < 0) return null;
+    scratch[j] = k;
+  }
+  return scratch.slice();
+}
+// Does (R, t) take every counted atom j onto perm[j] within f times the tolerance? For a
+// product (f = 2) the bound is the sum of its factors' (the rounding of the atom passed
+// through cancels: A(B·e_j − e_m) + (A·e_m − e_k) = C·e_j − e_k).
+function symHolds(F, R, t, perm, s, f){
+  const { used, nu, gOf, X } = F;
+  for (let m = 0; m < nu; m++){
+    const j = used[m], k = perm[j];
+    if (k < 0 || gOf[k] !== gOf[j]) return false;
+    const x = X[3*j], y = X[3*j+1], z = X[3*j+2];
+    let d0 = R[0]*x + R[1]*y + R[2]*z + t[0] - X[3*k], d1 = R[3]*x + R[4]*y + R[5]*z + t[1] - X[3*k+1], d2 = R[6]*x + R[7]*y + R[8]*z + t[2] - X[3*k+2];
+    d0 -= Math.round(d0); d1 -= Math.round(d1); d2 -= Math.round(d2);
+    if (!symWithin(F, d0, d1, d2, R, j, k, s, f)) return false;
+  }
+  return true;
+}
+// Two matchings composed: pb first, then pa.
+function symCompose({ n, used, nu }, pa, pb){
+  const c = new Int32Array(n).fill(-1);
+  for (let m = 0; m < nu; m++){ const j = used[m], k = pb[j]; if (k >= 0) c[j] = pa[k]; }
+  return c;
+}
+const same3 = (u, v) => u[0] === v[0] && u[1] === v[1] && u[2] === v[2];
+// The translation of (R, t) fitted to its matching: taken from one atom pair, t carries
+// that pair's rounding. On each axis, t plus the middle of the offsets (of the atoms from
+// their matches) that every atom's rounding allows; where none is (noise beyond the
+// rounding), the median offset, which ignores atoms matched to a near twin (a site split
+// across a mirror by less than the tolerance). Then snapped to the nearest multiple of 1/24
+// when that is allowed too (else within the largest rounding): exact data snap only exact
+// translations, and the part of a translation that the origin sets is not snapped by
+// coincidence (v425 snapped within 1.5e-3, and a P41 at a random origin came out not quite
+// a group). Kept when it maps the structure within f times the tolerance (the fit, else t
+// itself, else null).
+const medianOf = a => { const b = a.slice().sort(), h = b.length >> 1; return b.length % 2 ? b[h] : 0.5*(b[h - 1] + b[h]); };
+function symFitOff(F, R, t, perm, s){
+  const { used, nu, X, E, off } = F;
+  const lo = [-Infinity, -Infinity, -Infinity], hi = [Infinity, Infinity, Infinity];
+  for (let m = 0; m < nu; m++){
+    const j = used[m], k = perm[j], x = X[3*j], y = X[3*j+1], z = X[3*j+2];
+    for (let i = 0; i < 3; i++){
+      const d = X[3*k+i] - (R[3*i]*x + R[3*i+1]*y + R[3*i+2]*z + t[i]), o = d - Math.round(d);
+      const a = s*(E[3*k+i] + Math.abs(R[3*i])*E[3*j] + Math.abs(R[3*i+1])*E[3*j+1] + Math.abs(R[3*i+2])*E[3*j+2]);
+      off[i][m] = o; lo[i] = Math.max(lo[i], o - a); hi[i] = Math.min(hi[i], o + a);
     }
-    return scratch.slice();
-  };
-  // Does (R, t) take every counted atom j onto perm[j] within f times the tolerance? For a
-  // product (f = 2) the bound is the sum of its factors' (the rounding of the atom passed
-  // through cancels: A(B·e_j − e_m) + (A·e_m − e_k) = C·e_j − e_k).
-  const holds = (R, t, perm, s, f) =>{
-    for (let m = 0; m < nu; m++){
-      const j = used[m], k = perm[j];
-      if (k < 0 || gOf[k] !== gOf[j]) return false;
-      const x = X[3*j], y = X[3*j+1], z = X[3*j+2];
-      let d0 = R[0]*x + R[1]*y + R[2]*z + t[0] - X[3*k], d1 = R[3]*x + R[4]*y + R[5]*z + t[1] - X[3*k+1], d2 = R[6]*x + R[7]*y + R[8]*z + t[2] - X[3*k+2];
-      d0 -= Math.round(d0); d1 -= Math.round(d1); d2 -= Math.round(d2);
-      if (!within(d0, d1, d2, R, j, k, s, f)) return false;
-    }
-    return true;
-  };
-  const compose = (pa, pb) =>{   // pb first, then pa
-    const c = new Int32Array(n).fill(-1);
-    for (let m = 0; m < nu; m++){ const j = used[m], k = pb[j]; if (k >= 0) c[j] = pa[k]; }
-    return c;
-  };
-  const same3 = (u, v) => u[0] === v[0] && u[1] === v[1] && u[2] === v[2];
-  // The translation of (R, t) fitted to its matching: taken from one atom pair, t carries
-  // that pair's rounding. On each axis, t plus the middle of the offsets (of the atoms from
-  // their matches) that every atom's rounding allows; where none is (noise beyond the
-  // rounding), the median offset, which ignores atoms matched to a near twin (a site split
-  // across a mirror by less than the tolerance). Then snapped to the nearest multiple of 1/24
-  // when that is allowed too (else within the largest rounding): exact data snap only exact
-  // translations, and the part of a translation that the origin sets is not snapped by
-  // coincidence (v425 snapped within 1.5e-3, and a P41 at a random origin came out not quite
-  // a group). Kept when it maps the structure within f times the tolerance (the fit, else t
-  // itself, else null).
-  const off = [new Float64Array(nu), new Float64Array(nu), new Float64Array(nu)];
-  const med = a => { const b = a.slice().sort(), h = b.length >> 1; return b.length % 2 ? b[h] : 0.5*(b[h - 1] + b[h]); };
-  const fitOff = (R, t, perm, s) =>{
-    const lo = [-Infinity, -Infinity, -Infinity], hi = [Infinity, Infinity, Infinity];
-    for (let m = 0; m < nu; m++){
-      const j = used[m], k = perm[j], x = X[3*j], y = X[3*j+1], z = X[3*j+2];
-      for (let i = 0; i < 3; i++){
-        const d = X[3*k+i] - (R[3*i]*x + R[3*i+1]*y + R[3*i+2]*z + t[i]), o = d - Math.round(d);
-        const a = s*(E[3*k+i] + Math.abs(R[3*i])*E[3*j] + Math.abs(R[3*i+1])*E[3*j+1] + Math.abs(R[3*i+2])*E[3*j+2]);
-        off[i][m] = o; lo[i] = Math.max(lo[i], o - a); hi[i] = Math.min(hi[i], o + a);
-      }
-    }
-    // On each axis the middle of the offsets every atom's rounding allows, else their median.
-    return { lo, hi, c: [0, 1, 2].map(i => lo[i] <= hi[i] ? 0.5*(lo[i] + hi[i]) : med(off[i])) };
-  };
-  // Snapped where a multiple of 1/24 is allowed too (else, without such offsets, where it lies
-  // within the largest rounding).
-  const snapFit = (R, t, perm, s, f) =>{
-    const { lo, hi, c } = fitOff(R, t, perm, s), ft = t.map((v, i)=> mod1(v + c[i])), w = allowance(R, eMax, eMax);
-    const fs = ft.map((v, i)=>{ const k = Math.round(v*24), d = k/24 - v, ok = lo[i] <= hi[i] ? c[i] + d >= lo[i] - 1e-12 && c[i] + d <= hi[i] + 1e-12 : Math.abs(d) <= s*w[i] + 1e-12; return ok ? (k % 24)/24 : v; });
-    if (!same3(fs, ft) && holds(R, fs, perm, s, f)) return fs;
-    return holds(R, ft, perm, s, f) ? ft : holds(R, t, perm, s, f) ? t : null;
-  };
-  // (R, t) mapping the structure, its translation fitted and snapped: → { t, perm } or null.
-  // (When t itself fails, its v425 snap, which a rounded x₀ can need.)
-  const tryT = (R, raw, s, j) =>{
-    const et = [0, 1, 2].map(i => E[3*j+i] + Math.abs(R[3*i])*E[3*i0] + Math.abs(R[3*i+1])*E[3*i0+1] + Math.abs(R[3*i+2])*E[3*i0+2]);
-    let t = raw, perm = maps(R, raw, s, et);
-    if (!perm){ t = raw.map(snapT); if (same3(t, raw) || !(perm = maps(R, t, s, et))) return null; }
-    const ft = snapFit(R, t, perm, s, 1);
-    if (ft) return { t: ft, perm };
-    // (matched with t's own rounding allowed, an atom may have taken a near twin: matched
-    // again from the fitted translation)
-    const { c } = fitOff(R, t, perm, s), t1 = t.map((v, i)=> mod1(v + c[i])), p1 = maps(R, t1, s, ZERO3), f1 = p1 && snapFit(R, t1, p1, s, 1);
-    return f1 ? { t: f1, perm: p1 } : null;
-  };
-  // A sum of exact translations stays exact (no rounding noise left in it).
-  const exactT = v =>{ const s = snapT(v), d = Math.abs(s - v); return d < 1e-9 || d > 1 - 1e-9 ? s : v; };
-  // The same for a product, whose matching is known: it is checked, not searched (and a
-  // product of exact factors is exact).
-  const tryProduct = (R, raw, perm, s) =>{ const ex = raw.map(exactT); return holds(R, ex, perm, s, 2) ? ex : snapFit(R, raw, perm, s, 2); };
-  // v425's snap, to 1/24 within 1.5e-3, of an operation found: kept when it still maps the
-  // structure. Structures symmetric only to within the tolerance (a DFT cell, noise of a few
-  // mÅ) get exact translations so.
-  const snap425 = (o, R, s) =>{ const sn = o.t.map(snapT); if (!same3(sn, o.t) && holds(R, sn, o.perm, s, 1)) o.t = sn; };
-  const onGrid = t => t.every(v => { const w = mod1(v); return Math.abs(w - Math.round(w*24)/24) < 1.5e-3; });
-  // Two translations of one R closer than a match are one operation (atoms of a group that
-  // close, as a site split across a mirror by less than the rounding, give both).
-  const nearT = (t, u, s) =>{
-    const d = [0, 1, 2].map(i => { const v = t[i] - u[i]; return v - Math.round(v); }), B = s*(tol + 2*rmax[gOf[i0]]);
-    return qform(G, d) <= B*B;
-  };
+  }
+  // On each axis the middle of the offsets every atom's rounding allows, else their median.
+  return { lo, hi, c: [0, 1, 2].map(i => lo[i] <= hi[i] ? 0.5*(lo[i] + hi[i]) : medianOf(off[i])) };
+}
+// Snapped where a multiple of 1/24 is allowed too (else, without such offsets, where it lies
+// within the largest rounding).
+function symSnapFit(F, R, t, perm, s, f){
+  const { lo, hi, c } = symFitOff(F, R, t, perm, s), ft = t.map((v, i)=> mod1(v + c[i])), w = allowance(R, F.eMax, F.eMax);
+  const fs = ft.map((v, i)=>{ const k = Math.round(v*24), d = k/24 - v, ok = lo[i] <= hi[i] ? c[i] + d >= lo[i] - 1e-12 && c[i] + d <= hi[i] + 1e-12 : Math.abs(d) <= s*w[i] + 1e-12; return ok ? (k % 24)/24 : v; });
+  if (!same3(fs, ft) && symHolds(F, R, fs, perm, s, f)) return fs;
+  return symHolds(F, R, ft, perm, s, f) ? ft : symHolds(F, R, t, perm, s, f) ? t : null;
+}
+// (R, t) mapping the structure, its translation fitted and snapped: → { t, perm } or null.
+// (When t itself fails, its v425 snap, which a rounded x₀ can need.)
+const ZERO3 = [0, 0, 0];
+function symTryT(F, R, raw, s, j){
+  const { E, i0 } = F;
+  const et = [0, 1, 2].map(i => E[3*j+i] + Math.abs(R[3*i])*E[3*i0] + Math.abs(R[3*i+1])*E[3*i0+1] + Math.abs(R[3*i+2])*E[3*i0+2]);
+  let t = raw, perm = symMaps(F, R, raw, s, et);
+  if (!perm){ t = raw.map(snapT); if (same3(t, raw) || !(perm = symMaps(F, R, t, s, et))) return null; }
+  const ft = symSnapFit(F, R, t, perm, s, 1);
+  if (ft) return { t: ft, perm };
+  // (matched with t's own rounding allowed, an atom may have taken a near twin: matched
+  // again from the fitted translation)
+  const { c } = symFitOff(F, R, t, perm, s), t1 = t.map((v, i)=> mod1(v + c[i])), p1 = symMaps(F, R, t1, s, ZERO3), f1 = p1 && symSnapFit(F, R, t1, p1, s, 1);
+  return f1 ? { t: f1, perm: p1 } : null;
+}
+// A sum of exact translations stays exact (no rounding noise left in it).
+const exactT = v =>{ const s = snapT(v), d = Math.abs(s - v); return d < 1e-9 || d > 1 - 1e-9 ? s : v; };
+// The same for a product, whose matching is known: it is checked, not searched (and a
+// product of exact factors is exact).
+function symTryProduct(F, R, raw, perm, s){ const ex = raw.map(exactT); return symHolds(F, R, ex, perm, s, 2) ? ex : symSnapFit(F, R, raw, perm, s, 2); }
+// v425's snap, to 1/24 within 1.5e-3, of an operation found: kept when it still maps the
+// structure. Structures symmetric only to within the tolerance (a DFT cell, noise of a few
+// mÅ) get exact translations so.
+function symSnap425(F, o, R, s){ const sn = o.t.map(snapT); if (!same3(sn, o.t) && symHolds(F, R, sn, o.perm, s, 1)) o.t = sn; }
+const onGrid24 = t => t.every(v => { const w = mod1(v); return Math.abs(w - Math.round(w*24)/24) < 1.5e-3; });
+// Two translations of one R closer than a match are one operation (atoms of a group that
+// close, as a site split across a mirror by less than the rounding, give both).
+function symNearT(F, t, u, s){
+  const d = [0, 1, 2].map(i => { const v = t[i] - u[i]; return v - Math.round(v); }), B = s*(F.tol + 2*F.rmax[F.gOf[F.i0]]);
+  return qform(F.G, d) <= B*B;
+}
 
-  const attempt = s =>{
-    let closed = true;
-    // 1. The pure translations, closed into a group (an operation with R = 1 is known by
-    //    where it takes x₀).
-    const T = [], tAt = new Map();
+// One search at the tolerance (and the rounding allowed) times s: steps 1–5 above.
+function symAttempt(F, s){
+  const { cell, G, dG } = F;
+  const P = symTranslations(F, s), { T } = P;
+  const latt = symLattice(F, s, T);
+  // 2–3. The lattice's holohedry in the cell, and one translation for each matrix.
+  const lat = latticeSymmetry(G, latt || IDENT, dG);
+  const reps = symReps(F, s, T, lat);
+  const closed = symClose(F, s, T, reps) && P.closed;
+  const { Rs, ops } = symOps(F, T, reps);
+  const { sym, bSpread } = symmetrized(F, T, Rs);
+  const trans = T.filter(o => o.t.some(v => v)).map(o => o.t);
+  return { ops, order: ops.length, pointOrder: Rs.length, centring: centringOf(trans), ...classify(Rs.map(C => C.R), cell), atoms: sym, lost: lat.lost, bSpread,
+           ...(latt ? { lattice: latt, primitive: lat.basis } : {}), ...(closed ? {} : { group: false }) };
+}
+// 1. The pure translations, closed into a group (an operation with R = 1 is known by
+//    where it takes x₀). → { T, closed (every product found) }.
+function symTranslations(F, s){
+  const { ref, X, x0, i0 } = F;
+  let closed = true;
+  const T = [], tAt = new Map();
+  for (const j of ref){
+    if (tAt.has(j)) continue;
+    const r = symTryT(F, IDENT, [mod1(X[3*j] - x0[0]), mod1(X[3*j+1] - x0[1]), mod1(X[3*j+2] - x0[2])], s, j);
+    if (r && !tAt.has(r.perm[i0]) && !T.some(o => symNearT(F, o.t, r.t, s))){ symSnap425(F, r, IDENT, s); tAt.set(r.perm[i0], T.length); T.push(r); }
+  }
+  for (let a = 0; a < T.length; a++) for (let b = 1; b <= a; b++){   // (translations commute)
+    const j = T[a].perm[T[b].perm[i0]], raw = [0, 1, 2].map(i => mod1(T[a].t[i] + T[b].t[i]));
+    if (tAt.has(j) || T.some(o => symNearT(F, o.t, raw, s))) continue;
+    const perm = symCompose(F, T[a].perm, T[b].perm), t = symTryProduct(F, IDENT, raw, perm, s);
+    if (t){ tAt.set(j, T.length); T.push({ t, perm }); } else closed = false;
+  }
+  return { T, closed };
+}
+// They form a group of order m, so m·t is integral: each is made exact, and the
+// structure's lattice, ℤ³ + Σ ℤt, has a basis. → its basis (columns in the cell's
+// fractions), or null.
+function symLattice(F, s, T){
+  const m = T.length;
+  let latt = null;
+  if (m > 1){
+    const ints = [];
+    for (const o of T){
+      const v = o.t.map(x => Math.round(m*x));
+      if (o.t.some((x, i)=> Math.abs(m*x - v[i]) > 0.25)){ ints.length = 0; break; }
+      ints.push(v);
+      const ex = v.map(k => mod1(k/m));
+      if (!same3(ex, o.t) && symHolds(F, IDENT, ex, o.perm, s, 1)) o.t = ex;
+    }
+    const basis = ints.length ? latticeBasis([[m, 0, 0], [0, m, 0], [0, 0, m], ...ints]) : null;
+    if (basis) latt = colsOf(basis).map(v => v/m);
+  }
+  return latt;
+}
+// 2–3. For each matrix of the lattice's holohedry (lat), one translation that maps the
+//    structure. A candidate that fails rules out its images under T too. → reps: R → { R, t, perm }.
+function symReps(F, s, T, lat){
+  const { n, ref, X, x0, rankOf } = F;
+  const reps = new Map([[IDENT.join(), { R: IDENT.slice(), t: [0, 0, 0], perm: T[0].perm }]]);
+  const tried = new Uint8Array(n);
+  for (const R of lat.Rs.slice().sort((p, q)=> rankOf(p) - rankOf(q))){
+    if (isIdent(R)) continue;
+    tried.fill(0);
+    const Rx0 = apply3(R, x0);
     for (const j of ref){
-      if (tAt.has(j)) continue;
-      const r = tryT(IDENT, [mod1(X[3*j] - x0[0]), mod1(X[3*j+1] - x0[1]), mod1(X[3*j+2] - x0[2])], s, j);
-      if (r && !tAt.has(r.perm[i0]) && !T.some(o => nearT(o.t, r.t, s))){ snap425(r, IDENT, s); tAt.set(r.perm[i0], T.length); T.push(r); }
+      if (tried[j]) continue;
+      for (const o of T) if (o.perm[j] >= 0) tried[o.perm[j]] = 1;
+      const r = symTryT(F, R, [mod1(X[3*j] - Rx0[0]), mod1(X[3*j+1] - Rx0[1]), mod1(X[3*j+2] - Rx0[2])], s, j);
+      if (r){ reps.set(R.join(), { R: R.slice(), ...r }); break; }
     }
-    for (let a = 0; a < T.length; a++) for (let b = 1; b <= a; b++){   // (translations commute)
-      const j = T[a].perm[T[b].perm[i0]], raw = [0, 1, 2].map(i => mod1(T[a].t[i] + T[b].t[i]));
-      if (tAt.has(j) || T.some(o => nearT(o.t, raw, s))) continue;
-      const perm = compose(T[a].perm, T[b].perm), t = tryProduct(IDENT, raw, perm, s);
-      if (t){ tAt.set(j, T.length); T.push({ t, perm }); } else closed = false;
+  }
+  // A translation's part along the symmetry element is rational, its part across it is set
+  // by the origin. So v425's snap applies to all or none: all when every one lies near the
+  // grid (a standard origin, perhaps with noise), not one that a random origin puts there.
+  if ([...reps.values()].every(o => onGrid24(o.t))) for (const o of reps.values()) symSnap425(F, o, o.R, s);
+  return reps;
+}
+// 4. A group. Two operations with one R are one up to T when they take x₀ into one
+//    T-orbit (its least atom stands for it). The products not among reps are added.
+//    → whether every product was found.
+function symClose(F, s, T, reps){
+  const { n, ref, i0 } = F;
+  let closed = true;
+  const tOrb = new Int32Array(n).fill(-1);
+  for (const j of ref){ let lo = j; for (const o of T){ const k = o.perm[j]; if (k >= 0 && k < lo) lo = k; } tOrb[j] = lo; }
+  const list = [...reps.values()];
+  for (let a = 0; a < list.length && list.length <= 48; a++) for (let b = 0; b < list.length; b++){
+    const A = list[a], B = list[b], R = mul3(A.R, B.R), key = R.join(), j = A.perm[B.perm[i0]], C = reps.get(key);
+    const Bt = apply3(A.R, B.t), raw = [0, 1, 2].map(i => mod1(Bt[i] + A.t[i]));
+    if (C){
+      if (j < 0 || (tOrb[j] !== tOrb[C.perm[i0]] && !T.some(o => { const Rt = apply3(C.R, o.t); return symNearT(F, raw, [0, 1, 2].map(i => Rt[i] + C.t[i]), 2*s); }))) closed = false;
+      continue;
     }
-    // They form a group of order m, so m·t is integral: each is made exact, and the
-    // structure's lattice, ℤ³ + Σ ℤt, has a basis.
-    const m = T.length;
-    let latt = null;
-    if (m > 1){
-      const ints = [];
-      for (const o of T){
-        const v = o.t.map(x => Math.round(m*x));
-        if (o.t.some((x, i)=> Math.abs(m*x - v[i]) > 0.25)){ ints.length = 0; break; }
-        ints.push(v);
-        const ex = v.map(k => mod1(k/m));
-        if (!same3(ex, o.t) && holds(IDENT, ex, o.perm, s, 1)) o.t = ex;
-      }
-      const basis = ints.length ? latticeBasis([[m, 0, 0], [0, m, 0], [0, 0, m], ...ints]) : null;
-      if (basis) latt = colsOf(basis).map(v => v/m);
-    }
-    // 2–3. The lattice's holohedry in the cell, and one translation for each matrix. A
-    //    candidate that fails rules out its images under T too.
-    const lat = latticeSymmetry(G, latt || IDENT, dG);
-    const reps = new Map([[IDENT.join(), { R: IDENT.slice(), t: [0, 0, 0], perm: T[0].perm }]]);
-    const tried = new Uint8Array(n);
-    for (const R of lat.Rs.slice().sort((p, q)=> rankOf(p) - rankOf(q))){
-      if (isIdent(R)) continue;
-      tried.fill(0);
-      const Rx0 = apply3(R, x0);
-      for (const j of ref){
-        if (tried[j]) continue;
-        for (const o of T) if (o.perm[j] >= 0) tried[o.perm[j]] = 1;
-        const r = tryT(R, [mod1(X[3*j] - Rx0[0]), mod1(X[3*j+1] - Rx0[1]), mod1(X[3*j+2] - Rx0[2])], s, j);
-        if (r){ reps.set(R.join(), { R: R.slice(), ...r }); break; }
-      }
-    }
-    // A translation's part along the symmetry element is rational, its part across it is set
-    // by the origin. So v425's snap applies to all or none: all when every one lies near the
-    // grid (a standard origin, perhaps with noise), not one that a random origin puts there.
-    if ([...reps.values()].every(o => onGrid(o.t))) for (const o of reps.values()) snap425(o, o.R, s);
-    // 4. A group. Two operations with one R are one up to T when they take x₀ into one
-    //    T-orbit (its least atom stands for it).
-    const tOrb = new Int32Array(n).fill(-1);
-    for (const j of ref){ let lo = j; for (const o of T){ const k = o.perm[j]; if (k >= 0 && k < lo) lo = k; } tOrb[j] = lo; }
-    const list = [...reps.values()];
-    for (let a = 0; a < list.length && list.length <= 48; a++) for (let b = 0; b < list.length; b++){
-      const A = list[a], B = list[b], R = mul3(A.R, B.R), key = R.join(), j = A.perm[B.perm[i0]], C = reps.get(key);
-      const Bt = apply3(A.R, B.t), raw = [0, 1, 2].map(i => mod1(Bt[i] + A.t[i]));
-      if (C){
-        if (j < 0 || (tOrb[j] !== tOrb[C.perm[i0]] && !T.some(o => { const Rt = apply3(C.R, o.t); return nearT(raw, [0, 1, 2].map(i => Rt[i] + C.t[i]), 2*s); }))) closed = false;
-        continue;
-      }
-      const perm = compose(A.perm, B.perm), t = tryProduct(R, raw, perm, s);
-      if (!t){ closed = false; continue; }
-      const D = { R, t, perm };
-      reps.set(key, D); list.push(D);
-    }
-    const Rs = [...reps.values()].sort((p, q)=> rankOf(p.R) - rankOf(q.R));
-    const ops = [];
-    for (const C of Rs){
-      const sub = T.map(o =>{
-        const Rt = apply3(C.R, o.t);
-        return { t: [0, 1, 2].map(i => exactT(mod1(Rt[i] + C.t[i]))), at: refPos[C.perm[o.perm[i0]]] };
-      }).sort((p, q)=> p.at - q.at);
-      for (const { t } of sub) ops.push({ R: C.R.slice(), t });
-    }
-    // 5. The atoms at the mean of their images: atom k receives, from every operation, the
-    //    image of the atom it takes there. T is normal in the group, so the mean over it is
-    //    the mean over T, then over one operation for each R (the maps are affine): the cost
-    //    is (|T| + |R|)·N, not |T|·|R|·N.
-    const mean = (list, P) =>{
-      const acc = new Float64Array(3*n), cnt = new Int32Array(n), Y = new Float64Array(P);
-      for (const { R, t, perm } of list) for (let m = 0; m < nu; m++){
-        const j = used[m], k = perm[j];
-        if (k < 0) continue;
-        const x = P[3*j], y = P[3*j+1], z = P[3*j+2];
-        let d0 = R[0]*x + R[1]*y + R[2]*z + t[0] - P[3*k], d1 = R[3]*x + R[4]*y + R[5]*z + t[1] - P[3*k+1], d2 = R[6]*x + R[7]*y + R[8]*z + t[2] - P[3*k+2];
-        acc[3*k] += d0 - Math.round(d0); acc[3*k+1] += d1 - Math.round(d1); acc[3*k+2] += d2 - Math.round(d2);
-        cnt[k]++;
-      }
-      for (let k = 0; k < n; k++) if (cnt[k] === list.length) for (let i = 0; i < 3; i++) Y[3*k+i] += acc[3*k+i]/list.length; else cnt[k] = -1;
-      return { Y, cnt };
-    };
-    const s1 = mean(T.map(o => ({ R: IDENT, t: o.t, perm: o.perm })), X), s2 = mean(Rs, s1.Y);
-    // B too: the key has no B, so atoms the group maps onto each other may differ in it (sites
-    // of a lower group, a P1 file with a B per atom), and the reflections it merges would then
-    // be wrong (a B spread of ±0.1 Å² put lines 4 % off, median over 176 groups; ±0.5 Å², 21 %).
-    // Each atom takes the mean over its orbit, over T then over one operation per R.
-    const meanB = (list, Bv) =>{
-      const acc = new Float64Array(n), cnt = new Int32Array(n);
-      for (const { perm } of list) for (let m = 0; m < nu; m++){ const j = used[m], k = perm[j]; if (k >= 0){ acc[k] += Bv[j]; cnt[k]++; } }
-      return Bv.map((v, k)=> cnt[k] === list.length ? acc[k]/list.length : v);
-    };
-    const B0 = Float64Array.from(atoms, a => Number.isFinite(a.Biso) ? a.Biso : NaN);
-    const Bm = B0.some(Number.isNaN) ? B0 : meanB(Rs, meanB(T, B0));
-    let bSpread = 0;
-    const sym = atoms.map((a, k)=>{
-      const d0 = s2.Y[3*k] - X[3*k], d1 = s2.Y[3*k+1] - X[3*k+1], d2 = s2.Y[3*k+2] - X[3*k+2];
-      const dB = Math.abs(Bm[k] - B0[k]) > 1e-12 ? Bm[k] : null;
-      if (dB != null) bSpread = Math.max(bSpread, Math.abs(Bm[k] - B0[k]));
-      const moved = !(s1.cnt[k] < 0 || s2.cnt[k] < 0 || (Math.abs(d0) <= 1e-9 && Math.abs(d1) <= 1e-9 && Math.abs(d2) <= 1e-9));
-      if (!moved && dB == null) return a;
-      return { ...a, ...(moved ? { x: mod1(s2.Y[3*k]), y: mod1(s2.Y[3*k+1]), z: mod1(s2.Y[3*k+2]) } : {}), ...(dB != null ? { Biso: dB } : {}) };
-    });
-    const trans = T.filter(o => o.t.some(v => v)).map(o => o.t);
-    return { ops, order: ops.length, pointOrder: Rs.length, centring: centringOf(trans), ...classify(Rs.map(C => C.R), cell), atoms: sym, lost: lat.lost, bSpread,
-             ...(latt ? { lattice: latt, primitive: lat.basis } : {}), ...(closed ? {} : { group: false }) };
-  };
-  let r = null;
-  for (const s of [1, 1/2, 1/4, 1/8]){ r = attempt(s); if (r.group !== false) break; }
-  return r;
+    const perm = symCompose(F, A.perm, B.perm), t = symTryProduct(F, R, raw, perm, s);
+    if (!t){ closed = false; continue; }
+    const D = { R, t, perm };
+    reps.set(key, D); list.push(D);
+  }
+  return closed;
+}
+// The operations: for each R in the holohedry's order, its translations (times T) in the
+// order of the reference atoms they reach. → { Rs (one operation each R), ops }.
+function symOps(F, T, reps){
+  const { rankOf, refPos, i0 } = F;
+  const Rs = [...reps.values()].sort((p, q)=> rankOf(p.R) - rankOf(q.R));
+  const ops = [];
+  for (const C of Rs){
+    const sub = T.map(o =>{
+      const Rt = apply3(C.R, o.t);
+      return { t: [0, 1, 2].map(i => exactT(mod1(Rt[i] + C.t[i]))), at: refPos[C.perm[o.perm[i0]]] };
+    }).sort((p, q)=> p.at - q.at);
+    for (const { t } of sub) ops.push({ R: C.R.slice(), t });
+  }
+  return { Rs, ops };
+}
+// 5. The atoms at the mean of their images: atom k receives, from every operation, the
+//    image of the atom it takes there. T is normal in the group, so the mean over it is
+//    the mean over T, then over one operation for each R (the maps are affine): the cost
+//    is (|T| + |R|)·N, not |T|·|R|·N.
+function symMean({ n, used, nu }, list, P){
+  const acc = new Float64Array(3*n), cnt = new Int32Array(n), Y = new Float64Array(P);
+  for (const { R, t, perm } of list) for (let m = 0; m < nu; m++){
+    const j = used[m], k = perm[j];
+    if (k < 0) continue;
+    const x = P[3*j], y = P[3*j+1], z = P[3*j+2];
+    let d0 = R[0]*x + R[1]*y + R[2]*z + t[0] - P[3*k], d1 = R[3]*x + R[4]*y + R[5]*z + t[1] - P[3*k+1], d2 = R[6]*x + R[7]*y + R[8]*z + t[2] - P[3*k+2];
+    acc[3*k] += d0 - Math.round(d0); acc[3*k+1] += d1 - Math.round(d1); acc[3*k+2] += d2 - Math.round(d2);
+    cnt[k]++;
+  }
+  for (let k = 0; k < n; k++) if (cnt[k] === list.length) for (let i = 0; i < 3; i++) Y[3*k+i] += acc[3*k+i]/list.length; else cnt[k] = -1;
+  return { Y, cnt };
+}
+// B too: the key has no B, so atoms the group maps onto each other may differ in it (sites
+// of a lower group, a P1 file with a B per atom), and the reflections it merges would then
+// be wrong (a B spread of ±0.1 Å² put lines 4 % off, median over 176 groups; ±0.5 Å², 21 %).
+// Each atom takes the mean over its orbit, over T then over one operation per R.
+function symMeanB({ n, used, nu }, list, Bv){
+  const acc = new Float64Array(n), cnt = new Int32Array(n);
+  for (const { perm } of list) for (let m = 0; m < nu; m++){ const j = used[m], k = perm[j]; if (k >= 0){ acc[k] += Bv[j]; cnt[k]++; } }
+  return Bv.map((v, k)=> cnt[k] === list.length ? acc[k]/list.length : v);
+}
+// The atoms symmetrized (symMean, symMeanB): those moved or whose B changed as new objects.
+// → { sym, bSpread (the largest change of B) }.
+function symmetrized(F, T, Rs){
+  const { atoms, X } = F;
+  const s1 = symMean(F, T.map(o => ({ R: IDENT, t: o.t, perm: o.perm })), X), s2 = symMean(F, Rs, s1.Y);
+  const B0 = Float64Array.from(atoms, a => Number.isFinite(a.Biso) ? a.Biso : NaN);
+  const Bm = B0.some(Number.isNaN) ? B0 : symMeanB(F, Rs, symMeanB(F, T, B0));
+  let bSpread = 0;
+  const sym = atoms.map((a, k)=>{
+    const d0 = s2.Y[3*k] - X[3*k], d1 = s2.Y[3*k+1] - X[3*k+1], d2 = s2.Y[3*k+2] - X[3*k+2];
+    const dB = Math.abs(Bm[k] - B0[k]) > 1e-12 ? Bm[k] : null;
+    if (dB != null) bSpread = Math.max(bSpread, Math.abs(Bm[k] - B0[k]));
+    const moved = !(s1.cnt[k] < 0 || s2.cnt[k] < 0 || (Math.abs(d0) <= 1e-9 && Math.abs(d1) <= 1e-9 && Math.abs(d2) <= 1e-9));
+    if (!moved && dB == null) return a;
+    return { ...a, ...(moved ? { x: mod1(s2.Y[3*k]), y: mod1(s2.Y[3*k+1]), z: mod1(s2.Y[3*k+2]) } : {}), ...(dB != null ? { Biso: dB } : {}) };
+  });
+  return { sym, bSpread };
 }
 
 /* The atoms in the cell whose axes are the columns of B (in the old cell's fractions: a
