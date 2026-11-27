@@ -1,4 +1,4 @@
-import { esc, csvLine, fmtNum, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, buildAlertsHtml, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, registerBusy, busyChanged, registerModule, onSectionChange, flashFieldInvalid, kept, getModuleHistory } from './utils.js';
+import { esc, csvLine, fmtNum, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, fileAlertHtml, NOT_READ, bytesOf, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, registerBusy, busyChanged, registerModule, onSectionChange, flashFieldInvalid, kept, getModuleHistory } from './utils.js';
 import { readTescanTiff, readFile, SemReadError, reducedCopy, cropStats, resample, cardKey, cardLevels } from './sem-read.js';
 import { snavHtml, snav } from './snav.js';
 import { isObj } from './modkit.js';
@@ -255,10 +255,14 @@ function stopReads(owner){
   for (const [s, p] of [...pending]) if (p.owner === owner){ pending.delete(s); p.ok({ retry: true }); had = true; }
   if (had && !pending.size) dropWorker(false);
 }
-// A file read: { id, r (its header), px (its levels where a copy), small, st, card, bytes }.
+/* A file read: { id, r (its header), px (its levels where a copy), small, st, card, bytes },
+   or { error } why not: its bytes that cannot be read (gone from the disk: utils.js
+   NOT_READ) among them (to v566 the drop ended there, with no word). */
 async function readOne(file, job, owner){
+  const b0 = await bytesOf(file);
+  if (!b0) return { error: NOT_READ };
   // (the worker taken once the bytes are in: one that would not run has said so by then)
-  const buf = await file.arrayBuffer(), w = workerOf();
+  const buf = b0.buffer, w = workerOf();
   if (w){
     const s = ++reader.seq;
     clearTimeout(reader.idle);
@@ -267,7 +271,9 @@ async function readOne(file, job, owner){
   }
   await new Promise(ok=> setTimeout(ok, 0));
   if (job.stopped) return { retry: true };
-  try { const out = readFile(new Uint8Array(await file.arrayBuffer()), file.name); return { ...out, r: { ...out.r, pixels: null }, px: out.r.view ? null : out.r.pixels }; }
+  const b1 = await bytesOf(file);
+  if (!b1) return { error: NOT_READ };
+  try { const out = readFile(b1, file.name); return { ...out, r: { ...out.r, pixels: null }, px: out.r.view ? null : out.r.pixels }; }
   catch(err){ return err instanceof SemReadError ? { error: err.message } : { fault: String(err && err.message || err), kind: err && err.name }; }
 }
 
@@ -355,7 +361,7 @@ function readField(el, lo, hi){
 // The page's helpers the model takes (sem-model.js U), and what the markup takes
 // (sem-html.js u).
 const U = { isObj, fmtNum, csvLine, info, statsOf, rawOf };
-const HU = { esc, buildAlertsHtml };
+const HU = { esc, fileAlertHtml };
 const drawable = S => S.shown() || !(S.stale = true);
 
 function createSem({ key, root, layer, shown }){
@@ -569,7 +575,7 @@ function restore(S, s){
   S.line = S.lineOf.has(s) ? S.lineOf.get(s) : ++S.lines;
   const { lost, cur } = M.restoreInto(U, S, s);
   // (on this state's line: one read in and out again keeps its own, never shown)
-  if (lost.length) M.setAlerts(S, { bad: { names: lost.map(n=> H.fileLine(HU, n, 'its stored bytes no longer read as a Tescan TIFF')), ids: S.allFiles.map(f=> f.raw.id) } });
+  if (lost.length) M.setAlerts(S, { bad: { names: [esc(H.lostLine(lost.length))], ids: S.allFiles.map(f=> f.raw.id), opened: true } });
   S.cur = cur;
   filesChanged(S);
   // (a wake's or a reload's: the image its tab showed, by its id, over the record's state,
@@ -677,7 +683,7 @@ function thumbEl(S, f, i, cv){
   b.appendChild(cv);
   const cap = document.createElement('span');
   const r = M.isRef(S, f);
-  cap.className = 'sem-thumb-cap'; cap.textContent = (r ? '◎ ' : '') + f.label + (f.clamped ? ' ⚠' : '');
+  cap.className = 'sem-thumb-cap'; cap.textContent = (r ? '◎ ' : '') + f.label + (f.clamped ? ' ⓘ' : '');
   if (r) b.title = f.label + ' — the reference';
   if (f.clamped) b.title += ' — its crop was narrowed to fit it';
   // Out of the images the selector chose: dimmed (a click on it chooses its group).

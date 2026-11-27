@@ -1,200 +1,144 @@
-# Revisione di avvisi ed errori (da fare)
+# Avvisi ed errori: revisione (v565 → v567)
 
-Mappa fatta il 17/11/2026 su v540, leggendo il codice. Ha trovato 276 messaggi mostrati all'utente:
+Mappa rifatta dal codice di v565 (331 voci: 309 messaggi con testo, 3 flash, 4 solo tooltip, 15 casi muti). Sostituisce la revisione di v540: delle sue 79 proposte 73 valevano ancora, sono riprese qui sotto. I testi dell'interfaccia restano in inglese.
 
-| Modulo | Messaggi |
+## Regole
+
+**R1. Tipo: dice che cosa è successo ai dati.**
+
+| Tipo | Quando |
 |---|---|
-| XRPD | 155 |
-| codice condiviso | 51 |
-| SEM | 17 |
-| DRS | 17 |
-| Iodometria | 12 |
-| GC | 11 |
-| EPR | 9 |
-| Custom | 4 |
+| error ✕ | L'azione non ha prodotto nulla (file non caricato, raffinamento, export o integrazione falliti, valore rifiutato) oppure il risultato è sbagliato |
+| warn ⚠ | Il risultato c'è, ma può essere sbagliato o incompleto e l'utente può controllare o correggere |
+| info ⓘ | Scelta automatica o lettura corretta nel caso normale: da sapere, niente da fare |
+| grigio | Stato, avanzamento, stato vuoto, come procedere. Mai un problema |
 
-Per ciascuno c'è una proposta. 197 restano come sono. Qui sotto ci sono le 79 da cambiare e le incoerenze tra moduli. La mappa completa, con le 197 da tenere, va rifatta dal codice quando si riprende il lavoro: i numeri di riga cambiano.
+Solo questi quattro aspetti: via le righe ambra senza box, il testo rosso senza box, il "⚠" in una riga grigia, `alert()`. Nelle card il box compatto (stessa icona e colori, padding ridotto: `.alert.compact`).
 
-Le decisioni dell'utente sono ancora da prendere. Niente di questo è nel codice.
+**R2. Posto.** Avvisi su un file: sotto la drop zone che lo ha ricevuto, un box per tipo, nell'ordine error → warn → info. Avvisi su un'analisi: nella card, sotto ciò di cui parlano, box compatti. Valore rifiutato: flash e, dove la regola non è ovvia, una riga rossa sotto il campo. Progetto, memoria del browser, altre finestre: banner in alto; domande: banner (finestra centrale solo prima di un lavoro lungo).
 
-## Tipi
+**R3. Durata.** Box dei file calcolati dai file presenti; la × marca quel file come visto e regge undo e redo. Rifiuti e "già caricato" valgono fino alla drop successiva, che li sostituisce anche quando fallisce. Box nelle card ricalcolati col risultato, senza ×. Banner: OK o ×.
 
-- **error**: box rosso ✕. I dati non sono utilizzabili, oppure il risultato è sbagliato.
-- **warn**: box ambra ⚠. Il risultato è utilizzabile, ma va controllato qualcosa.
-- **info**: box azzurro ⓘ, dalla v539. È un fatto neutro su come è stato letto il file. Oggi lo usa solo GC.
-- **grigio**: riga di stato o nota `txt-meta`.
+**R4. Testo.**
 
-## Proposte di cambiamento
+| Caso | Intestazione | Riga |
+|---|---|---|
+| Rifiuto (error) | `Not loaded:` | `{file}: {reason}.` col motivo scritto dall'app, mai il messaggio grezzo del browser |
+| Caricato, da controllare (warn) | `Loaded, to check:` | `{file}: {what happened}: {consequence}.` |
+| Lettura neutra (info) | `How these files were read:` | `{file}: {how}.` |
+| Doppione (info) | `Already loaded, not loaded again:` | `{file}.` |
+| Riapertura con perdite o letture cambiate (warn) | `Opened, to check:` | `{file}: {what}.` / `{n} files left out: {why}.` |
 
-Formato: **#n**, tipo attuale → **proposta**, quando compare, il testo e il motivo in corsivo.
+Due punti tra nome e motivo, niente parentesi intorno al motivo, niente "—" né "!", niente numeri di versione, ogni riga col punto. Una cosa ha un nome solo (es. "the GC software's scale (k)"). In codice: `utils.js` FILE ALERTS (`fileAlertHtml`, `fileLine`, `NOT_READ`, `bytesOf`).
+
+## Decisioni (U1–U8)
+
+| U | Decisione |
+|---|---|
+| U1 | "Già caricato": ogni modulo tiene il suo criterio (nome, file sorgente, radice, contenuto); si unifica solo il testo |
+| U2 | Mezza coppia: nella Calibration GC il file aspetta l'altra metà; in EPR è rifiutato, nel box `Not loaded:` col motivo (`its .DSC is missing: drop the two together.`) |
+| U3 | Avvisi di lettura calcolati dai file presenti in tutti i moduli, × per file che regge undo/redo (X04, S04, D02) |
+| U4 | Classificazione info/warn degli avvisi di Rietveld e CIF come in X11/X12; risultati salvati senza tipo letti come warn |
+| U5 | Tassi negativi in GC: nessun nuovo avviso; domanda aperta all'utente (BACKLOG) |
+| U6 | Assunzioni dello strumento: riga grigia coi soli fatti, sotto un box compatto info (neutre) e uno warn (possono essere sbagliate) |
+| U7 | Vocabolario approvato: `Not loaded:`, `Loaded, to check:`, `How these files were read:`, `Already loaded, not loaded again:`, `Opened, to check:` |
+| U8 | File persi alla riapertura: warn (il progetto si apre) |
+
+## Modifiche
+
+ID della mappa tra parentesi. Fase: 1 file illeggibile, 2 drop zone e testi, 3 card e righe di stato, 4 persistenza e risultati salvati.
+
+### Condiviso
+
+| ID | Modifica | Stato |
+|---|---|---|
+| C01 | Rifiuti (SH01 e motivi di tutti i moduli, GI27) → `Not loaded:` + `{file}: {reason}.` | fatto in v567 |
+| C02 | Rifiuti senza motivo → GC `not a GC table: no injection date and H₂ or O₂ column under a header`, EPR `not a .DTA or .DSC file`, lettore che lancia `could not be read: {message}` | fatto in v567 |
+| C03 | File illeggibile (sparito dal disco, permessi; SH06 IO02 SE18 GI41 XR13 EP02) → `{file}: could not be read from the disk (moved, deleted or not accessible).`, gli altri file della drop caricati | fatto in v567 (tutti i moduli, finestre Calibration e standard comprese) |
+| C04 | Ogni drop sostituisce rifiuti e doppioni della drop precedente, anche quando fallisce | fatto in v567 |
+| C05 | "Already loaded" (SH03 XR24 SE10 GI31) → info `Already loaded, not loaded again:` | fatto in v567 |
+| C06 | Intestazione di default mai usata (SH02) → via (con `buildAlertsHtml`) | fatto in v567 |
+| C07 | File persi alla riapertura (SH05 XR29 SE14) → warn `Opened, to check:` + `{n} files left out: {no data in the project \| their stored bytes no longer read}.` | fatto in v567 |
+| C08 | `alert()` del download (SH08 SH09) → banner | fatto in v567 |
+| C09 | Byte non più salvati (SH15 SH19 SH27 SH30, GI07) → una frase: `“{title}”: {n} of its files are not stored in this browser any more: {it opens \| it comes back \| the file holds them} without their bytes.` | fatto in v567 |
+| C10 | `Project file list is empty.` → `No data loaded in {Module}.` | fatto in v567 |
+| C11 | CSV dalla lista progetti, byte illeggibili → `“{title}” could not be exported: …` | fatto in v567 |
+| C12 | `“{file}” is not a DataTreat project.` → `…: it cannot be read as one.` | fatto in v567 |
+| C13 | `Are you sure to delete…` → `Delete project “{title}”? This cannot be undone.` | fatto in v567 |
+| C14 | Salvataggio rifiutato da IndexedDB (muto) → banner `“{title}” could not be saved ({reason}): your work is still in its tab.` | fatto in v567 |
+| C15 | Rinomina su un nome esistente, palette con nome esistente (muti) → domanda | fatto in v567 |
+| C16 | Copy image fallito, compositore che non si carica (muti) → `Copy failed` accanto al bottone; banner | fatto in v567 |
+| C17 | Testo rosso senza box (compositore, GI02, IO09) → error compatto | da fare (fase 3) |
+| C18 | `vNNN` nei testi (XR26–XR28 XS05 GI35 SH33 XE26) → `an older version` | fatto in v567 |
+| C19 | Campo rifiutato: flash + riga rossa sotto il campo (GC10 GI14 XV32 IO09) | da fare (fase 3) |
 
 ### XRPD
 
-- **#13** warn → **info**: file con più scansioni. "Loaded, with a caveat: {file}: {n} scans, each a pattern of its own". _Fatto neutro._
-- **#18** warn → **info**: tempi di conteggio diversi per punto. "counts over unequal counting times: loaded as counts per second". _Variante gestita._
-- **#19** warn → **info**: cps senza tempo di conteggio, stimato dal rumore. "{s} s per point estimated from the noise, for the weights". _Scelta automatica; il Rietveld lo ripete (#103)._
-- **#20** warn → **unire a #229**: "Already loaded file(s): {file}".
-- **#21** warn → **info**: più file trascinati sullo standard. "One file at a time: … the first is the standard".
-- **#22** warn → **info**: standard con più scansioni. "the standard is scan {k}…".
-- **#27** warn → **unire a #230**: progetto con file senza 2θ/intensità. "…with no pattern to show: left out."
-- **#33** grigio → **warn**: meno di 3 picchi nello standard. "Not fitted: it needs 3 peaks or more…". _Cambia come si corregge._
-- **#43** grigio → **info**: "From the CIF, no last result to start from".
-- **#44** grigio → **info**: "Scales and background refined, not held: the background's terms changed".
-- **#45** grigio → **error**: raffinamento fallito ("⚠ Refinement failed", "too few points", "worker failed"). _Oggi è grigio come l'avanzamento._
-- **#48** grigio → **error**: il raffinamento dello standard fallisce o non dà profilo, quindi "nothing refined".
-- **#49** grigio → **error**: "⚠ {file}: not a CIF file".
-- **#50** grigio → **error**: CIF con struttura inutilizzabile (cella incompleta, nessun atomo, coordinate cartesiane…).
-- **#54** grigio → **unire a #41**: "No phase ticked for this pattern: tick one in the list."
-- **#56** grigio → **warn**: campione raffinato prima dello standard. "No instrumental profile… Refine it again".
-- **#57** grigio → **warn**: campione raffinato senza standard. "the widths, and the sizes from them, include the instrument's".
-- **#58** grigio → **unire a #57**: "the widths are not corrected for the instrument's".
-- **#60** riga dello strumento → **warn**: nessuna λ nel file, quindi "Cu Kα assumed". _Sbagliato se l'anodo non è Cu._
-- **#61** riga dello strumento → **info**: nessun Kα₂, quindi "a single wavelength is modelled".
-- **#62** riga dello strumento → **info**: rapporto Kα₂/Kα₁ assente, quindi "0.5 assumed".
-- **#63** riga dello strumento → **info**: nessun raggio del goniometro, quindi "240 mm assumed".
-- **#64** riga dello strumento → **info**: cristallo del monocromatore non riconosciuto, quindi "graphite (002) assumed".
-- **#65** riga dello strumento → **warn**: il cristallo non può riflettere quella λ.
-- **#66** riga dello strumento → **info**: riflessione del monocromatore non indicata.
-- **#67** riga dello strumento → **info**: il cristallo passa solo Kα₁, quindi il rapporto del file non è usato.
-- **#68** riga dello strumento → **warn**: "Sample mode … the model is Bragg–Brentano reflection".
-- **#69** riga dello strumento → **warn**: asse di scansione non θ–2θ.
-- **#70** riga dello strumento → **warn**: fenditura di divergenza automatica, "the data need dividing by sinθ".
-- **#71** riga dello strumento → **warn**: fenditura programmabile senza lunghezza irradiata.
-- **#72** riga dello strumento → **info**: fenditura sconosciuta o assente, quindi "a fixed slit is assumed".
-- **#73** riga dello strumento → **warn**: il monocromatore di solito passa solo Kα₁, ma il file dà un rapporto Kα₂ ("check it").
-- **#75** warn → **info**: CIF con più strutture, quindi viene usata la prima.
-- **#77** warn → **info**: CIF magnetico, momenti ignorati.
-- **#78** warn → **info**: angolo di cella dedotto dalla simmetria.
-- **#80** warn → **info**: identità aggiunta alle operazioni.
-- **#82** warn → **error**: centratura incompleta, "the cell will be filled incompletely".
-- **#89** warn → **info**: fattore di forma interpolato tra cariche.
-- **#90** warn → **info**: B mancanti, quindi "B = … assumed".
-- **#99** grigio → **warn**: occupanze inferiori a formula × Z. _Può indicare un sito mancante._
-- **#103** warn → **info**: rumore inferiore ai conteggi dichiarati, pesi riscalati.
-- **#104** warn → **info**: λ non tabulata per f′ e f″, quindi poste a 0.
-- **#106** warn → **unire a #105**: forma libera senza standard.
-- **#113** warn → **info**: Soller diverse tra standard e campione.
-- **#118** warn → **info**: forma libera ripresa dall'ultimo risultato.
-- **#119** warn → **info**: forma libera già scartata nell'ultimo risultato.
-- **#120** warn → **info**: forma libera non supportata dai dati, quindi resta la taglia isotropa.
-- **#123** warn → **error**: punti ≤ parametri raffinati.
-- **#125** warn → **info**: ultimo risultato con altre fasi, quindi si riparte dal CIF.
-- **#126** warn → **info**: fase assente nell'ultimo risultato, quindi lasciata fuori.
-- **#127** warn → **info**: difetti planari nuovi, con taglia e strain tenuti fissi.
-- **#128** warn → **info**: occupanze cambiate, B tenuti fissi.
-- **#129** warn → **info**: "Refined from the last result…" (resoconto).
-- **#130** warn → **info**: la ricerca della cella copre ±a %, non il ±b % impostato.
+| ID | Modifica | Stato |
+|---|---|---|
+| X01 | `Loaded, with a caveat:` → info `How these files were read:` (più scansioni, tempi diversi, tempo stimato) + warn `Loaded, to check:` (scansione non letta, punti tolti, fattori o tempi mancanti) | fatto in v567 |
+| X02 | Finestra dello standard: più file, più scansioni → info | fatto in v567 |
+| X03 | `Restored, with a caveat:` → `Opened, to check:`, senza vNNN | fatto in v567 |
+| X04 | Avvisi di lettura calcolati dai file, × per file | da fare (fase 4) |
+| X05 | Riga dello strumento "— ⚠ …" → fatti in grigio + box compatti info/warn | da fare (fase 3) |
+| X06 | Assunzione dello strumento detta subito (XE04) | da fare (fase 3) |
+| X07 | Fallimenti nella riga di stato → error compatto | da fare (fase 3) |
+| X08 | `No phase ticked…` un testo solo | da fare (fase 3) |
+| X09 | XV02 XV03 → info compatto | da fare (fase 3) |
+| X10 | Profilo strumentale mancante detto una volta, warn | da fare (fase 3) |
+| X11 | Avvisi del raffinamento → box info/warn (tipo dato dal motore) | da fare (fase 4, risultati salvati) |
+| X12 | Avvisi dei CIF → box compatti per fase | da fare (fase 3) |
+| X13 | XV37 → warn | da fare (fase 3) |
+| X14 | Curva persa in silenzio (XV39) → warn | da fare (fase 3) |
+| X15 | XS07 → warn | da fare (fase 3) |
+| X16 | XS01 stile inline → txt-meta | da fare (fase 3) |
+| X17 | XV32 → riga rossa sotto il campo (C19) | da fare (fase 3) |
 
-### SEM
+### SEM, DRS
 
-- **#166** warn → **unire a #229**: "Already loaded: {file}" (riconosciuto per contenuto).
-- **#169**, **#170** in linea → **info**: "⚠ narrowed to fit" (ritaglio ristretto per stare nell'immagine).
-- **#171** error → **unire a #230**: "its stored bytes no longer read as a Tescan TIFF".
-
-### DRS
-
-- **#179** warn → **info**: "not a standard format: … read as %R".
-- **#180** warn → **info**: "not a standard format: … read as F(R)".
-- **#187** warn → **error**: "⚠ Negative E_g for: …".
-- **#188** warn → **error**: "⚠ Negative E_U for: …".
+| ID | Modifica | Stato |
+|---|---|---|
+| S01 | `{file} — {reason}` → `{file}: {reason}.` | fatto in v567 |
+| S02 | `Loaded, but check:` → `Loaded, to check:` | fatto in v567 |
+| S03 | `⚠ narrowed to fit` → ⓘ, info | fatto in v567 |
+| S04 | Avvisi calcolati dai file (non legati alla linea della storia) | da fare (fase 4) |
+| D01 | `Verify how these files were read:` → info `How these files were read:` (formati) + warn `Loaded, to check:` (punti tolti) | fatto in v567 |
+| D02 | × per file che regge undo/redo | da fare (fase 4) |
+| D03 | `…for the regression!` → `…for the regression.` | fatto in v567 |
+| D04 | E_g o E_U negativi: warn → error | fatto in v567 |
 
 ### GC
 
-- **#192** warn → **info**: "{file}: dates read as day/month".
+| ID | Modifica | Stato |
+|---|---|---|
+| G01 | Date: info `{file}: dates read as day/month.` + warn `{file}: {n} rows left out: their injection date does not exist.` | fatto in v567 |
+| G02 | Righe senza gas → riga a parte `{file}: {n} rows with no gas value left out.` | fatto in v567 |
+| G03 | Export alternativo → `How these files were read:` + `{file}: the alternative export (Inject Time, Amount in ppm).` | fatto in v567 |
+| G04 | Coppie da controllare: warn alla drop zone e tooltip; nella card Integration solo `{label}: shown here, no injection times.` in grigio | fatto in v567 |
+| G05 | Sempre `{n} injections in the table, {m} chromatograms`; GC12 rimanda alla card Integration | fatto in v567 |
+| G06 | Un nome: `the GC software's scale (k)`; GI13 via, i rischi nominati nelle righe di GC11 | fatto in v567 |
+| G07–G12 | × che non regge (GI07 GI08), righe ambra → warn compatto, "Suspicious" in un colore, "Method changed" una volta, campi rifiutati (C19) | da fare (fase 3) |
+| G13 | `Light-on time is before first injection` → `Light-on at or before the first injection: no point before light-on.` | fatto in v567 (vedi nota) |
+| G14 | GI35 → `Opened, to check:` + `{file}: saved by an older version without its GC table: …`, con la sua × | fatto in v567 |
+| G15 | Results nascosta senza motivo → grigio `No rate to show: no sample's interval overlaps its injections.` sotto la card | fatto in v567 |
 
-### EPR
+Nota G13: la proposta diceva "at or after"; la condizione del codice (nessuna iniezione prima dell'accensione) è "at or before", ed è quella scritta.
 
-- **#208** warn → **unire a #201**: "Not loaded — a .DTA and its .DSC must be uploaded together". _È un rifiuto, con il motivo "(its .DSC is missing)"._
+### EPR, Iodometria
 
-### Iodometria
+| ID | Modifica | Stato |
+|---|---|---|
+| E01 | Coppia rifiutata nominata dai file: `{stem}.DTA + {stem}.DSC: {reason}.` | fatto in v567 |
+| E02 | Mezza coppia nel box `Not loaded:`: `{file}: its .DSC is missing: drop the two together.` (e simmetrico) | fatto in v567 |
+| E03 | Senza MWFQ (muto) → info `{file}: no microwave frequency (MWFQ): plotted on the field measured, not at 9.5 GHz; no g axis.` | fatto in v567 |
+| I01 | Coppie di colonne scartate (muto) → warn `{file}: {n} pairs of columns left out: fewer than 3 points.` | fatto in v567 |
+| I02 | `none: click the plot` → `none` | fatto in v567 |
+| I03 | Lettura oltre la fine della traccia, calibrazione incompleta: grigio → warn compatto | fatto in v567 |
+| I04 | Meno di due standard: grigio → error compatto | fatto in v567 |
 
-- **#217** grigio → **unire a #216**: "none: click the plot".
-- **#218** grigio → **warn**: "n/a (the trace ends {t} s after the injection)".
-- **#219** grigio → **warn**: "Calibration: incomplete, not used".
-- **#223** grigio → **error**: meno di 2 standard con concentrazioni diverse. _Blocca Apply come #221._
+Custom non ha modifiche proprie: le prende da C01–C05.
 
-### Codice condiviso
+## Ordine che resta
 
-- **#228** → **buttare**: intestazione di default "Non-standard format — verify these files:", mai usata.
-- **#229** warn → **info**: "Already loaded file(s): {file}". _Dire "not loaded again", con un'intestazione unica per tutti i moduli._
-- **#230** warn → **error**: "Restored, with a caveat: {n} files … with no data to show: left out." _Vale anche per XRPD (#27) e SEM (#171)._
-- **#232**, **#233** finestra nativa del browser → **unire a #248**: "The original file … is not available" / "No original files are available to download".
-- **#241** → **unire a #240**: "Project file list is empty."
-- **#252** → **unire a #250**: CSV con file non leggibili.
-- **#254** → **unire a #253**: "is not a DataTreat project."
-- **#256** → **unire a #259**: due frasi diverse per cancellare un progetto.
-- **#264**, **#266** → **unire a #248**: byte dei file non più salvati, detto con tre frasi diverse.
-
-### Destinazioni delle unioni
-
-Questi messaggi restano come sono.
-
-- **#41**: "No phase ticked for this pattern: add one from a CIF, or tick one." / "Add a phase from a CIF to refine."
-- **#105**: "{WPPM / faults / …}: need the standard's instrumental profile (refine the standard first) … refined without."
-- **#201**: error "Invalid file(s): {file}" (EPR, oggi senza motivo).
-- **#216**: "No injection found in this trace at this minimum prominence: click the plot to set it."
-- **#240**: "No data loaded in {Module}." [OK]
-- **#248**: "“{title}”: {n} of its files are not stored in this browser any more; it opens without them."
-- **#250**: "“{title}” could not be exported: its files could not be read from this browser's storage."
-- **#253**: "“{file}” is not a DataTreat project: it cannot be read as one." [OK]
-- **#259**: "Delete project “{title}”? This cannot be undone."
-
-## Incoerenze tra moduli
-
-1. **File rifiutato.** La forma cambia: "{file} ({motivo})" quasi ovunque, "{file} — {motivo}" in SEM. In tre casi manca il motivo: GC, EPR quando l'estensione è sbagliata, il modkit quando il lettore lancia un'eccezione.
-2. **"Già caricato".** Il criterio cambia da modulo a modulo:
-   - nome del file: XRPD, DRS, GC, Custom;
-   - nome del file sorgente: Iodometria;
-   - nome senza estensione: EPR;
-   - contenuto: SEM.
-
-   Le intestazioni sono due.
-3. **File persi alla riapertura.** Tre testi e due tipi tra modkit, XRPD e SEM. In più tabs.js e sessions.js mostrano un banner con quattro frasi diverse, e il download usa una finestra nativa del browser.
-4. **Intestazioni degli avvisi di lettura.** Ogni modulo ha la sua:
-
-   | Modulo | Intestazione |
-   |---|---|
-   | XRPD | "Loaded, with a caveat:" |
-   | SEM | "Loaded, but check:" |
-   | DRS | "Verify how these files were read:" |
-   | GC | una per argomento |
-   | EPR | "Not loaded — …" |
-5. **Varianti di formato.** Sono info in GC, warn in DRS e XRPD, e warn anche il "letto giorno/mese" di GC.
-6. **Fatti neutri e problemi nella stessa riga.** Succede in DRS (#179 con #182) e in GC (#192 con #193): chiudere l'uno chiude anche l'altro.
-7. **Punti o righe scartati.** Frasi diverse in ogni modulo. Iodometria scarta in silenzio le coppie con meno di 3 punti. GC conta come "celle vuote" anche le righe senza alcun gas.
-8. **Persistenza e chiusura diverse.**
-   - GC e DRS ricalcolano gli avvisi dai file; in DRS tornano anche dopo undo/redo.
-   - XRPD li azzera al primo undo/redo, e restano anche se il file viene rimosso.
-   - SEM li perde alla riapertura.
-   - Gli avvisi nelle card non si chiudono, tranne #28.
-9. **Valore rifiutato in un campo.** Gli stili sono diversi:
-   - tremolio rosso senza testo, quasi ovunque;
-   - banner con [OK] negli intervalli di GC;
-   - nota ambra nel Rietveld;
-   - testo rosso, o grigio, nella calibrazione di Iodometria;
-   - nessun segnale nelle impostazioni CSV;
-   - rosso fisso nel nome del progetto.
-10. **Domande all'utente.** Tre meccanismi: il banner in alto quasi ovunque, la modale solo per lo standard XRPD, la finestra nativa del browser solo nel download.
-11. **Errori in grigio.** La riga di stato del Rietveld mostra gli errori con lo stesso grigio dell'avanzamento, mentre quella del compositore li mostra in rosso.
-12. **Avvisi nelle card.** Tre aspetti:
-    - box ambra;
-    - riga ambra senza box (rv-warn);
-    - testo accodato alla riga grigia dello strumento dopo "— ⚠", che quindi non sembra un avviso.
-13. **Resoconti Rietveld in ambra.** "Refined from the last result…" ha lo stesso stile dei problemi veri.
-14. **Correzione strumentale assente.** È detta in cinque punti, alcuni grigi e altri ambra.
-15. **Stessa situazione, parole diverse nella stessa card:**
-    - "No phase ticked…" (#41 e #54);
-    - "No data loaded" contro "Project file list is empty";
-    - due frasi per la cancellazione di un progetto.
-16. **Valori negativi.** DRS nasconde le barre negative e lo dice; GC le disegna senza dire niente.
-17. **Situazioni senza messaggio.**
-    - EPR senza MWFQ cambia asse in silenzio.
-    - GC: la sezione Results resta nascosta senza spiegazione.
-    - "Copy image" dei grafici fallisce in silenzio.
-    - Rinominare un progetto con un nome già usato non chiede nulla.
-    - Una palette salvata con un nome esistente sovrascrive l'altra senza chiedere.
-    - Un risultato Rietveld con fasi cambiate perde la curva calcolata senza dire perché.
-18. **Punteggiatura e stile.**
-    - "!" solo in DRS.
-    - Trattino lungo "—" in SEM e nell'avviso EPR, parentesi altrove.
-    - "Light-on time is before first injection" manca dell'articolo ed è impreciso: l'avviso compare anche quando i due istanti coincidono.
+3. Card e righe di stato: X05–X10, X12–X17, G07–G12, C17, C19.
+4. Persistenza (X04, S04, D02), poi X11, che tocca il formato dei risultati salvati.

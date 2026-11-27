@@ -1,4 +1,4 @@
-import { settings, redrawAll, makeCsvButton, fitCsvIcons, fitPlotIcons, zoomAgain } from './utils.js';
+import { settings, redrawAll, makeCsvButton, fitCsvIcons, fitPlotIcons, zoomAgain, confirmBanner } from './utils.js';
 
 /* =========================================================
    SVG PLOT HELPER (shared)
@@ -121,6 +121,14 @@ function labelText(t, text, runs){
 }
 // A figure composer is being opened from a plot's toolbar (figBtn, in attachTools).
 let _figOpening = false;
+/* What a press of a toolbar button came to, said beside it for a moment (its own label is
+   an icon): the Copy image's failure, as the composer's Copy PNG says it in its label. */
+function sayBeside(btn, text){
+  const t = document.createElement('span');
+  t.className = 'plot-tool-say'; t.setAttribute('role', 'status'); t.textContent = text;
+  btn.classList.add('is-saying'); btn.appendChild(t);
+  setTimeout(()=>{ t.remove(); if (!btn.querySelector('.plot-tool-say')) btn.classList.remove('is-saying'); }, 1200);
+}
 /* An element by its id (a plot's svg, its legend), looked for from `from` outward: in its
    plot's box, its card, its section or window first, then in the page. A module has the
    same ids in each instance, only the one on show in the page: its buttons find their own
@@ -715,7 +723,7 @@ class Plot{
         try {
           const blob = await downloadSvgClean(this.svg, 'plot.png', viewLeg(), true, true, also);
           await navigator.clipboard.write([new ClipboardItem({'image/png': blob})]);
-        } catch(e){ /* clipboard denied / unsupported — silently ignore */ }
+        } catch(e){ sayBeside(copyBtn, 'Copy failed'); }   // (clipboard denied, unsupported: said, as the composer's Copy PNG says it; to v566 nothing)
         finally { setTimeout(()=>copyBtn.classList.remove('is-on'), 200); }
       };
     }
@@ -752,7 +760,11 @@ class Plot{
         const mod = await import('./figure.js');
         if (!document.querySelector('.fig-backdrop'))
           mod.openFigureEditor(this, { legendEl: legId ? near(dlBtn, legId) : null, name, ...(this.figure ? { figure: this.figure } : {}), ...(group ? { also: group.filter(p=> p !== this) } : {}) });
-      } catch(err){ console.error('figure composer failed to load', err); }
+      } catch(err){
+        // (offline with an old cache, say: said, not only in the console, v567)
+        console.error('figure composer failed to load', err);
+        confirmBanner('The figure composer could not be loaded: reload the page.', 'OK');
+      }
       finally { _figOpening = false; }
     };
 

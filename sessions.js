@@ -14,7 +14,7 @@ import { allProjects, putProject, deleteProject, retitleProject, readProject, ex
          hydrate, sweepSoon, dbBlocked, onDbBlocked, onDbClosing, onDbClosed } from './db.js';
 import { activeTab, tabById, tabByProject, openTab, closeTab, setTabTitle,
          setTabDirty, setTabProject, onTabActivated, onTabLoaded, onCloseSave, initTabs,
-         persistTab, persistMoved, isRestoring, isLive, ensureLive, notice, renderTabs,
+         persistTab, persistMoved, isRestoring, isLive, ensureLive, notice, notStored, renderTabs,
          stateOf, isEmpty, UNTITLED, underLoader } from './tabs.js';
 
 // Row action icons: the exact CSV/JSON glyphs used in the module toolbars
@@ -198,19 +198,30 @@ async function doSave(t, asNew){
       const clash = all.find(s=> s.module===mod && s.id!==cur.id && s.title.toLowerCase()===title.toLowerCase());
       if (clash && !await confirmBanner('Another ' + (MODULE_LABELS[mod]||mod) + ' project is named “' + clash.title + '”. Save under this name anyway?', 'Save')) return false;
       const rec = all.find(s=> s.id===cur.id);
-      id = cur.id; await putProject({ id, module: mod, title, createdAt: rec ? rec.createdAt : now, state, updatedAt: now });
+      id = cur.id; if (!await written(title, { id, module: mod, title, createdAt: rec ? rec.createdAt : now, state, updatedAt: now })) return false;
     } else {
       const existing = all.find(s=> s.module===mod && s.title.toLowerCase()===title.toLowerCase());
       if (existing){
         if (!await confirmBanner('A ' + (MODULE_LABELS[mod]||mod) + ' project named “' + existing.title + '” already exists. Overwrite it?', 'Overwrite')) return false;
-        id = existing.id; await putProject({ ...existing, title, state, updatedAt: now });
-      } else { id = uid(); await putProject({ id, module: mod, title, state, createdAt: now, updatedAt: now }); }
+        id = existing.id; if (!await written(title, { ...existing, title, state, updatedAt: now })) return false;
+      } else { id = uid(); if (!await written(title, { id, module: mod, title, state, createdAt: now, updatedAt: now })) return false; }
     }
     // (a name typed meanwhile is the tab's, not set back to the one saved)
     setTabProject(t.id, id, edits(t) === n ? title : null); markWritten(t, key, title, n);
     renderList();
     return true;
   });
+}
+/* A project's record written (db.js putProject), or, should the browser's storage refuse
+   it (full, closed under the page), said, the tab left as it is: whether it was written.
+   To v566 the refusal went unsaid, an unhandled rejection. */
+async function written(title, rec){
+  try { await putProject(rec); return true; }
+  catch(e){
+    const full = e && (e.name === 'QuotaExceededError' || /quota/i.test(e.message || ''));
+    notice('“' + title + '” could not be saved (' + (full ? 'this browser\'s storage is full' : 'this browser\'s storage refused it') + '): your work is still in its tab.');
+    return false;
+  }
 }
 /* One save at a time (v517). A save no longer holds the page while it is written, and may
    wait a second or so on the database behind the autosave of files just dropped (eight big
@@ -285,9 +296,9 @@ async function doubtsAbout(file, obj){
   const doubts = [];
   if (!file.name.toLowerCase().endsWith(FILE_EXT)) doubts.push('its name does not end in ' + FILE_EXT);
   if (obj.format !== FILE_FORMAT || !obj.signature || typeof obj.signature.value !== 'string'){
-    doubts.push('it carries no DataTreat signature (an export from v483 or earlier, or a file written elsewhere)');
+    doubts.push('it carries no DataTreat signature: an export of an older version, or a file written elsewhere');
   } else {
-    if (+obj.formatVersion > FILE_VERSION) doubts.push('it was written by a newer DataTreat (' + String(obj.appVersion || '?') + ')');
+    if (+obj.formatVersion > FILE_VERSION) doubts.push('it was written by a newer version of DataTreat');
     const sig = await signatureOf(obj.module, obj.state);
     if (sig && sig !== obj.signature.value) doubts.push('its content changed after DataTreat signed it');
   }
@@ -340,9 +351,9 @@ async function commitSaveAs(){
       const existing = all.find(s=> s.module===mod && s.title.toLowerCase()===title.toLowerCase());
       if (existing){
         if (!await confirmBanner('A ' + (MODULE_LABELS[mod]||mod) + ' project named “' + existing.title + '” already exists. Overwrite it?', 'Overwrite')) return null;
-        await putProject({ ...existing, title, state, updatedAt: now }); return existing.id;
+        return await written(title, { ...existing, title, state, updatedAt: now }) ? existing.id : null;
       }
-      const nid = uid(); await putProject({ id: nid, module: mod, title, state, createdAt: now, updatedAt: now }); return nid;
+      const nid = uid(); return await written(title, { id: nid, module: mod, title, state, createdAt: now, updatedAt: now }) ? nid : null;
     });
   } finally { _saveAsBusy = false; }
   if (!id) return;
@@ -366,7 +377,7 @@ async function openProjects(recs){
     try { got = await readProject(r.id); }
     catch(e){ notice('“' + r.title + '” could not be opened: its files could not be read from this browser\'s storage.'); continue; }
     if (!got){ goneProject(r); continue; }
-    if (got.missing) notice(lostSay(got.rec.title, got.missing) + ' it opens without them.');
+    if (got.missing) notice(notStored(got.rec.title, got.missing, 'it opens'));
     // Background: the tab appears in the bar but you stay on the Projects list.
     await openTab({ module: r.module, title: got.rec.title, projectId: r.id, state: got.state, dirty: false, focus: false });
   }
@@ -376,7 +387,6 @@ function goneProject(r){
   notice('“' + r.title + '” is no longer among your projects: it was deleted in another window.');
   renderList();
 }
-const lostSay = (title, n)=> '“' + title + '”: ' + n + (n > 1 ? ' of its files are' : ' of its files is') + ' not stored in this browser any more;';
 
 /* ---- Export a saved project record / import a project file ---- */
 // The record as stored now, its bytes read with it and put back where encode writes them:
@@ -388,7 +398,7 @@ async function exportRecord(rec){
   try { got = await exportedProject(rec.id); }
   catch(e){ notice('“' + rec.title + '” could not be exported: its files could not be read from this browser\'s storage.'); return; }
   if (!got){ goneProject(rec); return; }
-  if (got.missing) notice(lostSay(got.rec.title, got.missing) + ' the file holds them without their bytes.');
+  if (got.missing) notice(notStored(got.rec.title, got.missing, 'the file holds them'));
   return downloadProject({ ...got.rec, state: got.state });
 }
 async function importProjectFile(file){
@@ -397,7 +407,7 @@ async function importProjectFile(file){
   catch(e){ await confirmBanner('“' + file.name + '” is not a DataTreat project: it cannot be read as one.', 'OK'); return; }
   if (!obj || typeof obj !== 'object' || !obj.datatreat_session || !MODULES.includes(obj.module)
       || !obj.state || typeof obj.state !== 'object' || Array.isArray(obj.state)){
-    await confirmBanner('“' + file.name + '” is not a DataTreat project.', 'OK'); return;
+    await confirmBanner('“' + file.name + '” is not a DataTreat project: it cannot be read as one.', 'OK'); return;
   }
   const doubts = await doubtsAbout(file, obj);
   if (doubts.length && !await confirmBanner('“' + file.name + '”: ' + doubts.join('; ') + '. Import it anyway?', 'Import anyway')) return;
@@ -499,7 +509,7 @@ function recById(id){ return _cache.find(s=> s.id === id); }
 async function exportProjectCsv(rec){
   let got;
   try { got = await readProject(rec.id); }
-  catch(e){ notice('“' + rec.title + '”: its files could not be read from this browser\'s storage.'); return; }
+  catch(e){ notice('“' + rec.title + '” could not be exported: its files could not be read from this browser\'s storage.'); return; }
   if (!got){ goneProject(rec); return; }
   // (in an instance of its own, the tabs' left as they are: utils.js withState)
   withState(rec.module, decode(got.state), k=> runCsvExport(k));
@@ -507,6 +517,10 @@ async function exportProjectCsv(rec){
 async function renameProject(rec, t){
   t = (t||'').trim();
   if (!t || t === rec.title) return;
+  // A name another project of its module has: asked, as a save under it is (v567: to v566
+  // two projects took one name with no word). Not taken, the list shows the name it had.
+  const clash = _cache.find(s=> s.module === rec.module && s.id !== rec.id && s.title.toLowerCase() === t.toLowerCase());
+  if (clash && !await confirmBanner('Another ' + (MODULE_LABELS[rec.module]||rec.module) + ' project is named “' + clash.title + '”. Rename it anyway?', 'Rename')){ renderList(); return; }
   if (!await retitleProject(rec.id, t, Date.now())){ goneProject(rec); return; }
   // A renamed project that is open in a tab updates that tab's label (and the name
   // field, when it happens to be the active one).
@@ -541,7 +555,7 @@ async function deleteOpenProject(){
     return;
   }
   if (cur){
-    if (!await confirmBanner('Are you sure to delete “'+cur.title+'”? This action is permanent.', 'Delete')) return;
+    if (!await confirmBanner('Delete project “'+cur.title+'”? This cannot be undone.', 'Delete')) return;
     await deleteProject(cur.id);
   } else {
     if (!await confirmBanner('“'+t.title+'” was never saved. Discard it? All work in this tab will be lost.', 'Discard')) return;
@@ -581,7 +595,7 @@ document.addEventListener('click', async e=>{
   const isExport = b.classList.contains('proj-save') || b.classList.contains('proj-saveas')
                 || b.classList.contains('proj-csv')  || b.classList.contains('proj-json');
   // Save / Save as / export need files; with an empty list say so (delete & new are fine).
-  if (isExport && !(t && moduleHasData(t.id))){ await confirmBanner('Project file list is empty.', 'OK'); return; }
+  if (isExport && !(t && moduleHasData(t.id))){ await confirmBanner('No data loaded in ' + (t ? MODULE_LABELS[t.module] || t.module : 'this tab') + '.', 'OK'); return; }
   if (b.classList.contains('proj-save'))        doSave(t, false);
   else if (b.classList.contains('proj-saveas')) doSave(t, true);
   else if (b.classList.contains('proj-csv'))    runCsvExport(t.id);

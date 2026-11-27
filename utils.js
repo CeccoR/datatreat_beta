@@ -492,19 +492,21 @@ class PalettePickerUI {
     });
     const nameIn = this._el.querySelector('.pp-save-name');
     const saveBtn = this._el.querySelector('.pp-save-btn');
-    if (saveBtn) saveBtn.addEventListener('click', ()=>{
+    if (saveBtn) saveBtn.addEventListener('click', async ()=>{
       const colors = (this._opts.colors ? this._opts.colors() : []).filter(Boolean);
       if (!colors.length) return;
       // The combination as it stands, each colour kept once and in the order it is used.
       const seen = new Set(), uniq = [];
       for (const c of colors){ const k = String(c).toLowerCase(); if (!seen.has(k)){ seen.add(k); uniq.push(c); } }
-      const list = userPalettes();
-      const name = (nameIn.value || '').trim() || `Palette ${list.length + 1}`;
-      const at = list.findIndex(p=> p.name === name);
+      const name = (nameIn.value || '').trim() || `Palette ${userPalettes().length + 1}`;
+      // A palette of that name is replaced only when the answer says so (to v566 with no word).
+      if (userPalettes().some(p=> p.name === name) && !await confirmBanner(`A palette named “${name}” exists. Replace it?`, 'Replace')) return;
+      const list = userPalettes(), at = list.findIndex(p=> p.name === name);
       if (at >= 0) list[at] = { name, colors: uniq }; else list.push({ name, colors: uniq });
       saveUserPalettes(list);
       nameIn.value = '';
-      this._render(); this._wire(); this._reposition();
+      // (the picker closed meanwhile, by the click on the question: drawn as it opens again)
+      if (this._el.style.display !== 'none'){ this._render(); this._wire(); this._reposition(); }
     });
   }
   open(anchorBtn, onChange, opts){
@@ -970,7 +972,8 @@ function wireListDownloads({ wrap, files }){
       const f = files[+e.currentTarget.dataset.i];
       if (!f) return;
       const d = downloadOf(LIST_U, f);
-      if (d.missing){ alert('The original file for “'+d.name+'” is not available.'); return; }
+      // (a banner, as every other word of the page's: to v566 the browser's alert())
+      if (d.missing){ confirmBanner('“' + d.name + '”: its original bytes are not stored in this browser any more: it cannot be downloaded.', 'OK'); return; }
       if (d.one){
         if (d.one.bytes != null) downloadBytes(d.one.name, d.one.bytes);
         else downloadBlob(d.one.name, d.one.text);
@@ -980,7 +983,7 @@ function wireListDownloads({ wrap, files }){
   const dlAll = wrap.querySelector('.download-all');
   if (dlAll) dlAll.addEventListener('click', ()=>{
     const entries = zipEntries(LIST_U, files);
-    if (!entries.length){ alert('No original files are available to download.'); return; }
+    if (!entries.length){ confirmBanner('None of these files has its original bytes stored: nothing to download.', 'OK'); return; }
     downloadZip('files.zip', entries);
   });
 }
@@ -2559,20 +2562,36 @@ function confirmModal(message, confirmLabel, altLabel, o = {}){
 /* =========================================================
    ALERT HELPERS
 ========================================================= */
-// dismissInvalidAction / dismissWarnAction are data-action values handled by the
-// owning tab's delegated click listener; when omitted, the button just removes its
-// own alert (the delegated listener under this function: no inline handler, which the
-// page's Content-Security-Policy would refuse). The names and the header are markup:
-// the callers escape what they put in them (esc).
-function buildAlertsHtml(invalidNames, warnNames, warnHeader, dismissInvalidAction, dismissWarnAction){
-  let html = '';
-  if (invalidNames.length) html += alertHtml('bad', 'Invalid file(s):', invalidNames, dismissInvalidAction);
-  if (warnNames.length) html += alertHtml('warn', warnHeader || 'Non-standard format — verify these files:', warnNames, dismissWarnAction);
-  return html;
+/* ---- The alerts about files (v567, ALERTS-REVIEW.md R4) ----
+   One box a kind under the drop zone that took the files, in the order error, warning,
+   info, each with its header, the same in every module (to v566 each module its own:
+   "Invalid file(s):", "Already loaded file(s):", "Loaded, with a caveat:"…):
+     bad     a file not loaded, with why (fileLine)
+     check   a file loaded whose reading may be wrong or incomplete, to check
+     opened  a project opened whose files changed or were left out, to check
+     read    how a file was read, the normal case's choices: nothing to do
+     dup     a file already loaded, not loaded again: its name, a full stop given here
+   `lines` are markup (the callers escape what they put in them, esc); `dismissAction` as
+   alertHtml's. Nothing to say, ''. */
+const FILE_ALERT = { bad: ['bad', 'Not loaded:'], check: ['warn', 'Loaded, to check:'], opened: ['warn', 'Opened, to check:'],
+  read: ['info', 'How these files were read:'], dup: ['info', 'Already loaded, not loaded again:'] };
+const fileAlertHtml = (what, lines, dismissAction)=> lines.length ? alertHtml(FILE_ALERT[what][0], FILE_ALERT[what][1], what === 'dup' ? lines.map(l=> l + '.') : lines, dismissAction) : '';
+// A line of those alerts, plain text: the file, what is said of it, and a full stop.
+const fileLine = (name, why)=> `${name}: ${why}${/[.?!]$/.test(why) ? '' : '.'}`;
+/* A file dropped whose bytes cannot be read: gone from the disk since it was chosen,
+   moved, or no permission (the browser's NotFoundError or NotReadableError). To v566 DRS,
+   GC, Custom, SEM and Iodometry stopped the drop there with no word, XRPD and EPR said the
+   browser's own message. */
+const NOT_READ = 'could not be read from the disk (moved, deleted or not accessible)';
+// A file's bytes, or null when they cannot be read (NOT_READ).
+async function bytesOf(file){
+  try { return new Uint8Array(await file.arrayBuffer()); } catch(e){ return null; }
 }
 /* One alert of a kind: 'bad' (an error, ✕), 'warn' (a warning, ⚠) or 'info' (v539: what
    is worth knowing and needs no check, a circled i, in azure), its header and its lines
-   (markup), dismissed as buildAlertsHtml's are (`dismissAction`, or its own removal). The
+   (markup), dismissed by its button: `dismissAction`, a data-action value the owning tab's
+   delegated click listener handles, or none, the box removed (the delegated listener under
+   this function: no inline handler, which the page's Content-Security-Policy would refuse). The
    same box, place and behaviour for every kind; only the icon and the colours differ
    (style.css .alert.<kind>). */
 const ALERT_ICON = {
@@ -2740,7 +2759,7 @@ window.addEventListener('load', normalizeNavIcons);
 export {
   colorOf, esc, stateKey, bytesKey, moduleStateKey, viewOnlyChange, registerBusy, moduleBusy, stopModule, colorPickerUI, CP_PALETTES, palettePickerUI, settings, fmtNum, fmtData, csvNum, csvLine, saveBlob, downloadBytes,
   X_SVG, DL_SVG, setupDropzone, renderUnifiedFileList, dropGap, includedOf, setIncluded, removeFileAt, moveFileTo, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, boxStats,
-  maxArr, minArr, NORM_OPTIONS, normOf, fitLinear, tinv, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, alertHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState,
+  maxArr, minArr, NORM_OPTIONS, normOf, fitLinear, tinv, goTab, setTabLoaded, moduleHasData, registerHistory, alertHtml, fileAlertHtml, fileLine, NOT_READ, bytesOf, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState,
   getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, guardNumericInput,
   guardNumberInputs, createDateTimeField, flashFieldInvalid, tiltFits, barNames, barChipYmax, confirmBanner, confirmModal, normalizeProjIcons, refreshProjBar, saveSettings, registerModule,
   makeInstance, attachInstance, detachInstance, dropKey, withState, onAnyChange, onBusyChange, busyChanged, shownOf, showAgain, zoomAgain, keeper, kept, objId, exactKey, dropsBytes, asleep, vacate,

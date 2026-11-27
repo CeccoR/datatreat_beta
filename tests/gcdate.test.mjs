@@ -79,8 +79,11 @@ const FALLBACK = ['25/10/2026 1:45:00 AM', '25/10/2026 2:30:00 AM', '25/10/2026 
 const fixture = ()=> ({ name: path.basename(env.fx.files.gc[0]), mimeType: 'text/csv', buffer: fs.readFileSync(env.fx.files.gc[0]) });
 const files = st => Object.fromEntries(st.files.map(f=> [f.name, f]));
 const alerts = page => page.$$eval('#gcAlerts .alert', els=> els.map(e=> e.innerText.split('\n').map(s=> s.trim()).filter(Boolean)));
-const DATES_HEAD = '⚠ Injection dates (the instrument writes them month/day):';
-const datesAlert = async page => (await alerts(page)).find(a=> a[0] === DATES_HEAD) || null;
+// (v567, utils.js FILE ALERTS: the rows left out in the box to check, the files read day/month
+// in the info of how the files were read; to v566 both in a box of their own, "Injection dates")
+const CHECK = '⚠ Loaded, to check:', READ = 'How these files were read:';
+const box = async (page, head)=> (await alerts(page)).find(a=> a[0] === head) || null;
+const datesAlert = page => box(page, CHECK), dmAlert = page => box(page, READ);
 // A module's state put in as a tab opening a project puts it, and the state as a project file holds it (db.js).
 const restore = (page, st)=> page.evaluate(async st=>{
   const u = await import('./utils.js'), db = await import('./db.js');
@@ -126,20 +129,19 @@ test('dates that do not exist left out and said, a day/month file found and said
     for (const n of ['none.csv', 'badval.csv', 'emptyplusbad.csv']) assert.ok(!(n in by), n + ': no injection, not loaded');
     // Said: the file refused with why, then each file read day first or with rows left out.
     const al = await alerts(page);
-    assert.deepEqual(al.find(a=> /Invalid file/.test(a[0])), ['✕ Invalid file(s):',
-      'none.csv (no injection to read: 2 rows with an injection date that does not exist)',
-      'badval.csv (no injection to read: 1 row with an injection date that does not exist, 3 with no gas value)',
-      'emptyplusbad.csv']);
-    assert.deepEqual(await datesAlert(page), [DATES_HEAD,
-      'dm.csv: dates read as day/month (as month/day, some do not exist)',
-      'feb30.csv: 1 row left out: its injection date does not exist (as month/day)',
-      'ye-dm.csv: dates read as day/month (as month/day, some do not exist)',
-      'noleap.csv: 1 row left out: its injection date does not exist (as month/day)',
-      'clock.csv: 4 rows left out: their injection date does not exist (as month/day)',
-      'mixed.csv: 3 rows left out: their injection date does not exist (as month/day)',
-      'mixed2.csv: 3 rows left out: their injection date does not exist (as month/day)',
-      'typo.csv: 1 row left out: its injection date does not exist (as month/day)',
-      'fallback.csv: dates read as day/month (as month/day, some do not exist)']);
+    assert.deepEqual(al.find(a=> /Not loaded/.test(a[0])), ['✕ Not loaded:',
+      'none.csv: no injection to read: 2 rows with an injection date that does not exist.',
+      'badval.csv: no injection to read: 1 row with an injection date that does not exist, 3 with no gas value.',
+      'emptyplusbad.csv: not a GC table: no injection date and H₂ or O₂ column under a header.']);
+    assert.deepEqual(await datesAlert(page), [CHECK,
+      'feb30.csv: 1 row left out: its injection date does not exist.',
+      'noleap.csv: 1 row left out: its injection date does not exist.',
+      'clock.csv: 4 rows left out: their injection date does not exist.',
+      'mixed.csv: 3 rows left out: their injection date does not exist.',
+      'mixed2.csv: 3 rows left out: their injection date does not exist.',
+      'typo.csv: 1 row left out: its injection date does not exist.']);
+    assert.deepEqual(await dmAlert(page), [READ, 'dm.csv: dates read as day/month.', 'ye-dm.csv: dates read as day/month.', 'fallback.csv: dates read as day/month.']);
+    assert.deepEqual(al.map(a=> a[0]), ['✕ Not loaded:', CHECK, READ], 'one box a kind: error, warning, info');
     // The analysis takes them as any other: a card's Results drawn, no page error.
     assert.ok(await page.locator('#gcResultsBar').isVisible());
     assert.deepEqual(errors, []);
@@ -151,16 +153,17 @@ test('the dates alert: dismissed for the files on show, through undo and redo; s
   try {
     await openModule(page, 'gc');
     await loadFiles(page, 'gc', [fixture(), gc('dm.csv', CASES[0][1]), gc('feb30.csv', CASES[2][1])]);
-    assert.equal((await datesAlert(page)).length, 3);
-    await page.click('#gcAlerts [data-action="gc-dismiss-dates"]');
+    assert.equal((await datesAlert(page)).length, 2);
+    await page.click('#gcAlerts [data-action="gc-dismiss-check"]');
     await settle(page);
     assert.equal(await datesAlert(page), null, 'dismissed');
+    assert.deepEqual(await dmAlert(page), [READ, 'dm.csv: dates read as day/month.'], 'the other box left as it was');
     await loadFiles(page, 'gc', [gc('apr31.csv', ['4/30/2025 11:45:00 PM', '4/31/2025 12:00:00 AM', '5/1/2025 12:15:00 AM'])]);
-    assert.deepEqual(await datesAlert(page), [DATES_HEAD, 'apr31.csv: 1 row left out: its injection date does not exist (as month/day)'], 'the new file alone');
+    assert.deepEqual(await datesAlert(page), [CHECK, 'apr31.csv: 1 row left out: its injection date does not exist.'], 'the new file alone');
     await undo(page);
     assert.equal(await datesAlert(page), null, 'undone: the files on show dismissed');
     await undo(page, true);
-    assert.deepEqual(await datesAlert(page), [DATES_HEAD, 'apr31.csv: 1 row left out: its injection date does not exist (as month/day)'], 'redone');
+    assert.deepEqual(await datesAlert(page), [CHECK, 'apr31.csv: 1 row left out: its injection date does not exist.'], 'redone');
     // The file removed: nothing left to say.
     await page.locator('#gcFileTableWrap tr.file-row').nth(3).locator('.row-del').click();
     await settle(page);
@@ -174,16 +177,16 @@ test('a project reopened says it again; one edited by hand puts only true and a 
   try {
     await openModule(page, 'gc');
     await loadFiles(page, 'gc', [gc('dm.csv', CASES[0][1]), gc('feb30.csv', CASES[2][1])]);
-    await page.click('#gcAlerts [data-action="gc-dismiss-dates"]');
+    await page.click('#gcAlerts [data-action="gc-dismiss-check"]');
+    await page.click('#gcAlerts [data-action="gc-dismiss-read"]');
     await settle(page);
+    assert.equal(await page.locator('#gcAlerts .alert').count(), 0, 'both dismissed');
     const st = await encoded(page);
     await restore(page, st);
     const by = files(await moduleState(page, 'gc'));
     assert.equal(by['dm.csv'].dayMonth, true);
     assert.equal(by['feb30.csv'].badDates, 1);
-    assert.deepEqual(await datesAlert(page), [DATES_HEAD,
-      'dm.csv: dates read as day/month (as month/day, some do not exist)',
-      'feb30.csv: 1 row left out: its injection date does not exist (as month/day)'], 'reopened: said again');
+    assert.deepEqual([await datesAlert(page), await dmAlert(page)], [[CHECK, 'feb30.csv: 1 row left out: its injection date does not exist.'], [READ, 'dm.csv: dates read as day/month.']], 'reopened: said again');
     // By hand: anything but true and a whole count above 0 says nothing; a name is text.
     const notTrue = [PAYLOAD, 'true', 1, null, {}], notCount = [PAYLOAD, '3', 1.5, -2, 0, true, null, { n: 3 }];
     const edited = JSON.parse(JSON.stringify(st)), [f0, f1] = edited.files;
@@ -191,7 +194,7 @@ test('a project reopened says it again; one edited by hand puts only true and a 
     edited.files.push({ ...f0, name: PAYLOAD + '.csv', dayMonth: true, badDates: 2 });
     await restore(page, edited);
     assert.equal(await page.locator('#gcFileTableWrap tr.file-row').count(), notTrue.length + notCount.length + 1);
-    assert.deepEqual(await datesAlert(page), [DATES_HEAD, `${PAYLOAD}.csv: dates read as day/month (as month/day, some do not exist); 2 rows left out: their injection date does not exist (as day/month)`]);
+    assert.deepEqual([await datesAlert(page), await dmAlert(page)], [[CHECK, `${PAYLOAD}.csv: 2 rows left out: their injection date does not exist.`], [READ, `${PAYLOAD}.csv: dates read as day/month.`]]);
     assert.deepEqual(await injected(page), [], 'nothing from the project made markup');
     assert.deepEqual(errors, []);
   } finally { await close(); }

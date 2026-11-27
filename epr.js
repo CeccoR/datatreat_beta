@@ -1,4 +1,4 @@
-import { fmtNum, fmtData, setupDropzone, maxArr, minArr, NORM_OPTIONS, normOf, buildAlertsHtml, nextColor, guardNumericInput, esc, registerModule, keeper, objId, exactKey } from './utils.js';
+import { fmtNum, fmtData, setupDropzone, maxArr, minArr, NORM_OPTIONS, normOf, fileAlertHtml, fileLine, NOT_READ, bytesOf, nextColor, guardNumericInput, esc, registerModule, keeper, objId, exactKey } from './utils.js';
 import { boxSmooth, widthText } from './smooth.js';
 import { Plot } from './plot.js';
 import { cardInfo, fileSafe, nameDownloads } from './cards.js';
@@ -44,13 +44,17 @@ const smoothKept = keeper('epr-smoothed', 8);
 const smoothedOf = (f, w)=> smoothKept(f.a, exactKey([objId(f.b), w]), ()=> boxSmooth(f.b, f.a, w));
 
 /* A pair read, .DTA and .DSC (epr-model.js): the spectrum, or { error } saying why it
-   cannot be. Its .DSC first, its .DTA only once that gives a field axis. */
+   cannot be, or { unread } the file whose bytes cannot be read (gone from the disk: utils.js
+   NOT_READ). Its .DSC first, its .DTA only once that gives a field axis. */
 async function processPair(stem, dtaFile, dscFile){
-  const dscBytes = new Uint8Array(await dscFile.arrayBuffer());
+  const dscBytes = await bytesOf(dscFile);
+  if (!dscBytes) return { unread: dscFile, other: dtaFile };
   const p = M.parseDsc(decodeText(dscBytes));
   const bad = M.dscError(p);
   if (bad) return { error: bad };
-  return M.spectrumOf(stem, p, { name: dscFile.name, bytes: dscBytes }, await dtaFile.arrayBuffer(), dtaFile.name);
+  const dta = await bytesOf(dtaFile);
+  if (!dta) return { unread: dtaFile, other: dscFile };
+  return M.spectrumOf(stem, p, { name: dscFile.name, bytes: dscBytes }, dta.buffer, dtaFile.name);
 }
 
 /* =========================================================
@@ -63,10 +67,11 @@ async function processPair(stem, dtaFile, dscFile){
                           key (redrawTab)
      kit, allFiles, files the module (modkit.js): every file loaded, in list order, {name,
                           label, b[], a[]}, and the included ones, which the analysis sees;
-                          the alerts under the drop zone, `pending` the halves of a pair
-                          dropped alone; the cards' settings in the history
+                          the alerts under the drop zone; the cards' settings in the history
      deck                 the cards (cards.js), each its own normalisation and smoothing of
                           the same spectra, stacked on its own plot
+     readDismissed        how the files were read (epr-model.js readNotes), its alert
+                          dismissed, until the next drop, restore or Remove all
 ========================================================= */
 // An EPR tab's instance (utils.js makeInstance: ctx { key, root, layer, shown }).
 function createEpr(ctx){
@@ -81,7 +86,7 @@ function createEpr(ctx){
 }
 function makeState({ key, root, layer, shown }){
   const $ = id => root.querySelector('#' + id);
-  return { key, root, layer, shown, $, stale: false, drawnAt: '', kit: null, allFiles: null, files: null, deck: null };
+  return { key, root, layer, shown, $, stale: false, drawnAt: '', kit: null, allFiles: null, files: null, deck: null, readDismissed: false };
 }
 // Hidden, nothing is drawn (utils.js registerModule): whether to draw, and when not the
 // instance marked to be drawn whole as it is shown.
@@ -90,11 +95,11 @@ const drawable = S => S.shown() || !(S.stale = true);
 function kitHooks(S){
   return {
     root: S.root, key: S.key, layer: S.layer,
-    parts: ['pending'],
-    alerts: p =>{
-      S.$('eprAlerts').innerHTML = p.invalid + p.upload;
-      S.$('eprPendingWrap').innerHTML = p.pending;
-    },
+    // (how the files were read: worked out from those there are, until its ×, which a drop,
+    // a restore or Remove all brings back)
+    alerts: p =>{ S.$('eprAlerts').innerHTML = p.invalid + fileAlertHtml('read', S.readDismissed ? [] : M.readNotes(S.allFiles).map(esc), 'epr-dismiss-read') + p.upload; },
+    dismiss: { read: ()=>{ S.readDismissed = true; } },
+    cleared: ()=>{ S.readDismissed = false; },
     refresh: ()=> afterFilesChange(S),
     // A label or a colour changed: the zoom kept, the data being the same.
     redraw: ()=> updateEpr(S, true),
@@ -129,6 +134,7 @@ function apiOf(S){
 }
 // A state put back: its cards (a card kept, its fields showing its record).
 function restore(S, s){
+  S.readDismissed = false;
   return S.deck.load(M.cardsIn(U, s), c => M.readCard(U, S.files, c), a=>{
     const card = S.deck.cardOf(a);
     card.querySelector('#' + P(a) + 'Norm').value = a.norm;
@@ -146,23 +152,27 @@ function redrawTab(S){
 }
 
 /* ---- Files dropped: complete pairs load; a lone half is not (nothing is held back
-   waiting for its partner), and the alert `pending` says so. ---- */
+   waiting for its partner), said with the files not loaded, each with why (utils.js FILE
+   ALERTS: v567, to v566 a box of its own, and a pair refused named by its stem); a file
+   whose bytes cannot be read (gone from the disk) said, the other pairs loaded. ---- */
 async function onDrop(S, fileList){
   const existingStems = new Set(S.allFiles.map(f=>f.name));
-  const { groups, invalid: invalidFiles, already: alreadyLoaded } = M.groupsOf(fileList, existingStems);
-  const unpaired = [];
+  const { groups, invalid, already: alreadyLoaded } = M.groupsOf(fileList, existingStems);
+  const bad = invalid.map(n=> fileLine(n, 'not a .DTA or .DSC file'));
   for (const [stem, pair] of Object.entries(groups)){
     if (pair.dta && pair.dsc){
       let result;
-      try { result = await processPair(stem, pair.dta, pair.dsc); } catch(e){ result = { error: String(e && e.message || e) }; }
-      if (!result.error){ result.color = nextColor(S.allFiles); S.kit.add(M.keepSpectrum(result)); existingStems.add(stem); }
-      else { invalidFiles.push(`${stem} (${result.error})`); }
+      try { result = await processPair(stem, pair.dta, pair.dsc); } catch(e){ result = { error: `could not be read: ${e && e.message || e}` }; }
+      if (result.unread) bad.push(fileLine(result.unread.name, NOT_READ), fileLine(result.other.name, `its ${M.extOf(result.unread.name)} could not be read`));
+      else if (!result.error){ result.color = nextColor(S.allFiles); S.kit.add(M.keepSpectrum(result)); existingStems.add(stem); }
+      else bad.push(fileLine(`${pair.dta.name} + ${pair.dsc.name}`, result.error));
     } else {
-      unpaired.push((pair.dta || pair.dsc).name);
+      const f = pair.dta || pair.dsc;
+      bad.push(fileLine(f.name, `its ${pair.dta ? '.DSC' : '.DTA'} is missing: drop the two together`));
     }
   }
-  S.kit.said(invalidFiles, alreadyLoaded);
-  S.kit.alerts.pending = unpaired.length ? buildAlertsHtml([], unpaired.map(esc), H.PENDING_TITLE, undefined, 'epr-dismiss-pending') : '';
+  S.kit.said(bad, alreadyLoaded);
+  S.readDismissed = false;
   afterFilesChange(S);
 }
 function afterFilesChange(S){

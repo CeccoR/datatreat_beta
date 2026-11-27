@@ -78,10 +78,16 @@ const DELAY = 60.6;
 
 const files = st => Object.fromEntries(st.files.map(f=> [f.name, f]));
 const alerts = page => page.$$eval('#gcAlerts .alert', els=> els.map(e=> e.innerText.split('\n').map(s=> s.trim()).filter(Boolean)));
-const INFO_HEAD = 'Read as the alternative export (Inject Time, Amount in ppm), not the default format:';
-const infoAlert = async page => (await alerts(page)).find(a=> a[0] === INFO_HEAD) || null;
-const dateAlert = async page => (await alerts(page)).find(a=> a[0].startsWith('⚠ Injection dates')) || null;
-const blankAlert = async page => (await alerts(page)).find(a=> a[0].startsWith('⚠ Empty cells skipped')) || null;
+/* (v567, utils.js FILE ALERTS: one box a kind, the alternative export and the dates read
+   day/month in the info of how the files were read, the rows left out and the empty cells in
+   the box to check; to v566 a box each). The info: its head and the files read as the
+   alternative; the dates' and the empty cells' lines of the box to check (the latter's names
+   and counts). */
+const INFO_HEAD = 'How these files were read:', ALT_SAID = ': the alternative export (Inject Time, Amount in ppm).', CHECK = '⚠ Loaded, to check:';
+const infoAlert = async page =>{ const a = (await alerts(page)).find(x=> x[0] === INFO_HEAD); return a ? [INFO_HEAD, ...a.slice(1).filter(l=> l.endsWith(ALT_SAID)).map(l=> l.slice(0, -ALT_SAID.length))] : null; };
+const checkLines = async (page, re)=>{ const a = (await alerts(page)).find(x=> x[0] === CHECK), l = a ? a.slice(1).filter(x=> re.test(x)) : []; return l.length ? l : null; };
+const dateAlert = page => checkLines(page, /injection date does not exist/);
+const blankAlert = async page =>{ const l = await checkLines(page, /empty .* cells?: /); return l && l.map(x=> x.slice(0, x.indexOf(': each of those'))); };
 const zip = async page =>{
   const z = await download(page, ()=> page.click('.proj-csv'));
   return Object.fromEntries(readZip(z.buf).map(e=> [e.name.replace(/^.* - /, ''), parseCsv(e.data.toString('utf8').replace(/^﻿/, ''), ';')]));
@@ -175,7 +181,7 @@ test('dates: every form in both layouts, numeric ones found month/day or day/mon
     assert.deepEqual(a.gas.h2, [100, 101, 102, 103, 104, 105, 106].map(v=> v/1e4));
     assert.deepEqual([a.badDates, a.monthNames, a.dayMonth], [4, true, undefined]);
     // The alert names no order for a month named.
-    assert.deepEqual(await dateAlert(page), ['⚠ Injection dates:', 'dates-alt.txt: 4 rows left out: their injection date does not exist']);
+    assert.deepEqual(await dateAlert(page), ['dates-alt.txt: 4 rows left out: their injection date does not exist.']);
     assert.ok((await blankAlert(page)).includes('dates-default.csv: 1 empty H2 cell, 1 empty O2 cell'));
     // Numeric dates in the new forms: day/month found, its month/day twin, a typo left out, as before.
     await loadFiles(page, 'gc', [
@@ -188,10 +194,8 @@ test('dates: every form in both layouts, numeric ones found month/day or day/mon
     assert.deepEqual([by['dm24.csv'].dayMonth, by['md24.csv'].dayMonth, by['dm24.csv'].monthNames], [true, undefined, undefined]);
     assert.deepEqual(by['typo24.csv'].injDates.map(iso), ['2025-10-05T23:45:00', '2025-10-06T00:15:00', '2025-10-06T00:30:00']);
     assert.deepEqual([by['typo24.csv'].dayMonth, by['typo24.csv'].badDates], [undefined, 1]);
-    assert.deepEqual(await dateAlert(page), ['⚠ Injection dates (the instrument writes them month/day):',
-      'dates-alt.txt: 4 rows left out: their injection date does not exist',
-      'dm24.csv: dates read as day/month (as month/day, some do not exist)',
-      'typo24.csv: 1 row left out: its injection date does not exist (as month/day)']);
+    assert.deepEqual(await dateAlert(page), ['dates-alt.txt: 4 rows left out: their injection date does not exist.', 'typo24.csv: 1 row left out: its injection date does not exist.']);
+    assert.ok((await alerts(page)).find(x=> x[0] === INFO_HEAD).includes('dm24.csv: dates read as day/month.'), 'day/month: how it was read');
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });
@@ -212,7 +216,7 @@ test('the info alert: for the alternative alone, a circled i in azure in both th
       const info = document.querySelector('#gcAlerts .alert.info'), warn = document.querySelector('#gcAlerts .alert.warn'), ic = info.querySelector('svg.alert-ic');
       return { info: of(info), warn: of(warn), ic: ic && rgb(getComputedStyle(ic).color), icH: ic && ic.getBoundingClientRect().height,
         under: info.parentElement.id === 'gcAlerts' && info.parentElement.previousElementSibling.id === 'gcDropzone',
-        x: !!info.querySelector('.alert-dismiss[data-action="gc-dismiss-alt"]'), text: info.textContent.trim().slice(0, 4) };
+        x: !!info.querySelector('.alert-dismiss[data-action="gc-dismiss-read"]'), text: info.textContent.trim().slice(0, 4) };
     });
     const lum = c =>{ const l = c.map(v=> v/255).map(v=> v <= 0.03928 ? v/12.92 : ((v + 0.055)/1.055)**2.4); return 0.2126*l[0] + 0.7152*l[1] + 0.0722*l[2]; };
     const contrast = (a, b)=>{ const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05)/(Math.min(x, y) + 0.05); };
@@ -221,7 +225,7 @@ test('the info alert: for the alternative alone, a circled i in azure in both th
       await settle(page);
       const s = await look();
       assert.ok(s.under && s.x, `${theme}: under the drop zone, with its ×`);
-      assert.equal(s.text, 'Read', `${theme}: no ⚠ before its words`);
+      assert.equal(s.text, 'How ', `${theme}: no ⚠ before its words`);
       assert.deepEqual(s.ic, s.info.color, `${theme}: the icon in the text's colour`);
       assert.ok(s.icH >= 11 && s.icH <= 15, `${theme}: the icon as tall as the text (${s.icH})`);
       assert.equal(s.info.box, s.warn.box, `${theme}: the warning's box`);
@@ -233,7 +237,7 @@ test('the info alert: for the alternative alone, a circled i in azure in both th
     }
     await page.evaluate(async ()=>{ const u = await import('./utils.js'); u.applyTheme('dark'); });
     // Dismissed: the files on show, through undo and redo; a file dropped since said alone.
-    await page.click('#gcAlerts [data-action="gc-dismiss-alt"]');
+    await page.click('#gcAlerts [data-action="gc-dismiss-read"]');
     await settle(page);
     assert.equal(await infoAlert(page), null, 'dismissed');
     assert.ok(await blankAlert(page), 'the warning stays');

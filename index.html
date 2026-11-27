@@ -340,7 +340,6 @@
           <input type="file" id="eprFiles" multiple accept=".dta,.DTA,.dsc,.DSC" style="display:none">
         </div>
         <div id="eprAlerts"></div>
-        <div id="eprPendingWrap"></div>
         <div id="eprFileTableWrap"></div>
       </div>
       <!-- The analysis cards are built by epr.js, above the "+" bar. -->
@@ -514,6 +513,7 @@
                 <div class="pg-stat">Injection at: <b id="iodoInj">-</b></div>
                 <div class="pg-stat">Background: <b id="iodoBg">-</b></div>
                 <div class="pg-stat"><span id="iodoATitle">Absorbance at 240 s:</span> <b id="iodoA">-</b></div>
+                <div id="iodoAWarn" style="display:none"></div>
                 <div class="pg-stat" id="iodoCRow" style="display:none">Concentration: <b id="iodoC">-</b></div>
               </div>
             </div>
@@ -546,7 +546,7 @@
       </div>
     </section>
 
-    <footer>DataTreat <span class="app-version">v566</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
+    <footer>DataTreat <span class="app-version">v567</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
   </main>
 
   <!-- Save project as… dialog -->

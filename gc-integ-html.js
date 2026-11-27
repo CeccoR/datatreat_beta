@@ -112,7 +112,7 @@ export function valuesHtml(u, gasOf, v){
   const cU = units.length === 1 ? units[0] : null;
   const said = cU && v.aligned && cU === tUnit ? [`Conc. and GC table in ${u.esc(cU)}`] : [cU ? `Conc. in ${u.esc(cU)}` : '', v.aligned ? `GC table in ${tUnit}` : ''].filter(Boolean);
   const tr = gs.filter(g=> conv[g] && conv[g].how === 'transfer');
-  const from = tr.length ? `${tr.length > 1 ? 'Concentrations' : 'Concentration'} from the GC software's table: k = ${tr.map((g, i)=> `${sig(conv[g].k, 5)}${i ? '' : ' area per %mol'} (${gasOf(g).label}, median of ${conv[g].n} injections)`).join(', ')}.` : '';
+  const from = tr.length ? `${tr.length > 1 ? 'Concentrations' : 'Concentration'} from the GC software's scale (k): k = ${tr.map((g, i)=> `${sig(conv[g].k, 5)}${i ? '' : ' area per %mol'} (${gasOf(g).label}, median of ${conv[g].n} injections)`).join(', ')}.` : '';
   return `<table class="gci-values"><thead><tr><th>Gas</th><th>Area ± sd</th><th>Apex (s)</th><th>χ²<sub>r</sub></th><th>Conc.</th><th>GC table</th></tr></thead><tbody>${rows.join('')}</tbody></table>`
     + (said.length ? `<p class="txt-meta gci-units">${said.join('; ')}.</p>` : '')
     + (from ? `<p class="txt-meta gci-from">${from}</p>` : '')
@@ -138,17 +138,20 @@ export function statusHtml(u, x){
 // A line of the alerts' "to check" (gc-integ-model.js alertFacts's warn).
 function warnLine(u, gasOf, w){
   const e = w.e;
-  if (w.kind === 'rows') return `${u.esc(e.label)}: ${plural(e.rows, 'row')} in the table, ${plural(e.n, 'chromatogram')}: not aligned. Integrated all the same; Analysis uses the table alone.`;
-  if (w.kind === 'twin') return `${u.esc(e.label)}: two files of raw chromatograms paired (${u.esc(e.tcd.name)}, ${u.esc(e.twin)}): shown here, left out of Analysis (no injection times).`;
-  if (w.kind === 'alone') return `${u.esc(e.label)}: raw chromatograms with no table: no injection times (Analysis leaves them out), a concentration only with standards.`;
+  if (w.kind === 'rows') return `${u.esc(e.label)}: ${plural(e.rows, 'injection')} in the table, ${plural(e.n, 'chromatogram')}: not aligned: integrated all the same; Analysis uses the table alone.`;
   return `${u.esc(e.label)}: ${w.out} of ${w.n} injections' ${gasOf(w.g).label} outside the standards' range (${sig(w.lo, 3)}–${sig(w.hi, 3)} %mol): extrapolated${w.below ? `, below the lowest standard, where the intercept (${sig(w.L.intercept, 4)}) weighs most` : ''}.`;
 }
-// (f: gc-integ-model.js alertFacts's)
+/* (f: gc-integ-model.js alertFacts's) Raw chromatograms with no table, or paired with raw
+   chromatograms, are said under the drop zone, to check (gc-html.js pairLines), and in the
+   file list's tooltip: here a grey line names them (v567: to v566 a third time, in this
+   box). The calibration by the GC software's scale (k) is said in each Production Rate
+   card below, with where its risks are written (to v566 an info box of its header alone). */
 export function alertsHtml(u, gasOf, f){
-  const errs = f.errs.map(e=> `${u.esc(e.tcd.name)}: ${u.esc(e.d.error)}`), warn = f.warn.map(w=> warnLine(u, gasOf, w));
+  const errs = f.errs.map(e=> `${u.esc(e.tcd.name)}: ${u.esc(e.d.error)}`), warn = f.warn.filter(w=> w.kind !== 'twin' && w.kind !== 'alone').map(w=> warnLine(u, gasOf, w));
+  const shown = f.warn.filter(w=> w.kind === 'twin' || w.kind === 'alone').map(w=> `<p class="txt-meta gci-shown">${u.esc(w.e.label)}: shown here, no injection times.</p>`);
   return (errs.length ? u.alertHtml('bad', 'Raw chromatograms that could not be read:', errs) : '')
     + (warn.length ? u.alertHtml('warn', 'Raw chromatograms to check:', warn) : '')
-    + (f.transfer ? u.alertHtml('info', 'Calibration taken from the GC software\'s table (no standards for the gas): see the risks in this card\'s instructions.', []) : '');
+    + shown.join('');
 }
 // A window's edges refused (setMethod).
 export const notTakenHtml = (u, t)=> u.alertHtml('warn', 'Not taken:', [u.esc(t)]);
@@ -218,15 +221,17 @@ export const calHtml = (u, p)=> `
           <div class="row gci-cal-fits"></div>
         </div>
       </div>`;
-// What a drop did not load, and why.
-export const dropAlertHtml = (u, bad)=> bad.length ? u.alertHtml('bad', 'Not loaded:', bad.map(u.esc)) : '';
+// What a drop did not load, and why; what it held loaded already (utils.js FILE ALERTS).
+export const dropAlertHtml = (u, bad, dup = [])=> u.fileAlertHtml('bad', bad.map(u.esc)) + u.fileAlertHtml('dup', dup.map(u.esc));
 // The standards' files, each removable.
 export const calFilesHtml = (u, files)=> files.map((f, i)=> `<div class="xrd-std-row"><span class="txt-mini">Standards</span><span class="xrd-std-name">${f.table ? `${u.esc(f.table.name)} + ${u.esc(f.name)}` : `${u.esc(f.name)} <span class="txt-meta">(no table)</span>`}</span><button type="button" class="peak-del is-danger idle-dim" data-cal-del="${i}" title="Remove these standards and their levels">${u.X_SVG(13)}</button></div>`).join('');
 /* A calibration of v544–v548's, its raw chromatograms alone (`old`: its files with no
-   table): said, its standards named by column, until its table is dropped. */
-export const calWarnHtml = (u, old)=> old.length ? u.alertHtml('warn', 'Calibration tables missing:', old.map(f=> `${u.esc(f.name)}: its GC table is not in the project (a calibration saved before v549, raw chromatograms alone): its standards are named by column. Drop the table (the same name without _TCD) to name them; nothing else changes.`)) : '';
+   table): said, its standards named by column, until its table is dropped; its × its own
+   (utils.js alertHtml's: the box removed, gc-integ.js paintCalWarn draws it again only
+   when those files change). */
+export const calWarnHtml = (u, old)=> u.fileAlertHtml('opened', old.map(f=> `${u.esc(f.name)}: saved by an older version without its GC table: its standards are named by column. Drop the table (the same name without _TCD) to name them.`));
 // (what the unit's line says: no standards, the standards being integrated, all integrated)
-export const calStatusText = (files, left, rows)=> !files.length ? 'No standards: each pair takes its calibration from the GC software\'s table.' : left ? `Integrating the standards… (${left} left)` : `${plural(rows, 'chromatogram')} integrated.`;
+export const calStatusText = (files, left, rows)=> !files.length ? 'No standards: each pair takes the GC software\'s scale (k).' : left ? `Integrating the standards… (${left} left)` : `${plural(rows, 'chromatogram')} integrated.`;
 // A thumbnail of a standard's chromatogram over the windows (lo–hi): a polyline, no plot.
 export function thumbHtml(d, j, lo, hi){
   const W = 72, H = 22, pts = thumbPoints(d, j, lo, hi, W, H);
@@ -260,7 +265,7 @@ export const calFitsHtml = (u, gasOf, keys, p, zero)=> keys.map(g=> `<div class=
 /* A gas's numbers under its plot (gc-integ-model.js calGasOf's G): no standard; too few for
    a line; else the line (slope, intercept, R², n) and each level's deviation from it. */
 export function calStatsHtml(u, gasOf, g, G, unit, zero){
-  if (!G.pts.length) return `<p class="txt-meta">No standard for ${gasOf(g).label}: each pair takes its scale from the GC software's table.</p>`;
+  if (!G.pts.length) return `<p class="txt-meta">No standard for ${gasOf(g).label}: each pair takes the GC software's scale (k).</p>`;
   const L = G.L;
   if (!L){ const one = new Set(G.xs).size === 1; return `<p class="txt-meta">${plural(G.pts.length, 'standard')}${one ? ' at one concentration' : ''}: a free intercept needs two concentrations at least${zero ? '' : '; a zero intercept fits one'}.</p>`; }
   return `<p class="gci-cal-line">slope <b>${sig(L.slope, 6)}</b> area/${u.esc(unit)}, intercept <b>${sig(L.intercept, 5)}</b>${zero ? ' (fixed)' : ''}, R² = <b>${fin(L.r2) ? L.r2.toFixed(5) : '—'}</b>, n = ${L.n}</p>`

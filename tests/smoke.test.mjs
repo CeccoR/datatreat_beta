@@ -57,8 +57,9 @@ test('under the CSP: theme before paint, the Rietveld worker, an alert dismissed
       setTimeout(()=> res('alive, no reply in 5 s'), 5000);
     }));
     assert.equal(w, 'reply');
-    // The dismiss button of buildAlertsHtml works through the delegated listener.
-    await page.evaluate(async ()=>{ const u = await import('./utils.js'); const d = document.createElement('div'); d.id = 'tA'; d.innerHTML = u.buildAlertsHtml(['x'], []); document.body.appendChild(d); });
+    // The dismiss button of an alert with no action of its own (utils.js fileAlertHtml) works
+    // through the delegated listener.
+    await page.evaluate(async ()=>{ const u = await import('./utils.js'); const d = document.createElement('div'); d.id = 'tA'; d.innerHTML = u.fileAlertHtml('bad', ['x: why.']); document.body.appendChild(d); });
     await page.click('#tA [data-dismiss-alert]');
     assert.equal(await page.locator('#tA .alert').count(), 0);
     assert.deepEqual(errors, []);

@@ -164,12 +164,13 @@ test('a file read: the standard format, the Cary\'s %R, a header naming its colu
   cr.FR.forEach((F, i)=> near(M.reflOf(F), c.R[i], 1e-9, 'R back'));
   const ns = M.readDrs('Wavelength (nm);R (%)\n350;50\n351;105\n352;0\n353;NaN\n-5;40\n354;60\n');
   assert.deepEqual([ns.wl, ns.warn, ns.read, ns.left], [[350, 354], true, 'R%', { r: 1, zero: 1, inf: 1, wl: 1 }]);
-  assert.deepEqual(M.fileNotes(ns), ['not a standard format: its header names the reflectance in %, read as %R', '4 points left out (1 with a wavelength not above 0, 1 with R outside 0–100 %, 1 with R = 0 %, where F(R) is infinite, 1 with a value that is no finite number)']);
+  // (v567: how it was read, an info; the points left out, to check)
+  assert.deepEqual(M.fileNotes(ns), { read: ['not a standard format: its header names the reflectance in %, read as %R'], check: ['4 points left out: 1 with a wavelength not above 0, 1 with R outside 0–100 %, 1 with R = 0 %, where F(R) is infinite, 1 with a value that is no finite number'] });
   assert.deepEqual(M.readDrs('Wavelength,F(R)\n350,0.5\n351,0.6\n'), { wl: [350, 351], FR: [0.5, 0.6], warn: true, head: true });
   assert.deepEqual(M.readDrs('350,0.5\n351,0.6\n'), { error: 'no header naming its columns: the wavelength in nm, and F(R) or %R' });
   assert.deepEqual(M.readDrs('Wavelength (eV),F(R)\n3.5,0.5\n'), { error: 'its header names the wavelength in another unit than nm (Wavelength (eV))' });
   assert.deepEqual(M.readDrs('Wavelength,F(R),%R\n350,0.5,40\n'), { error: 'which columns to read cannot be told: its header names both F(R) and %R' });
-  assert.deepEqual(M.readDrs('Wavelength,F(R)\n350,-1\n'), { error: 'no point with a physical value: 1 point left out (1 with F(R) < 0)' });
+  assert.deepEqual(M.readDrs('Wavelength,F(R)\n350,-1\n'), { error: 'no point with a physical value: 1 point left out: 1 with F(R) < 0' });
   // A file a project holds: its points with a finite number and a wavelength above 0, its
   // notes as they were (a field of no kind left out).
   const g = M.restoredFile(U, { name: 'x', wl: [350, -1, 351, 352], FR: [0.5, 0.4, NaN, 0.6], warn: true, head: true, left: { neg: 2, zz: 3, r: 'x' }, hv: [1] });
@@ -271,10 +272,11 @@ test('the cards\' markup and alerts, every label escaped', ()=>{
   assert.equal(H.readNote({ read: 'R%', warn: false }, HU), '<span title="second column read as the reflectance in %, converted to F(R)">%R</span>');
   assert.equal(H.readNote({ warn: true }, HU), '<span title="second column read as F(R), with no header naming it">F(R)</span>');
   assert.equal(H.readNote({ warn: true, head: true }, HU), '<span title="the F(R) column its header names, read as F(R); not a standard format">F(R)</span>');
-  assert.equal(H.negWarnHtml([{ label: '<i>a' }, { label: 'b' }], [-1, 2], 'E<sub>g</sub>', HU), '<div class="alert warn">⚠ Negative E<sub>g</sub> for:<br>&lt;i&gt;a</div>');
+  // (v567: an error, no result; to v566 a warning)
+  assert.equal(H.negWarnHtml([{ label: '<i>a' }, { label: 'b' }], [-1, 2], 'E<sub>g</sub>', HU), '<div class="alert bad">✕ Negative E<sub>g</sub> for:<br>&lt;i&gt;a</div>');
   assert.equal(H.negWarnHtml([{ label: 'b' }], [NaN], 'x', HU), '');
   assert.match(H.blockedHtml({ lost: 3, inside: 40, neg: 1 }), /at 3 of the 40 points between the lines with F\(R\) > 0,/);
-  assert.match(H.TOO_SMALL, /Interval too small/);
+  assert.equal(H.TOO_SMALL, '<div class="alert warn">⚠ Interval too small: too few points for the regression.</div>');
   assert.equal(H.sup('2/3'), '<tspan baseline-shift="super" font-size="8">2/3</tspan>');
 });
 

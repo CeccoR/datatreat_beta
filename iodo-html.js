@@ -8,9 +8,10 @@
 ========================================================= */
 import { CAL_MODES, sig } from './iodo-model.js';
 
-// The calibration as the Analysis card says it (L: its line, iodo-model.js calLine).
+// The calibration as the Analysis card says it (L: its line, iodo-model.js calLine); one
+// chosen but incomplete, a warning (v567: to v566 a grey line).
 export const calSumHtml = (cal, L, u)=> cal.mode === 'none' ? 'Calibration: <b>none</b>'
-  : !L ? 'Calibration: <b>incomplete</b>, not used'
+  : !L ? '<div class="alert warn compact">⚠ Calibration incomplete: not used.</div>'
   : `Calibration: <b>A = ${u.esc(sig(L.m))} × c ${L.q < 0 ? '−' : '+'} ${u.esc(sig(Math.abs(L.q)))}</b>${Number.isFinite(L.r2) ? `, R² = <b>${u.esc(L.r2.toFixed(4))}</b>` : ''}${cal.unit.trim() ? `, c in <b>${u.esc(cal.unit.trim())}</b>` : ''}`;
 // The Analysis plot's legend: [colour, its words (markup)] each.
 export const legendHtml = (items, u)=> items.map(([c, t])=> `<span><i style="background:${u.esc(c)}"></i>${t}</span>`).join('');
@@ -48,7 +49,8 @@ export const calHtml = u => `
 export const stdRowsHtml = (stds, u)=> stds.map((p, i)=> `<tr data-i="${i}"><td><input type="text" inputmode="decimal" data-j="0" aria-label="Concentration of standard ${i + 1}" value="${p[0] == null ? '' : u.esc(String(p[0]))}" autocomplete="off"></td>`
   + `<td><input type="text" inputmode="decimal" data-j="1" aria-label="Absorbance of standard ${i + 1}" value="${p[1] == null ? '' : u.esc(String(p[1]))}" autocomplete="off"></td>`
   + `<td><button type="button" class="an-ic" data-del title="Remove this standard" aria-label="Remove standard ${i + 1}">${u.X_SVG(13)}</button></td></tr>`).join('');
-// The standards' fit under them (L: the draft's line; n: the standards with both values).
+// The standards' fit under them (L: the draft's line; n: the standards with both values);
+// none, an error (v567: to v566 a grey line): Apply is held back.
 export const calFitHtml = (draft, L, n, u)=> draft.mode !== 'std' ? '' : L
   ? `Fit of ${L.n} standards: slope <b>${u.esc(sig(L.m, 6))}</b>, intercept <b>${u.esc(sig(L.q, 6))}</b>, R² = <b>${u.esc(L.r2.toFixed(4))}</b>`
-  : `${n} standard${n === 1 ? '' : 's'} with both values: two of different concentrations at least are needed.`;
+  : `<div class="alert bad compact">✕ ${n} standard${n === 1 ? '' : 's'} with both values: two of different concentrations at least are needed.</div>`;

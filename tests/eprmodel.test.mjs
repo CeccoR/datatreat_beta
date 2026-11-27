@@ -182,13 +182,17 @@ test('what a card draws: the smoothed columns, the stacking, the plot, the CSV',
   assert.equal(M.csvCols(U, files, [[0.1234567, 0], [1, 1e-9]], { norm: 'local', smoothW: 0 })[5].v[1], '0.000000');
 });
 
-test('the markup: a card\'s body and instructions, the pending alert\'s title', ()=>{
+test('the markup: a card\'s body and instructions; how the files were read (v567)', ()=>{
   const b = H.cardBody({ id: 7 }, HU);
   for (const id of ['epr7Svg', 'epr7Legend', 'epr7Norm', 'epr7Smooth', 'epr7SmoothPts']) assert.ok(b.includes(`id="${id}"`), id);
   assert.ok(b.includes('value="0.2"') && b.includes(PAGE.NORM_OPTIONS));
   assert.equal(H.P({ id: 3 }), 'epr3');
   assert.ok(H.eprInfo('TAIL').endsWith(' TAIL') && H.eprInfo('').includes('<b>g = hν / (μ<sub>B</sub>·B)</b>'));
-  assert.equal(H.PENDING_TITLE, 'Not loaded — a .DTA and its .DSC must be uploaded together:');
+  // (v567: a lone half is said among the files not loaded, epr.js onDrop; a spectrum with no
+  // microwave frequency, how it was read, named by its .DSC, else its stem)
+  assert.deepEqual(M.readNotes([{ name: 'a', rescaled: true }, { name: 'b', rescaled: false, rawFiles: [{ name: 'b.DSC' }, { name: 'b.DTA' }] }, { name: 'c', rescaled: false }]),
+    ['b.DSC: no microwave frequency (MWFQ): plotted on the field measured, not at 9.5 GHz; no g axis.', 'c: no microwave frequency (MWFQ): plotted on the field measured, not at 9.5 GHz; no g axis.']);
+  assert.deepEqual([M.extOf('x.dta'), M.extOf('y.DSC')], ['.DTA', '.DSC']);
 });
 
 /* ---- 40 cases: random pairs, cards and steps, as v562's epr.js did them ---- */

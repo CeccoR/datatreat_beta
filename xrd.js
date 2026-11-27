@@ -1,4 +1,4 @@
-import { esc, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, buildAlertsHtml, nextColor, colorOf, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, registerBusy, busyChanged, registerModule, X_SVG } from './utils.js';
+import { esc, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, fileAlertHtml, fileLine, NOT_READ, bytesOf, nextColor, colorOf, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, registerBusy, busyChanged, registerModule, X_SVG } from './utils.js';
 import { createRietveld, RV_INFO, RV_STD_INFO } from './xrd-rv.js';
 import { createPeakAnalysis, PEAKS_INFO, STD_INFO } from './xrd-peaks.js';
 import { readXrdmlScans, decodeXml } from './xrd-instr.js';
@@ -40,7 +40,7 @@ import * as H from './xrd-html.js';
 // utils.js's and modkit.js's helpers the model takes (xrd-model.js U), with the page's
 // reading of a file's bytes, and what the markup takes (xrd-html.js u).
 const U = { isObj, colorOf, scansOf };
-const HU = { esc, X_SVG, buildAlertsHtml };
+const HU = { esc, X_SVG, fileAlertHtml, fileLine };
 
 /* A file read (readXrdmlScans, xrd-instr.js): 2θ, the intensities on the unattenuated
    scale (<intensities> as written, the raw <counts> of XRDML 2.x times the attenuation
@@ -53,9 +53,11 @@ const HU = { esc, X_SVG, buildAlertsHtml };
    absorbed by the SNIP background, so the whole pipeline — analysis and fit alike — runs
    on the true raw data and stays consistent with the CSVs.
    Every scan of the file is a pattern (xrd-model.js patternsOf); the caller gives each its
-   colour. */
+   colour. A file whose bytes cannot be read (gone from the disk) is refused with why
+   (utils.js NOT_READ; to v566 the browser's own message). */
 async function readFile(f){
-  const rawBytes = new Uint8Array(await f.arrayBuffer());
+  const rawBytes = await bytesOf(f);
+  if (!rawBytes) return { error: NOT_READ };
   const xml = new DOMParser().parseFromString(decodeXml(rawBytes), 'text/xml');
   const scans = xml.getElementsByTagName('parsererror').length ? [{ error: 'not well-formed XML' }] : readXrdmlScans(xml);
   M.keepScans(rawBytes, scans);
@@ -84,8 +86,10 @@ function sampleName(xml){
                           arrays the cards keep are aligned with those
      curIdx               the sample every card shows
      stdFile              the instrumental standard's file, or none
-     loadAlerts, noteAlerts, uploadAlerts   the alerts under the drop zone: the files
-                          refused, the caveats, those already loaded
+     loadAlerts, noteAlerts, readAlerts, uploadAlerts   the alerts under the drop zone
+                          (utils.js FILE ALERTS, in this order): the files refused, those
+                          loaded to check (a project opened: what changed), how they were
+                          read, those already loaded (to v566 the caveats in one box)
      peaksModal, rvModal  the standard's two windows ({ el, box, body }), and the one open
      openModal, onStdKey  (none: null), its Escape (a document listener while it is open)
      stdPeaks, stdRv      the standard's peak analysis and its Rietveld refinement
@@ -118,7 +122,7 @@ function createXrd(ctx){
 }
 function makeState({ key, root, layer, shown }){
   const $ = id => root.querySelector('#' + id);
-  const S = { key, root, layer, shown, $, allFiles: [], files: [], curIdx: 0, stdFile: null, deck: null, loadAlerts: '', noteAlerts: '', uploadAlerts: '',
+  const S = { key, root, layer, shown, $, allFiles: [], files: [], curIdx: 0, stdFile: null, deck: null, loadAlerts: '', noteAlerts: '', readAlerts: '', uploadAlerts: '',
     peaksModal: null, rvModal: null, openModal: null, stdPeaks: null, stdRv: null, live: new Map(), cardsNext: null, patNext: null, stdNext: null, resList: null, hist: null };
   S.onStdKey = e => onStdKey(S, e);
   return S;
@@ -164,9 +168,10 @@ function onDismiss(S, e){
   if (btn.dataset.action === 'xrd-dismiss-upload'){ S.uploadAlerts=''; rebuildXrdAlerts(S); }
   if (btn.dataset.action === 'xrd-dismiss-invalid'){ S.loadAlerts=''; rebuildXrdAlerts(S); }
   if (btn.dataset.action === 'xrd-dismiss-notes'){ S.noteAlerts=''; rebuildXrdAlerts(S); }
+  if (btn.dataset.action === 'xrd-dismiss-read'){ S.readAlerts=''; rebuildXrdAlerts(S); }
 }
 function rebuildXrdAlerts(S){
-  S.$('xrdAlerts').innerHTML = S.loadAlerts + S.noteAlerts + S.uploadAlerts;
+  S.$('xrdAlerts').innerHTML = S.loadAlerts + S.noteAlerts + S.readAlerts + S.uploadAlerts;
 }
 
 /* ---- The samples ---- */
@@ -209,12 +214,13 @@ function fileCallbacks(S){
 function removeAll(S){
   S.allFiles.length=0;
   cards(S).forEach(a=>{ const e = S.live.get(a.id); if (a.type === 'scherrer' && e) e.inst.clear(); const s = a.states.scherrer; if (a.type !== 'scherrer' && s){ s.perParams = []; s.manualPeaks = []; s.removedPeaks = []; } });
-  S.loadAlerts=''; S.noteAlerts=''; S.uploadAlerts=''; rebuildXrdAlerts(S); afterFilesChange(S);
+  S.loadAlerts=''; S.noteAlerts=''; S.readAlerts=''; S.uploadAlerts=''; rebuildXrdAlerts(S); afterFilesChange(S);
 }
 
 /* Files dropped. Each file on its own: one that cannot be read at all (its bytes gone from
    the disk, anything thrown) is refused with why, the others loaded. Up to v484 a throw
-   ended the batch: the files read before it were in the list, unseen, no card drawn. */
+   ended the batch: the files read before it were in the list, unseen, no card drawn. What
+   the drop says (xrd-html.js dropAlerts) replaces what the last one said. */
 async function onDrop(S, fileList){
   // (by the patterns' names: a file of several scans is tested scan by scan, below)
   const existing = new Set(S.allFiles.map(f=> f.name));
@@ -222,8 +228,8 @@ async function onDrop(S, fileList){
   for (const f of fileList){
     if (existing.has(f.name)){ alreadyLoaded.push(esc(f.name)); continue; }
     let r;
-    try { r = await readFile(f); } catch (e){ r = { error: String(e && e.message || e) }; }
-    if (r.error){ invalidFiles.push(esc(`${f.name} (${r.error})`)); continue; }
+    try { r = await readFile(f); } catch (e){ r = { error: `could not be read: ${e && e.message || e}` }; }
+    if (r.error){ invalidFiles.push(esc(fileLine(f.name, r.error))); continue; }
     // A scan whose name is in the list stays as it is (xrd-model.js freshOf), the others
     // load; every scan there, the file is already loaded.
     const fresh = M.freshOf(r, existing);
@@ -231,11 +237,11 @@ async function onDrop(S, fileList){
     existing.add(f.name);
     for (const q of r.pats) if (!fresh.includes(q)) alreadyLoaded.push(esc(q.f.name));
     if (r.n > 1) loadNotes.push(esc(H.scansNote(f.name, r.n, fresh.length)));
-    for (const t of r.skipped) loadNotes.push(esc(`${f.name}: ${t}`));
+    for (const t of r.skipped) loadNotes.push(esc(fileLine(f.name, t)));
     for (const q of fresh) addPattern(S, q, existing, loadNotes);
   }
   const A = H.dropAlerts(invalidFiles, loadNotes, alreadyLoaded, HU);
-  S.loadAlerts = A.load; S.noteAlerts = A.note; S.uploadAlerts = A.upload;
+  S.loadAlerts = A.load; S.noteAlerts = A.note; S.readAlerts = A.read; S.uploadAlerts = A.upload;
   rebuildXrdAlerts(S);
   afterFilesChange(S);
 }
@@ -244,7 +250,7 @@ async function onDrop(S, fileList){
 function addPattern(S, { f: p, notes }, existing, loadNotes){
   p.color = nextColor(S.allFiles);
   existing.add(p.name);
-  for (const t of notes) loadNotes.push(esc(`${p.name}: ${t}`));
+  for (const t of notes) loadNotes.push(esc(fileLine(p.name, t)));
   S.allFiles.push(p); S.files.push(p);
   cards(S).forEach(a=>{
     const e = S.live.get(a.id);
@@ -332,9 +338,9 @@ async function onStdDrop(S, m, fl){
   const f = fl[0];
   if (!f) return;
   let r;
-  try { r = await readFile(f); } catch (e){ r = { error: String(e && e.message || e) }; }
+  try { r = await readFile(f); } catch (e){ r = { error: `could not be read: ${e && e.message || e}` }; }
   const alerts = m.querySelector('.xrd-std-alerts');
-  if (r.error){ alerts.innerHTML = buildAlertsHtml([esc(`${f.name} (${r.error})`)], []); return; }
+  if (r.error){ alerts.innerHTML = fileAlertHtml('bad', [esc(fileLine(f.name, r.error))]); return; }
   const { f: p, k, notes } = r.pats[0];
   p.color = '#d4a72c';
   setStd(S, p);
@@ -523,7 +529,7 @@ function restore(S, s0, step){
   S.stdRv.refresh();
   afterFilesChange(S);
   // Clear the previous tab's transient upload alert and rebuild for this tab.
-  S.loadAlerts = ''; S.noteAlerts = ''; S.uploadAlerts = '';
+  S.loadAlerts = ''; S.noteAlerts = ''; S.readAlerts = ''; S.uploadAlerts = '';
   S.noteAlerts = H.restoredAlert(R.reads, R.stdRead, R.lost, s.std, HU);
   rebuildXrdAlerts(S);
 }

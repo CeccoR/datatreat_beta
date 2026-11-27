@@ -52,7 +52,7 @@ function decl(file, name){
   if (m && /^[}\])]/.test(rest.slice(end + 1))) end = rest.indexOf('\n', end + 1);
   return rest.slice(0, end).replace(/^export /, '');
 }
-const UN = ['esc', 'fmtNum', 'csvField', 'csvJoin', 'csvLine', 'cumtrapz', 'meanArr', 'stdArr', 'maxArr', 'minArr', 'X_SVG', 'ALERT_ICON', 'alertHtml', 'buildAlertsHtml', 'exactKey'];
+const UN = ['esc', 'fmtNum', 'csvField', 'csvJoin', 'csvLine', 'cumtrapz', 'meanArr', 'stdArr', 'maxArr', 'minArr', 'X_SVG', 'ALERT_ICON', 'alertHtml', 'FILE_ALERT', 'fileAlertHtml', 'fileLine', 'exactKey'];
 const KN = ['isObj', 'isArr', 'num', 'numStr', 'oneOf', 'dateOf', 'arrOf', 'without', 'wideCsv'];
 const CN = ['PLOT_DL_ICON', 'CSV_ICON', 'plotWrap'];
 // (the CSVs' settings as a fresh page has them; a decimal comma where a case asks for one)
@@ -63,7 +63,7 @@ const ids = new WeakMap();
 let nid = 0;
 const objId = o => o == null || typeof o !== 'object' ? String(o) : ids.get(o) || (ids.set(o, ++nid), nid);
 const U = { settings, objId, ...Object.fromEntries(['fmtNum', 'csvLine', 'cumtrapz', 'maxArr', 'minArr', 'meanArr', 'stdArr', 'exactKey', 'num', 'numStr', 'oneOf', 'dateOf', 'arrOf', 'without', 'wideCsv'].map(k=> [k, PAGE[k]])) };
-const HU = { esc: PAGE.esc, num: PAGE.num, plotWrap: PAGE.plotWrap, CSV_ICON: PAGE.CSV_ICON, alertHtml: PAGE.alertHtml, buildAlertsHtml: PAGE.buildAlertsHtml };
+const HU = { esc: PAGE.esc, num: PAGE.num, plotWrap: PAGE.plotWrap, CSV_ICON: PAGE.CSV_ICON, alertHtml: PAGE.alertHtml, fileAlertHtml: PAGE.fileAlertHtml };
 const near = (a, b, tol, what)=> assert.ok(Math.abs(a - b) <= tol*Math.max(1, Math.abs(b)), `${what}: ${a} against ${b}`);
 const iso = d => d && d.toISOString().slice(0, 19);
 // A canonical dump: every number by its shortest round-trip string, NaN, ±∞ and −0 too; a
@@ -153,7 +153,8 @@ test('the injection dates in every form, the two layouts, a file refused, raw ch
   const d = M.readGc('Injection Date,H2 (A) [%Mol],O2 (A) [%Mol],CO2 (A) [%Mol]\n10/20/2026 9:00:00 AM,0.1,,5\n,,,\n10/20/2026 9:15:00 AM,n.a.,0.2,5\n10/20/2026 9:30:00 AM,,,5\nn.a.,n.a.,n.a.,n.a.\n10/20/2026 9:45:00 AM,0.3,0.4,5\n');
   assert.deepEqual(d.injDates.map(iso), ['2026-10-20T09:00:00', '2026-10-20T09:15:00', '2026-10-20T09:45:00']);
   assert.deepEqual([d.gas.h2.map(v=> isNaN(v) ? 'x' : v), d.gas.o2.map(v=> isNaN(v) ? 'x' : v), d.emptyRows, Object.keys(d)], [[0.1, 'x', 0.3], ['x', 0.2, 0.4], 1, ['injDates', 'gas', 'emptyRows']]);
-  assert.deepEqual(M.blankCounts(d), [2, 2]);
+  // (the empty cells alone: the row with no gas value is said apart, v567)
+  assert.deepEqual(M.blankCounts(d), [1, 1]);
   // Day/month found; dates that do not exist left out (month/day); month names: no order.
   const dm = M.readGc(DM), bad = M.readGc(BAD), named = M.readGc(NAMED);
   assert.deepEqual([dm.dayMonth, iso(dm.injDates[2]), dm.badDates], [true, '2025-10-13T00:00:00', undefined]);
@@ -336,30 +337,41 @@ test('the cards\' markup, the parameter table and the alerts, every label escape
   assert.equal((t.match(/<option /g) || []).length, 8, 'mass/area and six units');
   assert.ok(t.includes('<option value="atm" selected>') && t.includes('<option value="mass" selected>') && t.includes('class="gcDelayAuto" checked'));
   assert.equal((t.match(/class="mode-chip gc-toggle"/g) || []).length, 6);
-  assert.ok(t.includes('Light-on time is before first injection'), 'light-on before the first injection: said');
+  assert.ok(t.includes('Light-on at or before the first injection: no point before light-on.'), 'light-on before the first injection: said');
   P.lightOnDates[0] = new Date(2026, 0, 1, 10, 1, 0);
-  assert.ok(H.lightOnWarnHtml(P, [f], 0).includes('Light-on time is before first injection'), 'at its logged date, before its injection (60.6 s later)');
+  assert.ok(H.lightOnWarnHtml(P, [f], 0).includes('Light-on at or before the first injection: no point before light-on.'), 'at its logged date, before its injection (60.6 s later)');
   P.lightOnDates[0] = new Date(2026, 0, 1, 10, 1, 1);
   assert.equal(H.lightOnWarnHtml(P, [f], 0), '', 'after it');
   assert.equal(H.paramTableHtml(P, [], HU), '');
   P.norm = 'area';
   assert.ok(H.paramTableHtml(P, [f], HU).includes('data-f="a"') && H.paramTableHtml(P, [f], HU).includes('A (cm²)'));
-  const seen = new WeakSet();
-  assert.match(H.blankAlertsHtml([f], seen, HU), /x\.csv: 2 empty H<sub>2<\/sub> cells/);
-  assert.match(H.dateAlertsHtml([f], seen, HU), /x\.csv: dates read as day\/month \(as month\/day, some do not exist\); 2 rows left out: their injection date does not exist \(as day\/month\)/);
-  assert.match(H.altAlertsHtml([f], seen, HU), /class="alert info"/);
-  seen.add(f.gas);
-  assert.deepEqual([H.blankAlertsHtml([f], seen, HU), H.dateAlertsHtml([f], seen, HU), H.altAlertsHtml([f], seen, HU)], ['', '', ''], 'dismissed');
-  assert.equal(H.dateAlertsHtml([{ ...f, gas: {}, dayMonth: 'yes', badDates: 2.5 }], seen, HU), '', 'a project\'s .json: only true and a whole count');
+  // The drop zone's alerts (v567, utils.js FILE ALERTS): one box to check (the pairs, the rows
+  // left out, the empty cells), one of how the files were read (day/month, the alternative export).
+  const seen = { check: new WeakSet(), read: new WeakSet(), pairs: new WeakSet() };
+  const A = H.dropAlertsHtml([f], [f], seen, HU);
+  assert.equal(A, PAGE.alertHtml('warn', 'Loaded, to check:', ['x.csv: 2 rows left out: their injection date does not exist.',
+    'x.csv: 1 empty H<sub>2</sub> cell: each of those injections is left out of that gas only, its rate, production and mean from the injections with a value.',
+    'x.csv: 1 row with no gas value left out.'], 'gc-dismiss-check')
+    + PAGE.alertHtml('info', 'How these files were read:', ['x.csv: dates read as day/month.', 'x.csv: the alternative export (Inject Time, Amount in ppm).'], 'gc-dismiss-read'));
+  seen.read.add(f.gas);
+  assert.equal(H.dropAlertsHtml([f], [f], seen, HU), A.slice(0, A.indexOf('<div class="alert info"')), 'how they were read, dismissed');
+  seen.check.add(f.gas);
+  assert.equal(H.dropAlertsHtml([f], [f], seen, HU), '', 'dismissed');
+  const fresh = { check: new WeakSet(), read: new WeakSet(), pairs: new WeakSet() };
+  assert.ok(!H.dropAlertsHtml([], [{ ...f, gas: {}, dayMonth: 'yes', badDates: 2.5, emptyRows: 'x', altExport: 1 }], fresh, HU), 'a project\'s .json: only true and a whole count');
   const tcd = { name: '<t>_TCD.csv', label: 'T', tcd: { n: 1 } };
-  assert.match(H.pairAlertsHtml([tcd, { ...f, mate: { ...f, name: 'y.csv' } }], new WeakSet(), HU), /&lt;t&gt;_TCD\.csv: raw chromatograms with no table[\s\S]*&lt;b&gt;&amp;&quot;: two tables paired \(x\.csv, y\.csv\)/);
+  assert.match(H.dropAlertsHtml([tcd, { ...f, mate: { ...f, name: 'y.csv' } }], [], fresh, HU), /&lt;t&gt;_TCD\.csv: raw chromatograms with no table: shown in Integration, left out of Analysis, with no injection times\.[\s\S]*&lt;b&gt;&amp;&quot;: two tables paired \(x\.csv, y\.csv\)/);
   const all = [f, { ...f, name: 'h.csv', label: 'H' }, { ...f, name: 'm.csv', label: 'M', sample: 'h.csv' }, tcd];
   assert.equal(H.sampleCell(all, all[2], 2, HU), '<select class="file-sample" data-i="2" aria-label="Sample" title="The sample this trace is: its own, or the one another trace heads (its replicates), by its label"><option value="x.csv" title="x.csv">&lt;b&gt;&amp;&quot;</option><option value="h.csv" title="h.csv" selected>H</option><option value="m.csv" title="m.csv">M</option></select>');
   assert.equal(H.sampleCell(all, tcd, 3, HU), '');
   const d = { label: 'S<1>', color: '#f00"', gas: { h2: {}, o2: {} } };
   assert.equal(H.gasLegendHtml(d, M.GASES, HU), '<span><i style="background:#f00&quot;"></i>S&lt;1&gt; H₂</span><span><i class="mk-dash" style="color:#f00&quot;"></i>S&lt;1&gt; O₂</span>');
   const src = H.srcAlertsHtml([{ label: 'A', src: { gas: { h2: [1] }, how: { h2: 'transfer', o2: 'table' }, why: { o2: 'no <cal>' }, k: { h2: { k: 41234.567 } } } }, { label: 'B', src: { gas: null, why: '2 rows, 3 chromatograms' } }, { label: 'C' }], 'Int <1>', HU);
-  assert.ok(src.includes('re-integrated from the raw chromatograms (Int &lt;1&gt;)') && src.includes('A: H₂ calibration taken from the GC software&#39;s table (k = 41235)') && src.includes('A, O₂: no &lt;cal&gt;') && src.includes('B: 2 rows, 3 chromatograms'));
+  assert.ok(src.includes('re-integrated from the raw chromatograms (Int &lt;1&gt;)') && src.includes('A: H₂ by the GC software&#39;s scale (k = 41235)') && src.includes('A, O₂: no &lt;cal&gt;') && src.includes('B: 2 rows, 3 chromatograms'));
+  // (the GC software's scale: where its risks are written, once; v567)
+  assert.ok(src.includes('The GC software\'s scale (k): its risks are in the instructions of Int &lt;1&gt;.'));
+  // (with samples and no rate, the card says why under it, v567)
+  assert.ok(b.includes('id="gc4NoRate"') && H.NO_RATE === 'No rate to show: no sample\'s interval overlaps its injections.');
   assert.equal(H.srcAlertsHtml([{ label: 'C' }], '', HU), '');
 });
 
@@ -418,9 +430,9 @@ function runCase(c){
     const files = all.filter(f=> f.included !== false && M.isTable(f)), P = M.newParams(files);
     M.restoreParams(U, P, JSON.parse(JSON.stringify(c.st)), files);
     const k = card(P, files, all, 'card');
-    const seen = new WeakSet(), tables = all.filter(M.isTable);
+    const seen = { check: new WeakSet(), read: new WeakSet(), pairs: new WeakSet() }, tables = all.filter(M.isTable);
     return canon([all.map(f=> [f.name, f.sample, f.included]), M.snapshotOf(P), H.paramTableHtml(P, files, HU), k.csvs,
-      H.dateAlertsHtml(tables, seen, HU) + H.blankAlertsHtml(tables, seen, HU) + H.altAlertsHtml(tables, seen, HU), all.map((f, i)=> H.sampleCell(all, f, i, HU))]);
+      H.dropAlertsHtml([], tables, seen, HU), all.map((f, i)=> H.sampleCell(all, f, i, HU))]);
   } finally { settings.decimal = '.'; }
 }
 

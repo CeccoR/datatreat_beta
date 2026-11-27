@@ -1,4 +1,4 @@
-import { esc, buildAlertsHtml, includedOf, setIncluded, removeFileAt, moveFileTo, renderUnifiedFileList, setTabLoaded, setupDropzone, registerHistory, registerTabRedraw, registerCsvExport, csvLine, nextColor, colorOf } from './utils.js';
+import { esc, fileAlertHtml, fileLine, NOT_READ, bytesOf, includedOf, setIncluded, removeFileAt, moveFileTo, renderUnifiedFileList, setTabLoaded, setupDropzone, registerHistory, registerTabRedraw, registerCsvExport, csvLine, nextColor, colorOf } from './utils.js';
 import { createDeck } from './cards.js';
 import { decodeText } from './textdata.js';
 
@@ -89,10 +89,12 @@ export function moduleKit(mod, o){
     if (o.dismiss && o.dismiss[part]) o.dismiss[part](); else parts[part] = '';
     kit.drawAlerts();
   });
-  // A drop's files that could not be read, and those already loaded (by name).
+  /* A drop's files not loaded, each its line (utils.js fileLine: the file and why), and
+     those already loaded (by name): each drop's replace the last drop's, whatever it
+     loaded (utils.js FILE ALERTS). */
   kit.said = (bad, dup)=>{
-    parts.invalid = bad.length ? buildAlertsHtml(bad.map(esc), [], undefined, pre + 'invalid') : '';
-    parts.upload = dup.length ? buildAlertsHtml([], dup.map(esc), 'Already loaded file(s):', '', pre + 'upload') : '';
+    parts.invalid = fileAlertHtml('bad', bad.map(esc), pre + 'invalid');
+    parts.upload = fileAlertHtml('dup', dup.map(esc), pre + 'upload');
   };
 
   /* ---- The file list. With no file left, the alert of the files that could not be read
@@ -142,21 +144,26 @@ export function moduleKit(mod, o){
   kit.add = f =>{ all.push(f); if (!isSample(f)) return; files.push(f); slots().forEach(s=> s.arr.push(s.make(undefined, f))); };
   /* Text files dropped on the module: each decoded (textdata.js) and read by
      `read(text, bytes)` (the bytes too: GC keeps what it read of them), which gives what
-     the file holds, or null when it cannot, or { error } saying why (a reader that throws
-     leaves out that file, not the rest of the drop). A name already loaded is not loaded
-     again. Each record is { name, label, ...what it holds, color, rawBytes } (the file as
-     it came, for its download); then `done(had)`, `had` the files there were. `more`:
-     { names() the names loaded beside the records' own (GC's files paired inside a row),
-     collect(records) to place the records read instead of adding each (GC pairs them) }. */
+     the file holds, or { error } saying why it cannot (null: `more.none`, the module's
+     why). A file whose bytes cannot be read (gone from the disk: utils.js NOT_READ) or
+     whose reader throws is left out with why, not the rest of the drop (to v566 a file
+     gone from the disk ended the drop with no word, the files read before it unseen). A
+     name already loaded is not loaded again. Each record is { name, label, ...what it
+     holds, color, rawBytes } (the file as it came, for its download); then `done(had)`,
+     `had` the files there were. `more`: { names() the names loaded beside the records' own
+     (GC's files paired inside a row), collect(records) to place the records read instead
+     of adding each (GC pairs them), none: why a file the reader gives null for is not
+     read }. */
   kit.dropText = (read, done, more = {})=> setupDropzone($(mod + 'Dropzone'), $(mod + 'Files'), async list=>{
     const had = all.length, names = new Set([...all.map(f=> f.name), ...(more.names ? more.names() : [])]), bad = [], dup = [], got = [];
     for (const f of list){
       if (names.has(f.name)){ dup.push(f.name); continue; }
       names.add(f.name);
-      const rawBytes = new Uint8Array(await f.arrayBuffer());
+      const rawBytes = await bytesOf(f);
+      if (!rawBytes){ bad.push(fileLine(f.name, NOT_READ)); continue; }
       let data;
-      try { data = read(decodeText(rawBytes), rawBytes); } catch(e){ data = null; }
-      if (!data || data.error){ bad.push(data ? `${f.name} (${data.error})` : f.name); continue; }
+      try { data = read(decodeText(rawBytes), rawBytes); } catch(e){ data = { error: `could not be read: ${e && e.message || e}` }; }
+      if (!data || data.error){ bad.push(fileLine(f.name, data ? data.error : more.none || 'not a file this module reads')); continue; }
       const rec = { name: f.name, label: f.name.replace(/\.[^.]+$/, ''), ...data, color: nextColor([...all, ...got]), rawBytes };
       if (more.collect) got.push(rec); else kit.add(rec);
     }
@@ -191,7 +198,7 @@ export function moduleKit(mod, o){
     o.refresh();
     clearAlerts();
     const lost = raw.length - all.length;
-    if (lost) parts.invalid = buildAlertsHtml([], [`${lost} file${lost > 1 ? 's' : ''} in the project with no data to show: left out.`], 'Restored, with a caveat:', '', pre + 'invalid');
+    if (lost) parts.invalid = fileAlertHtml('opened', [leftOut(lost, 'no data in the project')], pre + 'invalid');
     kit.drawAlerts();
   }, { view: o.view });
   kit.commit = ()=> hist.commit();
@@ -205,6 +212,9 @@ export function moduleKit(mod, o){
   kit.destroy = ()=>{ if (deck) deck.destroy(); };
   return kit;
 }
+
+// The files a project opened left out, said (utils.js FILE ALERTS, 'opened'): how many, and why.
+export const leftOut = (n, why)=> `${n} file${n > 1 ? 's' : ''} left out: ${why}.`;
 
 /* ---- RESTORED: a project read in may hold anything (an imported .json), so a restore
    takes what it reads only as what it should be — an object where one is due, arrays

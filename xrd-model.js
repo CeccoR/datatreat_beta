@@ -60,7 +60,7 @@ export function patternsOf(name, rawBytes, scans, sample = ''){
   const pats = ok.map(({ sc, k })=>{ const a = scanArrays(sc);
     return { k, notes: sc.notes, f: { name: n > 1 ? `${base} (scan ${k+1})${ext}` : name, label: n > 1 ? `${own} (scan ${k+1})` : own,
       x: a.x, y: a.y, rawBytes, ...(n > 1 ? { src: name, scan: k } : {}), ...(sc.meas ? { meas: sc.meas } : {}), ...(a.varMul ? { varMul: a.varMul } : {}) } }; });
-  return { pats, n, skipped: scans.map((sc, k)=> sc.error ? `scan ${k+1} not read (${sc.error})` : null).filter(Boolean) };
+  return { pats, n, skipped: scans.map((sc, k)=> sc.error ? `scan ${k+1} not read: ${sc.error}` : null).filter(Boolean) };
 }
 // A file's patterns a drop loads: those whose names are not in the list (`existing`); a
 // scan whose name is (one of the file's, dropped again after others were removed, or a
@@ -81,7 +81,7 @@ export function readAgain(U, f){
   const b = f.rawBytes;
   if (!b || typeof b !== 'object' || !/\.(xrdml|xml)$/i.test(f.name || '')){
     let lo = Infinity; for (const v of f.y || []) if (v < lo) lo = v;
-    return { f: fixedArrs(ascending({ ...f })), note: !b && lo === 0 ? 'its lowest point is exactly 0 and the project does not hold the file itself: its minimum may have been subtracted (as up to v262), which the Rietveld weights would take for the counts; load the file again' : null };
+    return { f: fixedArrs(ascending({ ...f })), note: !b && lo === 0 ? 'its lowest point is exactly 0 and the project does not hold the file itself: its minimum may have been subtracted, as an older version did, which the Rietveld weights would take for the counts; load the file again' : null };
   }
   let all = reread.get(b);
   if (!all){
@@ -107,8 +107,8 @@ function movedNote(old, g, sc){
     moved = Math.abs(old.y[i] - g.y[i]) > 1e-9*Math.max(1, Math.abs(g.y[i])) || Math.abs(old.x[i] - g.x[i]) > 1e-9 || (g.varMul && Math.abs(old.varMul[i] - g.varMul[i]) > 1e-12);
   // (points left out that an earlier version, to v484, kept as no number: those)
   const lost = sc.dropped && old.y && old.y.length === n + sc.dropped;
-  return !moved ? null : lost ? `read again from the file itself, ${sc.dropped} point${sc.dropped > 1 ? 's' : ''} whose values are no finite number left out (the project held ${sc.dropped > 1 ? 'them' : 'it'} as up to v484). Results refined before are from those: refine again`
-    : 'read again from the file itself: the project held its data as an earlier version had read them (up to v262, with their minimum subtracted). Results refined before are from those: refine again';
+  return !moved ? null : lost ? `read again from the file itself, ${sc.dropped} point${sc.dropped > 1 ? 's' : ''} whose values are no finite number left out: the project held ${sc.dropped > 1 ? 'them' : 'it'}, as an older version did. Results refined before are from those: refine again`
+    : 'read again from the file itself: the project held its data as an older version had read them, with their minimum subtracted. Results refined before are from those: refine again';
 }
 /* A project read in may hold anything (an imported .json): the restore takes what it reads
    only as what it should be — a file an object with its pattern, 2θ and intensities as

@@ -167,12 +167,13 @@ export function readNote(f, u){
 
 /* ---- Alerts ---- */
 // A card's lines holding fewer points with a value than a window.
-export const TOO_SMALL = '<div class="alert warn">⚠ Interval too small: too few points for the regression!</div>';
+export const TOO_SMALL = '<div class="alert warn">⚠ Interval too small: too few points for the regression.</div>';
 // An Urbach card's subtracted fit that the Tauc baseline blocks (subtracted: its counts).
 export const blockedHtml = sb => `<div class="alert warn">⚠ No subtracted fit: the Tauc baseline lies above F(R) at ${sb.lost} of the ${sb.inside} points between the lines${sb.neg ? ' with F(R) > 0' : ''}, where F(R) − F<sub>b</sub> has no logarithm.</div>`;
 // Negative values → one alert per series on show, under its chart, listing the
-// affected samples (`files`, by label) one per line. Live-computed → no X.
+// affected samples (`files`, by label) one per line. Live-computed → no X. An error (v567,
+// a warning to v566): a negative E_g or E_U is no result, and its bar is not drawn.
 export function negWarnHtml(files, vals, what, u){
   const list = files.filter((f,k)=> isFinite(vals[k]) && vals[k] < 0).map(f=>u.esc(f.label));
-  return list.length ? `<div class="alert warn">⚠ Negative ${what} for:<br>${list.join('<br>')}</div>` : '';
+  return list.length ? `<div class="alert bad">✕ Negative ${what} for:<br>${list.join('<br>')}</div>` : '';
 }

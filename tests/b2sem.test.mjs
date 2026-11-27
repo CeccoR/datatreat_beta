@@ -360,11 +360,12 @@ test('a wake reading its files: one read for two wakes asked, left or closed mea
       t.objectStore('bytes').delete(h); t.oncomplete = ()=>{ q.result.close(); res(); }; }; }), sha(A().buffer));
     await shown(page, 1);
     await page.waitForSelector('.pwa-confirm.show');
-    assert.match((await banner(page)).text, /^“[^”]+”: 1 of its files is not stored in this browser any more: it comes back without it\.$/);
+    assert.match((await banner(page)).text, /^“[^”]+”: 1 of its files is not stored in this browser any more: it comes back without its bytes\.$/);
     await answer(page, 'ok');
     assert.deepEqual(await awake(page), [true, true]);
     assert.deepEqual(await labels(page), ['b-two'], 'the rest as it was');
-    assert.match(await page.locator('#semAlerts').innerText(), /a\.tif/);
+    // (v567: counted, a warning of the project opened, utils.js FILE ALERTS)
+    assert.equal(await page.locator('#semAlerts').innerText(), '⚠ Opened, to check:\n1 file left out: its stored bytes no longer read.');
     await thumbs(page, 1);
     await undo(page);
     assert.deepEqual(await labels(page), ['B'], 'an undo, a.tif lost there too');

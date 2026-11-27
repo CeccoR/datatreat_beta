@@ -1,4 +1,4 @@
-import { settings, fmtNum, csvLine, cumtrapz, maxArr, minArr, meanArr, stdArr, buildAlertsHtml, alertHtml, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, confirmBanner, esc, registerModule, keeper, objId, exactKey } from './utils.js';
+import { settings, fmtNum, csvLine, cumtrapz, maxArr, minArr, meanArr, stdArr, alertHtml, fileAlertHtml, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, confirmBanner, esc, registerModule, keeper, objId, exactKey } from './utils.js';
 import { Plot, svgEl } from './plot.js';
 import { cardInfo, fileSafe, nameDownloads } from './cards.js';
 import { moduleKit, wideCsv, isObj, num, numStr, oneOf, dateOf, arrOf, without, cardList } from './modkit.js';
@@ -32,7 +32,7 @@ import * as H from './gc-html.js';
 // utils.js's and modkit.js's helpers the model takes (gc-model.js U), and what the markup
 // takes (gc-html.js u).
 const U = { settings, fmtNum, csvLine, cumtrapz, maxArr, minArr, meanArr, stdArr, objId, exactKey, num, numStr, oneOf, dateOf, arrOf, without, wideCsv };
-const HU = { esc, num, plotWrap, CSV_ICON, alertHtml, buildAlertsHtml };
+const HU = { esc, num, plotWrap, CSV_ICON, alertHtml, fileAlertHtml };
 const GC_INFO = H.gcInfo(cardInfo(false, true));
 
 /* A sample's tables (gc-model.js tablesOf: each gas's times, readings, flows and their
@@ -71,9 +71,9 @@ const tablesKept = keeper('gc-tables', 8);
                           chromatograms ({ name, label, color, rawBytes, tcd: { n } }) or a
                           pair, the first file's record with the second as its `mate` (PAIRS,
                           gc-model.js): only a table heading its row is a sample (`files`)
-     blankSeen, dateSeen, altSeen, pairSeen   the alerts dismissed (gc-html.js): marks on
-                          the files' data as this load holds them (a gas's values, a file's
-                          bytes), which the undo steps share
+     seen                 the alerts dismissed (gc-html.js dropAlertsHtml): { check, read,
+                          pairs }, marks on the files' data as this load holds them (a
+                          gas's values, a file's bytes), which the undo steps share
      walk                 a walk through a Sample select's options (gc-model.js setSample),
                           let go as the list is drawn anew by any other change
                           (afterFilesChange: to v556 it kept the files it named, a file
@@ -96,7 +96,7 @@ const shownAny = S => S.files.length > 0 || S.all.some(f=> f.included !== false 
 function createGc({ key, root, layer, shown }){
   const S = {
     root, key, layer, shown, $: id => root.querySelector('#' + id), stale: false, drawnAt: '',
-    kit: null, all: null, files: null, blankSeen: new WeakSet(), dateSeen: new WeakSet(), altSeen: new WeakSet(), pairSeen: new WeakSet(),
+    kit: null, all: null, files: null, seen: { check: new WeakSet(), read: new WeakSet(), pairs: new WeakSet() },
     walk: null, deck: null, live: new Map(), integ: null, resList: null, cardsNext: null,
   };
   S.kit = moduleKit('gc', kitHooks(S));
@@ -105,7 +105,7 @@ function createGc({ key, root, layer, shown }){
      first raw chromatograms of a project bring an Integration card, above the first
      Production Rate card; the integration starts (a Stop before it does not hold it). */
   S.kit.dropText((text, bytes)=> M.readGcAny(text, bytes, (b, d)=> S.integ.prime(b, d)), ()=>{ afterFilesChange(S); S.integ.ensure(true); }, {
-    names: ()=> S.all.filter(r=> r.mate).map(r=> r.mate.name),
+    names: ()=> S.all.filter(r=> r.mate).map(r=> r.mate.name), none: M.NOT_GC,
     collect: recs => collect(S, recs),
   });
   S.resList = S.$('gcResList');
@@ -142,9 +142,9 @@ function kitHooks(S){
     // (the plots' gas chips, H₂ / O₂: the view alone, a step but no change unsaved; utils.js VIEW_KEYS)
     // (and the Integration cards' run overview: its gases and its y, v544)
     view: ['gasSel', 'ovGas', 'ovY'],
-    alerts: p =>{ S.$('gcAlerts').innerHTML = p.invalid + H.pairAlertsHtml(S.all, S.pairSeen, HU) + H.dateAlertsHtml(tables(S), S.dateSeen, HU) + H.blankAlertsHtml(tables(S), S.blankSeen, HU) + H.altAlertsHtml(tables(S), S.altSeen, HU) + p.upload; },
-    dismiss: { blank: ()=> tables(S).forEach(f=> S.blankSeen.add(f.gas)), dates: ()=> tables(S).forEach(f=> S.dateSeen.add(f.gas)), alt: ()=> tables(S).forEach(f=> S.altSeen.add(f.gas)),
-      pairs: ()=> S.all.forEach(f=> M.pairMarks(f).forEach(b=> S.pairSeen.add(b))) },
+    alerts: p =>{ S.$('gcAlerts').innerHTML = p.invalid + H.dropAlertsHtml(S.all, tables(S), S.seen, HU) + p.upload; },
+    dismiss: { check: ()=>{ tables(S).forEach(f=> S.seen.check.add(f.gas)); S.all.forEach(f=> M.pairMarks(f).forEach(b=> S.seen.pairs.add(b))); },
+      read: ()=> tables(S).forEach(f=> S.seen.read.add(f.gas)) },
     // Only a table heading its row is a sample (raw chromatograms alone, or paired with raw
     // chromatograms, have no injection times: Analysis leaves them out, v544).
     sample: M.isTable,
@@ -493,8 +493,10 @@ function wireRows(S, C, wrap){
 /* ---- The card's tables and rates (gc-model.js) ---- */
 // (its tab not on show: the tables and the rates worked out, the CSVs' and the Results'
 // own, and nothing drawn: drawn whole as it is shown)
+// (no sample: nothing said of its rates either)
+const noSample = (S, C)=>{ if (S.files.length) return false; const w = C.$('NoRate'); if (w) w.style.display = 'none'; return true; };
 function compute(S, C, preserveView){
-  if (!S.files.length) return;
+  if (noSample(S, C)) return;
   // Snapshot the current zoom before renderPlots() builds fresh Plot instances.
   C.prevView = preserveView ? viewOf(C.$('Svg1')._plot) : null;
   computeTables(S, C);
@@ -523,10 +525,9 @@ function paintSrc(S, C){
 }
 // A folded card draws nothing; its Results section is drawn all the same.
 function computeQuiet(S, C){
-  if (!S.files.length) return;
+  if (noSample(S, C)) return;
   computeTables(S, C); renderGasSel(S, C); C.costResults = M.computeRates(C.P, C.dataTables);
-  C.res.style.display = M.hasResults(C.costResults) ? '' : 'none';
-  syncResults(S);
+  showRates(S, C);
   if (drawable(S)){ drawResultPlots(S, C); drawBarChart(S, C); }
   C.$('ResLegend').innerHTML = C.dataTables.map(d=> H.gasLegendHtml(d, M.shownGases(C.P, S.files, 'r'), HU)).join('');
 }
@@ -537,8 +538,7 @@ function updateRegression(S, C){
   if (draw) drawData(S, C);
   // Show the Results section before drawing into it: plots sized from a hidden element
   // would measure 0. It stays hidden while no sample has a valid integration interval.
-  C.res.style.display = M.hasResults(C.costResults) ? '' : 'none';
-  syncResults(S);
+  showRates(S, C);
   if (draw){ drawResultPlots(S, C); drawBarChart(S, C); }
 }
 
@@ -712,6 +712,13 @@ function drawBarChart(S, C){
 /* ---- The cards (cards.js), and the Results: each card's section under its name ---- */
 const placeRes = S => cards(S).forEach(a=>{ const c = S.live.get(a.id); if (c && c.res) S.resList.appendChild(c.res); });
 // The Results card is there while some card has a result to show.
+// The card's Results shown where there is a rate; with samples and none, the card says why.
+function showRates(S, C){
+  const on = M.hasResults(C.costResults), why = C.$('NoRate');
+  C.res.style.display = on ? '' : 'none';
+  if (why){ why.textContent = H.NO_RATE; why.style.display = on || !S.files.length ? 'none' : ''; }
+  syncResults(S);
+}
 function syncResults(S){
   const on = cards(S).filter(a=> S.live.has(a.id) && S.live.get(a.id).hasResults());
   S.$('gcResultsBar').style.display = S.files.length && on.length ? 'block' : 'none';

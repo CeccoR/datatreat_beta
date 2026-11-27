@@ -4,11 +4,11 @@
    instructions (with "From the reading to the rates", its example worked out with the
    module's own numbers), a card's body and its section of the Results, the parameter
    table, a sample's legend entries, the file list's Sample column, the alerts under the
-   drop zone (the empty cells, the dates, the alternative export, the pairs) and at a card's
+   drop zone (the pairs, the dates, the empty cells, the alternative export) and at a card's
    top (where its values came from). Taken out of v556's gc.js as they were: the same
    markup to the byte.
    What they need from the page is handed in, u = { esc, num, plotWrap, CSV_ICON, alertHtml,
-   buildAlertsHtml } (utils.js's esc and alerts, modkit.js's num, modcharts.js's plot box and
+   fileAlertHtml } (utils.js's esc and alerts, modkit.js's num, modcharts.js's plot box and
    CSV icon: gc.js HU), and the cards' own instructions (cards.js cardInfo) where they end
    with them.
 ========================================================= */
@@ -124,7 +124,11 @@ export const cardBody = (a, u)=> `
           <p class="txt-caption">Production Rate</p>${gasPlot(u, pre(a) + 'Svg1', 'a', { cls: 'plot-strip', csv: 'gc_raw.csv', name: 'GC_rate.svg', legend: pre(a) + 'Legend' })}
         </div>
       </div>
-      <div id="${pre(a)}Legend" class="legend" style="margin-top:8px"></div>`;
+      <div id="${pre(a)}Legend" class="legend" style="margin-top:8px"></div>
+      <p class="txt-meta gc-norate" id="${pre(a)}NoRate" style="display:none;margin-top:8px"></p>`;
+/* Why a card with samples has no Results (gc.js shows it under the card, v567: to v566 the
+   Results were hidden with no word): no sample's interval overlaps its injections. */
+export const NO_RATE = 'No rate to show: no sample\'s interval overlaps its injections.';
 export const resHtml = (a, u)=> `
       <h4 class="res-an-title"></h4>
       <div class="row res-row">
@@ -211,10 +215,10 @@ export function paramTableHtml(P, files, u){
 }
 
 // The warning beside a sample's row when its light-on time is before (or at) its first
-// injection (gc-model.js lightOnWarn).
+// injection (gc-model.js lightOnWarn): no injection before light-on, the dark reading.
 export function lightOnWarnHtml(P, files, i){
   return lightOnWarn(P, files, i)
-    ? '<div class="alert warn" style="margin:0;padding:6px 8px;font-size:11px">⚠ Light-on time is before first injection</div>'
+    ? '<div class="alert warn" style="margin:0;padding:6px 8px;font-size:11px">⚠ Light-on at or before the first injection: no point before light-on.</div>'
     : '';
 }
 
@@ -249,59 +253,61 @@ export function sampleCell(all, f, i, u){
    Each read off the loaded files (`tables`: the tables of the list) each time, not kept
    from the drop, so it is there again when the project is reopened (or its tab brought
    back) and goes with a file removed; dismissed, a file's mark (`seen`, gc.js) keeps it
-   away for the files on show through undo and redo. */
-/* The empty cells skipped, per file and gas: the blank cells of a row kept, and the
-   rows with none of the file's gases (dropped at parse, `emptyRows`, an empty cell for
-   each gas it has). Dismissed, it stays away for the files on show through undo and redo:
-   the mark is on the file's data as this load holds them, which the undo steps share,
-   so a file dropped anew (a same-named one too), a reopened project, a tab brought back
-   are named again, and a dismissal in one tab leaves the others' files named. */
-export function blankAlertsHtml(tables, seen, u){
+   away for the files on show through undo and redo. One box a kind (utils.js FILE ALERTS,
+   v567; to v566 a box each, under headers of their own): to check, the pairs that cannot
+   serve the analysis, the rows left out (dates that do not exist, no gas value) and the
+   empty cells skipped; how the files were read, the dates read day/month and the
+   alternative export. Every mark is on the file's data as this load holds them, which the
+   undo steps share, so a file dropped anew (a same-named one too), a reopened project, a
+   tab brought back are named again, and a dismissal in one tab leaves the others' files
+   named: `seen.check` and `seen.read` on a table's gases, `seen.pairs` on a row's files'
+   bytes (pairMarks). */
+/* The empty cells skipped, per file and gas (the blank cells of a row kept), and the rows
+   with none of the file's gases, left out at parse (`emptyRows`; to v566 counted as an
+   empty cell for each gas). */
+function blankLines(tables, u){
   const lines = [];
   tables.forEach(f=>{
-    const n = blankCounts(f);
-    if (!n.some(Boolean) || seen.has(f.gas)) return;
-    lines.push(u.esc(f.name) + ': ' + GASES.map((g, j)=> n[j] ? `${n[j]} empty ${g.label} cell${n[j] > 1 ? 's' : ''}` : '').filter(Boolean).join(', '));
+    const n = blankCounts(f), rows = u.num(f.emptyRows, 0, v=> Number.isInteger(v) && v > 0);
+    if (n.some(Boolean)) lines.push(u.esc(f.name) + ': ' + GASES.map((g, j)=> n[j] ? `${n[j]} empty ${g.label} cell${n[j] > 1 ? 's' : ''}` : '').filter(Boolean).join(', ')
+      + ': each of those injections is left out of that gas only, its rate, production and mean from the injections with a value.');
+    if (rows) lines.push(`${u.esc(f.name)}: ${rows} row${rows > 1 ? 's' : ''} with no gas value left out.`);
   });
-  return lines.length ? u.buildAlertsHtml([], lines, 'Empty cells skipped: each injection is left out of that gas only (its rate, production and mean come from the injections with a value):', '', 'gc-dismiss-blank') : '';
+  return lines;
 }
-/* The injection dates, said per file: a file read as day/month, the rows left out with
-   a date that does not exist (gc-model.js readGc). Dismissed as the empty cells are, on a
-   mark of its own. */
-export function dateAlertsHtml(tables, seen, u){
-  const lines = [];
-  let order = false;
+/* The injection dates, said per file: a file read as day/month (how it was read), the rows
+   left out with a date that does not exist (to check; gc-model.js readGc). */
+function dateLines(tables, u){
+  const check = [], read = [];
   tables.forEach(f=>{
     // (a project's .json may hold anything: only true and a whole count go into markup)
-    // A file whose dates name their month (monthNames) has no order: none is named.
-    const dm = f.dayMonth === true, named = f.monthNames === true && !dm, n = u.num(f.badDates, 0, v=> Number.isInteger(v) && v > 0), say = [];
-    if (dm) say.push('dates read as day/month (as month/day, some do not exist)');
-    if (n) say.push(`${n} row${n > 1 ? 's' : ''} left out: ${n > 1 ? 'their' : 'its'} injection date does not exist${named ? '' : ` (as ${dm ? 'day/month' : 'month/day'})`}`);
-    if (say.length && !seen.has(f.gas)){ lines.push(u.esc(f.name) + ': ' + say.join('; ')); if (!named) order = true; }
+    const dm = f.dayMonth === true, n = u.num(f.badDates, 0, v=> Number.isInteger(v) && v > 0);
+    if (dm) read.push(`${u.esc(f.name)}: dates read as day/month.`);
+    if (n) check.push(`${u.esc(f.name)}: ${n} row${n > 1 ? 's' : ''} left out: ${n > 1 ? 'their' : 'its'} injection date does not exist.`);
   });
-  return lines.length ? u.buildAlertsHtml([], lines, `Injection dates${order ? ' (the instrument writes them month/day)' : ''}:`, '', 'gc-dismiss-dates') : '';
+  return { check, read };
 }
-/* The files read as the alternative export (gc-model.js readGc, `altExport`), said in an
-   info alert (v539): a file name a line, dismissed as the empty cells are, on a mark of
-   its own. */
-export function altAlertsHtml(tables, seen, u){
-  const lines = tables.filter(f=> f.altExport === true && !seen.has(f.gas)).map(f=> u.esc(f.name));
-  return lines.length ? u.alertHtml('info', 'Read as the alternative export (Inject Time, Amount in ppm), not the default format:', lines, 'gc-dismiss-alt') : '';
-}
-/* The files that cannot be what their pairs need (PAIRS, gc-model.js), said under the drop
-   zone: two tables (the first used), two files of raw chromatograms, and raw chromatograms
-   with no table, which Analysis leaves out (`all`, every record). Dismissed as the others
-   are, on a mark of its own: a file's bytes (pairMarks). */
-export function pairAlertsHtml(all, seen, u){
+// The files read as the alternative export (gc-model.js readGc, `altExport`).
+const altLines = (tables, u)=> tables.filter(f=> f.altExport === true).map(f=> `${u.esc(f.name)}: the alternative export (Inject Time, Amount in ppm).`);
+/* The files that cannot be what their pairs need (PAIRS, gc-model.js): two tables (the
+   first used), two files of raw chromatograms, and raw chromatograms with no table, which
+   Analysis leaves out (`all`, every record). */
+function pairLines(all, seen, u){
   const lines = [];
   all.forEach(r=>{
     if (pairMarks(r).some(b=> seen.has(b))) return;
     const [a, b] = rowFiles(r);
-    if (b && isTable(a) && isTable(b)) lines.push(`${u.esc(r.label)}: two tables paired (${u.esc(a.name)}, ${u.esc(b.name)}): the first is used, as it is alone; ${u.esc(b.name)} is ignored.`);
-    else if (b && isTcd(a) && isTcd(b)) lines.push(`${u.esc(r.label)}: two files of raw chromatograms paired (${u.esc(a.name)}, ${u.esc(b.name)}): shown in Integration, left out of Analysis (no injection times).`);
-    else if (!b && isTcd(a)) lines.push(`${u.esc(a.name)}: raw chromatograms with no table: shown in Integration, left out of Analysis (no injection times).`);
+    if (b && isTable(a) && isTable(b)) lines.push(`${u.esc(r.label)}: two tables paired (${u.esc(a.name)}, ${u.esc(b.name)}): the first is used, as it is alone; ${u.esc(b.name)} is ignored. Drag a file by its own grip to pair it.`);
+    else if (b && isTcd(a) && isTcd(b)) lines.push(`${u.esc(r.label)}: two files of raw chromatograms paired (${u.esc(a.name)}, ${u.esc(b.name)}): shown in Integration, left out of Analysis, with no injection times. Drag a file by its own grip to pair it.`);
+    else if (!b && isTcd(a)) lines.push(`${u.esc(a.name)}: raw chromatograms with no table: shown in Integration, left out of Analysis, with no injection times.`);
   });
-  return lines.length ? u.buildAlertsHtml([], lines, 'Pairs to check (a table and its raw chromatograms share a row; drag a file by its own grip to pair it):', '', 'gc-dismiss-pairs') : '';
+  return lines;
+}
+// The two boxes (utils.js fileAlertHtml): to check, and how the files were read.
+export function dropAlertsHtml(all, tables, seen, u){
+  const check = tables.filter(f=> !seen.check.has(f.gas)), read = tables.filter(f=> !seen.read.has(f.gas));
+  return u.fileAlertHtml('check', [...pairLines(all, seen.pairs, u), ...dateLines(check, u).check, ...blankLines(check, u)], 'gc-dismiss-check')
+    + u.fileAlertHtml('read', [...dateLines(read, u).read, ...altLines(read, u)], 'gc-dismiss-read');
 }
 
 /* Where a card's values came from, said at its top (v544): the samples re-integrated, and
@@ -312,15 +318,18 @@ export function pairAlertsHtml(all, seen, u){
 export function srcAlertsHtml(dataTables, name, u){
   const used = [], kept = [], txt = Object.fromEntries(GASES.map(g=> [g.key, gasTxt(g)]));
   const k5 = v => Number.isFinite(v) ? String(+v.toPrecision(5)) : '?';
-  const how = (s, g)=> s.how[g] === 'cal' ? 'calibrated by the standards' : `calibration taken from the GC software's table (k = ${k5(s.k[g] && s.k[g].k)})`;
+  const how = (s, g)=> s.how[g] === 'cal' ? 'calibrated by the standards' : `by the GC software's scale (k = ${k5(s.k[g] && s.k[g].k)})`;
   dataTables.forEach(d=>{
     const s = d.src;
     if (!s) return;
-    if (!s.gas){ kept.push(`${u.esc(d.label)}: ${u.esc(s.why)}`); return; }
+    if (!s.gas){ kept.push(`${u.esc(d.label)}: ${u.esc(s.why)}${s.integ ? ': see the Integration card' : ''}`); return; }
     const re = Object.keys(s.how).filter(g=> s.how[g] !== 'table'), tb = Object.keys(s.how).filter(g=> s.how[g] === 'table');
     if (re.length) used.push(`${u.esc(d.label)}: ${re.map(g=> `${txt[g] || u.esc(g)} ${u.esc(how(s, g))}`).join('; ')}`);
     tb.forEach(g=> kept.push(`${u.esc(d.label)}, ${txt[g] || u.esc(g)}: ${u.esc(s.why[g] || 'the table')}`));
   });
+  // (where the GC software's scale is taken: its risks, which the Integration card's
+  // instructions give, said once; to v566 an info box of that card's, its header alone)
+  if (dataTables.some(d=> d.src && d.src.gas && Object.values(d.src.how).includes('transfer'))) used.push(`The GC software's scale (k): its risks are in the instructions of ${u.esc(name)}.`);
   return (used.length ? u.alertHtml('info', `H₂ and O₂ re-integrated from the raw chromatograms (${u.esc(name)}), the times from the tables:`, used) : '')
     + (kept.length ? u.alertHtml('warn', `The GC software's table used instead of the re-integration (${u.esc(name)}):`, kept) : '');
 }

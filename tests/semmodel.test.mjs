@@ -48,7 +48,7 @@ function decl(file, name){
   if (m && /^[}\])]/.test(rest.slice(end + 1))) end = rest.indexOf('\n', end + 1);
   return rest.slice(0, end).replace(/^export /, '');
 }
-const UN = ['esc', 'fmtNum', 'csvField', 'csvJoin', 'csvLine', 'X_SVG', 'ALERT_ICON', 'alertHtml', 'buildAlertsHtml', 'isIncluded', 'anySample', 'includedOf', 'includedIndex', 'setIncluded', 'removeFileAt'];
+const UN = ['esc', 'fmtNum', 'csvField', 'csvJoin', 'csvLine', 'X_SVG', 'ALERT_ICON', 'alertHtml', 'FILE_ALERT', 'fileAlertHtml', 'fileLine', 'isIncluded', 'anySample', 'includedOf', 'includedIndex', 'setIncluded', 'removeFileAt'];
 const settings = { decimal: '.', field: ';' };
 const PAGE = new Function('settings', [...UN.map(n=> decl('utils.js', n)), decl('modkit.js', 'isObj')].join('\n') + `\nreturn { ${[...UN, 'isObj'].join(', ')} };`)(settings);
 // A canonical dump: every number by its shortest round-trip string, NaN, ±∞ and −0 too.
@@ -72,7 +72,7 @@ function statsOf(f){
 }
 const rawOf = (id, bytes, r0)=> r0 instanceof Ref && r0.id === id && r0.bytes === bytes ? r0 : new Ref(id, bytes);
 const U = { isObj: PAGE.isObj, fmtNum: PAGE.fmtNum, csvLine: PAGE.csvLine, info, statsOf, rawOf };
-const HU = { esc: PAGE.esc, buildAlertsHtml: PAGE.buildAlertsHtml };
+const HU = { esc: PAGE.esc, fileAlertHtml: PAGE.fileAlertHtml };
 
 /* ---- The images (made up) ---- */
 const IMG = {
@@ -107,7 +107,7 @@ function filesChanged(S){
 function restore(S, s){
   S.line = ++S.lines;
   const { lost, cur } = M.restoreInto(U, S, s);
-  if (lost.length) M.setAlerts(S, { bad: { names: lost.map(n=> H.fileLine(HU, n, 'its stored bytes no longer read as a Tescan TIFF')), ids: S.allFiles.map(f=> f.raw.id) } });
+  if (lost.length) M.setAlerts(S, { bad: { names: [PAGE.esc(H.lostLine(lost.length))], ids: S.allFiles.map(f=> f.raw.id), opened: true } });
   S.cur = cur;
   filesChanged(S);
 }
@@ -347,8 +347,10 @@ test('the state: saved and read back, a v517 project, ids made again, files twic
   const W = newS();
   restore(W, { files: [s.files[0], { ...s.files[0], name: 'again' }, { name: 'gone <1>', raw: { id: 'x', bytes: new Uint8Array(9) } }, { name: 'none', raw: null }, 7], cur: 5 });
   assert.deepEqual([W.allFiles.length, W.cur], [1, 0]);
+  // (v567: a warning of the project opened, its files left out counted, utils.js FILE ALERTS)
   assert.equal(H.alertsHtml(HU, M.alertsNow(W), new Set(W.allFiles.map(f=> f.raw.id))),
-    PAGE.buildAlertsHtml(['gone &lt;1&gt; — its stored bytes no longer read as a Tescan TIFF', 'none — its stored bytes no longer read as a Tescan TIFF'], [], undefined, 'sem-dismiss-invalid'));
+    PAGE.alertHtml('warn', 'Opened, to check:', ['2 files left out: their stored bytes no longer read.'], 'sem-dismiss-invalid'));
+  assert.equal(H.lostLine(1), '1 file left out: its stored bytes no longer read.');
   // Pixels made square since the crop was saved (to v487, in the pixels as acquired): brought
   // to the square ones; its default kept the default.
   const r = info(S.allFiles[1]), q = r.squared;
@@ -406,7 +408,7 @@ test('the markup: the Image box, the groups, the alerts and the options, every n
   assert.ok(box.startsWith('<div class="sem-info-row"><span class="txt-meta">Image</span><span>120 × 92 px (info bar of 8 rows left out)</span></div>'), box);
   assert.ok(box.includes('<span>26 nm</span>') && box.includes('<span>3.12 µm</span>') && box.includes('<span>4.80 kx</span>') && box.includes('<span>15 kV · WD 10 mm</span>'));
   assert.ok(box.includes('<span>SE · gain —, offset —</span>') && box.includes('<span>2024-01-01 10:00:00 · MIRA</span>'));
-  assert.ok(box.includes('<span>120 × 92 px, 3.12 × 2.392 µm ⚠ narrowed to fit</span>'), box);
+  assert.ok(box.includes('<span>120 × 92 px, 3.12 × 2.392 µm <span class="sem-note-info">ⓘ narrowed to fit</span></span>'), box);
   // (with H, 24.6 nm: at B's 26 nm, its field of 56 rows of 24.6 nm, 53 of B's)
   assert.ok(box.endsWith('<span class="txt-meta">In the figure</span><span>120 × 53 px at 26 nm, 3.12 × 1.378 µm of the crop</span></div>'), box);
   const fb = H.infoHtml(HU, f, info(f), null);
@@ -425,7 +427,11 @@ test('the markup: the Image box, the groups, the alerts and the options, every n
   S.line = 1;
   M.setAlerts(S, { bad: { names: [H.fileLine(HU, 'x<1>.tif', 'not a TIFF')], ids: [b.raw.id] }, dup: [{ id: b.raw.id, html: 'b.tif' }], warn: [{ id: 'gone', html: 'w' }] });
   const here = new Set(S.allFiles.map(x=> x.raw.id));
-  assert.equal(H.alertsHtml(HU, M.alertsNow(S), here), PAGE.buildAlertsHtml(['x&lt;1&gt;.tif — not a TIFF'], [], undefined, 'sem-dismiss-invalid') + PAGE.buildAlertsHtml([], ['b.tif'], 'Already loaded:', '', 'sem-dismiss-upload'));
+  assert.equal(H.alertsHtml(HU, M.alertsNow(S), here), PAGE.alertHtml('bad', 'Not loaded:', ['x&lt;1&gt;.tif: not a TIFF.'], 'sem-dismiss-invalid') + PAGE.alertHtml('info', 'Already loaded, not loaded again:', ['b.tif.'], 'sem-dismiss-upload'));
+  M.setAlerts(S, { warn: [{ id: b.raw.id, html: 'b.tif: w.' }] });
+  assert.equal(H.alertsHtml(HU, M.alertsNow(S), here), PAGE.alertHtml('bad', 'Not loaded:', ['x&lt;1&gt;.tif: not a TIFF.'], 'sem-dismiss-invalid')
+    + PAGE.alertHtml('warn', 'Loaded, to check:', ['b.tif: w.'], 'sem-dismiss-warn') + PAGE.alertHtml('info', 'Already loaded, not loaded again:', ['b.tif.'], 'sem-dismiss-upload'), 'error, warning, info');
+  M.setAlerts(S, { warn: [{ id: 'gone', html: 'w' }] });
   M.dropAlertsOf(S, b.raw.id);
   assert.equal(H.alertsHtml(HU, M.alertsNow(S), here), '');
   assert.equal(M.alertsNow(S).warn.length, 1);
@@ -434,7 +440,7 @@ test('the markup: the Image box, the groups, the alerts and the options, every n
   for (let k = 0; k < 40; k++){ S.line = 100 + k; M.setAlerts(S, { dup: [{ id: 'x', html: 'x' }] }); }
   assert.equal(S.alertsOf.size, 32);
   assert.equal(M.faultText({ kind: 'RangeError', fault: 'x' }), 'too large for the memory this page has');
-  assert.equal(M.faultText({ kind: 'TypeError', fault: 'bad <x>' }), 'not read (bad <x>)');
+  assert.equal(M.faultText({ kind: 'TypeError', fault: 'bad <x>' }), 'could not be read: bad <x>');
   assert.deepEqual([M.magText({ mag: 12345 }), M.magText({ mag: 400 }), M.magText({ mag: 0 }), M.sig(NaN, 3), M.sig(0.000123456, 3)], ['12.3 kx', '400 x', '', '—', '0.000123']);
 });
 

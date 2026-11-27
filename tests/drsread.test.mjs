@@ -10,7 +10,7 @@
      spaces splits, "% R" and "Wavelength nm" among them), the decimal mark and the quotes,
      an empty or another column between them or the two the other way round, a title
      whose words name both above the header, a footer under the data;
-   - no such columns, or not one way only: refused ("Invalid file(s)"), the reason said,
+   - no such columns, or not one way only: refused ("Not loaded:"), the reason said,
      escaped: no header (two bare columns of numbers, to v509 read as F(R); DataTreat's own
      reflectance_FR.csv, its columns named by the sample), no F(R) or %R column, the
      wavelength in another unit ("(eV)", "in eV", its words under spaces too), two columns
@@ -106,13 +106,13 @@ test('any other format: said, and read from the columns its header names', async
     await drop(page, [...Object.entries(files).map(([n, [t]])=> file(n, t)), file('footer.csv', 'Wavelength (nm),%R,\r\n' + cary.buffer.toString('utf8').split('\r\n').slice(2).join('\r\n'))]);
     const st = await moduleState(page, 'tauc', true), by = Object.fromEntries(st.files.map(f=> [f.name, f]));
     const alerts = await page.locator('#taucAlerts').innerText();
-    assert.doesNotMatch(alerts, /Invalid/);
+    assert.doesNotMatch(alerts, /Not loaded/);
     for (const [n, [, k]] of Object.entries(files)){
       assert.ok(by[n], n + ' not loaded');
       assert.deepEqual([by[n].warn, by[n].read, by[n].head], k === 'R' ? [true, 'R%', undefined] : [true, undefined, true], n);
       assert.deepEqual(by[n].wl, D.map(r=> +r[0]), n + ': wavelengths');
       by[n].FR.forEach((v, i)=>{ const F = +D[i][1]; assert.ok(Math.abs(v - F) < 1e-4*Math.max(1, F), `${n}: F(R) at ${D[i][0]} nm, ${v} for ${F}`); });
-      assert.match(alerts, new RegExp('^' + n.replace('.', '\\.') + ': ' + (k === 'R' ? WARN_R : WARN_F).replace(/[()]/g, '\\$&') + '$', 'm'), n);
+      assert.match(alerts, new RegExp('^' + n.replace('.', '\\.') + ': ' + (k === 'R' ? WARN_R : WARN_F).replace(/[()]/g, '\\$&') + '\\.$', 'm'), n);
     }
     assert.deepEqual([by['footer.csv'].wl, by['footer.csv'].read, by['footer.csv'].warn], [cary.wl, 'R%', true]);
     by['footer.csv'].FR.forEach((v, i)=>{ const R = cary.R[i]/100; assert.ok(Math.abs(v - (1 - R)**2/(2*R)) <= 1e-12*Math.max(1, v)); });
@@ -156,7 +156,7 @@ test('no columns found, or not one way only: refused, and why said, escaped', as
     await drop(page, [file('ref.csv', ref), ...files.map(([n, t])=> file(n, t))]);
     assert.deepEqual((await moduleState(page, 'tauc')).files.map(f=> f.name), ['ref.csv']);
     const alerts = await page.locator('#taucAlerts').innerText();
-    assert.equal(alerts.trim(), '✕ Invalid file(s):\n' + files.map(([n, , why])=> `${n} (${why})`).join('\n'));
+    assert.equal(alerts.trim(), '✕ Not loaded:\n' + files.map(([n, , why])=> `${n}: ${why}.`).join('\n'));
     assert.deepEqual(await injected(page), [], 'no element made from a header or a name');
     assert.deepEqual(errors, []);
   } finally { await close(); }
@@ -184,7 +184,7 @@ test('a project saved before, holding a file read with no header: opened as it w
     const s = await moduleState(page, 'tauc', true);
     assert.deepEqual(s.files.map(f=> [f.name, f.wl.length, f.warn, f.read, f.head]), [['ref.csv', 551, false, undefined, undefined], ['noheader.csv', 300, true, undefined, undefined]]);
     assert.deepEqual(s.files[1].FR, D.slice(0, 300).map(r=> +r[1]));
-    assert.match(await page.locator('#taucAlerts').innerText(), /^⚠ Verify how these files were read:\s*noheader\.csv: no header naming the columns F\(R\) or R%: read as F\(R\)\s*$/);
+    assert.match(await page.locator('#taucAlerts').innerText(), /^How these files were read:\s*noheader\.csv: no header naming the columns F\(R\) or R%: read as F\(R\)\.\s*$/);
     assert.deepEqual(await page.$$eval('#taucFileTableWrap td.note-cell [title]', s=> s.map(e=> e.title)), ['second column read as F(R)', 'second column read as F(R), with no header naming it']);
     assert.deepEqual(errors, []);
   } finally { await close(); }

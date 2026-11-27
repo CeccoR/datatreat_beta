@@ -297,8 +297,7 @@ function wakeLater(t){
     t.state = s; t.hist = h && { ...h, states };
     const p = wakeTab(t, _onFixed);
     const n = [...refsIn(st)].filter(x=> lost.has(x)).length;
-    if (n) notice(name + n + (n > 1 ? ' of its files are' : ' of its files is') + ' not stored in this browser any more: it comes back without '
-      + (n > 1 ? 'them.' : 'it.'));
+    if (n) notice(notStored(t.title || UNTITLED, n, 'it comes back'));
     return p;
   });
 }
@@ -472,6 +471,12 @@ async function underLoader(fn){
 
 // A banner that asks nothing, shown once none is on show: confirmBanner shows one at a
 // time, and a new one would answer a question asked (a delete, a close) with no.
+/* A project's files whose bytes are not stored in this browser any more, said one way
+   wherever (v567: to v566 five sentences): `then` what happens to it ('it comes back', 'it
+   opens', 'the file holds them'). */
+function notStored(title, n, then){
+  return `“${title}”: ${n} of its files ${n > 1 ? 'are' : 'is'} not stored in this browser any more: ${n > 1 ? then : then.replace(/\bthem$/, 'it')} without ${n > 1 ? 'their' : 'its'} bytes.`;
+}
 function notice(msg){
   const go = ()=>{ if (document.querySelector('.pwa-confirm')) setTimeout(go, 400); else confirmBanner(msg, 'OK'); };
   go();
@@ -829,8 +834,7 @@ async function initTabs(){
   // bytes: read as it wakes, lighten; its files not stored are said then)
   try { ({ recs, states, missing } = await allTabStates(r=> dropsBytes(r.module) && !r.active)); }
   catch(e){ notice('Your open tabs could not be read from this browser\'s storage: they are kept as they are for the next load.'); }
-  if (missing) notice(missing + (missing > 1 ? ' files' : ' file') + ' of your open tabs ' + (missing > 1 ? 'are' : 'is')
-    + ' not stored in this browser any more: ' + (missing > 1 ? 'they come' : 'it comes') + ' back without the original bytes.');
+  if (missing) notice(`Your open tabs: ${missing} of their files ${missing > 1 ? 'are' : 'is'} not stored in this browser any more: ${missing > 1 ? 'they come back without their' : 'it comes back without its'} bytes.`);
   // (each its order and what it showed as its record holds them, or as this window kept it as
   // it went, newer, and what its record holds of its place, its being on show and what it
   // shows: rec, recShows, the records written again only where those change)
@@ -906,5 +910,5 @@ async function initTabs(){
 export { TABS, UNTITLED, activeTab, tabById, tabByProject, openTab, activateTab,
          closeTab, setTabTitle, setTabDirty, setTabProject, renderTabs,
          onTabActivated, onTabLoaded, onCloseSave, initTabs, persistTab, persistMoved, isRestoring,
-         isLive, ensureLive, notice, tabOf, stateOf, isEmpty,
+         isLive, ensureLive, notice, notStored, tabOf, stateOf, isEmpty,
          keepLimits as sleepTick, tabsNow, underLoader };

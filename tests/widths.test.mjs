@@ -196,7 +196,7 @@ test('XRPD: a project to v510 at different steps: those chips to one, a width ea
     [S0, SH].forEach((st, i)=>{ near(sc.perParams[i].smoothW, 10*st, 1e-15, 'smoothing ' + i); near(sc.perParams[i].snipW, 150*st, 1e-13, 'SNIP ' + i); assert.equal(sc.perParams[i].blOn, true); });
     near(sc.shared.smoothW, 10*SH, 1e-15, 'the shared value at the median step');
     assert.deepEqual(await page.$$eval('#xrdA1ModeN, #xrdA1ModeBl', cs=> cs.map(c=> c.textContent)), ['one', 'one']);
-    assert.match(await page.textContent('#xrdA1StepNote'), /different steps: the smoothing and SNIP width, set in points up to v510, are kept as they were, a width for each pattern \(one\)\. Set one width in all/);
+    assert.match(await page.textContent('#xrdA1StepNote'), /different steps: the smoothing and SNIP width, set in points by an older version, are kept as they were, a width for each pattern \(one\)\. Set one width in all/);
     const c = await csvs(page);
     for (const [lab, want] of Object.entries(V509)){
       const f = fwhms(c, lab);
@@ -210,7 +210,7 @@ test('XRPD: a project to v510 at different steps: those chips to one, a width ea
     sc = xrdShared(await moduleState(page, 'xrd'));
     assert.deepEqual([sc.paramMode.N, sc.stepNote], ['shared', ['blWin']]);
     near(sc.shared.smoothW, 10*SH, 1e-15, 'the width on show, shared');
-    assert.match(await page.textContent('#xrdA1StepNote'), /the SNIP width, set in points up to v510, is kept as it was/);
+    assert.match(await page.textContent('#xrdA1StepNote'), /the SNIP width, set in points by an older version, is kept as it was/);
     await page.click('#xrdA1StepNote [data-step-x]'); await settle(page);
     assert.equal(await page.textContent('#xrdA1StepNote'), '');
     assert.equal(xrdShared(await moduleState(page, 'xrd')).stepNote, undefined);

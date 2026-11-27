@@ -172,6 +172,12 @@ was proposed; nothing here is in the code yet.
   others need windows of their own, as the Python's N₂ window (321–346 s, with the system
   peak at 340 s). With more windows, the chromatogram's initial view and its zoom reset
   (today the H₂/O₂ zone) may change.
+- **Negative rates: said, or hidden? (a question for the user, U5 of ALERTS-REVIEW.md).**
+  A sample whose production falls over its interval (a reading lower at the end than at
+  the start) has a negative mean rate, drawn as a negative bar with no word, where DRS warns
+  of a negative E_g. Whether that is a real consumption or an artefact (a leak, a drift of
+  the baseline) is the user's call: a warning like DRS's, the bar hidden, or as it is.
+  Decided for v567: no new message; left as it is until the user says.
 
 ## EPR
 
@@ -192,13 +198,15 @@ was proposed; nothing here is in the code yet.
 
 ## General
 
-- **Warnings and errors, reviewed by kind.** A map of every message the app shows (276,
-  made from the code at v540) proposes for each one: keep, make it error / warn / info
-  (the info kind is new in v539), merge it with another that says the same, or drop it.
-  It also lists where the modules say the same thing differently.
-  `ALERTS-REVIEW.md` keeps the 79 proposed changes and the inconsistencies, in Italian.
-  Waiting on the user's choices; the full map is to be made again from the code when this
-  is taken up, its line numbers having moved.
+- **Warnings and errors, reviewed by kind.** The map of every message the app shows was
+  made again from the code at v565 (331 entries) and the rules agreed (R1–R4: a kind for
+  what happened to the data, a place, a duration, the words). `ALERTS-REVIEW.md` (in
+  Italian) keeps the rules, the decisions and the changes, each with its state. Done in
+  v567: a file that cannot be read refused with why in every module, the rest of the drop
+  loaded; the alerts under every drop zone and the banners in the same words. Left: the
+  cards and the status lines (phase 3: XRPD's instrument line, CIF and refinement notes,
+  GC's Integration card, the fields refused), then the alerts' × kept per file through undo
+  and redo and the Rietveld warnings' kinds in the saved results (phase 4).
 
 - **Long functions.** A handful of functions run to hundreds of lines: `createRietveld`
   (xrd-rv.js, ~1300), `createPeakAnalysis` (xrd-peaks.js, ~1100), `autoRefine`
@@ -801,17 +809,6 @@ was proposed; nothing here is in the code yet.
   note says "The CIF lists no symmetry operations for : …" and the symbol counts as named
   (the no-operations test then runs on it). Proposed: a blank symbol (as a blank Hall
   symbol or name) read as none. Left as it is meanwhile (a visible change).
-- **Iodometry: a file whose bytes cannot be read ends the whole drop (found in v563, as
-  v562 has it).** The drop reads each file's bytes (`file.arrayBuffer()`, iodo.js `onDrop`)
-  outside the guard that refuses a file it cannot read: a file gone from the disk after it
-  was picked (or any other read error) rejects the drop's promise, an unhandled rejection
-  (a page error). The traces of the files read before it are in the module but nothing of
-  them is drawn (the list and the cards as they were before the drop), no alert says why,
-  no step is taken; the files after it are not read; the traces show at the next change (checked on v562 in the
-  browser: three files, the second's read failing: no row, one trace in the state, one
-  history entry; the next drop shows two rows). XRPD and EPR refuse such a file with the
-  reason and load the others. Proposed: the read inside the guard, the file refused with
-  why. Left as it is meanwhile (a visible change).
 - **A card's kinds' menu left open through an undo (found in v562, as v561 has it).** A
   card's title opens the kinds' menu; Ctrl+Z (or Ctrl+Y) while it is open loads the step
   without closing it, and a kind then picked in it switches the record the menu was opened

@@ -5,7 +5,7 @@
    it), the groups' boxes, the options of the settings' scope and of the reference, and the
    chain on a thumbnail. Taken out of v557's sem.js as they were: the same markup to the
    byte.
-   What they need from the page is handed in, u = { esc, buildAlertsHtml } (utils.js's:
+   What they need from the page is handed in, u = { esc, fileAlertHtml } (utils.js's:
    sem.js HU).
 ========================================================= */
 import { sig, magText, byId, inFigure } from './sem-model.js';
@@ -14,19 +14,25 @@ import { sig, magText, byId, inFigure } from './sem-model.js';
 export const LINK_SVG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5"/></svg>';
 
 /* ---- Alerts ---- */
-// A file in the alerts: its name, and what is said of it.
-export const fileLine = (u, name, why) => `${u.esc(name)} — ${u.esc(why)}`;
+// A file in the alerts: its name, and what is said of it, a full stop after (utils.js
+// fileLine; to v566 "{name} — {why}").
+export const fileLine = (u, name, why) => `${u.esc(name)}: ${u.esc(why)}${/[.?!]$/.test(why) ? '' : '.'}`;
 /* The alerts of a line (sem-model.js alertsNow: A) about the files in the list now (their
    ids, here): each about files, those it names (an image loaded with a warning, the image
    a file dropped is a copy of), or, for the refused and the unreadable, which name files
-   never loaded, those in the list when it was made (none: while the list is empty). */
+   never loaded, those in the list when it was made (none: while the list is empty). One
+   box a kind (utils.js FILE ALERTS), in the order error, warning, info: the files refused
+   (or, a project opened, those left out: `A.bad.opened`, a warning), those loaded to
+   check, those already loaded. */
 export function alertsHtml(u, A, here){
   const dup = A.dup.filter(a=> here.has(a.id)), warn = A.warn.filter(a=> here.has(a.id));
   const bad = A.bad && (A.bad.ids.length ? A.bad.ids.some(id=> here.has(id)) : !here.size);
-  return (bad ? u.buildAlertsHtml(A.bad.names, [], undefined, 'sem-dismiss-invalid') : '')
-    + (dup.length ? u.buildAlertsHtml([], dup.map(a=> a.html), 'Already loaded:', '', 'sem-dismiss-upload') : '')
-    + (warn.length ? u.buildAlertsHtml([], warn.map(a=> a.html), 'Loaded, but check:', '', 'sem-dismiss-warn') : '');
+  return (bad ? u.fileAlertHtml(A.bad.opened ? 'opened' : 'bad', A.bad.names, 'sem-dismiss-invalid') : '')
+    + u.fileAlertHtml('check', warn.map(a=> a.html), 'sem-dismiss-warn')
+    + u.fileAlertHtml('dup', dup.map(a=> a.html), 'sem-dismiss-upload');
 }
+// The images a project opened left out, their bytes no longer reading as a Tescan TIFF.
+export const lostLine = n => `${n} file${n > 1 ? 's' : ''} left out: ${n > 1 ? 'their' : 'its'} stored bytes no longer read.`;
 
 /* ---- The Image box ----
    An image's header (r: sem-read.js readTescanTiff's numbers), its crop, and what the
@@ -47,7 +53,8 @@ export function infoHtml(u, f, r, o){
   ];
   // The crop, and what the figure takes of it in its group (narrowed, at its pixel).
   const c = f.crop, um = v => sig(v*r.pixelNm/1000, 4);
-  rows.push(['Crop', `${esc(c.w)} × ${esc(c.h)} px, ${um(c.w)} × ${um(c.h)} µm${f.clamped ? ' ⚠ narrowed to fit' : ''}`]);
+  // (narrowed to fit the image: an info, v567; to v566 "⚠")
+  rows.push(['Crop', `${esc(c.w)} × ${esc(c.h)} px, ${um(c.w)} × ${um(c.h)} µm${f.clamped ? ' <span class="sem-note-info">ⓘ narrowed to fit</span>' : ''}`]);
   if (o) rows.push(['In the figure', `${esc(o.w)} × ${esc(o.h)} px at ${sig(o.px, 4)} nm${o.c.w !== c.w || o.c.h !== c.h ? `, ${um(o.c.w)} × ${um(o.c.h)} µm of the crop` : ''}`]);
   return rows.map(([k, v])=> `<div class="sem-info-row"><span class="txt-meta">${k}</span><span>${v}</span></div>`).join('')
     + (r.warning ? `<div class="alert warn" style="margin-top:8px">⚠ ${esc(r.warning)}</div>` : '');

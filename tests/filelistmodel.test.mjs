@@ -141,12 +141,12 @@ export function runCase(c){
   const o = { html: H.listHtml(files, cb, note, c.head, nIn, U), indeterminate: nIn > 0 && nIn < n, includeAll: nIn < n };
   o.dl = files.map(f=>{
     const d = M.downloadOf(U, f);
-    if (d.missing) return ['alert', 'The original file for “' + d.name + '” is not available.'];
+    if (d.missing) return ['banner', '“' + d.name + '”: its original bytes are not stored in this browser any more: it cannot be downloaded.'];
     if (d.one) return d.one.bytes != null ? ['bytes', d.one.name, d.one.bytes] : ['blob', d.one.name, d.one.text];
     return ['zip', d.zip, d.entries];
   });
   const all = M.zipEntries(U, files);
-  o.all = all.length ? ['zip', 'files.zip', all] : ['alert', 'No original files are available to download.'];
+  o.all = all.length ? ['zip', 'files.zip', all] : ['banner', 'None of these files has its original bytes stored: nothing to download.'];
   o.drags = files.map((_, from)=> Array.from({ length: n + 1 }, (_, g)=> M.gapFor(g, from) == null ? null : [from, M.landing(g, from)]));
   return canon(o);
 }

@@ -68,7 +68,7 @@ function decl(file, name){
   if (m && /^[}\])]/.test(rest.slice(end + 1))) end = rest.indexOf('\n', end + 1);
   return rest.slice(0, end).replace(/^export /, '');
 }
-const UN = ['esc', 'fmtNum', 'csvField', 'csvJoin', 'csvLine', 'X_SVG', 'ALERT_ICON', 'alertHtml', 'exactKey', '_bytesKey', 'bytesKey'];
+const UN = ['esc', 'fmtNum', 'csvField', 'csvJoin', 'csvLine', 'X_SVG', 'ALERT_ICON', 'alertHtml', 'FILE_ALERT', 'fileAlertHtml', 'exactKey', '_bytesKey', 'bytesKey'];
 const KN = ['isObj', 'num', 'oneOf'], CN = ['PLOT_DL_ICON', 'plotWrap', 'chipRow'];
 const settings = { decimal: '.', field: ';' };
 const PAGE = new Function('settings', [...UN.map(n=> decl('utils.js', n)), ...KN.map(n=> decl('modkit.js', n)), ...CN.map(n=> decl('modcharts.js', n)),
@@ -78,7 +78,7 @@ const ids = new WeakMap();
 let nid = 0;
 const objId = o => o == null || typeof o !== 'object' ? String(o) : ids.get(o) || (ids.set(o, ++nid), nid);
 const U = { isObj: PAGE.isObj, oneOf: PAGE.oneOf, num: PAGE.num, esc: PAGE.esc, exactKey: PAGE.exactKey, bytesKey: PAGE.bytesKey, objId, fmtNum: PAGE.fmtNum, csvLine: PAGE.csvLine, niceTicks: PAGE.niceTicks };
-const HU = { esc: PAGE.esc, alertHtml: PAGE.alertHtml, X_SVG: PAGE.X_SVG, snavHtml: PAGE.snavHtml, plotWrap: PAGE.plotWrap, chipRow: PAGE.chipRow, PLOT_DL_ICON: PAGE.PLOT_DL_ICON };
+const HU = { esc: PAGE.esc, alertHtml: PAGE.alertHtml, fileAlertHtml: PAGE.fileAlertHtml, X_SVG: PAGE.X_SVG, snavHtml: PAGE.snavHtml, plotWrap: PAGE.plotWrap, chipRow: PAGE.chipRow, PLOT_DL_ICON: PAGE.PLOT_DL_ICON };
 const GASES = GM.GASES.map(g=> ({ key: g.key, label: g.label, txt: GM.gasTxt(g), csv: g.csv, color: g.bar }));
 export const canon = v => JSON.stringify(v, function(k, x){ const o = this[k];
   if (o instanceof Date) return 'D' + o.getTime();
@@ -288,7 +288,7 @@ test('the results taken in, saved and written into the states that hold their fi
   // read once per file, by its bytes; a table read so too; primed
   const d = M.dataOf(S, all[0].mate);
   assert.equal(M.dataOf(S, all[0].mate), d);
-  assert.deepEqual(M.dataOf(S, { rawBytes: null }), { error: 'its bytes are not stored in this browser' });
+  assert.deepEqual(M.dataOf(S, { rawBytes: null }), { error: 'its bytes are not stored in this browser any more' });
   assert.match(M.dataOf(S, all[2]).error, /does not increase/);
   const b = new Uint8Array([1]); M.prime(S, b, { t: [], cols: [] }); assert.deepEqual(M.dataOf(S, { rawBytes: b }), { t: [], cols: [] });
   const t = M.tableOf(S, BYTES['standards.csv']);
@@ -352,7 +352,7 @@ test('the entries, their results and names; the concentrations; what Analysis ta
   const conv = M.convAll(U, S, C, run, rr);
   assert.equal(conv.h2.how, 'transfer'); near(conv.h2.f(1000), 1000/conv.h2.k, 1e-15, 'A/k');
   assert.match(M.convAll(U, S, C, es[2], M.resOf(U, S, C, es[2].tcd).res).h2.why, /too few injections above the threshold/);
-  assert.match(M.convAll(U, S, C, es[4], []).o2.why, /no standards for O₂ and no table/);
+  assert.match(M.convAll(U, S, C, es[4], []).o2.why, /^no standards for O₂, and no GC table for the GC software's scale \(k\)$/);
   // the standards: their names (Analysis, its number where blank, a column without a table), rows and lines, in %mol and ppm
   C.cal = M.calIn(U, { files: [{ name: 'standards_TCD.csv', rawBytes: BYTES['standards_TCD.csv'], table: { name: 'standards.csv', rawBytes: BYTES['standards.csv'] },
     levels: [{ h2: 0.05 }, { h2: 0.1 }, { h2: 0.2 }, { o2: 0.02 }, { o2: 0.05 }, { o2: 0.1, on: false }] }, { name: 'old (1)_TCD.csv', rawBytes: BYTES['old (1)_TCD.csv'], levels: [] }] });
@@ -377,7 +377,7 @@ test('the entries, their results and names; the concentrations; what Analysis ta
   assert.equal(M.valuesFor(U, S, C, all[0]), v, 'kept while nothing changes');
   near(v.gas.h2[1], M.convOf(U, S, C, 'h2', [], null).f(v.areas.h2[1]), 1e-12, 'a sample\'s H₂');
   assert.equal(M.valuesFor(U, S, C, all[8]), null);
-  assert.deepEqual(M.valuesFor(U, S, C, all[1]), { why: '12 rows in the table, 11 chromatograms' });
+  assert.deepEqual(M.valuesFor(U, S, C, all[1]), { why: '12 injections in the table, 11 chromatograms', integ: true });
   C.method = ALT_M;
   assert.deepEqual(M.valuesFor(U, S, C, all[0]), res[M.keyOf(U, all[0].mate, ALT_M)] ? M.valuesFor(U, S, C, all[0]) : { why: 'its integration is not done yet', waiting: true });
   S.halted = true; if (!res[M.keyOf(U, all[0].mate, ALT_M)]) assert.equal(M.valuesFor(U, S, C, all[0]).why, 'its integration was stopped before its end');
@@ -459,7 +459,8 @@ test('the status, the alerts\' facts, the CSVs; the calibration window\'s files 
   const noneS = instance([], cards); assert.equal(M.progressOf(U, noneS.S, noneS.card(cards[0])).state, 'none');
   // the alerts' facts: unreadable, a count that differs, two raw chromatograms paired, alone; transfer
   const f = M.alertFacts(U, S, C);
-  assert.deepEqual([f.errs.map(e=> e.name), f.warn.map(w=> [w.kind, w.e.name]), f.transfer], [['broken_TCD.csv'], [['rows', 'short_TCD.csv'], ['twin', 'twinA_TCD.csv'], ['twin', 'twinB_TCD.csv'], ['alone', 'lone_TCD.csv']], true]);
+  // (v567: the GC software's scale is said by the Production Rate cards, gc-html.js srcAlertsHtml)
+  assert.deepEqual([f.errs.map(e=> e.name), f.warn.map(w=> [w.kind, w.e.name]), f.transfer], [['broken_TCD.csv'], [['rows', 'short_TCD.csv'], ['twin', 'twinA_TCD.csv'], ['twin', 'twinB_TCD.csv'], ['alone', 'lone_TCD.csv']], undefined]);
   // integration.csv: every chromatogram's values; chromatogram.csv: the whole chromatogram, the model blank outside its window
   const es = M.entriesOf(S), csv = M.integrationCsv(U, S, C, es).split('\n');
   assert.equal(csv[0], 'File;Table;Injection;Injection date;H2 area;H2 area sd;H2 apex (s);H2 chi2r;H2 (%mol);H2 source;H2 table (%mol);H2 suspicious;O2 area;O2 area sd;O2 apex (s);O2 chi2r;O2 (%mol);O2 source;O2 table (%mol);O2 suspicious;Flags');
@@ -476,20 +477,21 @@ test('the status, the alerts\' facts, the CSVs; the calibration window\'s files 
   // the calibration window: a file told by what it holds
   const T = M.takeDropped(S, 'x_TCD.csv', BYTES['standards_TCD.csv']), Tb = M.takeDropped(S, 'b.csv', BYTES['broken_TCD.csv']);
   assert.deepEqual([T.kind, T.d.cols.length, Tb.bad, M.takeDropped(S, 'n.csv', BYTES['notext.csv']).bad, M.takeDropped(S, 'h.csv', BYTES['nothing.csv']).bad.slice(0, 40), M.takeDropped(S, 's.csv', BYTES['standards.csv']).kind],
-    ['tcd', 6, 'b.csv: raw chromatograms that cannot be read (The time does not increase at line 2 (1 s).)', 'n.csv: neither raw chromatograms nor a GC table (not a GC table (no injection date and H₂ or O₂ column under a header))', 'h.csv: neither raw chromatograms nor a G', 'table']);
+    ['tcd', 6, 'b.csv: raw chromatograms that cannot be read: The time does not increase at line 2 (1 s).', 'n.csv: neither raw chromatograms nor a GC table: no injection date and H₂ or O₂ column under a header.', 'h.csv: neither raw chromatograms nor a G', 'table']);
   const take = names => names.map(n=> M.takeDropped(S, n, new Uint8Array(BYTES[n])));
   // a lone file waits; its partner pairs it; counts that differ refused; already loaded; an old calibration named, a count that differs for it
   let cal = M.calIn(U, null), bad = [], P = M.pairDropped(S, cal, [], take(['standards_TCD.csv']), bad);
-  assert.deepEqual([P.add.length, P.held.map(x=> x.name), bad], [0, ['standards_TCD.csv'], ['standards_TCD.csv: raw chromatograms without their GC table (the same name without _TCD, .csv or .txt): drop the table too (this file waits here for it)']]);
+  assert.deepEqual([P.add.length, P.held.map(x=> x.name), bad], [0, ['standards_TCD.csv'], ['standards_TCD.csv: raw chromatograms without their GC table: drop the table too, the same name without _TCD (.csv or .txt); this file waits here for it.']]);
   bad = []; P = M.pairDropped(S, cal, P.held, take(['standards.csv', 'stds2.csv', 'stds2_TCD.csv', 'old.csv']), bad);
   assert.deepEqual([P.add.map(f=> [f.name, f.table.name, f.levels.length]), P.held.map(x=> x.name)], [[['standards_TCD.csv', 'standards.csv', 6]], ['old.csv']]);
-  assert.deepEqual(bad, ['stds2.csv + stds2_TCD.csv: 5 injections in the table, 6 chromatograms: they must be as many (a name a chromatogram), nothing integrated',
-    'old.csv: a GC table without its raw chromatograms (the same name with _TCD): drop them too (this file waits here for them)']);
+  assert.deepEqual(bad, ['stds2.csv + stds2_TCD.csv: 5 injections in the table, 6 chromatograms: they must be as many, a name for each chromatogram: nothing integrated.',
+    'old.csv: a GC table without its raw chromatograms: drop them too, the same name with _TCD; this file waits here for them.']);
   assert.ok(S.read.has(P.add[0].rawBytes), 'its read primed');
   cal = M.calWith(cal, P.add, P.named);
   cal.files.push({ name: 'old (1)_TCD.csv', rawBytes: BYTES['old (1)_TCD.csv'], levels: [] });
-  bad = []; M.pairDropped(S, cal, [], take(['old (2).csv', 'standards.csv']), bad);
-  assert.deepEqual(bad, ['standards.csv: already loaded', 'old (2).csv + old (1)_TCD.csv: 3 injections in the table, 4 chromatograms: they must be as many (a name a chromatogram), nothing integrated']);
+  bad = []; P = M.pairDropped(S, cal, [], take(['old (2).csv', 'standards.csv']), bad);
+  // (v567: those loaded already apart, an info of their own)
+  assert.deepEqual([bad, P.dup], [['old (2).csv + old (1)_TCD.csv: 3 injections in the table, 4 chromatograms: they must be as many, a name for each chromatogram: nothing integrated.'], ['standards.csv']]);
   bad = []; P = M.pairDropped(S, cal, [], take(['old.csv']), bad);
   assert.deepEqual([P.named.map(x=> [x.fi, x.table.name]), bad], [[[1, 'old.csv']], []]);
   const named = M.calWith(cal, P.add, P.named);
@@ -529,7 +531,7 @@ test('the markup: the instructions, the card\'s and the window\'s bodies, Window
   const vh = H.valuesHtml(HU, gasOf, { R: { stale: true }, conv, gs: ['h2'], unitOf: ()=> '%mol', units: ['%mol'], tUnit: '%mol', aligned: true, keys: ['h2', 'o2'], fl: ['χ²ᵣ <9>'],
     rows: [{ g: 'h2', x: { area: 1234.5678, sd: 2.345, tApex: 287.345, chi2r: 5.5 }, shown: 0.123456, tShown: 0.12, off: true }] });
   assert.ok(vh.includes('<td class="gci-bad" title="Out of proportion with the GC table">1234.6 ± 2.3</td>') && vh.includes('<td>287.35</td><td class="gci-bad">5.50</td><td>0.1235</td><td>0.1200</td>'));
-  assert.ok(vh.includes('Conc. and GC table in %mol.') && vh.includes('Concentration from the GC software\'s table: k = 41235 area per %mol (H<sub>2</sub>, median of 12 injections).'));
+  assert.ok(vh.includes('Conc. and GC table in %mol.') && vh.includes('Concentration from the GC software\'s scale (k): k = 41235 area per %mol (H<sub>2</sub>, median of 12 injections).'));
   assert.ok(vh.includes('⚠ Suspicious: χ²ᵣ &lt;9&gt;') && vh.includes('O₂: none &lt;x&gt;.') && vh.endsWith('(the previous method\'s)</p>'));
   // the status, the alerts, the notices, the legends
   const st = { job: { done: 2, total: 5, name: 'a<b>' }, failed: 'f<x>' };
@@ -537,10 +539,13 @@ test('the markup: the instructions, the card\'s and the window\'s bodies, Window
   assert.deepEqual(['failed', 'stopped', 'soon', 'left', 'done', 'none'].map(s=> H.statusHtml(HU, { st, left: 1, state: s })), ['<span class="gci-bad">The integration failed: f&lt;x&gt;</span>', '<span>Stopped: 1 chromatogram not integrated with this method.</span>',
     '<span>Method changed: integrating again in a moment…</span>', '<span>1 chromatogram to integrate.</span>', '', '<span class="txt-meta">No raw chromatograms (TCD) loaded: drop them beside their tables.</span>']);
   const e = { label: 'L<b>', rows: 3, n: 1, tcd: { name: 't<i>' }, twin: 'w&', d: { error: 'e<>' } };
-  const ah = H.alertsHtml(HU, gasOf, { errs: [e], warn: [{ kind: 'rows', e }, { kind: 'twin', e }, { kind: 'alone', e }, { kind: 'out', e, g: 'o2', out: 2, n: 5, lo: 0.02, hi: 0.1, below: true, L: { intercept: -123.456 } }], transfer: true });
-  for (const s of ['t&lt;i&gt;: e&lt;&gt;', 'L&lt;b&gt;: 3 rows in the table, 1 chromatogram: not aligned.', '(t&lt;i&gt;, w&amp;)', 'L&lt;b&gt;: raw chromatograms with no table',
-    'L&lt;b&gt;: 2 of 5 injections\' O<sub>2</sub> outside the standards\' range (0.02–0.1 %mol): extrapolated, below the lowest standard, where the intercept (-123.5) weighs most.', 'Calibration taken from the GC software\'s table']) assert.ok(ah.includes(s), s);
-  assert.equal(H.alertsHtml(HU, gasOf, { errs: [], warn: [], transfer: false }), '');
+  const ah = H.alertsHtml(HU, gasOf, { errs: [e], warn: [{ kind: 'rows', e }, { kind: 'twin', e }, { kind: 'alone', e }, { kind: 'out', e, g: 'o2', out: 2, n: 5, lo: 0.02, hi: 0.1, below: true, L: { intercept: -123.456 } }] });
+  for (const s of ['t&lt;i&gt;: e&lt;&gt;', 'L&lt;b&gt;: 3 injections in the table, 1 chromatogram: not aligned: integrated all the same; Analysis uses the table alone.',
+    'L&lt;b&gt;: 2 of 5 injections\' O<sub>2</sub> outside the standards\' range (0.02–0.1 %mol): extrapolated, below the lowest standard, where the intercept (-123.5) weighs most.']) assert.ok(ah.includes(s), s);
+  // (v567: raw chromatograms with no table, or paired with raw chromatograms, a grey line here; to
+  // check under the drop zone; the GC software's scale said by the Production Rate cards)
+  assert.ok(ah.endsWith('<p class="txt-meta gci-shown">L&lt;b&gt;: shown here, no injection times.</p><p class="txt-meta gci-shown">L&lt;b&gt;: shown here, no injection times.</p>') && !ah.includes('(t&lt;i&gt;, w&amp;)') && !ah.includes('software'), ah);
+  assert.equal(H.alertsHtml(HU, gasOf, { errs: [], warn: [] }), '');
   assert.equal(H.notTakenHtml(HU, 'x<y'), PAGE.alertHtml('warn', 'Not taken:', ['x&lt;y']));
   const o = { d: { error: 'bad<' }, file: 'f<', what: 'w<' };
   assert.deepEqual([H.pairNotice(HU, o, { fail: 'read' }), H.pairNotice(HU, { d: null }, { fail: 'read' }), H.pairNotice(HU, o, { fail: 'empty' }), H.pairNotice(HU, o, { r: null, R: {} }), H.pairNotice(HU, o, { r: {}, R: { stale: true } }), H.pairNotice(HU, o, { r: {}, R: {} })],
@@ -552,12 +557,12 @@ test('the markup: the instructions, the card\'s and the window\'s bodies, Window
   assert.equal(H.overLegendHtml({ G: gasOf('h2'), bad: [false, true], table: [1], mode: 'area' }, '#f', '#b'), '<span><i class="gci-mk gci-mk-dot" style="color:#f"></i>H₂ fit</span><span><i class="gci-mk gci-mk-dot" style="color:#b"></i>suspicious</span><span><i class="gci-mk gci-mk-x"></i>GC table × k</span>');
   // the window's files, warning, status, rows, fit, lines
   assert.equal(H.dropAlertHtml(HU, []), '');
-  assert.equal(H.dropAlertHtml(HU, ['a<b']), PAGE.alertHtml('bad', 'Not loaded:', ['a&lt;b']));
+  assert.equal(H.dropAlertHtml(HU, ['a<b: why.'], ['c<']), PAGE.alertHtml('bad', 'Not loaded:', ['a&lt;b: why.']) + PAGE.alertHtml('info', 'Already loaded, not loaded again:', ['c&lt;.']));
   const files = [{ name: 'f<1>', table: { name: 't&' } }, { name: 'g"' }];
   assert.ok(H.calFilesHtml(HU, files).includes('<span class="xrd-std-name">t&amp; + f&lt;1&gt;</span>') && H.calFilesHtml(HU, files).includes('g&quot; <span class="txt-meta">(no table)</span>') && H.calFilesHtml(HU, files).includes('data-cal-del="1"'));
-  assert.ok(H.calWarnHtml(HU, [files[1]]).includes('g&quot;: its GC table is not in the project'));
+  assert.equal(H.calWarnHtml(HU, [files[1]]), PAGE.alertHtml('warn', 'Opened, to check:', ['g&quot;: saved by an older version without its GC table: its standards are named by column. Drop the table (the same name without _TCD) to name them.']));
   assert.equal(H.calWarnHtml(HU, []), '');
-  assert.deepEqual([H.calStatusText([], 0, 0), H.calStatusText([1], 3, 6), H.calStatusText([1], 0, 1)], ['No standards: each pair takes its calibration from the GC software\'s table.', 'Integrating the standards… (3 left)', '1 chromatogram integrated.']);
+  assert.deepEqual([H.calStatusText([], 0, 0), H.calStatusText([1], 3, 6), H.calStatusText([1], 0, 1)], ['No standards: each pair takes the GC software\'s scale (k).', 'Integrating the standards… (3 left)', '1 chromatogram integrated.']);
   assert.equal(H.levelRowsHtml(HU, [], 0, 0, 1), '<tr><td colspan="8" class="txt-meta">Drop the standards\' GC table and its raw chromatograms above.</td></tr>');
   const d = { t: [0, 0.5, 1, 1.5, 2], cols: [[1, 2, 3, 2, 1]] };
   const row = { f: { name: 'f<', table: { name: 't>' } }, fi: 0, j: 0, d, lv: { h2: 0.05, o2: null, on: false }, r: { error: 'x' }, name: 'n<b>' };
@@ -569,7 +574,7 @@ test('the markup: the instructions, the card\'s and the window\'s bodies, Window
   assert.equal(H.calFitHtml(HU, gasOf, ['h2'], null), '');
   const fits = H.calFitsHtml(HU, gasOf, ['h2', 'o2'], 'gc7', { h2: false, o2: true });
   assert.ok(fits.includes('id="gc7Calh2"') && fits.includes('data-dl-name="GC_calibration_O2.svg"') && fits.includes('class="mode-chip plot-chip gci-zero-chip is-on" data-g="o2" data-zero="1"'));
-  assert.equal(H.calStatsHtml(HU, gasOf, 'o2', { pts: [] }, '%mol', false), '<p class="txt-meta">No standard for O<sub>2</sub>: each pair takes its scale from the GC software\'s table.</p>');
+  assert.equal(H.calStatsHtml(HU, gasOf, 'o2', { pts: [] }, '%mol', false), '<p class="txt-meta">No standard for O<sub>2</sub>: each pair takes the GC software\'s scale (k).</p>');
   assert.equal(H.calStatsHtml(HU, gasOf, 'o2', { pts: [1], xs: [0.1], L: null }, '%mol', false), '<p class="txt-meta">1 standard at one concentration: a free intercept needs two concentrations at least; a zero intercept fits one.</p>');
   const L = { slope: 40000.123, intercept: -12.3456, r2: 0.999876, n: 3, residuals: [{ conc: 0.1, area: 4100, fitted: 4000 }, { conc: 0.05, area: 1900, fitted: 2000 }, { conc: 0.1, area: 4000, fitted: 4000 }] };
   const sh = H.calStatsHtml(HU, gasOf, 'h2', { pts: [1, 2, 3], xs: [0.1, 0.05, 0.1], L }, 'p<m', true);
@@ -672,7 +677,7 @@ export function step(E, [op, a, b, x]){
     const bad = [], got = [];
     for (const name of a){ const t = M.takeDropped(S, name, new Uint8Array(BYTES[name])); if (t.bad) bad.push(t.bad); else got.push(t); }
     const P = M.pairDropped(S, C.cal, W.held, got, bad);
-    W.held = P.held; W.alerts = H.dropAlertHtml(HU, bad);
+    W.held = P.held; W.alerts = H.dropAlertHtml(HU, bad, P.dup);
     if (P.add.length || P.named.length){ if (P.add.length) C.calSel = M.calRows(U, S, C).length; C.cal = M.calWith(C.cal, P.add, P.named); calChanged(); }
   }
   else if (op === 'level'){

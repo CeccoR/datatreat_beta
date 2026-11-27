@@ -4,8 +4,8 @@
    Node): a standard's window, the standard's file in it, the alerts of a file dropped
    there, of a drop on the samples' zone and of a project restored. Taken out of v562's
    xrd.js as they were: the same markup to the byte.
-   What they need from the page is handed in, u = { esc, X_SVG, buildAlertsHtml } (utils.js's:
-   xrd.js HU).
+   What they need from the page is handed in, u = { esc, X_SVG, fileAlertHtml, fileLine }
+   (utils.js's: xrd.js HU).
 ========================================================= */
 
 /* ---- The instrumental standard's windows ---- */
@@ -36,25 +36,39 @@ export const stdModalHtml = (id, title, info, u)=> `
 export const stdFileHtml = (stdFile, u)=> stdFile
   ? `<div class="xrd-std-row"><span class="txt-mini">Standard</span><span class="xrd-std-name">${u.esc(stdFile.name)}</span><button type="button" class="peak-del is-danger idle-dim" data-std-del title="Remove the standard">${u.X_SVG(13)}</button></div>` : '';
 /* A file dropped on a window, the standard now (its name, the files dropped: n; its scans
-   and the one taken, k; the pattern's name and its notes): the others not used, its
-   caveats. */
-export const stdDropAlerts = (n, name, scans, k, pname, notes, u)=> (n > 1 ? u.buildAlertsHtml([], [u.esc(`${n} files dropped: the first, ${name}, is the standard`)], 'One file at a time:') : '')
-  + (scans > 1 ? u.buildAlertsHtml([], [u.esc(`${name}: ${scans} scans: the standard is ${k ? `scan ${k+1}, the first that could be read` : 'the first'}, the others are not used`)], 'One pattern:') : '')
-  + (notes.length ? u.buildAlertsHtml([], notes.map(t=> u.esc(`${pname}: ${t}`)), 'Loaded, with a caveat:') : '');
+   and the one taken, k; the pattern's name and its notes): its caveats to check, and how
+   it was taken, the others not used (an info, v567: to v566 warnings of their own). */
+export function stdDropAlerts(n, name, scans, k, pname, notes, u){
+  const say = notes.map(t=> ({ t: u.esc(u.fileLine(pname, t)), read: isReadNote(t) }));
+  return u.fileAlertHtml('check', say.filter(x=> !x.read).map(x=> x.t))
+    + u.fileAlertHtml('read', [...(n > 1 ? [u.esc(`${n} files dropped: the first, ${name}, is the standard; the others are not used.`)] : []),
+      ...(scans > 1 ? [u.esc(`${name}: ${scans} scans: the standard is ${k ? `scan ${k+1}, the first that could be read` : 'the first'}; the others are not used.`)] : []),
+      ...say.filter(x=> x.read).map(x=> x.t)]);
+}
 
-/* ---- The alerts under the samples' drop zone ---- */
+/* ---- The alerts under the samples' drop zone (utils.js FILE ALERTS) ---- */
 // A file of several scans dropped: each a pattern (k of them loaded, of n).
-export const scansNote = (name, n, k)=> `${name}: ${n} scans, ${k === n ? '' : k + ' of them loaded, '}each a pattern of its own`;
-// A drop's alerts (its lines escaped): the files refused, the caveats, those already loaded.
+export const scansNote = (name, n, k)=> `${name}: ${n} scans, ${k === n ? '' : k + ' of them loaded, '}each a pattern of its own.`;
+/* Whether a note of a file loaded (xrd-instr.js readScan's, a file's scans) says how it was
+   read, the normal case's choice, nothing to check: a file of several scans, counts over
+   unequal times read as counts per second, a time per point estimated from the noise. The
+   others (a scan not read, points left out, factors or times missing) are to check. */
+export const isReadNote = t => /: \d+ scans, |(^|: )counts over unequal counting times|with no counting time: .* estimated from the noise/.test(t);
+/* A drop's alerts (its lines escaped, each "{file}: {what}."): the files refused, the
+   caveats to check, how the files were read (isReadNote), those already loaded (v567: to
+   v566 every caveat in one warning, "Loaded, with a caveat:"). */
 export const dropAlerts = (invalid, notes, already, u)=> ({
-  load: invalid.length ? u.buildAlertsHtml(invalid, [], undefined, 'xrd-dismiss-invalid') : '',
-  note: notes.length ? u.buildAlertsHtml([], notes, 'Loaded, with a caveat:', '', 'xrd-dismiss-notes') : '',
-  upload: already.length ? u.buildAlertsHtml([], already, 'Already loaded file(s):', '', 'xrd-dismiss-upload') : '' });
+  load: u.fileAlertHtml('bad', invalid, 'xrd-dismiss-invalid'),
+  note: u.fileAlertHtml('check', notes.filter(t=> !isReadNote(t)), 'xrd-dismiss-notes'),
+  read: u.fileAlertHtml('read', notes.filter(isReadNote), 'xrd-dismiss-read'),
+  upload: u.fileAlertHtml('dup', already, 'xrd-dismiss-upload') });
 /* A project restored: the files read again whose data changed (each read's note), those
    with no pattern to show, left out (lost, and the standard where the state has one,
-   hasStd, but it was not read); '' none. */
+   hasStd, but it was not read); '' none. A warning to check (utils.js FILE ALERTS,
+   'opened'; to v566 "Restored, with a caveat:"). */
 export function restoredAlert(reads, stdRead, lost, hasStd, u){
-  const notes = [...reads, ...(stdRead ? [stdRead] : [])].filter(r=> r && r.note).map(r=> u.esc(`${r.f.label || r.f.name}: ${r.note}.`));
-  if (lost || (hasStd && !stdRead)) notes.push(u.esc(`${lost ? `${lost} file${lost > 1 ? 's' : ''}` : ''}${lost && hasStd && !stdRead ? ' and ' : ''}${hasStd && !stdRead ? 'the standard' : ''} in the project with no pattern to show (no 2θ and intensities): left out.`));
-  return notes.length ? u.buildAlertsHtml([], notes, 'Restored, with a caveat:', '', 'xrd-dismiss-notes') : '';
+  const notes = [...reads, ...(stdRead ? [stdRead] : [])].filter(r=> r && r.note).map(r=> u.esc(u.fileLine(r.f.label || r.f.name, r.note)));
+  const std = hasStd && !stdRead;
+  if (lost || std) notes.push(u.esc(`${lost ? `${lost} file${lost > 1 ? 's' : ''}` : ''}${lost && std ? ' and ' : ''}${std ? 'the standard' : ''} left out: no data in the project.`));
+  return u.fileAlertHtml('opened', notes, 'xrd-dismiss-notes');
 }

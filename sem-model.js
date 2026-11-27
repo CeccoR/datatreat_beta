@@ -33,7 +33,7 @@ export const sig = (v, d) => Number.isFinite(v) ? String(+v.toPrecision(d)) : 'â
 export const magText = r => !(r.mag > 0) ? '' : r.mag >= 1000 ? `${(r.mag/1000).toPrecision(3)} kx` : `${r.mag.toPrecision(3)} x`;
 // Anything but a reason (sem-read.js SemReadError) said in words: the raw message
 // of an allocation that failed said nothing to the user (to v487).
-export const faultText = r => /RangeError|allocation|memory/i.test(`${r.kind} ${r.fault}`) ? 'too large for the memory this page has' : `not read (${r.fault})`;
+export const faultText = r => /RangeError|allocation|memory/i.test(`${r.kind} ${r.fault}`) ? 'too large for the memory this page has' : `could not be read: ${r.fault}`;
 
 /* ---- The files' bytes ---- */
 // The ids of every file's bytes a state or a history holds (a RawRef, or its copy: { id,

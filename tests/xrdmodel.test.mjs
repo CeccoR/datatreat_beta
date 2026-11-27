@@ -47,7 +47,7 @@ function decl(file, name){
   if (m && /^[}\])]/.test(rest.slice(end + 1))) end = rest.indexOf('\n', end + 1);
   return rest.slice(0, end).replace(/^export /, '');
 }
-const UN = ['COLORS', 'colorOf', 'nextColor', 'esc', 'X_SVG', 'ALERT_ICON', 'alertHtml', 'buildAlertsHtml'];
+const UN = ['COLORS', 'colorOf', 'nextColor', 'esc', 'X_SVG', 'ALERT_ICON', 'alertHtml', 'FILE_ALERT', 'fileAlertHtml', 'fileLine'];
 export const PAGE = new Function([...UN.map(n=> decl('utils.js', n)), decl('modkit.js', 'isObj')].join('\n') + `\nreturn { ${UN.join(', ')}, isObj };`)();
 export const dec = b => new TextDecoder().decode(b);
 export const enc = s => new TextEncoder().encode(s);
@@ -56,7 +56,7 @@ export const read = { n: 0 };
 export function scansOf(b){ read.n++; try { return JSON.parse(dec(b instanceof Uint8Array ? b : Uint8Array.from(b))).scans; } catch(e){ return [{ error: 'not well-formed XML' }]; } }
 export const sampleOf = b =>{ let j; try { j = JSON.parse(dec(b)); } catch(e){ return ''; } const s = j.sample || {}; const t = k => typeof s[k] === 'string' ? s[k].trim() : ''; return t('name') || t('id'); };
 export const U = { isObj: PAGE.isObj, colorOf: PAGE.colorOf, scansOf };
-export const HU = { esc: PAGE.esc, X_SVG: PAGE.X_SVG, buildAlertsHtml: PAGE.buildAlertsHtml };
+export const HU = { esc: PAGE.esc, X_SVG: PAGE.X_SVG, fileAlertHtml: PAGE.fileAlertHtml, fileLine: PAGE.fileLine };
 export const dg = a => a == null ? String(a) : sha(Array.from(a, v=> Object.is(v, -0) ? '-0' : String(v)).join(',')).slice(0, 16);
 export const canon = v => JSON.stringify(v, function(k, x){ const o = this[k];
   if (o instanceof Uint8Array){ let h = 0; for (const b of o) h = (Math.imul(h, 31) + b) >>> 0; return 'U8:' + o.length + ':' + h; }
@@ -74,7 +74,7 @@ test('a file\'s scans made patterns: one, several, running down, not read; their
   assert.equal(M.patternsOf('a.xrdml', b, [s1]).pats[0].f.x, one.pats[0].f.x);
   const sev = M.patternsOf('s.v1.xrdml', b, [scan([1, 2], [1, 2]), { error: 'not a 2θ scan' }, scan([5, 4], [1, 2], { notes: ['n'] })]);
   assert.deepEqual(sev.pats.map(p=> [p.k, p.f.name, p.f.label, p.f.src, p.f.scan, p.notes]), [[0, 's.v1 (scan 1).xrdml', 's.v1 (scan 1)', 's.v1.xrdml', 0, []], [2, 's.v1 (scan 3).xrdml', 's.v1 (scan 3)', 's.v1.xrdml', 2, ['n']]]);
-  assert.deepEqual(sev.skipped, ['scan 2 not read (not a 2θ scan)']);
+  assert.deepEqual(sev.skipped, ['scan 2 not read: not a 2θ scan']);
   assert.deepEqual(M.patternsOf('x', b, [{ error: 'e1' }, { error: 'e2' }]), { error: 'scan 1: e1; scan 2: e2' });
   assert.deepEqual(M.patternsOf('x', b, [{ error: 'e1' }]), { error: 'e1' });
   assert.deepEqual(M.ascending({ x: [1], y: [2] }), { x: [1], y: [2] });
@@ -90,8 +90,9 @@ test('a file read again: by its bytes (once), as it was, its data moved, points 
   assert.equal(same.note, null); assert.deepEqual(same.f.x, [1, 2, 3]);
   assert.equal(M.readAgain(U, { name: 'a.xrdml', rawBytes: b, x: same.f.x, y: same.f.y, varMul: same.f.varMul }).f.x, same.f.x);
   assert.equal(read.n, 1, 'read once');
-  assert.match(M.readAgain(U, { name: 'a.XML', rawBytes: b, x: [1, 2, 3], y: [4, 5, 6], varMul: [1, 1, 1] }).note, /up to v262/);
-  assert.match(M.readAgain(U, { name: 'a.xrdml', rawBytes: b, scan: 1, x: [4, 5, 6, 7], y: [1, 2, 3, 4] }).note, /1 point whose values are no finite number left out .*held it as up to v484/);
+  // (v567: no version number in the words, ALERTS-REVIEW.md R4)
+  assert.match(M.readAgain(U, { name: 'a.XML', rawBytes: b, x: [1, 2, 3], y: [4, 5, 6], varMul: [1, 1, 1] }).note, /as an older version had read them, with their minimum subtracted/);
+  assert.match(M.readAgain(U, { name: 'a.xrdml', rawBytes: b, scan: 1, x: [4, 5, 6, 7], y: [1, 2, 3, 4] }).note, /1 point whose values are no finite number left out: the project held it, as an older version did/);
   assert.equal(M.readAgain(U, { name: 'a.xrdml', rawBytes: b, scan: 7, x: [3, 2], y: [1, 2] }).f.x.join(), '2,3');
   assert.match(M.readAgain(U, { name: 'a.txt', y: [0, 1], x: [1, 2] }).note, /lowest point is exactly 0/);
   assert.equal(M.readAgain(U, { name: 'a.txt', rawBytes: b, y: [0, 1], x: [1, 2] }).note, null);
@@ -156,15 +157,21 @@ test('the markup: the standard\'s window and file, its alerts, the drop\'s, a re
   for (const s of ['aria-labelledby="xrdStdPeaksTitle"', 'id="xrdStdPeaksTitle">Instrumental <b>standard</b>', 'id="xrdStdPeaksDz"', 'id="xrdStdPeaksFiles"', 'class="xrd-std-alerts"', 'class="xrd-std-file"', 'class="xrd-std-body"', '>INFO</div>']) assert.ok(w.includes(s), s);
   assert.equal(H.stdFileHtml(null, HU), '');
   assert.ok(H.stdFileHtml({ name: 'a<b>.xrdml' }, HU).includes('<span class="xrd-std-name">a&lt;b&gt;.xrdml</span>'));
-  const al = H.stdDropAlerts(2, 'f<1>.xrdml', 3, 1, 'p', ['n<'], HU);
-  assert.ok(al.includes('2 files dropped: the first, f&lt;1&gt;.xrdml, is the standard') && al.includes('3 scans: the standard is scan 2, the first that could be read') && al.includes('p: n&lt;'));
-  assert.ok(H.stdDropAlerts(1, 'f', 2, 0, 'p', [], HU).includes('the standard is the first, the others'));
+  // (v567, utils.js FILE ALERTS: a caveat to check a warning; how the file was taken an info)
+  const al = H.stdDropAlerts(2, 'f<1>.xrdml', 3, 1, 'p', ['n<', 'counts over unequal counting times: loaded as counts per second'], HU);
+  assert.equal(al, PAGE.alertHtml('warn', 'Loaded, to check:', ['p: n&lt;.']) + PAGE.alertHtml('info', 'How these files were read:', ['2 files dropped: the first, f&lt;1&gt;.xrdml, is the standard; the others are not used.',
+    'f&lt;1&gt;.xrdml: 3 scans: the standard is scan 2, the first that could be read; the others are not used.', 'p: counts over unequal counting times: loaded as counts per second.']));
+  assert.ok(H.stdDropAlerts(1, 'f', 2, 0, 'p', [], HU).includes('the standard is the first; the others'));
   assert.equal(H.stdDropAlerts(1, 'f', 1, 0, 'p', [], HU), '');
-  assert.equal(H.scansNote('f', 3, 3), 'f: 3 scans, each a pattern of its own'); assert.equal(H.scansNote('f', 3, 1), 'f: 3 scans, 1 of them loaded, each a pattern of its own');
-  const d = H.dropAlerts(['x'], [], ['y'], HU);
-  assert.ok(d.load.includes('data-action="xrd-dismiss-invalid"') && d.note === '' && d.upload.includes('data-action="xrd-dismiss-upload"'));
+  assert.equal(H.scansNote('f', 3, 3), 'f: 3 scans, each a pattern of its own.'); assert.equal(H.scansNote('f', 3, 1), 'f: 3 scans, 1 of them loaded, each a pattern of its own.');
+  const d = H.dropAlerts(['x: why.'], ['f: 3 scans, each a pattern of its own.', 'f: scan 2 not read: no scan data.', 'g: intensities in cps with no counting time: 0.5 s per point estimated from the noise, for the weights.'], ['y'], HU);
+  assert.equal(d.load, PAGE.alertHtml('bad', 'Not loaded:', ['x: why.'], 'xrd-dismiss-invalid'));
+  assert.equal(d.note, PAGE.alertHtml('warn', 'Loaded, to check:', ['f: scan 2 not read: no scan data.'], 'xrd-dismiss-notes'));
+  assert.equal(d.read, PAGE.alertHtml('info', 'How these files were read:', ['f: 3 scans, each a pattern of its own.', 'g: intensities in cps with no counting time: 0.5 s per point estimated from the noise, for the weights.'], 'xrd-dismiss-read'));
+  assert.equal(d.upload, PAGE.alertHtml('info', 'Already loaded, not loaded again:', ['y.'], 'xrd-dismiss-upload'));
+  assert.equal(H.dropAlerts([], [], [], HU).note, '');
   const r = H.restoredAlert([{ f: { label: 'L<', name: 'n' }, note: 'moved' }, null], null, 1, { name: 's' }, HU);
-  assert.ok(r.includes('L&lt;: moved.') && r.includes('1 file and the standard in the project with no pattern to show'));
+  assert.equal(r, PAGE.alertHtml('warn', 'Opened, to check:', ['L&lt;: moved.', '1 file and the standard left out: no data in the project.'], 'xrd-dismiss-notes'));
   assert.equal(H.restoredAlert([{ f: { name: 'n' }, note: null }], null, 0, null, HU), '');
 });
 
@@ -219,17 +226,17 @@ function dropCase(S, c, names){
     const b = S.bytes.get(name) || S.bytes.set(name, enc(file.text)).get(name), scans = scansOf(b);
     M.keepScans(b, scans);
     const rr = M.patternsOf(name, b, scans, sampleOf(b));
-    if (rr.error){ invalid.push(PAGE.esc(`${name} (${rr.error})`)); continue; }
+    if (rr.error){ invalid.push(PAGE.esc(PAGE.fileLine(name, rr.error))); continue; }
     const fresh = M.freshOf(rr, existing);
     if (!fresh.length){ already.push(PAGE.esc(name)); continue; }
     existing.add(name);
     for (const q of rr.pats) if (!fresh.includes(q)) already.push(PAGE.esc(q.f.name));
     if (rr.n > 1) notes.push(PAGE.esc(H.scansNote(name, rr.n, fresh.length)));
-    for (const t of rr.skipped) notes.push(PAGE.esc(`${name}: ${t}`));
-    for (const { f: p, notes: ns } of fresh){ p.color = PAGE.nextColor(S.all); existing.add(p.name); for (const t of ns) notes.push(PAGE.esc(`${p.name}: ${t}`)); S.all.push(p); }
+    for (const t of rr.skipped) notes.push(PAGE.esc(PAGE.fileLine(name, t)));
+    for (const { f: p, notes: ns } of fresh){ p.color = PAGE.nextColor(S.all); existing.add(p.name); for (const t of ns) notes.push(PAGE.esc(PAGE.fileLine(p.name, t))); S.all.push(p); }
   }
   const A = H.dropAlerts(invalid, notes, already, HU);
-  S.alerts = A.load + A.note + A.upload;
+  S.alerts = A.load + A.note + A.read + A.upload;
 }
 const fileOut = f => f && [f.name, f.label, f.color, dg(f.x), dg(f.y), f.varMul ? dg(f.varMul) : null, f.src, f.scan, f.meas, f.included, f.held, f.rawBytes];
 // The state the module saves (its cards with their kinds' settings: a panel's its own as restored).

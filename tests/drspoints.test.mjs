@@ -123,7 +123,7 @@ test('DRS: the windows in points, as v514: whole numbers in v514\'s fields, at i
     assert.deepEqual(info[1].split(';').slice(2, 4), ['1', '30']);
     // Fewer points between the lines than the window: no fit, said.
     await enter(page, 'an1M', 2000);
-    assert.match(await page.textContent('#an1Alert'), /Interval too small: too few points for the regression!/);
+    assert.match(await page.textContent('#an1Alert'), /Interval too small: too few points for the regression\./);
     assert.equal(await page.textContent('#an1Eg'), '-');
     assert.deepEqual(errors, []);
   } finally { await close(); }

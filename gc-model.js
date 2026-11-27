@@ -97,8 +97,10 @@ export const inUnit = (pa, u)=> +(pa*P_UNITS[u][1]/P_UNITS[u][0]).toPrecision(12
 export const okP = v => v > 0 && v <= P_MAX*P_ATM;
 // A card's per-sample arrays, as its state names them.
 export const PER_SAMPLE = ['ms', 'Qs', 'Ts', 'Ps', 'startArr', 'endArr', 'lightOnDates'];
-// (a number however a project's .json writes it: the count goes into markup)
-export function blankCounts(f){ return GASES.map(g=> f.gas[g.key] ? f.gas[g.key].filter(noValue).length + (+f.emptyRows || 0) : 0); }
+// A table's empty cells per gas (the rows with no gas value, `emptyRows`, apart: v567).
+export function blankCounts(f){ return GASES.map(g=> f.gas[g.key] ? f.gas[g.key].filter(noValue).length : 0); }
+// Why a file the GC reader gives nothing for is not loaded (modkit.js dropText's `none`).
+export const NOT_GC = 'not a GC table: no injection date and H₂ or O₂ column under a header';
 
 /* ---- Reading a file ---- */
 /* An injection date, as both exports write it (one reader for both, v539): day, month and
@@ -144,7 +146,7 @@ export function parseGCDate(m, dm){
    day first. Any other is read month/day, the rows whose date does not exist so left
    out (`badDates`): a month/day file with a mistyped date that would exist day first
    (16/10 among 10/5 and 10/6), whose times would go back months, and one whose dates
-   fail both ways. The alert says both (gc-html.js dateAlertsHtml); a file with no
+   fail both ways. The alerts say both (gc-html.js dateLines); a file with no
    injection left for a date that does not exist is refused with why. To v509 every date
    was month/day, rolled over. A date that names its month (13/Nov/26) has no order to
    find: it is the same either way, and a file of those alone is never day/month
@@ -154,7 +156,7 @@ export function parseGCDate(m, dm){
    its date) is passed over unsaid, as ever.
    Two layouts: the default (gcColumns), a header naming the injection date and each
    gas's %mol; the alternative (altColumns, v539), the instrument's .txt, its gases in
-   ppm, its files said in an info alert (`altExport`, gc-html.js altAlertsHtml). */
+   ppm, its files said in an info alert (`altExport`, gc-html.js altLines). */
 /* (v549: the column naming each injection, for the calibration's window: the default
    export's Analysis, else a sample's or a name's column; -1 none) */
 const NAME_COL = /^(analysis|sample( name| id)?|name|injection name)$/;
@@ -220,7 +222,7 @@ export function readGc(text, withNames){
     if (!d){ badDates++; if (any) lost++; continue; }
     // One row, every gas kept on the same time axis; a blank cell stays NaN so the
     // columns never slip out of step with the dates. The analysis leaves it out of
-    // that gas's series (tablesOf) and the alerts count it (gc-html.js blankAlertsHtml).
+    // that gas's series (tablesOf) and the alerts count it (gc-html.js blankLines).
     // A row with no gas at all is left out, as it was, and the alert counts it too (to
     // v474 it went unsaid).
     if (any){ injDates.push(d); for (const k in idx) gas[k].push(vals[k]); if (name >= 0) names.push(String(r[name] || '').trim()); }
@@ -273,7 +275,7 @@ export function firstInjection(f){
 /* A table's record: its injections, each with a date that is one, and the columns of the
    gases it has beside them, a cell that is no number an empty one; none of either, it is
    left out. A record that is all that already is kept as it is: the empty-cell and the
-   dates' alerts dismissed stay so (gc.js blankSeen and dateSeen mark its gases). */
+   dates' alerts dismissed stay so (gc.js seen.check and seen.read mark its gases). */
 export function tableIn(U, f){
     if (!isArr(f.injDates) || !isObj(f.gas)) return null;
     const n = f.injDates.length, ks = Object.keys(f.gas), emptyRows = U.num(f.emptyRows, 0, v=> v >= 0);
@@ -383,7 +385,7 @@ export const gasPresent = (files, k)=> files.some(f=> hasGas(f, k));
    same name but for a final _TCD, any case, a browser's " (1)" aside), with each other or
    with a file alone in the list; a file dragged by its own grip onto another pairs or swaps
    (dropPart). Which kind each file is never changes the pairing: two tables or two files
-   of raw chromatograms may be paired, which is said (gc-html.js pairAlertsHtml): of two
+   of raw chromatograms may be paired, which is said (gc-html.js pairLines): of two
    tables the first is the sample, the second ignored; two files of raw chromatograms have
    no times, no sample. Pairing is a change: a step of the history, saved. */
 export const rowFiles = r => r.mate ? [(({ mate: _m, ...x })=> x)(r), r.mate] : [r];

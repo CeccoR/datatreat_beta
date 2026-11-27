@@ -307,7 +307,8 @@ test('two tables paired: the first used, the second ignored; two files of raw ch
     assert.equal(await rate.locator('.gc-row').count(), 1);
     // Integration: both raw chromatograms' files (its file selector's list), said.
     assert.deepEqual((await listOf(page, '#tab-gc .gci-fsel')).map(x=> x.text), ['P_TCD (no table)', 'P_TCD · Q_TCD.csv (no table)']);
-    assert.ok((await alerts(page, '#tab-gc .gci-alerts')).join(' ').includes('two files of raw chromatograms paired'));
+    // (v567: to check under the drop zone; here a grey line names them)
+    assert.deepEqual(await page.locator('#tab-gc .gci-alerts .gci-shown').allTextContents(), ['P_TCD: shown here, no injection times.', 'P_TCD · Q_TCD.csv: shown here, no injection times.']);
     await integrated(page);
     const z = await zip(page);
     const raw = z['gc_raw.csv'];
@@ -324,16 +325,16 @@ test('counts that differ: said in Integration, integrated all the same; Analysis
     await integrated(page);
     const card = page.locator('#tab-gc .an-card').nth(0);
     const ia = (await alerts(page, '#tab-gc .gci-alerts')).join(' ');
-    assert.ok(ia.includes(`short: ${N} rows in the table, ${N - 1} chromatograms: not aligned`), ia);
+    assert.ok(ia.includes(`short: ${N} injections in the table, ${N - 1} chromatograms: not aligned: integrated all the same`), ia);
     assert.equal(await idxOf(card, 'Inj'), `1/${N - 1}`, 'every chromatogram integrated and shown');
     // (all integrated: the status line says nothing and folds away, v545)
     assert.equal(await card.locator('.gci-status').textContent(), '');
     assert.equal(await card.locator('.gci-bar').isVisible(), false);
     const ra = (await alerts(page, '#tab-gc .gc-src')).join(' ');
-    assert.ok(ra.includes(`short: ${N} rows in the table, ${N - 1} chromatograms`), ra);
+    assert.ok(ra.includes(`short: ${N} injections in the table, ${N - 1} chromatograms: see the Integration card`), ra);
     const raw = (await zip(page))['gc_raw.csv'];
     assert.deepEqual(column(raw, 'H2 (%mol) [short]').slice(1).map(num), tableRows().map(r=> r[0]), 'the table\'s values');
-    assert.ok(column(raw, 'H2 source [short]').slice(1).every(s=> s === `table (${N} rows in the table, ${N - 1} chromatograms)`));
+    assert.ok(column(raw, 'H2 source [short]').slice(1).every(s=> s === `table (${N} injections in the table, ${N - 1} chromatograms)`));
     assert.ok(column(raw, 'H2 reintegrated (%mol) [short]').every(s=> s === ''));
     assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
   } finally { await close(); }
@@ -688,19 +689,19 @@ test('the calibration window (v549): a GC table and its raw chromatograms, both 
     await m.locator('.gci-cal-in').setInputFiles([stdTcd('std_TCD.csv')]); await settle(page);
     let a = await said();
     assert.equal(a.length, 1); assert.equal(await m.locator('.gci-cal-alerts .alert.bad').count(), 1);
-    assert.match(a[0], /Not loaded: std_TCD\.csv: raw chromatograms without their GC table \(the same name without _TCD, \.csv or \.txt\): drop the table too/);
+    assert.match(a[0], /Not loaded: std_TCD\.csv: raw chromatograms without their GC table: drop the table too, the same name without _TCD \(\.csv or \.txt\); this file waits here for it\./);
     assert.equal(await rows(), 0, 'no standard');
     assert.match(await m.locator('.gci-cal-status').textContent(), /^No standards/);
     // A table alone (of another name): the same; the raw chromatograms still said.
     await m.locator('.gci-cal-in').setInputFiles([calTable('other.csv')]); await settle(page);
     a = await said();
     assert.match(a[0], /std_TCD\.csv: raw chromatograms without their GC table/);
-    assert.match(a[0], /other\.csv: a GC table without its raw chromatograms \(the same name with _TCD\): drop them too/);
+    assert.match(a[0], /other\.csv: a GC table without its raw chromatograms: drop them too, the same name with _TCD; this file waits here for them\./);
     assert.equal(await rows(), 0);
     // A pair whose counts differ (5 injections in the table, 6 chromatograms): refused, nothing integrated.
     await m.locator('.gci-cal-in').setInputFiles([calTable('five.csv', STD_NAMES.slice(0, 5)), stdTcd('five_TCD.csv')]); await settle(page);
     a = await said();
-    assert.ok(a[0].includes('five.csv + five_TCD.csv: 5 injections in the table, 6 chromatograms: they must be as many (a name a chromatogram), nothing integrated'), a[0]);
+    assert.ok(a[0].includes('five.csv + five_TCD.csv: 5 injections in the table, 6 chromatograms: they must be as many, a name for each chromatogram: nothing integrated.'), a[0]);
     assert.equal(await rows(), 0);
     assert.equal(await fitted(page), n0, 'nothing integrated');
     assert.equal(await steps(page), s0, 'no step');
@@ -830,7 +831,7 @@ test('a calibration saved by v544–v548 (raw chromatograms alone) opens as it w
     assert.equal(await m.locator('.gci-csel .snav-name').textContent(), 'column 1');
     assert.deepEqual(await m.locator('.xrd-std-row .xrd-std-name').allTextContents(), ['std_TCD.csv (no table)']);
     const w = (await m.locator('.gci-cal-warn .alert.warn').innerText()).replace(/\s+/g, ' ');
-    assert.match(w, /std_TCD\.csv: its GC table is not in the project \(a calibration saved before v549, raw chromatograms alone\): its standards are named by column\. Drop the table \(the same name without _TCD\) to name them/);
+    assert.match(w, /^⚠ Opened, to check: std_TCD\.csv: saved by an older version without its GC table: its standards are named by column\. Drop the table \(the same name without _TCD\) to name them\.$/);
     assert.match(await m.locator('.gci-cal-status').textContent(), /6 chromatograms integrated/);
     assert.equal(await fitted(page), n0, 'nothing fitted with the window open');
     // Its table dropped alone: it names them, one step; nothing else changes, nothing said.
@@ -854,11 +855,11 @@ test('no standards: the GC software\'s scale taken over (k, the median of area/t
     await openModule(page, 'gc');
     await load(page, [table('sw.csv', tableRows(1.1)), tcd('sw_TCD.csv', areas())], 1);
     await integrated(page);
-    // The alert: its message alone (v546: no line per file); the file's k under its Peaks, the
-    // units said plainly, no superscript on the values.
-    assert.deepEqual(await alerts(page, '#tab-gc .gci-alerts'), ['Calibration taken from the GC software\'s table (no standards for the gas): see the risks in this card\'s instructions.']);
+    // No alert in the card (v567: the Production Rate card says it, with where its risks are
+    // written); the file's k under its Peaks, the units said plainly, no superscript on the values.
+    assert.deepEqual(await alerts(page, '#tab-gc .gci-alerts'), []);
     const vbox = page.locator('#tab-gc .an-card .gci-values-box'), from = await vbox.locator('.gci-from').textContent();
-    assert.match(from, /^Concentrations from the GC software's table: k = [\d.]+ area per %mol \(H2, median of 12 injections\), [\d.]+ \(O2, median of 12 injections\)\.$/, from);
+    assert.match(from, /^Concentrations from the GC software's scale \(k\): k = [\d.]+ area per %mol \(H2, median of 12 injections\), [\d.]+ \(O2, median of 12 injections\)\.$/, from);
     assert.equal(await vbox.locator('.gci-units').textContent(), 'Conc. and GC table in %mol.');
     assert.ok(!/ᵗ/.test(await vbox.textContent()), 'no superscript t');
     const k = num(/k = ([\d.]+) area/.exec(from)[1]);
@@ -868,7 +869,7 @@ test('no standards: the GC software\'s scale taken over (k, the median of area/t
     assert.ok(Math.abs(k - med) < 1e-4*med, `k ${k}, by hand ${med}`);
     assert.ok(column(integ, 'H2 source').every(s=> s.startsWith('transfer (k = ')));
     const ra = (await alerts(page, '#tab-gc .gc-src')).join(' ');
-    assert.ok(ra.includes('H₂ calibration taken from the GC software\'s table (k = '), ra);
+    assert.ok(ra.includes('H₂ by the GC software\'s scale (k = ') && ra.includes('The GC software\'s scale (k): its risks are in the instructions of '), ra);
     // Area / k: the table's scale, so the table's rates within the fit's noise.
     const mean = z['mean_rates.csv'][1], want = meanRate(tableRows(1.1).map(r=> r[0]));
     assert.ok(Math.abs(num(mean[1]) - want) < 0.01*want, `H₂ ${mean[1]} for ${want}`);

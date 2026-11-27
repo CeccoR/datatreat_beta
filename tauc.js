@@ -1,4 +1,4 @@
-import { fmtNum, csvLine, includedOf, linspace, movingAverage, gradientArr, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, guardNumberInputs, esc, registerModule, fixed, keeper, objId, exactKey } from './utils.js';
+import { fmtNum, csvLine, includedOf, linspace, movingAverage, gradientArr, maxArr, minArr, fitLinear, tinv, fileAlertHtml, fileLine, guardNumberInputs, esc, registerModule, fixed, keeper, objId, exactKey } from './utils.js';
 import { Plot } from './plot.js';
 import { cardInfo, fileSafe, nameDownloads } from './cards.js';
 import { moduleKit, wideCsv, isObj, num, ownKey, without, cardList, finitePairs } from './modkit.js';
@@ -78,9 +78,10 @@ const curveKept = keeper('drs-curve', 8), slopeKept = keeper('drs-slope'), fitsK
                           `files`, with which every per-sample list the cards keep is
                           aligned; in the file list, the note right of each label, how the
                           file was read, %R or F(R) (tauc-html.js readNote); the alerts
-                          under the drop zone, among them what to verify of how files were
-                          read (tauc-model.js fileNotes: a format not standard, points left
-                          out; until dismissed, warnDismissed); every card in the history
+                          under the drop zone, among them the points left out (to check)
+                          and how files of no standard format were read (tauc-model.js
+                          fileNotes; until dismissed, warnDismissed and readDismissed);
+                          every card in the history
      currIndex            the sample every analysis card shows
      sampleNext           the sample a tab woken or reloaded showed: its next restore shows
                           it (showNext)
@@ -100,7 +101,7 @@ const quietly = (S, fn)=>{ const was = S.quiet; S.quiet = true; try { fn(); } fi
 function createTauc({ key, root, layer, shown }){
   const S = {
     root, shown, $: id => root.querySelector('#' + id), stale: false, drawnAt: '',
-    kit: null, allFiles: null, files: null, warnDismissed: false, currIndex: 0, sampleNext: null,
+    kit: null, allFiles: null, files: null, warnDismissed: false, readDismissed: false, currIndex: 0, sampleNext: null,
     resPlot0: null, resPlotR: null, resPlotLog: null, deck: null, live: new Map(), quiet: false, refsMoved: [], resList: null,
   };
   S.kit = moduleKit('tauc', kitHooks(S, key, layer));
@@ -140,7 +141,7 @@ function kitHooks(S, key, layer){
     view: ['egSel', 'urbSel'],
     note: f => H.readNote(f, HU),
     alerts: p => fileAlerts(S, p),
-    dismiss: { warn: ()=>{ S.warnDismissed = true; } },
+    dismiss: { warn: ()=>{ S.warnDismissed = true; }, read: ()=>{ S.readDismissed = true; } },
     slots: ()=> slots(S),
     /* The cards stay on the sample they showed when another is removed, moved, left out or
        taken in (`files` holds the ones included before); the one on show removed or left
@@ -151,7 +152,7 @@ function kitHooks(S, key, layer){
     // A label changed: the cards' captions and plots name the sample anew, as the Results do
     // (to v494 the caption kept the old label until the sample was stepped).
     redraw: what =>{ if (what === 'label') quietly(S, ()=> livePanels(S).forEach(p=>{ if (p.hasPlot()) p.update(true); })); renderResView(S); },
-    cleared: ()=>{ livePanels(S).forEach(p=> p.clear()); eachKeptState(S, s=>{ s.per = []; s.sharedVlines = {}; }); S.warnDismissed = false; },
+    cleared: ()=>{ livePanels(S).forEach(p=> p.clear()); eachKeptState(S, s=>{ s.per = []; s.sharedVlines = {}; }); S.warnDismissed = S.readDismissed = false; },
     snapshot: ()=> snapshotOf(S),
     // A file as a restore takes it (tauc-model.js restoredFile), its spectrum kept and its
     // energies made from its wavelengths.
@@ -162,10 +163,14 @@ function kitHooks(S, key, layer){
     csv: ()=> exportTaucZip(S),
   };
 }
-// The alerts under the drop zone: the kit's, and what to verify of how files were read.
+/* The alerts under the drop zone (utils.js FILE ALERTS): the kit's, the points left out
+   (a warning to check) and how files of no standard format were read (an info), each
+   worked out from the files there are (tauc-model.js fileNotes), until its × (to v566 one
+   warning, "Verify how these files were read:"). */
 function fileAlerts(S, p){
-  const notes = S.warnDismissed ? [] : S.allFiles.map(f=> [f, M.fileNotes(f)]).filter(([, n])=> n.length).map(([f, n])=> esc(`${f.name}: ${n.join('; ')}`));
-  S.$('taucAlerts').innerHTML = p.invalid + buildAlertsHtml([], notes, 'Verify how these files were read:', '', 'tauc-dismiss-warn') + p.upload;
+  const lines = (k, off)=> off ? [] : S.allFiles.map(f=> [f, M.fileNotes(f)[k]]).filter(([, n])=> n.length).map(([f, n])=> esc(fileLine(f.name, n.join('; '))));
+  S.$('taucAlerts').innerHTML = p.invalid + fileAlertHtml('check', lines('check', S.warnDismissed), 'tauc-dismiss-warn')
+    + fileAlertHtml('read', lines('read', S.readDismissed), 'tauc-dismiss-read') + p.upload;
 }
 /* ---- Undo/redo (kit.snapshot): every analysis card, its kind, name, fold, reference,
    and the line positions and parameters of both its kinds, beside the files' records
@@ -179,7 +184,7 @@ function snapshotOf(S){
   }) };
 }
 function restoreState(S, s, gone){
-  S.warnDismissed = false;
+  S.warnDismissed = S.readDismissed = false;
   // (a wake's or a reload's: the sample its tab showed, by its file's name, else its place)
   const next = S.sampleNext;
   if (next){ const k = S.files.findIndex(f=> f.name === next.name); S.currIndex = k >= 0 ? k : num(next.sample, 0, Number.isInteger); S.sampleNext = null; }
@@ -714,7 +719,7 @@ function stayOn(S, f){ const k = includedOf(S.allFiles).indexOf(f); if (k >= 0) 
 
 /* ---- The files ---- */
 function filesDropped(S, had){
-  S.warnDismissed = false;
+  S.warnDismissed = S.readDismissed = false;
   S.allFiles.slice(had).forEach(keepSpectrum);
   afterFilesChange(S);
   // Once, when the first data lands: propose optimal interval-line positions. The

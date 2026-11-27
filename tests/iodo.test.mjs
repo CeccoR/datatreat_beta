@@ -128,7 +128,9 @@ test('Iodometry: a Cary Kinetics CSV, injections, the click, Suggest, readings, 
     assert.deepEqual(await injs(page), [100.05, 20.05, 12.05, 18.05]);
     assert.equal(await text(page, 'iodoInj'), '100.05 s');
     const e1 = expected(0, 100.05, 240);
-    assert.equal(await text(page, 'iodoA'), `n/a (the trace ends ${(300.05 - 100.05).toFixed(1)} s after the injection)`, 'past its end');
+    // (v567: n/a, and why in a warning under the read-outs)
+    assert.equal(await text(page, 'iodoA'), 'n/a', 'past its end');
+    assert.equal(await page.locator('#iodoAWarn .alert.warn.compact').innerText(), `⚠ The trace ends ${(300.05 - 100.05).toFixed(1)} s after the injection: no reading at ${await page.inputValue('#iodoTRead')} s.`);
     assert.equal((await history(page, 'iodo')).index, h0.index + 1, 'a step');
     // (the click is the injection's: no trace picked out or locked there, plot.js v536)
     assert.deepEqual(await page.$eval('#iodoSvg', s=> [!!s._pick, s.querySelectorAll('.plot-pick-hl, .plot-pick-label, .plot-lockcross').length]), [false, 0], 'no trace locked by the injection click');
@@ -276,13 +278,13 @@ test('Iodometry: a file with no pair of columns refused, the same file twice sai
     fs.writeFileSync(path.join(dir, 'semi.csv'), semi);
     await page.setInputFiles('#iodoFiles', [path.join(dir, 'bad.csv'), path.join(dir, 'semi.csv')]);
     await page.waitForFunction(()=> document.querySelectorAll('#iodoFileTableWrap tr.file-row').length === 2); await settle(page);
-    assert.match(await page.textContent('#iodoAlerts'), /bad\.csv \(no columns of time and absorbance found\)/);
+    assert.match(await page.textContent('#iodoAlerts'), /Not loaded:\s*bad\.csv: no columns of time and absorbance found\./);
     assert.deepEqual(await traceRows(page), [['run 1', 'semi.csv', true], ['run 2', 'semi.csv', true]]);
     // (minutes read as seconds: the second trace's last point at 240 s)
     await page.click('#iodoNext'); await settle(page);
     assert.deepEqual(await page.$eval('#iodoSvg', s=> s._plot._stored.find(e=> e.type === 'line').xs.slice()), [0, 60, 120, 180, 240]);
     await page.setInputFiles('#iodoFiles', [path.join(dir, 'semi.csv')]); await settle(page);
-    assert.match(await page.textContent('#iodoAlerts'), /Already loaded[\s\S]*semi\.csv/);
+    assert.match(await page.textContent('#iodoAlerts'), /Already loaded, not loaded again:\s*semi\.csv\./);
     assert.equal((await traceRows(page)).length, 2);
     assert.deepEqual(errors, []);
   } finally { await close(); }

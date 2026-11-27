@@ -378,8 +378,8 @@ test('the words: the warnings under the table, the step note, the chips, the not
   // A project of v510 whose steps differ: the chips its conversion turned to one, with the ×.
   const x = n => `<svg w="${n}"/>`;
   assert.equal(H.stepNoteHtml([], { X_SVG: x }), '');
-  assert.equal(H.stepNoteHtml(['N'], { X_SVG: x }), '<div class="alert warn">⚠ The patterns were measured at different steps: the smoothing, set in points up to v510, is kept as it was, a width for each pattern (one). Set one width in all to treat them alike.<button class="alert-dismiss close-x" data-step-x title="Dismiss"><svg w="15"/></button></div>');
-  assert.match(H.stepNoteHtml(['N', 'blWin'], { X_SVG: x }), /the smoothing and SNIP width, set in points up to v510, are kept as they were,/);
+  assert.equal(H.stepNoteHtml(['N'], { X_SVG: x }), '<div class="alert warn">⚠ The patterns were measured at different steps: the smoothing, set in points by an older version, is kept as it was, a width for each pattern (one). Set one width in all to treat them alike.<button class="alert-dismiss close-x" data-step-x title="Dismiss"><svg w="15"/></button></div>');
+  assert.match(H.stepNoteHtml(['N', 'blWin'], { X_SVG: x }), /the smoothing and SNIP width, set in points by an older version, are kept as they were,/);
   // The chips: none for one sample; by peak disabled with no reflection in every sample.
   assert.equal(H.sizeChipsHtml(1, false, 'sample'), '');
   assert.equal(H.sizeChipsHtml(2, false, 'sample'), '<button type="button" class="mode-chip plot-chip is-on" data-size-by="sample" title="Crystallite size by sample">by sample</button>'

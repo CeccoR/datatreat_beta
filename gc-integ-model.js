@@ -140,7 +140,7 @@ export const calCopy = c => ({ unit: c.unit, zero: { ...c.zero }, files: c.files
 /* ---- The raw chromatograms, read once per file (by its bytes) ---- */
 export function dataOf(S, rec){
   const b = rec && rec.rawBytes;
-  if (!(b instanceof Uint8Array)) return { error: 'its bytes are not stored in this browser' };
+  if (!(b instanceof Uint8Array)) return { error: 'its bytes are not stored in this browser any more' };
   let d = S.read.get(b);
   if (!d){
     try { d = readTcd(decodeText(b)); } catch(e){ d = { error: String(e && e.message || e) }; }
@@ -150,6 +150,8 @@ export function dataOf(S, rec){
 }
 // (a file a drop read, gc.js's or the calibration window's: what it read kept, not read again)
 export const prime = (S, bytes, d)=>{ S.read.set(bytes, d); };
+// (gc-model.js's, as gc.js says it of a file it cannot read as a GC table)
+const NOT_GC = 'not a GC table: no injection date and H₂ or O₂ column under a header';
 export const fileKey = (U, rec)=> rec.rawBytes instanceof Uint8Array ? U.bytesKey(rec.rawBytes) : 'name:' + rec.name;
 /* ---- A calibration's table (v549), read once per file (by its bytes) as gc.js reads a
    GC table (ctx.readTable), its injections' names with it ---- */
@@ -158,7 +160,7 @@ export function tableOf(S, b){
   let t = S.tabs.get(b);
   if (!t){
     try { t = S.ctx.readTable(decodeText(b)); } catch(e){ t = null; }
-    if (!t || t.error) t = { error: t && t.error || 'not a GC table (no injection date and H₂ or O₂ column under a header)' };
+    if (!t || t.error) t = { error: t && t.error || NOT_GC };
     S.tabs.set(b, t);
   }
   return t;
@@ -305,10 +307,10 @@ export const calKey = (U, C)=> U.exactKey([C.cal.unit, C.cal.zero, C.cal.files.m
 export function convOf(U, S, C, g, areas, tableVals){
   const L = calFit(U, S, C, g);
   if (L) return { how: 'cal', fit: L, f: A => toPct((A - L.intercept)/L.slope, C.cal.unit) };
-  if (!tableVals) return { why: `no standards for ${S.gasOf(g).txt} and no table to take its scale from` };
+  if (!tableVals) return { why: `no standards for ${S.gasOf(g).txt}, and no GC table for the GC software's scale (k)` };
   let T = null;
   try { T = transferK(areas, Array.from(tableVals, v=> fin(v) ? v : NaN), C.method.transfer[g]); } catch(e){ T = null; }
-  if (!T || !fin(T.k) || !T.k) return { why: `no standards for ${S.gasOf(g).txt}, and too few injections above the threshold to take the GC software's scale` };
+  if (!T || !fin(T.k) || !T.k) return { why: `no standards for ${S.gasOf(g).txt}, and too few injections above the threshold to take the GC software's scale (k)` };
   return { how: 'transfer', k: T.k, n: T.n, f: A => A/T.k };
 }
 // Each gas's conversion for entry e (its areas from `res`).
@@ -328,9 +330,10 @@ export function valuesFor(U, S, C, f){
   const tcd = f && f.mate && S.ctx.isTcd(f.mate) ? f.mate : null;
   if (!tcd) return null;
   const d = dataOf(S, tcd);
-  if (d.error) return { why: `its raw chromatograms could not be read (${d.error})` };
+  if (d.error) return { why: `its raw chromatograms could not be read: ${d.error.replace(/\.$/, '')}` };
   const n = d.cols.length, rows = f.injDates.length;
-  if (n !== rows) return { why: `${plural(rows, 'row')} in the table, ${plural(n, 'chromatogram')}` };
+  // (`integ`: the Integration card says it, which the card's alert names; gc-html.js srcAlertsHtml)
+  if (n !== rows) return { why: `${plural(rows, 'injection')} in the table, ${plural(n, 'chromatogram')}`, integ: true };
   const res = resultsAt(S, keyOf(U, tcd, C.method));
   if (!res || res.some(x=> !x)){ const st = status(S); return { why: st.halted ? 'its integration was stopped before its end' : 'its integration is not done yet', waiting: true }; }
   const vk = U.exactKey([keyOf(U, tcd, C.method), calKey(U, C), Object.keys(f.gas).map(k=> [k, U.objId(f.gas[k])]), U.objId(res)]);
@@ -605,9 +608,6 @@ export function alertFacts(U, S, C){
     if (!e.table && e.twin) warn.push({ kind: 'twin', e });
     else if (!e.table) warn.push({ kind: 'alone', e });
   });
-  // (a calibration taken from the GC software's table, for some file: said once; each
-  // file's k under its Peaks)
-  const transfer = es.filter(aligned).some(e=>{ const R = resOf(U, S, C, e.tcd); if (!R.res || R.res.some(x=> !x)) return false; const c = convAll(U, S, C, e, R.res); return Object.keys(S.GAS).some(g=> c[g] && c[g].how === 'transfer'); });
   /* A gas calibrated by standards whose injections fall outside the standards' range:
      extrapolated, said (below the lowest standard the intercept weighs most: the real O₂
      runs, about 0.03 %mol, lie far under the 0.2 %mol standard). */
@@ -623,7 +623,7 @@ export function alertFacts(U, S, C){
       if (out) warn.push({ kind: 'out', e, g, out, n: v.length, lo, hi, below: v.some(c=> c < lo), L });
     });
   });
-  return { errs: es.filter(e=> e.d.error), warn, transfer };
+  return { errs: es.filter(e=> e.d.error), warn };
 }
 
 /* ---- Its CSVs ---- */
@@ -664,20 +664,22 @@ export function chromCsv(U, d){
 }
 
 /* ---- The calibration's window ---- */
+// (a line of the alerts ends with a full stop: utils.js fileLine)
+const full = t => /[.?!]$/.test(t) ? t : t + '.';
 /* A file dropped, told by what it holds (v549): raw chromatograms (gc-pair.js looksTcd),
    { kind: 'tcd', name, bytes, d }, or a GC table (gc.js's reader), { kind: 'table', name,
    bytes, t }; else { bad } (why it is not loaded). */
 export function takeDropped(S, name, bytes){
   let text;
-  try { text = decodeText(bytes); } catch(e){ return { bad: `${name}: not text` }; }
+  try { text = decodeText(bytes); } catch(e){ return { bad: `${name}: not text.` }; }
   if (looksTcd(text)){
     let d;
     try { d = readTcd(text); } catch(e){ d = { error: String(e && e.message || e) }; }
-    if (d.error) return { bad: `${name}: raw chromatograms that cannot be read (${d.error})` };
+    if (d.error) return { bad: `${name}: raw chromatograms that cannot be read: ${full(d.error)}` };
     return { kind: 'tcd', name, bytes, d };
   }
   const t = tableOf(S, bytes);
-  if (t.error) return { bad: `${name}: neither raw chromatograms nor a GC table (${t.error})` };
+  if (t.error) return { bad: `${name}: neither raw chromatograms nor a GC table: ${full(t.error.replace(/^not a GC table: /, ''))}` };
   return { kind: 'table', name, bytes, t };
 }
 /* The files dropped (`got`) and those waiting (`held`) paired: a table and raw
@@ -685,21 +687,22 @@ export function takeDropped(S, name, bytes){
    pair, added (`add`) when the table has as many injections as there are chromatograms (its
    read primed); a table whose partner is a calibration file of v544–v548's (raw
    chromatograms alone) names its standards (`named`); a file whose partner is not there
-   waits (`held`, not in the project). What is not loaded, and why, goes into `bad`. */
+   waits (`held`, not in the project). What is not loaded, and why, goes into `bad`; the
+   files loaded already, by name, into `dup` (v567: to v566 among `bad`). */
 export function pairDropped(S, cal, held, got, bad){
   const pool = [...held.filter(h=> !got.some(g=> g.name === h.name)), ...got], stem = x => stemOf(x.name).stem;
   const loaded = new Set(cal.files.flatMap(f=> f.table ? [f.name, f.table.name] : [f.name]));
-  const add = [], named = [];
-  pool.forEach(x=>{ if (loaded.has(x.name)){ x.done = true; bad.push(`${x.name}: already loaded`); } });
+  const add = [], named = [], dup = [];
+  pool.forEach(x=>{ if (loaded.has(x.name)){ x.done = true; dup.push(x.name); } });
   // (a pair's counts: the table's injections, its rows with a date and a value as the
   // file list counts them, one a chromatogram)
-  const counts = (t, n)=> t.injDates.length === n ? '' : `${plural(t.injDates.length, 'injection')} in the table, ${plural(n, 'chromatogram')}: they must be as many (a name a chromatogram), nothing integrated`;
+  const counts = (t, n)=> t.injDates.length === n ? '' : `${plural(t.injDates.length, 'injection')} in the table, ${plural(n, 'chromatogram')}: they must be as many, a name for each chromatogram: nothing integrated`;
   pool.filter(x=> x.kind === 'tcd' && !x.done).forEach(c=>{
     const t = pool.find(x=> x.kind === 'table' && !x.done && stem(x) === stem(c));
     if (!t) return;
     c.done = t.done = true;
     const why = counts(t.t, c.d.cols.length);
-    if (why){ bad.push(`${t.name} + ${c.name}: ${why}`); return; }
+    if (why){ bad.push(`${t.name} + ${c.name}: ${full(why)}`); return; }
     prime(S, c.bytes, c.d);
     add.push({ name: c.name, rawBytes: c.bytes, levels: c.d.cols.map(blankLevel), table: { name: t.name, rawBytes: t.bytes } });
   });
@@ -707,15 +710,15 @@ export function pairDropped(S, cal, held, got, bad){
     const fi = cal.files.findIndex((f, i)=> !f.table && !named.some(z=> z.fi === i) && stemOf(f.name).stem === stem(t));
     if (fi < 0) return;
     t.done = true;
-    const d = dataOf(S, cal.files[fi]), why = d.error ? `its raw chromatograms cannot be read (${d.error})` : counts(t.t, d.cols.length);
-    if (why){ bad.push(`${t.name} + ${cal.files[fi].name}: ${why}`); return; }
+    const d = dataOf(S, cal.files[fi]), why = d.error ? `its raw chromatograms cannot be read: ${d.error}` : counts(t.t, d.cols.length);
+    if (why){ bad.push(`${t.name} + ${cal.files[fi].name}: ${full(why)}`); return; }
     named.push({ fi, table: { name: t.name, rawBytes: t.bytes } });
   });
   const wait = pool.filter(x=> !x.done);
   wait.forEach(x=> bad.push(x.kind === 'tcd'
-    ? `${x.name}: raw chromatograms without their GC table (the same name without _TCD, .csv or .txt): drop the table too (this file waits here for it)`
-    : `${x.name}: a GC table without its raw chromatograms (the same name with _TCD): drop them too (this file waits here for them)`));
-  return { add, named, held: wait };
+    ? `${x.name}: raw chromatograms without their GC table: drop the table too, the same name without _TCD (.csv or .txt); this file waits here for it.`
+    : `${x.name}: a GC table without its raw chromatograms: drop them too, the same name with _TCD; this file waits here for them.`));
+  return { add, named, held: wait, dup };
 }
 // The calibration with the pairs added and the tables naming its files (pairDropped's).
 export function calWith(cal, add, named){

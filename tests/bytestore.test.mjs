@@ -345,23 +345,27 @@ test('bytes missing or unreadable: the other files and tabs back, said so; XRPD 
       t.objectStore('bytes').delete(a); t.objectStore('bytes').delete(b); t.objectStore('bytes').put('not bytes', c); t.oncomplete = ()=>{ q.result.close(); res(); }; }; }), [shaOf(s0), shaOf(S[0]), shaOf(S[1])]);
     await page.reload(); await ready(page);
     await page.waitForSelector('.pwa-confirm.show');
-    assert.match((await banner(page)).text, /^3 files of your open tabs are not stored in this browser any more/);
+    assert.equal((await banner(page)).text, 'Your open tabs: 3 of their files are not stored in this browser any more: they come back without their bytes.');
     await answer(page, 'ok');
     await thumbs(page, 1);
     assert.equal(await page.locator('#semFileTableWrap tr.file-row').count(), 1);
-    assert.match(await page.locator('#semAlerts').innerText(), /img1\.tif.*\n?.*img2\.tif|img1\.tif, img2\.tif/s);
+    // (v567: counted, a warning of the project opened, utils.js FILE ALERTS)
+    assert.match(await page.locator('#semAlerts').innerText(), /Opened, to check:\s*2 files left out: their stored bytes no longer read\./);
     await same(page, 'sem', [S[2]]);
     await switchTab(page, 0);
     assert.equal(await page.locator('#xrdFileTableWrap tr.file-row').count(), 2);
+    // (v567: a banner; to v566 the browser's alert())
     await page.locator('#xrdFileTableWrap .dl-file').nth(0).click();
-    await page.waitForTimeout(300);
-    assert.deepEqual(said, ['The original file for “s00.xrdml” is not available.']);
+    await page.waitForSelector('.pwa-confirm.show');
+    assert.equal((await banner(page)).text, '“s00.xrdml”: its original bytes are not stored in this browser any more: it cannot be downloaded.');
+    await answer(page, 'ok');
+    assert.deepEqual(said, [], 'no dialog of the browser');
     assert.ok((await dl(page, 'xrd', 1)).buf.equals(fs.readFileSync(s1)));
     // The project's record still holds the three: its export says two are not stored, and holds them as null.
     await page.click('#nav button[data-tab="projects"]');
     const d = await download(page, ()=> row(page, 'S').locator('.pr-json').click());
     await page.waitForSelector('.pwa-confirm.show');
-    assert.match((await banner(page)).text, /“S”: 2 of its files are not stored in this browser any more; the file holds them without their bytes/);
+    assert.equal((await banner(page)).text, '“S”: 2 of its files are not stored in this browser any more: the file holds them without their bytes.');
     await answer(page, 'ok');
     assert.deepEqual(JSON.parse(d.buf.toString()).state.files.map(f=> f.raw.b64 === null), [true, true, false]);
     assert.deepEqual(errors, []);
@@ -379,13 +383,15 @@ test('an EPR pair whose .DTA bytes are not stored: its download says so, not a z
       t.objectStore('bytes').delete(h); t.oncomplete = ()=>{ q.result.close(); res(); }; }; }), shaOf(E[1]));
     await page.reload(); await ready(page);
     await page.waitForSelector('.pwa-confirm.show');
-    assert.match((await banner(page)).text, /^1 file of your open tabs is not stored in this browser any more/);
+    assert.equal((await banner(page)).text, 'Your open tabs: 1 of their files is not stored in this browser any more: it comes back without its bytes.');
     await answer(page, 'ok');
     let got = null;
     page.once('download', ()=> got = 'downloaded');
     await page.locator('#eprFileTableWrap .dl-file').nth(0).click();
-    await page.waitForTimeout(300);
-    assert.deepEqual([said, got], [['The original file for “e1.DTA” is not available.'], null]);
+    await page.waitForSelector('.pwa-confirm.show');
+    assert.equal((await banner(page)).text, '“e1.DTA”: its original bytes are not stored in this browser any more: it cannot be downloaded.');
+    await answer(page, 'ok');
+    assert.deepEqual([said, got], [[], null]);
     const z = readZip((await dl(page, 'epr', 1)).buf);
     assert.deepEqual(z.map(e=> e.name), ['e2.DSC', 'e2.DTA']);
     assert.ok(z[0].data.equals(fs.readFileSync(E[2])) && z[1].data.equals(fs.readFileSync(E[3])));

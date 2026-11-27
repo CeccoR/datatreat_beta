@@ -79,9 +79,9 @@ test('DRS: every encoding and dialect loads to the numbers of the fixture', asyn
     const alerts = await page.locator('#taucAlerts').textContent();
     // Three columns named two ways, and two columns with no header (to v509 read as F(R),
     // with a warning): refused, and why said.
-    assert.match(alerts, /Invalid file\(s\):\s*three\.csv \(which columns to read cannot be told: its header names both F\(R\) and %R\)\s*noheader\.txt \(no header naming its columns: the wavelength in nm, and F\(R\) or %R\)/);
+    assert.match(alerts, /Not loaded:\s*three\.csv: which columns to read cannot be told: its header names both F\(R\) and %R\.\s*noheader\.txt: no header naming its columns: the wavelength in nm, and F\(R\) or %R\./);
     // (how it was read said: the F(R) its header names; the standard ones need no word)
-    assert.match(alerts, /Verify how these files were read:\s*spaces-comma\.txt: not a standard format: its header names F\(R\), read as F\(R\)\s*units\.csv: not a standard format: its header names F\(R\), read as F\(R\)\s*$/);
+    assert.match(alerts, /How these files were read:\s*spaces-comma\.txt: not a standard format: its header names F\(R\), read as F\(R\)\.\s*units\.csv: not a standard format: its header names F\(R\), read as F\(R\)\.\s*$/);
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });
@@ -110,7 +110,9 @@ test('GC: every encoding and dialect loads to the numbers of the fixture, quoted
       assert.deepEqual(by[n].gas, by['ref.csv'].gas, n + ': H2 and O2');
       assert.equal(by[n].emptyRows, 0, n);
     }
-    assert.match(await page.locator('#gcAlerts').textContent(), /Invalid file\(s\):\s*nodate\.csv\s*comma-both\.csv\s*aligned-blank\.txt/);
+    // (v567: each with why, C02: to v566 the names alone)
+    const why = 'not a GC table: no injection date and H₂ or O₂ column under a header\\.';
+    assert.match(await page.locator('#gcAlerts').textContent(), new RegExp(`Not loaded:\\s*nodate\\.csv: ${why}\\s*comma-both\\.csv: ${why}\\s*aligned-blank\\.txt: ${why}`));
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });
@@ -123,7 +125,7 @@ test('a name already loaded is said and not loaded again; dismissed, the alert g
     await page.setInputFiles('#gcFiles', env.fx.files.gc[0]);
     await settle(page);
     assert.equal(await page.locator('#gcFileTableWrap tr.file-row').count(), 2);
-    assert.match(await page.locator('#gcAlerts').textContent(), /Already loaded file\(s\):\s*alpha\.csv/);
+    assert.match(await page.locator('#gcAlerts').textContent(), /Already loaded, not loaded again:\s*alpha\.csv\./);
     await page.click('#gcAlerts [data-action="gc-dismiss-upload"]');
     assert.doesNotMatch(await page.locator('#gcAlerts').textContent(), /Already loaded/);
     assert.deepEqual(errors, []);

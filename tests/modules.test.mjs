@@ -183,8 +183,9 @@ test('30e: EPR refuses a .DSC of fewer than two points, saying why; flat spectra
       file('none.DSC', dsc.replace(/XPTS 1024\n/, '')), file('none.DTA', e.dta), file('ok.DSC', dsc), file('ok.DTA', e.dta)]);
     await page.waitForFunction(()=> document.querySelectorAll('#eprFileTableWrap tr.file-row').length === 1); await settle(page);
     const alerts = await page.locator('#eprAlerts').textContent();
-    assert.match(alerts, /one \(XPTS 1: a spectrum needs two points at least\)/);
-    assert.match(alerts, /none \(its \.DSC gives no XPTS, the number of points\)/);
+    // (v567: the pair named by its files, R4's line: "{file}: {reason}.")
+    assert.match(alerts, /one\.DTA \+ one\.DSC: XPTS 1: a spectrum needs two points at least\./);
+    assert.match(alerts, /none\.DTA \+ none\.DSC: its \.DSC gives no XPTS, the number of points\./);
     // Two spectra all flat, global normalisation: each a line in its slot, no NaN.
     await openModule(page, 'epr');
     const flat = Buffer.alloc(1024*8);
@@ -295,16 +296,18 @@ test('38, 39: DRS reads R% by its header; only the Cary layout is standard, any 
     assert.equal(by['bad-f.csv'].wl.length, 548);
     assert.ok(!by['bad-f.csv'].wl.includes(251));
     const alerts = await page.locator('#taucAlerts').innerText();
-    assert.match(alerts, /Invalid file\(s\):\s*noheader\.csv \(no header naming its columns: the wavelength in nm, and F\(R\) or %R\)\s*all-bad\.csv \(no point with a physical value: 2 points left out \(1 with R outside 0–100 %, 1 with R = 0 %, where F\(R\) is infinite\)\)\s*meta-r\.csv \(its header names no F\(R\) or %R column\)\s*meta-r\.txt \(its header names no F\(R\) or %R column\)\s*jasco\.csv \(its header names no wavelength column in nm\)/);
-    assert.match(alerts, /Verify how these files were read:/);
+    assert.match(alerts, /Not loaded:\s*noheader\.csv: no header naming its columns: the wavelength in nm, and F\(R\) or %R\.\s*all-bad\.csv: no point with a physical value: 2 points left out: 1 with R outside 0–100 %, 1 with R = 0 %, where F\(R\) is infinite\.\s*meta-r\.csv: its header names no F\(R\) or %R column\.\s*meta-r\.txt: its header names no F\(R\) or %R column\.\s*jasco\.csv: its header names no wavelength column in nm\./);
+    // (v567: the points left out to check, a warning; how the files were read, an info, after it)
+    assert.match(alerts, /Loaded, to check:[\s\S]*How these files were read:/);
     // A header naming the reflectance in any other layout: read as %R, and said.
     for (const n of ['r.csv', 'refl.csv', 'spaced.txt', 'semi.csv', 'quoted.txt', 'pr1.csv', 'pr3.csv'])
-      assert.match(alerts, new RegExp('^' + n.replace('.', '\\.') + ': not a standard format: its header names the reflectance in %, read as %R$', 'm'), n);
-    for (const n of ['fr1', 'fru']) assert.match(alerts, new RegExp('^' + n + '\\.csv: not a standard format: its header names F\\(R\\), read as F\\(R\\)$', 'm'), n);
+      assert.match(alerts, new RegExp('^' + n.replace('.', '\\.') + ': not a standard format: its header names the reflectance in %, read as %R\\.$', 'm'), n);
+    for (const n of ['fr1', 'fru']) assert.match(alerts, new RegExp('^' + n + '\\.csv: not a standard format: its header names F\\(R\\), read as F\\(R\\)\\.$', 'm'), n);
     // The standard format, F(R) or %R, has no note on how it was read (the file list says it);
     // the points left out keep theirs.
-    assert.match(alerts, /^bad-r\.csv: not a standard format: its header names the reflectance in %, read as %R; 3 points left out \(2 with R outside 0–100 %, 1 with R = 0 %, where F\(R\) is infinite\)$/m);
-    assert.match(alerts, /^bad-f\.csv: 3 points left out \(1 with F\(R\) < 0, 2 with a value that is no finite number\)$/m);
+    assert.match(alerts, /^bad-r\.csv: not a standard format: its header names the reflectance in %, read as %R\.$/m);
+    assert.match(alerts, /^bad-r\.csv: 3 points left out: 2 with R outside 0–100 %, 1 with R = 0 %, where F\(R\) is infinite\.$/m);
+    assert.match(alerts, /^bad-f\.csv: 3 points left out: 1 with F\(R\) < 0, 2 with a value that is no finite number\.$/m);
     assert.doesNotMatch(alerts, /^(ref|pr|prsemi)\.csv/m, 'the standard format, read as such: no note');
     // The file itself is downloaded as it came.
     const d = await download(page, ()=> page.locator('#taucFileTableWrap tr.file-row:nth-child(2) .dl-file').click());
@@ -333,7 +336,7 @@ test('DRS: a Cary %R export loads with no alert, the file list says how each fil
     assert.equal((await page.locator('#taucAlerts').innerText()).trim(), '', 'standard formats: no alert');
     // (its header on the first line: not the standard format)
     await loadFiles(page, 'tauc', [file('nonstd.csv', ref.split('\n').slice(1).join('\n'))]);
-    assert.match(await page.locator('#taucAlerts').innerText(), /^⚠ Verify how these files were read:\s*nonstd\.csv: not a standard format: its header names F\(R\), read as F\(R\)\s*$/);
+    assert.match(await page.locator('#taucAlerts').innerText(), /^How these files were read:\s*nonstd\.csv: not a standard format: its header names F\(R\), read as F\(R\)\.\s*$/);
     const st = await moduleState(page, 'tauc', true), by = Object.fromEntries(st.files.map(f=> [f.name, f]));
     assert.deepEqual([by['cary.csv'].read, by['cary.csv'].warn, by['cary.csv'].wl.length], ['R%', false, 1201]);
     assert.deepEqual(by['cary.csv'].wl, cary.wl, 'its wavelengths, 800 down to 200 nm');
@@ -433,7 +436,7 @@ for (const mod of ['tauc', 'gc', 'epr']){
       const st = structuredClone(good);
       st.files.splice(1, 0, { name: 'empty', label: 'empty' });
       assert.equal(await restore(page, mod, st), 'ok');
-      assert.match(await page.locator(`#${mod}Alerts`).textContent(), /1 file in the project with no data to show: left out\./);
+      assert.match(await page.locator(`#${mod}Alerts`).textContent(), /Opened, to check:\s*1 file left out: no data in the project\./);
       assert.deepEqual((await moduleState(page, mod)).files.map(f=> f.name), good.files.map(f=> f.name));
       // The true state again: drawn as before.
       assert.equal(await restore(page, mod, good), 'ok');

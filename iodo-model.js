@@ -278,13 +278,16 @@ export function resultOf(U, f, tRead, cal){
   const tr = traceOf(f), al = alignOf(U, tr, f.inj), A = readAt(al, tRead), L = calLine(U, cal);
   return { f, tr, al, A, c: L && Number.isFinite(A) ? (A - L.q) / L.m : NaN };
 }
-// The Analysis card's read-outs of a trace's results r: its injection, background, reading
-// and concentration.
+// The Analysis card's read-outs of a trace's results r: its injection (none: the note under
+// the plot says to click it), background, reading and concentration; a reading time past
+// the trace's end said in a warning under them (AWarn, v567: to v566 grey, in the read-out).
 export function readouts(r, cal, tRead, L){
+  const past = r.al && !Number.isFinite(r.A);
   return {
-    inj: r.al ? `${fix(r.al.t0, 2)} s` : 'none: click the plot',
+    inj: r.al ? `${fix(r.al.t0, 2)} s` : 'none',
     bg: r.al ? fix(r.al.min, 4) : 'n/a',
-    A: r.al ? (Number.isFinite(r.A) ? fix(r.A, 4) : `n/a (the trace ends ${fix(r.al.xs[r.al.xs.length - 1], 1)} s after the injection)`) : 'n/a',
+    A: r.al && !past ? fix(r.A, 4) : 'n/a',
+    AWarn: past ? `The trace ends ${fix(r.al.xs[r.al.xs.length - 1], 1)} s after the injection: no reading at ${tRead} s.` : '',
     ATitle: `Absorbance at ${tRead} s:`,
     cRow: L ? '' : 'none',
     c: Number.isFinite(r.c) ? `${sig(r.c)}${cal.unit.trim() ? ' ' + cal.unit.trim() : ''}` : 'n/a',

@@ -95,13 +95,15 @@ test('import: not a project refused; changed after signing, or newer, asked', as
     let said = await importProject(page, env.fx.put('junk.datatreat', 'not json {'), { refused: true });
     assert.match(said.text, /“junk\.datatreat” is not a DataTreat project/);
     said = await importProject(page, projectFile(env, 'arr.datatreat', { ...ex.obj, state: [1, 2] }), { refused: true });
-    assert.match(said.text, /is not a DataTreat project/);
+    assert.match(said.text, /“arr\.datatreat” is not a DataTreat project: it cannot be read as one\./);
     const edited = { ...ex.obj, title: 'Edited', state: { ...ex.obj.state, files: ex.obj.state.files.slice(0, 1) } };
     said = await importProject(page, projectFile(env, 'edited.datatreat', edited), { expectDoubt: true, answerDoubt: 'x' });
     assert.match(said.text, /its content changed after DataTreat signed it/);
     assert.equal(await page.locator('#sessListWrap tr.sess-row').count(), 0, 'not imported when not confirmed');
     said = await importProject(page, projectFile(env, 'newer.datatreat', { ...ex.obj, title: 'Newer', formatVersion: 99, appVersion: 'v999' }), { expectDoubt: true });
-    assert.match(said.text, /written by a newer DataTreat \(v999\)/);
+    // (v567: no version number in the words)
+    assert.match(said.text, /it was written by a newer version of DataTreat/);
+    assert.doesNotMatch(said.text, /v999/);
     assert.equal(await page.locator('#sessListWrap tr.sess-row').count(), 1);
     assert.deepEqual(errors, []);
   } finally { await close(); }

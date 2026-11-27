@@ -1,4 +1,4 @@
-import { esc, registerModule, keeper, objId, exactKey, csvNum, flashFieldInvalid, barNames, X_SVG, setupDropzone, nextColor, fitLinear, csvLine } from './utils.js';
+import { esc, registerModule, keeper, objId, exactKey, csvNum, flashFieldInvalid, barNames, X_SVG, setupDropzone, nextColor, fitLinear, csvLine, fileAlertHtml, fileLine, NOT_READ, bytesOf } from './utils.js';
 import { Plot, svgEl, axisReadout } from './plot.js';
 import { moduleKit, wideCsv, isObj, num } from './modkit.js';
 import { viewOf, setView, viewKey, swatchLegend } from './modcharts.js';
@@ -105,7 +105,8 @@ const drawable = S => S.shown() || !(S.stale = true);
 function kitHooks(S){
   return {
     root: S.root, key: S.key, layer: S.layer,
-    alerts: p =>{ S.$('iodoAlerts').innerHTML = p.invalid + p.upload; },
+    parts: ['check'],
+    alerts: p =>{ S.$('iodoAlerts').innerHTML = p.invalid + p.check + p.upload; },
     refresh: ()=> afterFilesChange(S),
     redraw: ()=> drawAll(S, true),
     cleared: ()=>{ S.curName = null; },
@@ -141,15 +142,21 @@ function redrawTab(S){
 }
 
 /* ---- Files dropped: each read (iodo-model.js readKinetics), each pair of columns a trace,
-   its injection suggested; a file already loaded (by its name) said, not loaded again. ---- */
+   its injection suggested; a file already loaded (by its name) said, not loaded again; one
+   whose bytes cannot be read (gone from the disk: utils.js NOT_READ) said, the others
+   loaded (to v566 it ended the drop with no word); the pairs of columns left out of a file
+   (fewer than three points) said, to check (to v566 with no word). ---- */
 async function onDrop(S, list){
-  const names = new Set(S.allFiles.map(f=> f.src || f.name)), bad = [], dup = [];
+  const names = new Set(S.allFiles.map(f=> f.src || f.name)), bad = [], dup = [], check = [];
   for (const file of list){
     if (names.has(file.name)){ dup.push(file.name); continue; }
     names.add(file.name);
-    const rawBytes = new Uint8Array(await file.arrayBuffer());
+    const rawBytes = await bytesOf(file);
+    if (!rawBytes){ bad.push(fileLine(file.name, NOT_READ)); continue; }
     const t = M.readBytes(rawBytes);
-    if (!t || t.error){ bad.push(t ? `${file.name} (${t.error})` : file.name); continue; }
+    if (!t || t.error){ bad.push(fileLine(file.name, t ? t.error : 'could not be read as text')); continue; }
+    const out = t.traces.filter(tr=> !tr).length;
+    if (out) check.push(esc(fileLine(file.name, `${out} pair${out > 1 ? 's' : ''} of columns left out: fewer than 3 points`)));
     M.keepTable(rawBytes, t);
     t.traces.forEach((tr, k)=>{
       if (!tr) return;
@@ -157,6 +164,7 @@ async function onDrop(S, list){
     });
   }
   S.kit.said(bad, dup);
+  S.kit.alerts.check = fileAlertHtml('check', check, 'iodo-dismiss-check');
   afterFilesChange(S);
 }
 function afterFilesChange(S){
@@ -219,6 +227,8 @@ function paintAnalysis(S){
   $('iodoInj').textContent = o.inj;
   $('iodoBg').textContent = o.bg;
   $('iodoA').textContent = o.A;
+  $('iodoAWarn').innerHTML = o.AWarn ? `<div class="alert warn compact">⚠ ${esc(o.AWarn)}</div>` : '';
+  $('iodoAWarn').style.display = o.AWarn ? '' : 'none';
   $('iodoATitle').textContent = o.ATitle;
   $('iodoCRow').style.display = o.cRow;
   $('iodoC').textContent = o.c;

@@ -34,7 +34,7 @@ const belowInstrHtml = n => `<div class="alert warn">⚠ ${n} peak${n > 1 ? 's a
    conversion turned to one and still one, N the smoothing's, blWin the SNIP's); none, ''. */
 function stepNoteHtml(on, { X_SVG }){
   const what = on.map(m=> m === 'N' ? 'smoothing' : 'SNIP width').join(' and ');
-  return on.length ? `<div class="alert warn">⚠ The patterns were measured at different steps: the ${what}, set in points up to v510, ${on.length > 1 ? 'are' : 'is'} kept as ${on.length > 1 ? 'they were' : 'it was'}, a width for each pattern (one). Set one width in all to treat them alike.<button class="alert-dismiss close-x" data-step-x title="Dismiss">${X_SVG(15)}</button></div>` : '';
+  return on.length ? `<div class="alert warn">⚠ The patterns were measured at different steps: the ${what}, set in points by an older version, ${on.length > 1 ? 'are' : 'is'} kept as ${on.length > 1 ? 'they were' : 'it was'}, a width for each pattern (one). Set one width in all to treat them alike.<button class="alert-dismiss close-x" data-step-x title="Dismiss">${X_SVG(15)}</button></div>` : '';
 }
 
 /* The peak table of a pattern's kept peaks (pks, at least one): 2θ, rel intensity, classic

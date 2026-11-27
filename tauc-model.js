@@ -577,23 +577,22 @@ export function drsPoints(t, R){
 export const LEFT = { wl: 'a wavelength not above 0', r: 'R outside 0–100 %', zero: 'R = 0 %, where F(R) is infinite', neg: 'F(R) < 0', inf: 'a value that is no finite number' };
 export function leftText(left){
   const ks = Object.keys(LEFT).filter(k=> left[k] > 0), n = ks.reduce((t, k)=> t + left[k], 0);
-  return `${n} point${n > 1 ? 's' : ''} left out (${ks.map(k=> `${left[k]} with ${LEFT[k]}`).join(', ')})`;
+  return `${n} point${n > 1 ? 's' : ''} left out: ${ks.map(k=> `${left[k]} with ${LEFT[k]}`).join(', ')}`;
 }
-/* What the alert says of a file: how a file of no standard format was read (drsColumns),
-   and the points left out (to v501 the files of a non-standard format were named, no
-   more). A file in the standard format has no word on how it was read: the file list's
-   note says it (to v501 an R% file was said here, the Cary's own export as well; to v501
-   a header naming R% or F(R) anywhere above the data was a standard format). A file with
-   no header naming F(R) or %R is refused (from v510): only a project saved before holds
-   one, read as F(R), and says so as it did (none). */
+/* What the alerts say of a file (utils.js FILE ALERTS): how a file of no standard format
+   was read (drsColumns), in the info (`read`), and the points left out, in the warning to
+   check (`check`; v567: to v566 both in one warning, "Verify how these files were read:").
+   To v501 the files of a non-standard format were named, no more. A file in the standard
+   format has no word on how it was read: the file list's note says it (to v501 an R% file
+   was said here, the Cary's own export as well; to v501 a header naming R% or F(R)
+   anywhere above the data was a standard format). A file with no header naming F(R) or %R
+   is refused (from v510): only a project saved before holds one, read as F(R), and says
+   so as it did (none). */
 const WARNS = { R: 'not a standard format: its header names the reflectance in %, read as %R', F: 'not a standard format: its header names F(R), read as F(R)',
   none: 'no header naming the columns F(R) or R%: read as F(R)' };
 export const warnOf = f => f.read === 'R%' ? 'R' : f.head ? 'F' : 'none';
 export function fileNotes(f){
-  const out = [];
-  if (f.warn) out.push(WARNS[warnOf(f)]);
-  if (f.left && Object.keys(LEFT).some(k=> f.left[k] > 0)) out.push(leftText(f.left));
-  return out;
+  return { read: f.warn ? [WARNS[warnOf(f)]] : [], check: f.left && Object.keys(LEFT).some(k=> f.left[k] > 0) ? [leftText(f.left)] : [] };
 }
 /* A file as a restore takes it (modkit RESTORED): its wavelengths and F(R), the points
    with both a finite number and a wavelength above 0 (none: left out, null); how it was

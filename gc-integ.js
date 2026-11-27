@@ -1,4 +1,4 @@
-import { esc, csvLine, fmtNum, alertHtml, setupDropzone, X_SVG, bytesKey, exactKey, objId, guardNumericInput, flashFieldInvalid, kept } from './utils.js';
+import { esc, csvLine, fmtNum, alertHtml, fileAlertHtml, fileLine, NOT_READ, bytesOf, setupDropzone, X_SVG, bytesKey, exactKey, objId, guardNumericInput, flashFieldInvalid, kept } from './utils.js';
 import { Plot, svgEl, linkX, niceTicks } from './plot.js';
 import { plotWrap, chipRow, viewOf, setView, PLOT_DL_ICON } from './modcharts.js';
 import { cardInfo, fileSafe, nameDownloads } from './cards.js';
@@ -45,7 +45,7 @@ import * as H from './gc-integ-html.js';
 // utils.js's, modkit.js's and plot.js's helpers the model takes (gc-integ-model.js U), and
 // what the markup takes (gc-integ-html.js u).
 const U = { isObj, oneOf, num, esc, exactKey, bytesKey, objId, fmtNum, csvLine, niceTicks };
-const HU = { esc, alertHtml, X_SVG, snavHtml, plotWrap, chipRow, PLOT_DL_ICON };
+const HU = { esc, alertHtml, fileAlertHtml, X_SVG, snavHtml, plotWrap, chipRow, PLOT_DL_ICON };
 export const INTEG_INFO = H.integInfo(cardInfo(false, false));
 
 /* =========================================================
@@ -563,16 +563,21 @@ function calChanged(S, C, W, levels){ C.valuesKept.clear(); draw(S, C, true); if
 /* The files dropped (v549), each told by what it holds and paired (gc-integ-model.js
    takeDropped, pairDropped): a pair loaded when its table has as many injections as there
    are chromatograms; a file whose partner is not there waits (W.held) until it is dropped;
-   a table whose partner is a calibration file of v544–v548's names its standards. */
+   a table whose partner is a calibration file of v544–v548's names its standards. A file
+   whose bytes cannot be read (gone from the disk: utils.js NOT_READ) is said and left out,
+   not the rest of the drop (to v566 it ended the drop with no word). Each drop's alerts
+   replace the last's. */
 async function onCalDrop(S, C, W, list){
   const bad = [], got = [];
   for (const f of list){
-    const x = M.takeDropped(S, f.name, new Uint8Array(await f.arrayBuffer()));
+    const b = await bytesOf(f);
+    if (!b){ bad.push(fileLine(f.name, NOT_READ)); continue; }
+    const x = M.takeDropped(S, f.name, b);
     if (x.bad) bad.push(x.bad); else got.push(x);
   }
   const P = M.pairDropped(S, C.cal, W.held, got, bad);
   W.held = P.held;
-  W.q('.gci-cal-alerts').innerHTML = H.dropAlertHtml(HU, bad);
+  W.q('.gci-cal-alerts').innerHTML = H.dropAlertHtml(HU, bad, P.dup);
   if (!P.add.length && !P.named.length) return;
   if (P.add.length) C.calSel = M.calRows(U, S, C).length;
   C.cal = M.calWith(C.cal, P.add, P.named);

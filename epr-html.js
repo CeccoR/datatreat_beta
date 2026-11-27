@@ -28,6 +28,3 @@ export const cardBody = (a, u)=> `
           </div>
         </div>
       </div>`;
-// The alert's title over the halves of a pair dropped alone (nothing is held back waiting
-// for its partner).
-export const PENDING_TITLE = 'Not loaded — a .DTA and its .DSC must be uploaded together:';

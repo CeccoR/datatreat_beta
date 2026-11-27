@@ -158,9 +158,12 @@ test('the state, a trace\'s results and read-outs, the plots, the CSVs', ()=>{
   const line = { mode: 'line', slope: 0.5, intercept: 0.01, stds: [], unit: ' mM ' }, L = M.calLine(U, line);
   const r = M.resultOf(U, f0, 1.5, line);
   near(r.A, 0.105); near(r.c, (0.105 - 0.01)/0.5);
-  assert.deepEqual(M.readouts(r, line, 1.5, L), { inj: '1.00 s', bg: '0.1200', A: '0.1050', ATitle: 'Absorbance at 1.5 s:', cRow: '', c: '0.19 mM' });
-  assert.deepEqual(M.readouts(M.resultOf(U, f0, 5, line), line, 5, L).A, 'n/a (the trace ends 2.0 s after the injection)');
-  assert.deepEqual(M.readouts(M.resultOf(U, f1, 5, cal), cal, 5, null), { inj: 'none: click the plot', bg: 'n/a', A: 'n/a', ATitle: 'Absorbance at 5 s:', cRow: 'none', c: 'n/a' });
+  assert.deepEqual(M.readouts(r, line, 1.5, L), { inj: '1.00 s', bg: '0.1200', A: '0.1050', AWarn: '', ATitle: 'Absorbance at 1.5 s:', cRow: '', c: '0.19 mM' });
+  // (v567: past the trace's end, n/a and a warning under the read-outs; no injection, none,
+  // the note under the plot saying to click it)
+  const past = M.readouts(M.resultOf(U, f0, 5, line), line, 5, L);
+  assert.deepEqual([past.A, past.AWarn], ['n/a', 'The trace ends 2.0 s after the injection: no reading at 5 s.']);
+  assert.deepEqual(M.readouts(M.resultOf(U, f1, 5, cal), cal, 5, null), { inj: 'none', bg: 'n/a', A: 'n/a', AWarn: '', ATitle: 'Absorbance at 5 s:', cRow: 'none', c: 'n/a' });
   const tr = M.traceOf(f0), R = M.traceRange(tr);
   assert.deepEqual([R.x0, R.x1], [0, 3]); near(R.y0, 0.1 - 0.01); near(R.y1, 0.3 + 0.01);
   assert.deepEqual(M.alignRange([], 100), [0, 125, -0.05, 1.05]);
@@ -181,7 +184,7 @@ test('the state, a trace\'s results and read-outs, the plots, the CSVs', ()=>{
 
 test('the markup: the calibration\'s summary, the legend, the window, its rows and fit, escaped', ()=>{
   assert.equal(H.calSumHtml(M.calDefault(), null, HU), 'Calibration: <b>none</b>');
-  assert.equal(H.calSumHtml({ mode: 'line', unit: '' }, null, HU), 'Calibration: <b>incomplete</b>, not used');
+  assert.equal(H.calSumHtml({ mode: 'line', unit: '' }, null, HU), '<div class="alert warn compact">⚠ Calibration incomplete: not used.</div>');
   assert.equal(H.calSumHtml({ mode: 'std', unit: '<i>' }, { m: 0.1, q: -0.02, r2: 0.99999 }, HU), 'Calibration: <b>A = 0.1 × c − 0.02</b>, R² = <b>1.0000</b>, c in <b>&lt;i&gt;</b>');
   assert.equal(H.legendHtml([['#a"b', 'x <y>']], HU), '<span><i style="background:#a&quot;b"></i>x <y></span>');
   const w = H.calHtml(HU);
@@ -189,7 +192,7 @@ test('the markup: the calibration\'s summary, the legend, the window, its rows a
   const rows = H.stdRowsHtml([[1, null], ['<x>', 2]], HU);
   assert.ok(rows.includes('value="1"') && rows.includes('value=""') && rows.includes('value="&lt;x&gt;"') && rows.includes('aria-label="Remove standard 2"'));
   assert.equal(H.calFitHtml({ mode: 'line' }, null, 0, HU), '');
-  assert.equal(H.calFitHtml({ mode: 'std' }, null, 1, HU), '1 standard with both values: two of different concentrations at least are needed.');
+  assert.equal(H.calFitHtml({ mode: 'std' }, null, 1, HU), '<div class="alert bad compact">✕ 1 standard with both values: two of different concentrations at least are needed.</div>');
   assert.equal(H.calFitHtml({ mode: 'std' }, { n: 3, m: 0.1, q: 0.01, r2: 0.5 }, 3, HU), 'Fit of 3 standards: slope <b>0.1</b>, intercept <b>0.01</b>, R² = <b>0.5000</b>');
 });
 
