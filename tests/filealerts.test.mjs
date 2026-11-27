@@ -18,6 +18,12 @@
      check:" and "How these files were read:" (DRS's points left out and its formats, XRPD's
      scans, Iodometry's pairs of columns left out, EPR's spectrum with no microwave
      frequency, a half pair refused saying which half is missing).
+   - What the reading of the files said is worked out from the files there are (v572, R3, U3:
+     DRS, EPR, Iodometry, XRPD, SEM; GC in gcdate and gcalt): said again after an undo and a
+     redo, its box's × marking its files (no step of the history, a change to save), the mark
+     kept through undo and redo and in the project saved and opened again, a file dropped
+     since said, a file removed taking its own (to v571 a flag of the module's or the drop's
+     words, gone or back at the next undo, lost or back at a reopening).
    - A save the browser's storage refuses: said, the tab left unsaved (to v566 nothing).
    - SEM's figure composer that cannot load: a banner, as the plots' (v571; to v570 nothing). */
 import { test, before, after } from 'node:test';
@@ -25,7 +31,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { start, openModule, loadFiles, settle, moduleState, banner, answer, tabLabels, firstTop } from './helpers.mjs';
+import { start, openModule, loadFiles, settle, moduleState, banner, answer, tabLabels, firstTop, undo, history, saveAs, openProject } from './helpers.mjs';
 import { drsCsv, gcCsv, xrdml, eprPair, tif } from './fixtures.mjs';
 
 let env;
@@ -221,6 +227,77 @@ test('Iodometry and XRPD: what was left out to check, how the files were read as
     await drop(page, '#xrdFiles', [{ name: 'two.xrdml', buffer: Buffer.from(two) }]);
     assert.deepEqual(await boxes(page, '#xrdAlerts'), [['warn', '⚠ Loaded, to check:', 'two.xrdml: scan 2 not read: no <intensities> or <counts>.'],
       ['info', 'How these files were read:', 'two.xrdml: 2 scans, 1 of them loaded, each a pattern of its own.']]);
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+/* ---- What the reading of the files said, from the files there are (v572, R3) ----
+   A module walked through: files dropped (`first`), said (A), and so after an undo and a redo;
+   a box's × (`what`): the rest (B), no step of the history, its files marked in the state; so
+   after an undo and a redo; a file dropped since (`more`) said (C); a file removed (row `gone`)
+   taking its own (D), back with its undo (C); the project saved, its tab closed, opened again
+   (C); a box's × there a change to save. */
+const CHECK = '⚠ Loaded, to check:', READ = 'How these files were read:';
+async function walk(page, { mod, first, more, what, gone, A, B, C, D }){
+  const box = ()=> boxes(page, `#${mod}Alerts`), name = 'Seen ' + mod, saved = '.proj-save.is-saved';
+  await openModule(page, mod);
+  await drop(page, `#${mod}Files`, first);
+  assert.deepEqual(await box(), A, 'dropped');
+  await undo(page); await undo(page, true);
+  assert.deepEqual(await box(), A, 'undone and redone: said, from the files there are');
+  const h = await history(page, mod);
+  await page.click(`#${mod}Alerts [data-action="${mod}-dismiss-${what}"]`); await settle(page);
+  assert.deepEqual(await box(), B, 'dismissed');
+  assert.deepEqual(await history(page, mod), h, 'no step of the history');
+  assert.ok((await moduleState(page, mod)).files.some(f=> Array.isArray(f.seen) && f.seen.includes(what)), 'its files marked in the state');
+  await undo(page); await undo(page, true);
+  assert.deepEqual(await box(), B, 'undone and redone: dismissed still');
+  await drop(page, `#${mod}Files`, more);
+  assert.deepEqual(await box(), C, 'a file dropped since: said');
+  await page.locator(`#${mod}FileTableWrap tr.file-row`).nth(gone).locator('.row-del').click(); await settle(page);
+  assert.deepEqual(await box(), D, 'a file removed: its own with it');
+  await undo(page);
+  assert.deepEqual(await box(), C, 'its removal undone: back');
+  await saveAs(page, name);
+  await page.locator('#tabBar .ptab.is-on .ptab-x').click(); await settle(page);
+  await openProject(page, mod, name);
+  assert.deepEqual(await box(), C, 'the project opened again: as saved');
+  assert.equal(await page.locator(saved).count(), 1);
+  await page.click(`#${mod}Alerts [data-action="${mod}-dismiss-${what}"]`); await settle(page);
+  assert.equal(await page.locator(saved).count(), 0, 'a × a change to save');
+}
+
+test('R3, DRS and EPR: each file\'s note until its box\'s × marks it, through undo and redo and the project reopened; a file removed takes its own', async ()=>{
+  const { page, errors, close } = await env.page();
+  try {
+    const body = drsCsv({ Eg: 3.2 }).toString('utf8').split('\n').slice(2), fr = n => csv(n, 'Wavelength (nm),F(R)\n' + body.join('\n'));
+    const FR = n => `${n}: not a standard format: its header names F(R), read as F(R).`, LEFT = 'bad.csv: 3 points left out: 3 with F(R) < 0.';
+    await walk(page, { mod: 'tauc', first: [fr('nonstd.csv'), csv('bad.csv', 'Wavelength (nm),F(R)\n' + body.map((l, i)=> i < 3 ? l.replace(/,.*/, ',-1') : l).join('\n'))], more: [fr('nonstd2.csv')], what: 'read', gone: 1,
+      A: [['warn', CHECK, LEFT], ['info', READ, FR('nonstd.csv'), FR('bad.csv')]], B: [['warn', CHECK, LEFT]], C: [['warn', CHECK, LEFT], ['info', READ, FR('nonstd2.csv')]], D: [['info', READ, FR('nonstd2.csv')]] });
+    const a = eprPair({ title: 'a' }), dsc = a.dsc.toString('latin1'), nf = n => [{ name: n + '.DSC', buffer: Buffer.from(dsc.replace(/MWFQ .*\n/, ''), 'latin1') }, { name: n + '.DTA', buffer: a.dta }];
+    const MW = n => `${n}.DSC: no microwave frequency (MWFQ): plotted on the field measured, not at 9.5 GHz; no g axis.`;
+    await walk(page, { mod: 'epr', first: [{ name: 'a.DSC', buffer: a.dsc }, { name: 'a.DTA', buffer: a.dta }, ...nf('nf')], more: nf('nf2'), what: 'read', gone: 2,
+      A: [['info', READ, MW('nf')]], B: [], C: [['info', READ, MW('nf2')]], D: [] });
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+test('R3, Iodometry, XRPD and SEM: each file\'s note until its box\'s × marks it, through undo and redo and the project reopened; a file removed takes its own', async ()=>{
+  const { page, errors, close } = await env.page();
+  try {
+    const PAIR = n => `${n}: 1 pair of columns left out: fewer than 3 points.`;
+    await walk(page, { mod: 'iodo', first: [kinetics('k.csv', 2)], more: [kinetics('k2.csv', 1, 1)], what: 'check', gone: 1,
+      A: [['warn', CHECK, PAIR('k.csv')]], B: [], C: [['warn', CHECK, PAIR('k2.csv')]], D: [] });
+    const one = xrdml(0, { n: 400 }).toString('utf8'), scan = one.slice(one.indexOf('<scan '), one.indexOf('</scan>') + 7);
+    const two = n => ({ name: n, buffer: Buffer.from(one.replace(scan, scan + scan.replace(/<intensities[\s\S]*?<\/intensities>/, ''))) });
+    const NOT = n => `${n}: scan 2 not read: no <intensities> or <counts>.`, SCANS = n => `${n}: 2 scans, 1 of them loaded, each a pattern of its own.`;
+    await walk(page, { mod: 'xrd', first: [two('two.xrdml')], more: [two('two2.xrdml')], what: 'read', gone: 1,
+      A: [['warn', CHECK, NOT('two.xrdml')], ['info', READ, SCANS('two.xrdml')]], B: [['warn', CHECK, NOT('two.xrdml')]],
+      C: [['warn', CHECK, NOT('two.xrdml'), NOT('two2.xrdml')], ['info', READ, SCANS('two2.xrdml')]], D: [['warn', CHECK, NOT('two.xrdml')]] });
+    // (an info bar said to be 2 rows taller than it is: the row above it is the image's)
+    const w = n => tif(n, { W: 60, H: 50, strip: 6, sign: n, seed: 3, extraMain: 'ImageStripSize=8\r\n' });
+    const BAR = n => `${n}: the row under the image (row 43) is not the info bar's uniform border: the bar may not be where Tescan puts it, so check the image's bottom edge.`;
+    await walk(page, { mod: 'sem', first: [w('w.tif')], more: [w('w2.tif')], what: 'check', gone: 1, A: [['warn', CHECK, BAR('w.tif')]], B: [], C: [['warn', CHECK, BAR('w2.tif')]], D: [] });
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });

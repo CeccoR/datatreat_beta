@@ -207,9 +207,16 @@ was proposed; nothing here is in the code yet.
   v571: the cards and the status lines (XRPD's instrument line and its assumptions, a CIF
   not added and a run failed, no instrumental profile said once, the CIFs' warnings by
   kind; GC's Integration card; a value refused said in red under its field, never a banner).
-  Left (phase 4): the alerts' × kept per file through undo and redo, and the Rietveld
-  warnings' kinds in the saved results (X11, with the two amber lines left in the results,
-  XV20 and XV22).
+  Done in v572 (phase 4, the last): what the reading of the files said worked out from the
+  files in the list in every module, a box's × marking its files through undo and redo and
+  in the project saved; the Rietveld engine's, the CIF reader's and the instrument reader's
+  messages each of its kind, kept so in the results, a result saved before read as warnings;
+  the results' amber lines in compact boxes. Left, found then: GC's Calibration window says
+  a calibration of v544–v548 lacks its table in a box whose × holds while the window is
+  open (not kept in the project); XRPD's standard window says what its last drop found until
+  the next (not worked out from the standard's file); three of the engine's messages keep
+  "—" in their words (a phase alone showing n % of its intensity, a phase not detected, the
+  parameters not determined), which the engine's golden outputs hold: to change with them.
 
 - **Long functions.** A handful of functions run to hundreds of lines: `createRietveld`
   (xrd-rv.js, ~1300), `createPeakAnalysis` (xrd-peaks.js, ~1100), `autoRefine`

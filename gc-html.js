@@ -4,16 +4,15 @@
    instructions (with "From the reading to the rates", its example worked out with the
    module's own numbers), a card's body and its section of the Results, the parameter
    table, a sample's legend entries, the file list's Sample column, the alerts under the
-   drop zone (the pairs, the dates, the empty cells, the alternative export) and at a card's
-   top (where its values came from). Taken out of v556's gc.js as they were: the same
-   markup to the byte.
-   What they need from the page is handed in, u = { esc, num, plotWrap, CSV_ICON, alertHtml,
-   fileAlertHtml } (utils.js's esc and alerts, modkit.js's num, modcharts.js's plot box and
-   CSV icon: gc.js HU), and the cards' own instructions (cards.js cardInfo) where they end
-   with them.
+   drop zone (the pairs, the dates, the empty cells, the alternative export: their lines,
+   which modkit.js puts in their boxes) and at a card's top (where its values came from).
+   Taken out of v556's gc.js as they were: the same markup to the byte.
+   What they need from the page is handed in, u = { esc, num, plotWrap, CSV_ICON, alertHtml }
+   (utils.js's esc and alerts, modkit.js's num, modcharts.js's plot box and CSV icon: gc.js
+   HU), and the cards' own instructions (cards.js cardInfo) where they end with them.
 ========================================================= */
 import { NORM, NORMS, P_ATM, P_UNITS, INJ_DELAY_AUTO, GASES, molarVolume, inUnit, injDelay, mOf, aOf, qOf, tOf, pOf, startOf, endOf,
-  lightOnWarn, seriesName, gasTxt, blankCounts, byName, headOf, isHead, isTable, isTcd, rowFiles, pairMarks } from './gc-model.js';
+  lightOnWarn, seriesName, gasTxt, blankCounts, byName, headOf, isHead, isTable, isTcd, rowFiles } from './gc-model.js';
 import { boxHtml } from './alerts.js';
 
 /* ---- The instructions ---- */
@@ -251,64 +250,50 @@ export function sampleCell(all, f, i, u){
 }
 
 /* ---- The alerts under the drop zone ----
-   Each read off the loaded files (`tables`: the tables of the list) each time, not kept
-   from the drop, so it is there again when the project is reopened (or its tab brought
-   back) and goes with a file removed; dismissed, a file's mark (`seen`, gc.js) keeps it
-   away for the files on show through undo and redo. One box a kind (utils.js FILE ALERTS,
-   v567; to v566 a box each, under headers of their own): to check, the pairs that cannot
-   serve the analysis, the rows left out (dates that do not exist, no gas value) and the
-   empty cells skipped; how the files were read, the dates read day/month and the
-   alternative export. Every mark is on the file's data as this load holds them, which the
-   undo steps share, so a file dropped anew (a same-named one too), a reopened project, a
-   tab brought back are named again, and a dismissal in one tab leaves the others' files
-   named: `seen.check` and `seen.read` on a table's gases, `seen.pairs` on a row's files'
-   bytes (pairMarks). */
+   What the reading of the files said, read off the files in the list (`all`, every record)
+   at each draw (modkit.js notes), not kept from the drop: there again as the project is
+   reopened (or its tab brought back), gone with a file removed; a box's × marks its files
+   seen (alerts.js markSeen: the record's `seen`, which the undo steps and the project keep;
+   to v571 a mark on the file's data in memory, which a reopened project lost). One box a kind
+   (utils.js FILE ALERTS, v567; to v566 a box each, under headers of their own): to check, the
+   pairs that cannot serve the analysis, the rows left out (dates that do not exist, no gas
+   value) and the empty cells skipped; how the files were read, the dates read day/month and
+   the alternative export. Each line a note about the record that heads its row. */
 /* The empty cells skipped, per file and gas (the blank cells of a row kept), and the rows
    with none of the file's gases, left out at parse (`emptyRows`; to v566 counted as an
    empty cell for each gas). */
-function blankLines(tables, u){
-  const lines = [];
-  tables.forEach(f=>{
-    const n = blankCounts(f), rows = u.num(f.emptyRows, 0, v=> Number.isInteger(v) && v > 0);
-    if (n.some(Boolean)) lines.push(u.esc(f.name) + ': ' + GASES.map((g, j)=> n[j] ? `${n[j]} empty ${g.label} cell${n[j] > 1 ? 's' : ''}` : '').filter(Boolean).join(', ')
-      + ': each of those injections is left out of that gas only, its rate, production and mean from the injections with a value.');
-    if (rows) lines.push(`${u.esc(f.name)}: ${rows} row${rows > 1 ? 's' : ''} with no gas value left out.`);
-  });
-  return lines;
+function blankLines(f, u){
+  const n = blankCounts(f), rows = u.num(f.emptyRows, 0, v=> Number.isInteger(v) && v > 0);
+  return [...(n.some(Boolean) ? [u.esc(f.name) + ': ' + GASES.map((g, j)=> n[j] ? `${n[j]} empty ${g.label} cell${n[j] > 1 ? 's' : ''}` : '').filter(Boolean).join(', ')
+    + ': each of those injections is left out of that gas only, its rate, production and mean from the injections with a value.'] : []),
+  ...(rows ? [`${u.esc(f.name)}: ${rows} row${rows > 1 ? 's' : ''} with no gas value left out.`] : [])];
 }
-/* The injection dates, said per file: a file read as day/month (how it was read), the rows
-   left out with a date that does not exist (to check; gc-model.js readGc). */
-function dateLines(tables, u){
-  const check = [], read = [];
-  tables.forEach(f=>{
-    // (a project's .json may hold anything: only true and a whole count go into markup)
-    const dm = f.dayMonth === true, n = u.num(f.badDates, 0, v=> Number.isInteger(v) && v > 0);
-    if (dm) read.push(`${u.esc(f.name)}: dates read as day/month.`);
-    if (n) check.push(`${u.esc(f.name)}: ${n} row${n > 1 ? 's' : ''} left out: ${n > 1 ? 'their' : 'its'} injection date does not exist.`);
-  });
-  return { check, read };
+/* The injection dates of a file: read as day/month (how it was read), the rows left out with
+   a date that does not exist (to check; gc-model.js readGc). A project's .json may hold
+   anything: only true and a whole count go into markup. */
+const dayMonthLines = (f, u)=> f.dayMonth === true ? [`${u.esc(f.name)}: dates read as day/month.`] : [];
+function badDateLines(f, u){
+  const n = u.num(f.badDates, 0, v=> Number.isInteger(v) && v > 0);
+  return n ? [`${u.esc(f.name)}: ${n} row${n > 1 ? 's' : ''} left out: ${n > 1 ? 'their' : 'its'} injection date does not exist.`] : [];
 }
-// The files read as the alternative export (gc-model.js readGc, `altExport`).
-const altLines = (tables, u)=> tables.filter(f=> f.altExport === true).map(f=> `${u.esc(f.name)}: the alternative export (Inject Time, Amount in ppm).`);
-/* The files that cannot be what their pairs need (PAIRS, gc-model.js): two tables (the
+// A file read as the alternative export (gc-model.js readGc, `altExport`).
+const altLines = (f, u)=> f.altExport === true ? [`${u.esc(f.name)}: the alternative export (Inject Time, Amount in ppm).`] : [];
+/* A row whose files cannot be what their pair needs (PAIRS, gc-model.js): two tables (the
    first used), two files of raw chromatograms, and raw chromatograms with no table, which
-   Analysis leaves out (`all`, every record). */
-function pairLines(all, seen, u){
-  const lines = [];
-  all.forEach(r=>{
-    if (pairMarks(r).some(b=> seen.has(b))) return;
-    const [a, b] = rowFiles(r);
-    if (b && isTable(a) && isTable(b)) lines.push(`${u.esc(r.label)}: two tables paired (${u.esc(a.name)}, ${u.esc(b.name)}): the first is used, as it is alone; ${u.esc(b.name)} is ignored. Drag a file by its own grip to pair it.`);
-    else if (b && isTcd(a) && isTcd(b)) lines.push(`${u.esc(r.label)}: two files of raw chromatograms paired (${u.esc(a.name)}, ${u.esc(b.name)}): shown in Integration, left out of Analysis, with no injection times. Drag a file by its own grip to pair it.`);
-    else if (!b && isTcd(a)) lines.push(`${u.esc(a.name)}: raw chromatograms with no table: shown in Integration, left out of Analysis, with no injection times.`);
-  });
-  return lines;
+   Analysis leaves out. */
+function pairLines(r, u){
+  const [a, b] = rowFiles(r);
+  if (b && isTable(a) && isTable(b)) return [`${u.esc(r.label)}: two tables paired (${u.esc(a.name)}, ${u.esc(b.name)}): the first is used, as it is alone; ${u.esc(b.name)} is ignored. Drag a file by its own grip to pair it.`];
+  if (b && isTcd(a) && isTcd(b)) return [`${u.esc(r.label)}: two files of raw chromatograms paired (${u.esc(a.name)}, ${u.esc(b.name)}): shown in Integration, left out of Analysis, with no injection times. Drag a file by its own grip to pair it.`];
+  return !b && isTcd(a) ? [`${u.esc(a.name)}: raw chromatograms with no table: shown in Integration, left out of Analysis, with no injection times.`] : [];
 }
-// The two boxes (utils.js fileAlertHtml): to check, and how the files were read.
-export function dropAlertsHtml(all, tables, seen, u){
-  const check = tables.filter(f=> !seen.check.has(f.gas)), read = tables.filter(f=> !seen.read.has(f.gas));
-  return u.fileAlertHtml('check', [...pairLines(all, seen.pairs, u), ...dateLines(check, u).check, ...blankLines(check, u)], 'gc-dismiss-check')
-    + u.fileAlertHtml('read', [...dateLines(read, u).read, ...altLines(read, u)], 'gc-dismiss-read');
+/* The notes (alerts.js: { what, line, files }), in the boxes' order: to check, the pairs of
+   every row, then the tables' rows left out and empty cells; how they were read, the tables'
+   dates, then their alternative export. */
+export function fileNotes(all, u){
+  const tables = all.filter(isTable), by = (what, list, lines)=> list.flatMap(f=> lines(f, u).map(line=> ({ what, line, files: [f] })));
+  return [...by('check', all, pairLines), ...by('check', tables, badDateLines), ...by('check', tables, blankLines),
+    ...by('read', tables, dayMonthLines), ...by('read', tables, altLines)];
 }
 
 /* Where a card's values came from, said at its top (v544): the samples re-integrated, and

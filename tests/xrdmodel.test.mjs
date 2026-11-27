@@ -47,8 +47,9 @@ function decl(file, name){
   if (m && /^[}\])]/.test(rest.slice(end + 1))) end = rest.indexOf('\n', end + 1);
   return rest.slice(0, end).replace(/^export /, '');
 }
-const UN = ['COLORS', 'colorOf', 'nextColor', 'esc', 'X_SVG', 'ALERT_ICON', 'alertHtml', 'FILE_ALERT', 'fileAlertHtml', 'fileLine'];
-export const PAGE = new Function([...UN.map(n=> decl(n === 'ALERT_ICON' ? 'alerts.js' : 'utils.js', n)), decl('modkit.js', 'isObj')].join('\n') + `\nreturn { ${UN.join(', ')}, isObj };`)();
+const UN = ['COLORS', 'colorOf', 'nextColor', 'esc', 'X_SVG', 'ALERT_ICON', 'seenFor', 'notesFor', 'alertHtml', 'FILE_ALERT', 'fileAlertHtml', 'fileLine', 'notesHtml'];
+const IN_ALERTS = new Set(['ALERT_ICON', 'seenFor', 'notesFor']);
+export const PAGE = new Function([...UN.map(n=> decl(IN_ALERTS.has(n) ? 'alerts.js' : 'utils.js', n)), decl('modkit.js', 'isObj')].join('\n') + `\nreturn { ${UN.join(', ')}, isObj };`)();
 export const dec = b => new TextDecoder().decode(b);
 export const enc = s => new TextEncoder().encode(s);
 // A file's bytes read (the page's XML, here JSON of its scans: new objects at each reading).
@@ -87,22 +88,27 @@ test('a file read again: by its bytes (once), as it was, its data moved, points 
   const sc = [scan([1, 2, 3], [5, 6, 7], { varMul: [1, 1, 1] }), scan([4, 5, 6], [1, 2, 3], { dropped: 1 })], b = enc(JSON.stringify({ scans: sc }));
   read.n = 0;
   const same = M.readAgain(U, { name: 'a.xrdml', rawBytes: b, x: [1, 2, 3], y: [5, 6, 7], varMul: [1, 1, 1] });
-  assert.equal(same.note, null); assert.deepEqual(same.f.x, [1, 2, 3]);
-  assert.equal(M.readAgain(U, { name: 'a.xrdml', rawBytes: b, x: same.f.x, y: same.f.y, varMul: same.f.varMul }).f.x, same.f.x);
+  assert.equal(same.oldData, undefined); assert.deepEqual(same.x, [1, 2, 3]);
+  assert.equal(M.readAgain(U, { name: 'a.xrdml', rawBytes: b, x: same.x, y: same.y, varMul: same.varMul }).x, same.x);
   assert.equal(read.n, 1, 'read once');
-  // (v567: no version number in the words, ALERTS-REVIEW.md R4)
-  assert.match(M.readAgain(U, { name: 'a.XML', rawBytes: b, x: [1, 2, 3], y: [4, 5, 6], varMul: [1, 1, 1] }).note, /as an older version had read them, with their minimum subtracted/);
-  assert.match(M.readAgain(U, { name: 'a.xrdml', rawBytes: b, scan: 1, x: [4, 5, 6, 7], y: [1, 2, 3, 4] }).note, /1 point whose values are no finite number left out: the project held it, as an older version did/);
-  assert.equal(M.readAgain(U, { name: 'a.xrdml', rawBytes: b, scan: 7, x: [3, 2], y: [1, 2] }).f.x.join(), '2,3');
-  assert.match(M.readAgain(U, { name: 'a.txt', y: [0, 1], x: [1, 2] }).note, /lowest point is exactly 0/);
-  assert.equal(M.readAgain(U, { name: 'a.txt', rawBytes: b, y: [0, 1], x: [1, 2] }).note, null);
-  assert.equal(M.readAgain(U, { name: 'b.xrdml', rawBytes: enc('<no'), y: [1, 1], x: [1, 2] }).note, null);
+  // What it found kept with the file (v572: said until its box's ×, xrd-html.js openedNote;
+  // v567: no version number in the words, ALERTS-REVIEW.md R4)
+  const min = M.readAgain(U, { name: 'a.XML', rawBytes: b, x: [1, 2, 3], y: [4, 5, 6], varMul: [1, 1, 1] }), drop = M.readAgain(U, { name: 'a.xrdml', rawBytes: b, scan: 1, x: [4, 5, 6, 7], y: [1, 2, 3, 4] });
+  assert.deepEqual([min.oldData, drop.oldData], [{ minimum: true }, { dropped: 1 }]);
+  assert.match(H.openedNote(min), /as an older version had read them, with their minimum subtracted/);
+  assert.match(H.openedNote(drop), /1 point whose values are no finite number left out: the project held it, as an older version did/);
+  assert.equal(M.readAgain(U, { ...drop, seen: ['opened'] }).oldData, drop.oldData, 'kept as the file is read again (an undo), with its mark');
+  assert.equal(M.readAgain(U, { name: 'a.xrdml', rawBytes: b, scan: 7, x: [3, 2], y: [1, 2] }).x.join(), '2,3');
+  assert.match(H.openedNote(M.readAgain(U, { name: 'a.txt', y: [0, 1], x: [1, 2] })), /lowest point is exactly 0/);
+  assert.equal(H.openedNote(M.readAgain(U, { name: 'a.txt', rawBytes: b, y: [0, 1], x: [1, 2] })), '');
+  assert.equal(M.readAgain(U, { name: 'b.xrdml', rawBytes: enc('<no'), y: [1, 1], x: [1, 2] }).oldData, undefined);
+  for (const oldData of [{ dropped: 0 }, { dropped: 1.5 }, { dropped: '2' }, { minimum: 'yes' }, 'x', null, 5]) assert.equal(H.openedNote({ oldData, rawBytes: b, y: [0] }), '', 'a project\'s .json: only a whole count, or true');
   const bad = enc('q'); M.keepScans(bad, [{ error: 'x' }]); read.n = 0; M.readAgain(U, { name: 'c.xrdml', rawBytes: bad, x: [1, 2], y: [1, 2] }); assert.equal(read.n, 0);
   // as a restore takes it
   assert.equal(M.keptFile(U, 5, 0, '#1'), null);
   const k = M.keptFile(U, { x: [2, 1], y: [1, 2], varMul: [1] }, 3, '#abc');
-  assert.deepEqual([k.f.name, k.f.label, k.f.color, k.f.x, 'varMul' in k.f], ['file 4', 'file 4', '#abc', [1, 2], false]);
-  assert.equal(M.keptFile(U, { name: 'a.b.c', label: 7, x: [1, 2], y: [1, 2] }, 0, '#1').f.label, 'a.b');
+  assert.deepEqual([k.name, k.label, k.color, k.x, 'varMul' in k], ['file 4', 'file 4', '#abc', [1, 2], false]);
+  assert.equal(M.keptFile(U, { name: 'a.b.c', label: 7, x: [1, 2], y: [1, 2] }, 0, '#1').label, 'a.b');
   assert.equal(M.keptFile(U, { name: 'n', x: [1], y: [1] }, 0, '#1'), null);
   assert.equal(M.keptFile(U, { name: 'n', x: 'ab', y: [1, 2] }, 0, '#1'), null);
 });
@@ -121,8 +127,8 @@ test('a project restored: migrated, its files read, those lost, the sample on sh
   assert.equal(M.keptState(U, 'rietveld', 5, new Set()), null);
   const s = { files: [f('a'), 5, { ...f('b'), included: false }, { name: 'bad' }, f('c')], std: { name: 'std' }, curIdx: 4 };
   const R = M.readsOf(U, s);
-  assert.deepEqual([R.reads.map(r=> r && r.f.name), R.stdRead, R.lost, [...R.gone]], [['a', null, 'b', null, 'c'], null, 2, [1, 2]]);
-  assert.deepEqual(R.reads[4].f.color, PAGE.colorOf(4));
+  assert.deepEqual([R.reads.map(r=> r && r.name), R.stdRead, R.lost, [...R.gone]], [['a', null, 'b', null, 'c'], null, 2, [1, 2]]);
+  assert.deepEqual(R.reads[4].color, PAGE.colorOf(4));
   assert.equal(M.curIdxOf(s, R.gone, 2), 1); assert.equal(M.curIdxOf({ curIdx: 'x' }, R.gone, 2), 0); assert.equal(M.curIdxOf({ curIdx: 1.9 }, new Set([0]), 3), 0);
   assert.deepEqual(M.cardsIn(U, { cards: [null, { type: 'pie' }, { type: 'constructor' }, { id: 3 }, { type: 'rietveld' }] }), [{ id: 3 }, { type: 'rietveld' }]);
   assert.deepEqual(M.cardIn(U, { states: { scherrer: { perParams: [1, 2] }, rietveld: 5, constructor: {}, x: {} } }, new Set([0])), { states: { scherrer: { perParams: [2], manualPeaks: [], removedPeaks: [], shared: {} } } });
@@ -164,15 +170,37 @@ test('the markup: the standard\'s window and file, its alerts, the drop\'s, a re
   assert.ok(H.stdDropAlerts(1, 'f', 2, 0, 'p', [], HU).includes('the standard is the first; the others'));
   assert.equal(H.stdDropAlerts(1, 'f', 1, 0, 'p', [], HU), '');
   assert.equal(H.scansNote('f', 3, 3), 'f: 3 scans, each a pattern of its own.'); assert.equal(H.scansNote('f', 3, 1), 'f: 3 scans, 1 of them loaded, each a pattern of its own.');
-  const d = H.dropAlerts(['x: why.'], ['f: 3 scans, each a pattern of its own.', 'f: scan 2 not read: no scan data.', 'g: intensities in cps with no counting time: 0.5 s per point estimated from the noise, for the weights.'], ['y'], HU);
+  const d = H.dropAlerts(['x: why.'], ['y'], HU);
   assert.equal(d.load, PAGE.alertHtml('bad', 'Not loaded:', ['x: why.'], 'xrd-dismiss-invalid'));
-  assert.equal(d.note, PAGE.alertHtml('warn', 'Loaded, to check:', ['f: scan 2 not read: no scan data.'], 'xrd-dismiss-notes'));
-  assert.equal(d.read, PAGE.alertHtml('info', 'How these files were read:', ['f: 3 scans, each a pattern of its own.', 'g: intensities in cps with no counting time: 0.5 s per point estimated from the noise, for the weights.'], 'xrd-dismiss-read'));
   assert.equal(d.upload, PAGE.alertHtml('info', 'Already loaded, not loaded again:', ['y.'], 'xrd-dismiss-upload'));
-  assert.equal(H.dropAlerts([], [], [], HU).note, '');
-  const r = H.restoredAlert([{ f: { label: 'L<', name: 'n' }, note: 'moved' }, null], null, 1, { name: 's' }, HU);
-  assert.equal(r, PAGE.alertHtml('warn', 'Opened, to check:', ['L&lt;: moved.', '1 file and the standard left out: no data in the project.'], 'xrd-dismiss-notes'));
-  assert.equal(H.restoredAlert([{ f: { name: 'n' }, note: null }], null, 0, null, HU), '');
+  assert.deepEqual(H.dropAlerts([], [], HU), { load: '', upload: '' });
+  // What the reading of the files said (v572, ALERTS-REVIEW.md X04: worked out from the
+  // patterns in the list, each until its box's × marks it seen; to v571 the drop's and the
+  // restore's words, gone at the next undo, left with their file removed): from the scans the
+  // bytes were read into, a file's (how many, those not read) and each pattern's; what a project
+  // opened found, the standard's too; what it left out beside them.
+  const b1 = enc('f'), b2 = enc('g');
+  M.keepScans(b1, [scan([1, 2], [1, 2]), { error: 'no scan data' }, scan([1, 2], [1, 2], { notes: ['n<'] })]);
+  M.keepScans(b2, [scan([1, 2], [1, 2], { notes: ['intensities in cps with no counting time: 0.5 s per point estimated from the noise, for the weights'] })]);
+  assert.equal(M.keptScans({ name: 'f (scan 1).xrdml', rawBytes: b1 }).length, 3);
+  assert.deepEqual([M.keptScans({ name: 'f.txt', rawBytes: b1 }), M.keptScans({ name: 'f.xrdml' }), M.keptScans({ name: 'f.xrdml', rawBytes: enc('h') })], [null, null, null]);
+  const p1 = { name: 'f (scan 1).xrdml', src: 'f.xrdml', scan: 0, rawBytes: b1, y: [0] }, p3 = { name: 'f (scan 3).xrdml', src: 'f.xrdml', scan: 2, rawBytes: b1 };
+  const g = { name: 'g.xrdml', label: 'G', rawBytes: b2, oldData: { dropped: 2 } }, o = { name: 'o', label: 'O<', y: [3, 0, 1] }, std = { name: 's.xrdml', y: [0] };
+  const box = (all, st, lost)=> PAGE.notesHtml(H.fileNotes(all, st, M.keptScans, HU), w=> 'xrd-dismiss-' + w, { opened: lost ? [lost] : [] });
+  const CHECK = ['f.xrdml: scan 2 not read: no scan data.', 'f (scan 3).xrdml: n&lt;.'], READ = ['f.xrdml: 3 scans, 2 of them loaded, each a pattern of its own.', 'g.xrdml: intensities in cps with no counting time: 0.5 s per point estimated from the noise, for the weights.'];
+  const OPENED = ['G: read again from the file itself, 2 points whose values are no finite number left out: the project held them, as an older version did. Results refined before are from those: refine again.',
+    'O&lt;: its lowest point is exactly 0 and the project does not hold the file itself: its minimum may have been subtracted, as an older version did, which the Rietveld weights would take for the counts; load the file again.'];
+  const STD = 's.xrdml: its lowest point is exactly 0 and the project does not hold the file itself: its minimum may have been subtracted, as an older version did, which the Rietveld weights would take for the counts; load the file again.';
+  assert.equal(box([p1, p3, g, o], std, H.leftOutLine(1, true, null, HU)), PAGE.alertHtml('warn', 'Loaded, to check:', CHECK, 'xrd-dismiss-check')
+    + PAGE.alertHtml('warn', 'Opened, to check:', [...OPENED, STD, '1 file and the standard left out: no data in the project.'], 'xrd-dismiss-opened') + PAGE.alertHtml('info', 'How these files were read:', READ, 'xrd-dismiss-read'));
+  // A file's line goes when all its patterns are seen (or gone), a pattern's with it alone.
+  assert.equal(box([{ ...p1, seen: ['check', 'read'] }, p3, g], null, ''), PAGE.alertHtml('warn', 'Loaded, to check:', CHECK, 'xrd-dismiss-check')
+    + PAGE.alertHtml('warn', 'Opened, to check:', OPENED.slice(0, 1), 'xrd-dismiss-opened') + PAGE.alertHtml('info', 'How these files were read:', READ, 'xrd-dismiss-read'));
+  assert.equal(box([p1, { ...p3, seen: ['check'] }, { ...g, seen: ['opened', 'read'] }], null, ''), PAGE.alertHtml('warn', 'Loaded, to check:', CHECK.slice(0, 1), 'xrd-dismiss-check')
+    + PAGE.alertHtml('info', 'How these files were read:', READ.slice(0, 1), 'xrd-dismiss-read'));
+  assert.equal(box([p3], null, ''), PAGE.alertHtml('warn', 'Loaded, to check:', CHECK, 'xrd-dismiss-check') + PAGE.alertHtml('info', 'How these files were read:', ['f.xrdml: 3 scans, 1 of them loaded, each a pattern of its own.'], 'xrd-dismiss-read'));
+  assert.deepEqual(['the standard', '2 files', '1 file and the standard'].map(t=> t + ' left out: no data in the project.'), [H.leftOutLine(0, true, null, HU), H.leftOutLine(2, false, null, HU), H.leftOutLine(1, true, null, HU)]);
+  assert.deepEqual([H.leftOutLine(0, false, null, HU), H.leftOutLine(0, true, std, HU)], ['', '']);
 });
 
 /* ---- 40 cases: files dropped twice, a state put back, a run's results patched in ---- */
@@ -219,7 +247,7 @@ export function caseOf(seed){
 // A drop: each file read (its scans kept by its bytes), its patterns loaded unless loaded, each
 // its colour; the alerts' markup as the page puts it under the drop zone.
 function dropCase(S, c, names){
-  const existing = new Set(S.all.map(f=> f.name)), already = [], invalid = [], notes = [];
+  const existing = new Set(S.all.map(f=> f.name)), already = [], invalid = [];
   for (const name of names){
     const file = c.files.find(f=> f.name === name);
     if (existing.has(name)){ already.push(PAGE.esc(name)); continue; }
@@ -231,25 +259,26 @@ function dropCase(S, c, names){
     if (!fresh.length){ already.push(PAGE.esc(name)); continue; }
     existing.add(name);
     for (const q of rr.pats) if (!fresh.includes(q)) already.push(PAGE.esc(q.f.name));
-    if (rr.n > 1) notes.push(PAGE.esc(H.scansNote(name, rr.n, fresh.length)));
-    for (const t of rr.skipped) notes.push(PAGE.esc(PAGE.fileLine(name, t)));
-    for (const { f: p, notes: ns } of fresh){ p.color = PAGE.nextColor(S.all); existing.add(p.name); for (const t of ns) notes.push(PAGE.esc(PAGE.fileLine(p.name, t))); S.all.push(p); }
+    for (const { f: p } of fresh){ p.color = PAGE.nextColor(S.all); existing.add(p.name); S.all.push(p); }
   }
-  const A = H.dropAlerts(invalid, notes, already, HU);
-  S.alerts = A.load + A.note + A.read + A.upload;
+  const A = H.dropAlerts(invalid, already, HU);
+  S.alerts = A.load + notesOf(S, '') + A.upload;
 }
+// What the reading of the files in the list said (xrd.js rebuildXrdAlerts), a project opened's
+// line beside it.
+const notesOf = (S, lost)=> PAGE.notesHtml(H.fileNotes(S.all, S.std, M.keptScans, HU), w=> 'xrd-dismiss-' + w, { opened: lost ? [lost] : [] });
 const fileOut = f => f && [f.name, f.label, f.color, dg(f.x), dg(f.y), f.varMul ? dg(f.varMul) : null, f.src, f.scan, f.meas, f.included, f.held, f.rawBytes];
 // The state the module saves (its cards with their kinds' settings: a panel's its own as restored).
 const stateOf = S => ({ v: 2, files: S.all.map(f=> ({ ...f })), std: S.std ? { ...S.std } : null, stdRv: S.stdRv, curIdx: S.curIdx, cards: S.cards.map(a=>{ const st = M.otherStates(a); st[a.type] = M.clone(a.own); return { ...saved(a), states: st }; }) });
 function restoreCase(S, s0){
   const s = M.stateIn(U, s0), R = M.readsOf(U, s);
-  S.all = R.reads.filter(Boolean).map(x=> x.f);
-  S.std = R.stdRead ? R.stdRead.f : null;
+  S.all = R.reads.filter(Boolean);
+  S.std = R.stdRead;
   S.curIdx = M.curIdxOf(s, R.gone, S.all.filter(f=> f.included !== false).length);
   S.stdRv = U.isObj(s.stdRv) ? s.stdRv : {};
   const list = M.cardsIn(U, s), free = { n: freeId(list) }, seen = new Set();
   S.cards = list.map(src=>{ const a = recIn(src, x=> M.cardIn(U, x, R.gone), M.KINDS, Object.keys(M.KINDS)); if (!okId(a.id) || seen.has(a.id)) a.id = free.n++; seen.add(a.id); a.own = a.states[a.type] || {}; return a; });
-  S.alerts = H.restoredAlert(R.reads, R.stdRead, R.lost, s.std, HU);
+  S.alerts = notesOf(S, H.leftOutLine(R.lost, !!s.std, R.stdRead, HU));
 }
 export function runCase(c){
   const S = { all: [], std: null, curIdx: 0, stdRv: {}, bytes: new Map(),

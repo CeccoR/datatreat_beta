@@ -4,15 +4,15 @@
   "chi2": "0.9431272692657574"
  },
  "noirf-last-held": {
-  "digest": "0a1b4be4d0e84b07ca627126e47fe7b90faf75a4647306c81bee2094f8f32eac",
+  "digest": "9d30546437fd018a6fc7f9360485b2e81c6e60f58f1a8900f23bdeaed4e3375a",
   "chi2": "0.9388682901270935"
  },
  "noirf-last-bg": {
-  "digest": "f024383ff48f0ce7d0659e23d420b410fc6cfe34a984d52fef373a9ce34eece7",
+  "digest": "be0d497429f7f462d2d1b352700c817aaa54ca3c7fa3e6042b3fa7bb76b4f8d1",
   "chi2": "0.9422311335841232"
  },
  "needirf-noinstr-countscale": {
-  "digest": "2f78b40dce7dc82642a650381426a0dca166a65913028444fd3b6fbb366e26f0",
+  "digest": "b477065907f58fa32176c565e81d52c7c45f9482b466906a0eef060793674cc8",
   "chi2": "0.8391056872401824"
  },
  "irf-faults-aniso": {
@@ -28,7 +28,7 @@
   "chi2": "0.9473490633203272"
  },
  "std-soller-last": {
-  "digest": "51256d4dfc1c16b41a59bc5888a229ce1a28f3e374cc4926bce78154098048e9",
+  "digest": "03d5063e653d619e9cf258ab5aa9c2e70184fd5cf8bc317789b76bc6a7c3510e",
   "chi2": "0.9393006205035128"
  },
  "std-fcj": {
@@ -36,47 +36,47 @@
   "chi2": "0.9465041101648929"
  },
  "std-fcj-to-soller": {
-  "digest": "779c830430f98d0311e071feddf3e4be9c35c2b96411be64bada1b9437d1b7fe",
+  "digest": "28101c468219ee152a8199b5edad44e2ee131d6a6a10365ebac32fc6f753b5a0",
   "chi2": "2.3675136117994664"
  },
  "std-zero-far": {
-  "digest": "f9fad6bd559fa125ff30aa9281575946dafd617e46d96e4e2ef70376434e6350",
+  "digest": "fede276e9a8c93ed041e4c4e1cc1e8a6b328e6e4fe90a70e17be37ed3c558b55",
   "chi2": "110.39654064868566"
  },
  "sample-soller-irf": {
-  "digest": "b76a95e28839f1156999c6eb850e88097ab57e63d6dafb2df3de2a9f0ff0c8eb",
+  "digest": "6a5436dc67059717a570aff743d0437fde4a45444a42374b5c3e496b1576d00f",
   "chi2": "0.9743066149587906"
  },
  "two-phase": {
-  "digest": "83c2f7723785f6f73cf45e295d39e7021e609a6c42398a8aa52ec5ec8cd8fec1",
+  "digest": "30ace09c86eefd87ce5065c1e2650957ff38863a18175c882eb3349b0f345e65",
   "chi2": "0.9405629543222703"
  },
  "two-phase-last-new": {
-  "digest": "e2f283201cc0e01fdd5d75fa50b994dacfade55e59e1efe497baa5b6940dfea1",
+  "digest": "56677730ef0a103dadbe3932a6d03ede808d1a97d626da7c5b19282a590cb2a6",
   "chi2": "5.243448221284193"
  },
  "absent-rutile": {
-  "digest": "82fc20adab65876732942c586bbec78c6121fa369819be367127ef51c682d304",
+  "digest": "7b231cb67a61bbf92e2dfab20f86a0d3cfce7a660dcc9cbee13acfa05b33f8a8",
   "chi2": "0.9449246035644134"
  },
  "absent-nacl": {
-  "digest": "662b7e89f2b0325a17a9da9fd4769aa7e83291028e0c022ff8d01a9530d47152",
+  "digest": "1887eec4ff77318a945ef8186c9c25d1067058108e19895ddc97b21d5c84bc5a",
   "chi2": "0.9449246035644232"
  },
  "absent-nacl-last": {
-  "digest": "274bc29dd00a86029d93979d9d4f3d9548dea92ade3ef967e45bc20e9189cafb",
+  "digest": "057bbac4360139232e5df55b7b92e89334f7d37ac7e4fc19371e4a0d2d8ff992",
   "chi2": "0.9439754075790455"
  },
  "kept-bic": {
-  "digest": "f81c30b12691f8b28c383dfc00890c377fbfb83ab6f555f860bc96da0cccc07f",
+  "digest": "3e547705e0b4ddc7e3675e4b5d0c793c140f8698d072cb89ab60c3c78815ecd3",
   "chi2": "1.0197644875657548"
  },
  "kept-own": {
-  "digest": "4e51f76e611f852ed4ac71d34fb725d57ce774c3eeb28a0fe4be0ba46c7e2fd8",
+  "digest": "61d7eb4b77e173daa97b1940ae84d5263b87434013629386fb47e0b2e205fe62",
   "chi2": "8.183805175627228"
  },
  "implausible": {
-  "digest": "b8d89a3f6d5f7dcff63d76af2a062b9f404d8fbe046987a099b05fcf46a18fd2",
+  "digest": "1077916d78fe93535a210b795baac5f289e500816373b572bba1ee399d0e14f2",
   "chi2": "1.6393812514493524"
  },
  "cell-wide": {
@@ -88,19 +88,19 @@
   "chi2": "100.169582819791"
  },
  "few-points": {
-  "digest": "5ce4ec6f7478b0692829c44356c9eeafb431206d915f7a5075787aefa8c28ac7",
+  "digest": "f3dc567cb0007e34c7340e6105417f83a0d0133ce932a3acf0e24d089e466daa",
   "chi2": "17657.429340247712"
  },
  "shape-ellipsoidL": {
-  "digest": "4f5a1bfaef3c1d8b5848cba03dd6c47c04b9f7cf179a51fdf94adfc9e0f73fb2",
+  "digest": "4f986d1f919006aa8becd3eae2dd924cc910034d8b39aff41e8ea631ca2125dc",
   "chi2": "17.79275845067848"
  },
  "shape-sphere": {
-  "digest": "380bda6c2636653df2bcf11382700e49f8373b27caa39ee549f8e7e3763887b2",
+  "digest": "04464b9675b79c2bfc324275676867e363817ddb3f14e31c206a052e325917e4",
   "chi2": "0.9418542425838192"
  },
  "shape-sphere-last": {
-  "digest": "1c6e499c8f20d209d6ed1c47f9f98089bdf698ced35e0ecaf1ad0201a463c546",
+  "digest": "45a218328255bbffc7d48c16e1db341f6dff81287c27af8579727e221ee77721",
   "chi2": "0.9409081308383721"
  }
 }

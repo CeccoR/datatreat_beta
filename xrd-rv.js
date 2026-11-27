@@ -509,7 +509,7 @@ function drawPlot(S, f, r, preserve){
   const drawn = !(S.plot && key === S.plotKey && (preserve || atOrigin(S.plot)));
   if (drawn){ S.plotKey = ''; drawPattern(S, f, r, svg, preserve); S.plotKey = key; }
   else S.plot._stored.forEach(e=>{ if (e.key === f.name) e.label = f.label; });
-  const ins = M.instrOf(f), it = H.instrLine(ins), nt = H.instrNotesHtml(ins);
+  const ins = M.instrOf(f), it = H.instrLine(ins), nt = H.instrNotesHtml(ins, M.bytesHeld(f));
   if (it !== S.instrTxt){ S.instrTxt = it; S.$('Instr').textContent = it; }
   // (what it rests on, under it: v571, X05 and X06)
   if (nt !== S.instrNotes){ S.instrNotes = nt; S.$('InstrNotes').innerHTML = nt; }

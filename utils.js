@@ -2,7 +2,7 @@
    GENERIC UTILITIES
 ========================================================= */
 import { fixed, isFixed } from './db.js';
-import { ALERT_ICON, boxHtml } from './alerts.js';
+import { ALERT_ICON, boxHtml, notesFor } from './alerts.js';
 import { listHtml } from './filelist-html.js';
 import { downloadOf, zipEntries, gapFor, landing, outside, halfAt, movedFrom } from './filelist-model.js';
 const COLORS = [
@@ -2624,6 +2624,12 @@ const FILE_ALERT = { bad: ['bad', 'Not loaded:'], check: ['warn', 'Loaded, to ch
 const fileAlertHtml = (what, lines, dismissAction)=> lines.length ? alertHtml(FILE_ALERT[what][0], FILE_ALERT[what][1], what === 'dup' ? lines.map(l=> l + '.') : lines, dismissAction) : '';
 // A line of those alerts, plain text: the file, what is said of it, and a full stop.
 const fileLine = (name, why)=> `${name}: ${why}${/[.?!]$/.test(why) ? '' : '.'}`;
+/* The boxes of what the reading of the files said, worked out from the files in the list
+   (v572, R3: alerts.js notes, those with a file not marked seen), in the order warning (to
+   check, then a project opened), info: `act(what)` the data-action of each box's ×, which
+   marks its files (alerts.js markSeen); `more[what]`, lines of a box beside its notes (what a
+   project opened left out, which is no file in the list). */
+const notesHtml = (notes, act, more = {})=> ['check', 'opened', 'read'].map(w=> fileAlertHtml(w, [...notesFor(notes, w).map(n=> n.line), ...(more[w] || [])], act(w))).join('');
 /* A file dropped whose bytes cannot be read: gone from the disk since it was chosen,
    moved, or no permission (the browser's NotFoundError or NotReadableError). To v566 DRS,
    GC, Custom, SEM and Iodometry stopped the drop there with no word, XRPD and EPR said the
@@ -2802,7 +2808,7 @@ window.addEventListener('load', normalizeNavIcons);
 export {
   colorOf, esc, stateKey, bytesKey, moduleStateKey, viewOnlyChange, registerBusy, moduleBusy, stopModule, colorPickerUI, CP_PALETTES, palettePickerUI, settings, fmtNum, fmtData, csvNum, csvLine, saveBlob, downloadBytes,
   X_SVG, DL_SVG, setupDropzone, renderUnifiedFileList, dropGap, includedOf, setIncluded, removeFileAt, moveFileTo, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, boxStats,
-  maxArr, minArr, NORM_OPTIONS, normOf, fitLinear, tinv, goTab, setTabLoaded, moduleHasData, registerHistory, alertHtml, boxHtml, fileAlertHtml, fileLine, NOT_READ, bytesOf, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState,
+  maxArr, minArr, NORM_OPTIONS, normOf, fitLinear, tinv, goTab, setTabLoaded, moduleHasData, registerHistory, alertHtml, boxHtml, fileAlertHtml, fileLine, notesHtml, NOT_READ, bytesOf, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState,
   getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, guardNumericInput,
   guardNumberInputs, createDateTimeField, flashFieldInvalid, numRule, tiltFits, barNames, barChipYmax, confirmBanner, confirmModal, normalizeProjIcons, refreshProjBar, saveSettings, registerModule,
   makeInstance, attachInstance, detachInstance, dropKey, withState, onAnyChange, onBusyChange, busyChanged, shownOf, showAgain, zoomAgain, keeper, kept, objId, exactKey, dropsBytes, asleep, vacate,

@@ -26,6 +26,7 @@ import { rng, makeTiff } from './fixtures.mjs';
 import { readTescanTiff, cropStats, hashBytes } from '../sem-read.js';
 import * as M from '../sem-model.js';
 import * as H from '../sem-html.js';
+import { markSeen } from '../alerts.js';
 
 const UPDATE = !!process.env.UPDATE_GOLDEN || process.env.npm_lifecycle_event === 'test:update';
 const GOLDEN = new URL('./golden/semmodel.json', import.meta.url);
@@ -48,9 +49,10 @@ function decl(file, name){
   if (m && /^[}\])]/.test(rest.slice(end + 1))) end = rest.indexOf('\n', end + 1);
   return rest.slice(0, end).replace(/^export /, '');
 }
-const UN = ['esc', 'fmtNum', 'csvField', 'csvJoin', 'csvLine', 'X_SVG', 'ALERT_ICON', 'alertHtml', 'FILE_ALERT', 'fileAlertHtml', 'fileLine', 'isIncluded', 'anySample', 'includedOf', 'includedIndex', 'setIncluded', 'removeFileAt'];
+const UN = ['esc', 'fmtNum', 'csvField', 'csvJoin', 'csvLine', 'X_SVG', 'ALERT_ICON', 'seenFor', 'notesFor', 'alertHtml', 'FILE_ALERT', 'fileAlertHtml', 'fileLine', 'notesHtml', 'isIncluded', 'anySample', 'includedOf', 'includedIndex', 'setIncluded', 'removeFileAt'];
+const IN_ALERTS = new Set(['ALERT_ICON', 'seenFor', 'notesFor']);
 const settings = { decimal: '.', field: ';' };
-const PAGE = new Function('settings', [...UN.map(n=> decl(n === 'ALERT_ICON' ? 'alerts.js' : 'utils.js', n)), decl('modkit.js', 'isObj')].join('\n') + `\nreturn { ${[...UN, 'isObj'].join(', ')} };`)(settings);
+const PAGE = new Function('settings', [...UN.map(n=> decl(IN_ALERTS.has(n) ? 'alerts.js' : 'utils.js', n)), decl('modkit.js', 'isObj')].join('\n') + `\nreturn { ${[...UN, 'isObj'].join(', ')} };`)(settings);
 // A canonical dump: every number by its shortest round-trip string, NaN, ±∞ and −0 too.
 const canon = v => JSON.stringify(v, function(k, x){ const o = this[k]; return typeof o === 'number' ? (Object.is(o, -0) ? '#-0' : '#' + o) : x; });
 
@@ -72,7 +74,10 @@ function statsOf(f){
 }
 const rawOf = (id, bytes, r0)=> r0 instanceof Ref && r0.id === id && r0.bytes === bytes ? r0 : new Ref(id, bytes);
 const U = { isObj: PAGE.isObj, fmtNum: PAGE.fmtNum, csvLine: PAGE.csvLine, info, statsOf, rawOf };
-const HU = { esc: PAGE.esc, fileAlertHtml: PAGE.fileAlertHtml };
+const HU = { esc: PAGE.esc, fileAlertHtml: PAGE.fileAlertHtml, notesHtml: PAGE.notesHtml };
+// The alerts under the drop zone, as sem.js draws them: the line's and what the reading of the
+// images in the list said (v572).
+const alertsOf = S => H.alertsHtml(HU, M.alertsNow(S), new Set(S.allFiles.map(f=> f.raw.id)), H.fileNotes(HU, S.allFiles, info));
 
 /* ---- The images (made up) ---- */
 const IMG = {
@@ -398,7 +403,7 @@ test('the state: saved and read back, a v517 project, ids made again, files twic
   restore(W, { files: [s.files[0], { ...s.files[0], name: 'again' }, { name: 'gone <1>', raw: { id: 'x', bytes: new Uint8Array(9) } }, { name: 'none', raw: null }, 7], cur: 5 });
   assert.deepEqual([W.allFiles.length, W.cur], [1, 0]);
   // (v567: a warning of the project opened, its files left out counted, utils.js FILE ALERTS)
-  assert.equal(H.alertsHtml(HU, M.alertsNow(W), new Set(W.allFiles.map(f=> f.raw.id))),
+  assert.equal(alertsOf(W),
     PAGE.alertHtml('warn', 'Opened, to check:', ['2 files left out: their stored bytes no longer read.'], 'sem-dismiss-invalid'));
   assert.equal(H.lostLine(1), '1 file left out: its stored bytes no longer read.');
   // Pixels made square since the crop was saved (to v487, in the pixels as acquired): brought
@@ -486,17 +491,26 @@ test('the markup: the Image box, the groups, the alerts and the options, every n
   assert.equal(H.refHtml(HU, [b]), `<option value="${b.raw.id}">B &lt;i&gt;&amp;&quot;</option>`);
   // The alerts of a line, about the files still in the list; dismissed one kind at a time.
   S.line = 1;
-  M.setAlerts(S, { bad: { names: [H.fileLine(HU, 'x<1>.tif', 'not a TIFF')], ids: [b.raw.id] }, dup: [{ id: b.raw.id, html: 'b.tif' }], warn: [{ id: 'gone', html: 'w' }] });
-  const here = new Set(S.allFiles.map(x=> x.raw.id));
-  assert.equal(H.alertsHtml(HU, M.alertsNow(S), here), PAGE.alertHtml('bad', 'Not loaded:', ['x&lt;1&gt;.tif: not a TIFF.'], 'sem-dismiss-invalid') + PAGE.alertHtml('info', 'Already loaded, not loaded again:', ['b.tif.'], 'sem-dismiss-upload'));
-  M.setAlerts(S, { warn: [{ id: b.raw.id, html: 'b.tif: w.' }] });
-  assert.equal(H.alertsHtml(HU, M.alertsNow(S), here), PAGE.alertHtml('bad', 'Not loaded:', ['x&lt;1&gt;.tif: not a TIFF.'], 'sem-dismiss-invalid')
-    + PAGE.alertHtml('warn', 'Loaded, to check:', ['b.tif: w.'], 'sem-dismiss-warn') + PAGE.alertHtml('info', 'Already loaded, not loaded again:', ['b.tif.'], 'sem-dismiss-upload'), 'error, warning, info');
-  M.setAlerts(S, { warn: [{ id: 'gone', html: 'w' }] });
+  M.setAlerts(S, { bad: { names: [H.fileLine(HU, 'x<1>.tif', 'not a TIFF')], ids: [b.raw.id] }, dup: [{ id: b.raw.id, html: 'b.tif' }] });
+  const BAD = PAGE.alertHtml('bad', 'Not loaded:', ['x&lt;1&gt;.tif: not a TIFF.'], 'sem-dismiss-invalid'), DUP = PAGE.alertHtml('info', 'Already loaded, not loaded again:', ['b.tif.'], 'sem-dismiss-upload');
+  assert.equal(alertsOf(S), BAD + DUP);
+  // What the reading of an image in the list said (v572: worked out from the images there are,
+  // not a line's): its warning, to check, until its box's × marks it seen, in the list and in
+  // the states of the history that hold it (by its id), which an undo and the project keep.
+  const wb = new Uint8Array(makeTiff({ W: 60, H: 50, strip: 6, sign: 'W', seed: 11, extraMain: 'ImageStripSize=8\r\n' }));
+  const w = M.newFile('w<1>.tif', readTescanTiff(wb, 'w<1>.tif', { head: true }), new Ref(hashBytes(wb), wb));
+  S.allFiles.push(w);
+  const CHECK = PAGE.alertHtml('warn', 'Loaded, to check:', ['w&lt;1&gt;.tif: the row under the image (row 43) is not the info bar&#39;s uniform border: the bar may not be where Tescan puts it, so check the image&#39;s bottom edge.'], 'sem-dismiss-check');
+  assert.equal(alertsOf(S), BAD + CHECK + DUP, 'error, warning, info');
+  const states = [{ files: [{ ...w, raw: new Ref(w.raw.id, wb) }, { ...b }] }, { files: [] }, { cur: 1 }], hist = { patch: fn =>{ states.splice(0, 3, ...states.map(fn)); } };
+  const was = states.slice();
+  markSeen(hist, H.fileNotes(HU, S.allFiles, info), 'check', { same: M.sameImage });
+  assert.equal(alertsOf(S), BAD + DUP, 'dismissed');
+  assert.deepEqual([w.seen, b.seen, states[0].files.map(f=> f.seen)], [['check'], undefined, [['check'], undefined]]);
+  assert.ok(states[0] !== was[0] && states[0].files[1] === was[0].files[1] && states[1] === was[1] && states[2] === was[2] && !was[0].files[0].seen, 'copies where marked, the states\' own objects unchanged');
+  S.allFiles.pop();
   M.dropAlertsOf(S, b.raw.id);
-  assert.equal(H.alertsHtml(HU, M.alertsNow(S), here), '');
-  assert.equal(M.alertsNow(S).warn.length, 1);
-  M.setAlerts(S, { warn: [] });
+  assert.equal(alertsOf(S), '');
   assert.equal(S.alertsOf.size, 0);
   for (let k = 0; k < 40; k++){ S.line = 100 + k; M.setAlerts(S, { dup: [{ id: 'x', html: 'x' }] }); }
   assert.equal(S.alertsOf.size, 32);
@@ -566,7 +580,7 @@ export function caseOf(n){
     if (op === 'include') return [op, int(0, 5), u() < 0.5];
     if (op === 'label') return [op, int(0, 5), pick(['L', 'x <i>', ''])];
     if (op === 'remove') return [op, int(0, 5)];
-    if (op === 'dismiss') return [op, pick(['sem-dismiss-invalid', 'sem-dismiss-upload', 'sem-dismiss-warn'])];
+    if (op === 'dismiss') return [op, pick(['sem-dismiss-invalid', 'sem-dismiss-upload', 'sem-dismiss-check'])];
     return [op];
   });
   return { state, steps };
@@ -600,11 +614,11 @@ function step(S, [op, a, b]){
   else if (op === 'include'){ PAGE.setIncluded(S.allFiles, a, b, []); filesChanged(S); }
   else if (op === 'label'){ if (S.allFiles[a]){ S.allFiles[a].label = b; settingsDrawn(S); } }
   else if (op === 'remove'){ const x = S.allFiles[a]; if (x){ PAGE.removeFileAt(S.allFiles, a, []); M.dropAlertsOf(S, x.raw.id); filesChanged(S); } }
-  else if (op === 'dismiss') M.setAlerts(S, { 'sem-dismiss-invalid': { bad: null }, 'sem-dismiss-upload': { dup: [] }, 'sem-dismiss-warn': { warn: [] } }[a]);
+  else if (op === 'dismiss'){ if (a === 'sem-dismiss-check') markSeen({ patch: ()=>{} }, H.fileNotes(HU, S.allFiles, info), 'check', { same: M.sameImage }); else M.setAlerts(S, { 'sem-dismiss-invalid': { bad: null }, 'sem-dismiss-upload': { dup: [] } }[a]); }
 }
 // What the tab shows and keeps of a state: the settings drawn last (renderIntensity edits).
 function outputs(S){
-  const o = { csv: M.csvOf(U, S), alerts: H.alertsHtml(HU, M.alertsNow(S), new Set(S.allFiles.map(f=> f.raw.id))) };
+  const o = { csv: M.csvOf(U, S), alerts: alertsOf(S) };
   o.info = S.files.map(f=>{ const r = info(f); return r ? H.infoHtml(HU, f, r, M.outOf(U, S, f)) : ''; });
   o.groups = S.files.length ? H.groupsHtml(HU, S) : null;
   o.luts = S.allFiles.map(f=>{

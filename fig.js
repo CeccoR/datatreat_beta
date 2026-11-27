@@ -105,7 +105,6 @@ function kitHooks(S){
   return {
     root: S.root, key: S.key, layer: S.layer,
     traces: cb => traceList(S, cb),
-    alerts: p =>{ S.$('figAlerts').innerHTML = p.invalid + p.upload; },
     refresh: ()=> afterFilesChange(S),
     // A label or a colour changed: the Data card's list and the series' files say it anew.
     redraw: ()=>{ renderData(S); S.deck.records.forEach(a=> paintPanel(S, a)); updateAll(S, true); },

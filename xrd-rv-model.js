@@ -15,6 +15,7 @@ import { readXrdmlInstrumentText } from './xrd-instr.js';
 import { buildModel, calc, fitSettings, phaseSites, bgInvOn, shapeNamed } from './xrd-rietveld.js';
 import { spaceGroupName, spaceGroupSymbol } from './xrd-sg.js';
 import { fixed, isFixed, isObj } from './db.js';
+import { MSG } from './xrd-math.js';
 
 const PHASE_COLORS = ['#d4a72c', '#c77dff', '#ff8a65', '#7cc4ff', '#e05f8a', '#9ccc65'];
 
@@ -49,8 +50,8 @@ function prepPhase(text, fileName){
   // and angles stay the file's, which the user should know.
   if (sym.constraint && sym.constraint.kind === 'isotropic' && sym.constraint.note) notes.push(sym.constraint.note);
   if (sym.bSpread > 0.01) notes.push(`the B of atoms the symmetry makes equivalent differed (by up to ${+sym.bSpread.toFixed(2)} Å² from their mean): each takes its site's mean`);
-  if (sym.group === false) warnings.push('The symmetry found from the atoms does not close into a group at any tolerance tried (atoms of one kind within 0.01 Å of each other?): the operations used may be incomplete.');
-  if (comp && !comp.ok && comp.message) warnings.push(comp.message);
+  if (sym.group === false) warnings.push(MSG.warn('The symmetry found from the atoms does not close into a group at any tolerance tried (atoms of one kind within 0.01 Å of each other?): the operations used may be incomplete.'));
+  if (comp && !comp.ok && comp.message) warnings.push(MSG.warn(comp.message));
   else if (comp && comp.note) cautions.push(comp.note);
   // The sites, named as the engine names them (phaseSites): what Site occupancy offers.
   const sites = phaseSites(sc.cell, sc.atoms, sym.ops).sites.map(st=> ({ label: st.label, element: st.element, n: st.members.length }));
@@ -356,28 +357,32 @@ function instrOf(f){
   f.instr = ins || f.instr || null;
   return f.instr;
 }
+// Whether a pattern's file is held, its bytes (none: a project of no bytes, or opened without
+// them, not stored in this browser any more), as instrOf reads them.
+const bytesHeld = f => { const b = f.rawBytes; return !!b && typeof b === 'object' && b.length > 0; };
+/* A message of a reading or of a result as the page says it: { kind, text } (xrd-math.js MSG,
+   v572), and a key where the results say it apart (xrd-rv-html.js). Words alone, as a file's
+   instrument and a result were saved to v571: their kind by `kindOf`, a result's a warning
+   (ALERTS-REVIEW.md U4). A project read in may hold anything: what is no message, null. */
+const KINDS_SAID = ['info', 'warn', 'bad'];
+const msgOf = (m, kindOf = ()=> 'warn')=> typeof m === 'string' ? { kind: kindOf(m), text: m }
+  : isObj(m) && typeof m.text === 'string' ? { ...m, kind: KINDS_SAID.includes(m.kind) ? m.kind : 'warn' } : null;
 /* The instrument's assumptions (its reading's warnings, xrd-instr.js readInstrument), each said
-   under the pattern in its box (xrd-rv-html.js instrNotesHtml, v571, ALERTS-REVIEW.md X05, U6):
-   'info' a choice that holds in the normal case (no Kα₂, the ratio, the radius, a
-   monochromator's crystal or reflection, a perfect crystal's Kα₂ left out, a fixed slit);
-   'warn' one that may be wrong (the wavelength assumed, a crystal that cannot reflect λ, a
-   geometry the model does not take, a slit not fixed, a ratio a monochromator may not pass)
-   and any other. By their words: the file's warnings are kept as words with it. */
+   under the pattern in its box (xrd-rv-html.js instrNotesHtml, v571, ALERTS-REVIEW.md X05, U6),
+   of the kind its reading gives (v572). A file's instrument kept with a project saved to v571
+   holds words alone, which take theirs from their words: 'info' a choice that holds in the
+   normal case (no Kα₂, the ratio, the radius, a monochromator's crystal or reflection, a
+   perfect crystal's Kα₂ left out, a fixed slit); 'warn' one that may be wrong (the wavelength
+   assumed, a crystal that cannot reflect λ, a geometry the model does not take, a slit not
+   fixed, a ratio a monochromator may not pass) and any other. */
 const INSTR_INFO = [/: a single wavelength is modelled$/, /: 0\.5 assumed$/, /^No goniometer radius in the file/, /not recognised, graphite \(002\) assumed for the polarisation/,
   /: no reflection given, .* assumed for the polarisation/, /passes Kα₁ alone, so the file's Kα₂\/Kα₁ ratio/, /: a fixed slit is assumed$/];
 const instrNoteKind = w => INSTR_INFO.some(re=> re.test(String(w))) ? 'info' : 'warn';
+const instrMsgs = ins => (Array.isArray(ins.warnings) ? ins.warnings : []).map(w=> msgOf(w, instrNoteKind)).filter(Boolean);
 // No instrument description at all (bytes not stored, a file of no header): what the model
 // assumes, the engine's words (xrd-rietveld.js), said under the pattern at once (v571, X06: to
 // v570 only after a refinement, among its warnings).
 const NO_INSTR = 'No instrument description could be read from the file: Cu Kα₁/Kα₂ (ratio 0.5), a 240 mm goniometer and no monochromator are assumed.';
-/* A CIF's warnings (xrd-cryst.js parseCif, prepPhase), each in its phase's box of its kind
-   (xrd-rv-html.js resultsHtml, v571, ALERTS-REVIEW.md X12, U4): 'bad' centring translations
-   missing (the cell filled incompletely); 'info' a reading's choice (the first of several
-   structures, a magnetic CIF's operations, a cell angle missing, the identity added, a form
-   factor from the charges around it, B assumed); 'warn' the rest. By their words. */
-const CIF_INFO = [/^The file holds \d+ structures: the first/, /^A magnetic CIF/, /^No valid _cell_angle_/, /do not include the identity: it is added/,
-  /^No tabulated form factor of its own, taken as the tabulated charges around it/, /^No displacement parameter for .*: B = [\d.]+ Å² assumed/];
-const cifNoteKind = w => /is centred but the operations hold \d+ of its \d+ centring translation/.test(w) ? 'bad' : CIF_INFO.some(re=> re.test(String(w))) ? 'info' : 'warn';
 // The built-in LaB6's id (the standard's card: lab6).
 const LAB6_ID = 0;
 // The role a result was refined in: as the standard or as a sample; null for a result
@@ -1052,10 +1057,10 @@ function nextInto(S, v){
 export { PHASE_COLORS, prepPhase, textKey, prepOf, cellKey, MODES, MODE, siteList, listOf, depOf, defSettings, stdSettings, cleanSettings, migrateSettings, engineOf,
   HOLD_KEYS, HOLD_DEFAULT, START_RULE, FIT_DEF, FITS, FIT, fitTxt, readFit, cleanFit, formulaOf,
   SIZE_KINDS, hklShow, hklPlain, hklRuns, plotRuns,
-  instrOf, LAB6_ID, irfOf, sameIrf, lastUnusable, payloadFor, resultRecord,
+  instrOf, bytesHeld, LAB6_ID, irfOf, sameIrf, lastUnusable, payloadFor, resultRecord,
   resultPhases, curvesFrom, exactJson, scanRange, tickRows, groupTicks,
   sizesOf, sizeKinds, sizeMarks, fitUsed, csvTables, rowsFor, fitShown, naOf, autoInvOf, fitRefusal, stateOf, readState, resultsOf,
   idOf, resKey, curveKey, allPhases, stdPhase, phasesFor, locked, newPhase, dropPhase, keepLoaded, holdWith, fitNoteText, modeTitle, settingsKeyOf, fitEntry,
-  runOf, NO_TICK, nothingText, failText, notAddedLines, instrNoteKind, cifNoteKind, NO_INSTR, runEndText, progressStatus, progressTell, waitStopText, stoppedText, stdQuestion, stdFailText, refineTitle, stdRunView, ROW_TITLES, rowLock,
+  runOf, NO_TICK, nothingText, failText, notAddedLines, msgOf, instrNoteKind, instrMsgs, NO_INSTR, runEndText, progressStatus, progressTell, waitStopText, stoppedText, stdQuestion, stdFailText, refineTitle, stdRunView, ROW_TITLES, rowLock,
   plotKeyOf, patternFrame, tickSegs, stackKeyOf, stackOf, sizeNoteOf, pointGroups, solidsKeyOf, turnKeyOf, solidPngName, widthsKeyOf, pkOf, samePk, markedOf,
   whPoints, whRange, fitSetTitle, cellKeyOf, snapshotOf, restoreInto, showsOf, nextInto };

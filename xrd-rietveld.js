@@ -25,7 +25,7 @@ import { metric, reflections, latticeNames, latticeParams, cellFrom, cellMass, a
 import { lineForWavelength, f0, fprime, atomicMass } from './xrd-data.js';
 import { noiseCountScale } from './xrd-instr.js';
 import { wppmLine, wppmPair, wppmPoints, WPPM_N_MAX, lineFwhm, addMemberCoef, quarticInvariants, evalQuartic, faultTable, faultKappa } from './xrd-broad.js';
-import { gaussLegendre, lowerBound, inv3n, hklText } from './xrd-math.js';
+import { gaussLegendre, lowerBound, inv3n, hklText, MSG } from './xrd-math.js';
 
 const D2R = Math.PI/180, R2D = 180/Math.PI;
 const LN2 = Math.LN2;
@@ -3816,7 +3816,7 @@ function ownEvidence(model, v, chi2){
    ms}], cellSearch:{f, Rwp,
    curve, fine, steps, phases:[{id, f, found, Rwp, curve, fine, steps}]} (f, curve: the
    first phase's), sizeStrain, weightFractions (each with `detected`), detected: [ids],
-   warnings: [string], textures (each {hkl, r, esd, spec}), models: {id: {profile, strain
+   warnings: [{ kind, text }] (xrd-math.js MSG), textures (each {hkl, r, esd, spec}), models: {id: {profile, strain
    ('off', 'iso', 'aniso'), faults, adp, occ (the sites whose occupancy is refined, or null),
    size, shape (the solid asked for and searched)}}
    (what each phase was refined with: without the standard's profile, WPPM, the
@@ -3837,7 +3837,7 @@ function autoRefine(model, opts = {}){
      opts.hold: the groups held at it). A result refined with other phases is not one to
      start from: the CIF then, said in the warnings. */
   const S0 = opts.start && opts.start.params ? opts.start : null;
-  if (S0 && refinedWithOthers(model, S0)) A.warnings.push('The last result was refined with other phases: this pattern is refined from the CIF.');
+  if (S0 && refinedWithOthers(model, S0)) A.warnings.push(MSG.info('The last result was refined with other phases: this pattern is refined from the CIF.'));
   else if (S0) return fromLast(A, S0);
   // 1. where the peaks are; then the stages, run again for as long as the detection's
   // tests leave a phase out or put one back
@@ -3876,10 +3876,10 @@ function autoSetup(model, opts){
   // tabulated λ1 (Cu 1.540562–1.540598 Å: 2·10⁻⁵ apart) from the next anode's (over 10 %
   // apart), and one goniometer's radius as files give it from another's (200–320 mm).
   if (irf && Number.isFinite(irf.lam1) && Math.abs(irf.lam1/model.lines[0].lam - 1) > 1e-4){
-    warnings.push(`The standard was measured at λ = ${irf.lam1} Å, this pattern at ${model.lines[0].lam} Å: its instrumental profile, in degrees at its own wavelength, does not apply here, and the pattern is refined without it (its widths include the instrument's).`);
+    warnings.push(MSG.warn(`The standard was measured at λ = ${irf.lam1} Å, this pattern at ${model.lines[0].lam} Å: its instrumental profile, in degrees at its own wavelength, does not apply here, and the pattern is refined without it (its widths include the instrument's).`));
     irf = null;
   } else if (irf && Number.isFinite(irf.radius) && Math.abs(irf.radius/model.radius - 1) > 1e-3)
-    warnings.push(`The standard was measured on a goniometer of radius ${irf.radius} mm, this pattern on one of ${model.radius} mm: its instrumental profile and asymmetry, used here, may not be this instrument's, and the sizes and strains take up the difference.`);
+    warnings.push(MSG.warn(`The standard was measured on a goniometer of radius ${irf.radius} mm, this pattern on one of ${model.radius} mm: its instrumental profile and asymmetry, used here, may not be this instrument's, and the sizes and strains take up the difference.`));
   // With a free shape to refine, its trial refinements take most of the time: the
   // stages before it fill the first half of the progress.
   const progRaw = opts.onProgress || (()=>{});
@@ -3895,11 +3895,11 @@ function autoSetup(model, opts){
     q.wppm = false; q.noIrf = true;
   });
   // What the model had to assume about the instrument, said once with the results.
-  if (model.instrMissing) warnings.push('No instrument description could be read from the file: Cu Kα₁/Kα₂ (ratio 0.5), a 240 mm goniometer and no monochromator are assumed.');
-  if (model.countScale) warnings.push(`The pattern is ${(1/model.countScale).toPrecision(2)}× less noisy than counts in its own units would be (a rate with no counting time, or averaged, rescaled or smoothed counts): the weights take one count as ${+model.countScale.toPrecision(2)} of the file's unit, as its noise says.`);
-  if (!model.lineName) warnings.push(`λ = ${model.lines[0].lam.toFixed(5)} Å is not one of the lines the anomalous scattering factors are tabulated at (Cu, Co, Mo, Cr, Fe, Ag Kα₁ and Kα₂): f′ and f″ are taken as 0.`);
-  if (needIrf.length) warnings.push(`${needIrf.join('; ')}: need the standard's instrumental profile (refine the standard first), else the instrument's broadening and the sample's are one and the same; refined without.`);
-  model.phases.forEach(q=> (q.specWarn || []).forEach(t=> warnings.push(`${q.name || 'Phase ' + q.id}: ${t}.`)));
+  if (model.instrMissing) warnings.push(MSG.warn('No instrument description could be read from the file: Cu Kα₁/Kα₂ (ratio 0.5), a 240 mm goniometer and no monochromator are assumed.', { key: 'noInstr' }));
+  if (model.countScale) warnings.push(MSG.info(`The pattern is ${(1/model.countScale).toPrecision(2)}× less noisy than counts in its own units would be (a rate with no counting time, or averaged, rescaled or smoothed counts): the weights take one count as ${+model.countScale.toPrecision(2)} of the file's unit, as its noise says.`));
+  if (!model.lineName) warnings.push(MSG.info(`λ = ${model.lines[0].lam.toFixed(5)} Å is not one of the lines the anomalous scattering factors are tabulated at (Cu, Co, Mo, Cr, Fe, Ag Kα₁ and Kα₂): f′ and f″ are taken as 0.`));
+  if (needIrf.length){ const arg = needIrf.join('; '); warnings.push(MSG.warn(`${arg}: need the standard's instrumental profile (refine the standard first), else the instrument's broadening and the sample's are one and the same; refined without.`, { key: 'needIrf', arg })); }
+  model.phases.forEach(q=> (q.specWarn || []).forEach(t=> warnings.push(MSG.warn(`${q.name || 'Phase ' + q.id}: ${t}.`))));
   const adpOf = q => q.adp !== 'cif' ? q.adp : opts.refineB ? 'overall' : 'cif';
   const optStages = [
     model.phases.some(q=> q.iS && !q.noIrf) && 'anisotropic strain',
@@ -3948,9 +3948,9 @@ function startingProfile(A){
   // (what the profile's refinement without a standard frees: A, or nothing of the Soller's)
   const asFree = AS === 'asym' || std ? [AS] : [];
   if (!model.axial && irf && Number.isFinite(irf.axL))
-    warnings.push(`The standard's axial divergence was modelled through its Soller slits, which this pattern's file does not give: it is refined with no axial divergence.`);
+    warnings.push(MSG.warn(`The standard's axial divergence was modelled through its Soller slits, which this pattern's file does not give: it is refined with no axial divergence.`));
   if (AS === 'axL' && irf && (Math.abs(irf.axP1/model.axial.p1 - 1) > 1e-3 || Math.abs(irf.axP2/model.axial.p2 - 1) > 1e-3))
-    warnings.push(`The standard was measured with Soller slits of ${irf.axP1} and ${irf.axP2} rad, this pattern with ${model.axial.p1} and ${model.axial.p2} rad: the axial divergence is drawn with this pattern's, and the standard's sample and receiver lengths.`);
+    warnings.push(MSG.info(`The standard was measured with Soller slits of ${irf.axP1} and ${irf.axP2} rad, this pattern with ${model.axial.p1} and ${model.axial.p2} rad: the axial divergence is drawn with this pattern's, and the standard's sample and receiver lengths.`));
   v[model.iAsym] = AS !== 'asym' ? 0 : irf ? (Number.isFinite(irf.asym) ? irf.asym : 0) : reflectionsInRange(model).positions >= UV_POSITIONS ? asym0 : 0;
   if (AS === 'axL') v[model.iAx] = irf ? irf.axL : AX_START;
   // The sin 2θ shift: the standard's on a sample, as its zero (none from a standard refined
@@ -4069,13 +4069,13 @@ function autoFinish(A, { res, out, lastFree, nIn, cs, carried = [], held = [], i
 // whose peaks overlap (ownEvidence at the result res), but for the phases out.
 function phaseWarnings(A, out, res){
   const { model, warnings } = A, nm = k => phaseName(model, k);
-  A.lsFailed.forEach(k=> { if (!out.has(k)) warnings.push(`${nm(k)}: the size distribution could not be refined (the refinements from σ = 0.3 and 0.6 both failed): a single size is reported (σ = 0).`); });
-  A.poFailed.forEach(k=> { if (!out.has(k)){ const s = model.phases[k].poSpec; warnings.push(`${nm(k)}: the preferred orientation ${s === 'auto' ? 'on its trial axes' : '(' + hklText(s) + ')'} could not be refined (every trial failed): none is applied.`); } });
+  A.lsFailed.forEach(k=> { if (!out.has(k)) warnings.push(MSG.warn(`${nm(k)}: the size distribution could not be refined (the refinements from σ = 0.3 and 0.6 both failed): a single size is reported (σ = 0).`)); });
+  A.poFailed.forEach(k=> { if (!out.has(k)){ const s = model.phases[k].poSpec; warnings.push(MSG.warn(`${nm(k)}: the preferred orientation ${s === 'auto' ? 'on its trial axes' : '(' + hklText(s) + ')'} could not be refined (every trial failed): none is applied.`)); } });
   const live = model.phases.map((_, k)=> k).filter(k=> !out.has(k));
   if (live.length > 1){
     const ev = ownEvidence(model, model.v, res.stats.chi2);
-    if (live.every(k=> !ev[k].own)) warnings.push(`${live.map(nm).join(', ')}: their peaks overlap throughout, with no line of any one clear of the others': the pattern tells neither whether each is there nor their fractions (a candidate can take up the others' tails or the background: refine without it to compare).`);
-    else live.forEach(k=> { if (ev[k].own && ev[k].alpha < 0.5) warnings.push(`${nm(k)}: where it is alone it shows ${Math.round(ev[k].alpha*100)} % of the intensity the fit gives it — its fraction rests mostly on peaks it shares.`); });
+    if (live.every(k=> !ev[k].own)) warnings.push(MSG.warn(`${live.map(nm).join(', ')}: their peaks overlap throughout, with no line of any one clear of the others': the pattern tells neither whether each is there nor their fractions (a candidate can take up the others' tails or the background: refine without it to compare).`));
+    else live.forEach(k=> { if (ev[k].own && ev[k].alpha < 0.5) warnings.push(MSG.warn(`${nm(k)}: where it is alone it shows ${Math.round(ev[k].alpha*100)} % of the intensity the fit gives it — its fraction rests mostly on peaks it shares.`)); });
   }
 }
 /* shapeStage(A, { res, out, lastFree, carried, held, iso0, keptIso }) → { res, shapes,
@@ -4089,7 +4089,7 @@ function shapeStage(A, { res, out, lastFree, carried, held, iso0, keptIso }){
   const shapes = {};
   let isoParams = null;
   const shapeKs = model.phases.map((_, k)=> k).filter(k=> model.phases[k].shapeType && !out.has(k));
-  if (shapeKs.length && !irf) warnings.push(`Free shape: needs the standard's instrumental profile (refine the standard first), else the shape's widths and the instrument's are one and the same; ${shapeKs.map(nm).join(', ')} refined with an isotropic size.`);
+  if (shapeKs.length && !irf){ const arg = shapeKs.map(nm).join(', '); warnings.push(MSG.warn(`Free shape: needs the standard's instrumental profile (refine the standard first), else the shape's widths and the instrument's are one and the same; ${arg} refined with an isotropic size.`, { key: 'needIrfShape', arg })); }
   else if (shapeKs.length){
     /* A shape carried from the last result keeps that search's record and isotropic fit
        (the peak widths are read with it, xrd-widths): no search, no new ΔBIC. Its
@@ -4106,9 +4106,9 @@ function shapeStage(A, { res, out, lastFree, carried, held, iso0, keptIso }){
       shapes[q.id] = { ...info, carried: true };
       const dBIC = (info.chi2 - info.chi2Iso)/Math.max(1, info.chi2redIso) + (info.P - info.Piso)*Math.log(info.N);
       const kept = held.some(n=> n.startsWith(q.pfx) && model.par[model.index[n]].kind === 'shape');
-      warnings.push(`${nm(k)}: the free shape (${q.shapeType}) is the last result's, ${kept ? 'held at its values' : 'refined from there'} and not searched again${Number.isFinite(dBIC) ? `; its ΔBIC against the isotropic size, ${dBIC.toFixed(0)}, is that search's` : ''}.`);
+      warnings.push(MSG.info(`${nm(k)}: the free shape (${q.shapeType}) is the last result's, ${kept ? 'held at its values' : 'refined from there'} and not searched again${Number.isFinite(dBIC) ? `; its ΔBIC against the isotropic size, ${dBIC.toFixed(0)}, is that search's` : ''}.`));
     }
-    for (const k of keptIso) warnings.push(`${nm(k)}: the free shape (${model.phases[k].shapeType}) was not supported by the data in the last result, which kept the isotropic size: held so (the shape ticked), not searched again.`);
+    for (const k of keptIso) warnings.push(MSG.info(`${nm(k)}: the free shape (${model.phases[k].shapeType}) was not supported by the data in the last result, which kept the isotropic size: held so (the shape ticked), not searched again.`));
     for (const k of searchKs){
       const j = searchKs.indexOf(k), part = (1 - share)/searchKs.length;
       progRaw(share + j*part, `free shape of ${nm(k)}`);
@@ -4118,11 +4118,11 @@ function shapeStage(A, { res, out, lastFree, carried, held, iso0, keptIso }){
         // (freeShape's keep test: the gain over the isotropic fit against the class's threshold;
         // with the per-line check fired, ΔBIC < −10 as well)
         const kp = r.keep, sg = x => (x >= 0 ? '+' : '') + x.toFixed(0);
-        warnings.push(`${nm(k)}: the free shape (${model.phases[k].shapeType}) is not supported by the data (${kp.kept === false && kp.flagged && kp.G > kp.need
+        warnings.push(MSG.info(`${nm(k)}: the free shape (${model.phases[k].shapeType}) is not supported by the data (${kp.kept === false && kp.flagged && kp.G > kp.need
           ? `its gain over the isotropic size, ${kp.G.toFixed(1)} χ²_ν, passes the ${kp.need.toFixed(1)} its Laue class needs, but the fit misses some lines (the per-line check) and its ΔBIC, ${sg(r.dBIC)}, is not under −10`
-          : `its gain over the isotropic size, ${r.early ? 'about ' + kp.gainBrief.toFixed(1) + ' χ²_ν from the trial shapes' : kp.G.toFixed(1) + ' χ²_ν'}, needs over ${kp.need.toFixed(1)} for its Laue class`}): the isotropic size is kept.`);
+          : `its gain over the isotropic size, ${r.early ? 'about ' + kp.gainBrief.toFixed(1) + ' χ²_ν from the trial shapes' : kp.G.toFixed(1) + ' χ²_ν'}, needs over ${kp.need.toFixed(1)} for its Laue class`}): the isotropic size is kept.`));
       }
-      else warnings.push(`${nm(k)}: the free shape (${model.phases[k].shapeType}) could not be refined; the isotropic size is kept.`);
+      else warnings.push(MSG.warn(`${nm(k)}: the free shape (${model.phases[k].shapeType}) could not be refined; the isotropic size is kept.`));
     }
     // No shape kept: nothing to compare the isotropic model with.
     if (!Object.keys(shapes).length) isoParams = null;
@@ -4162,11 +4162,11 @@ function autoResult(A, { res, out, nIn, cs, held, shapes, isoParams }){
     const FCJ_RIPPLE = [[1.5, 0.04], [2, 0.15], [3, 0.8], [5, 2.7]], s = model.fcjShort;
     const j = FCJ_RIPPLE.findIndex(([r])=> r >= s), [r0, e0] = FCJ_RIPPLE[Math.max(0, j - 1)], [r1, e1] = FCJ_RIPPLE[j < 0 ? FCJ_RIPPLE.length - 1 : j];
     const e = j < 0 ? null : e0 + (e1 - e0)*(s - r0)/(r1 - r0 || 1);
-    warnings.push(`Axial divergence: the tails of the sharpest lines (at the lowest or highest angles) would need ${s.toFixed(1)} times the ${FCJ_MAX_NODES} quadrature nodes used, so they ripple, by up to ${e == null ? 'over 3' : 'about ' + e.toPrecision(1)} % of the peak.`);
+    warnings.push(MSG.warn(`Axial divergence: the tails of the sharpest lines (at the lowest or highest angles) would need ${s.toFixed(1)} times the ${FCJ_MAX_NODES} quadrature nodes used, so they ripple, by up to ${e == null ? 'over 3' : 'about ' + e.toPrecision(1)} % of the peak.`));
   }
   if (res.stats.N <= res.free.length)
-    warnings.push(`The pattern has ${res.stats.N} points for ${res.free.length} refined parameters: with no more points than parameters nothing is determined (no esd). A refinement needs many more points than parameters.`);
-  if (res.fcjBehind) warnings.push(`Axial divergence: after ${FCJ_PASSES} passes the last refinement still moved some lines' tails past the quadrature nodes counted for them; the result may be slightly off (refine again from it).`);
+    warnings.push(MSG.bad(`The pattern has ${res.stats.N} points for ${res.free.length} refined parameters: with no more points than parameters nothing is determined (no esd). A refinement needs many more points than parameters.`));
+  if (res.fcjBehind) warnings.push(MSG.warn(`Axial divergence: after ${FCJ_PASSES} passes the last refinement still moved some lines' tails past the quadrature nodes counted for them; the result may be slightly off (refine again from it).`));
   return {
     params: res.params, esd: res.esd, corr: res.corr, cov: res.cov, free: res.free, atBound: res.atBound, undetermined: res.undetermined, tied: res.tied, esdHeld: res.esdHeld,
     held, stats: res.stats, stages: A.stages, cellSearch: cs,
@@ -4427,21 +4427,21 @@ function lastReport(A, L, P, res){
   const { model, std, AS, warnings } = A, { P0, hold, has, was, out, liveK, chg, irfMoved, groupOf, changed } = L, { held, trial, search, axChanged, zeroMoved } = P;
   const nm = k => phaseName(model, k);
   // What was held, refined from the last values, and new.
-  out.forEach(k=> warnings.push(`${nm(k)}: not detected in the last result, so left out here too (scale 0); a refinement from the CIF tests it again.`));
+  out.forEach(k=> warnings.push(MSG.info(`${nm(k)}: not detected in the last result, so left out here too (scale 0); a refinement from the CIF tests it again.`)));
   /* New faults beside a held size and strain take only the broadening those left: the
      size had taken the faults' share in the last result. On synthetic Pt (D 40 nm,
      α 0.03 on {111}) the faults came out at 0.0055(2), χ²_ν 5.1, with the size and
      strain held; refined with them, 0.0297(2), χ²_ν 0.99. */
   liveK.forEach(k=> { const q = model.phases[k];
     if (q.iFA != null && !q.noIrf && chg[k].faults && held.some(n=> n.startsWith(q.pfx) && ['sizestrain', 'shape'].includes(groupOf(model.index[n]))))
-      warnings.push(`${nm(k)}: the planar faults are new, and refined with the size and strain${held.some(n=> n.startsWith(q.pfx) && groupOf(model.index[n]) === 'shape') ? ' and the shape' : ''} held: they take only the broadening those left, which took the faults' share before. Refined together (not held), the faults get their own.`); });
+      warnings.push(MSG.info(`${nm(k)}: the planar faults are new, and refined with the size and strain${held.some(n=> n.startsWith(q.pfx) && groupOf(model.index[n]) === 'shape') ? ' and the shape' : ''} held: they take only the broadening those left, which took the faults' share before. Refined together (not held), the faults get their own.`)); });
   /* The occupancies changed (switched on, off or to another site) beside displacements
      held: those were fitted beside the other occupancies, and both scale the sites'
      scattering. On 33A (SrTiO3, the Sr site at 0.69) a ΔB held at its 0.63 Å² and the
      occupancy switched off left χ²_ν at 1.73, where refined together they give 1.70. */
   liveK.forEach(k=> { const q = model.phases[k];
     if (chg[k].occ && chg[k].m0 && held.some(n=> n.startsWith(q.pfx) && groupOf(model.index[n]) === 'adp'))
-      warnings.push(`${nm(k)}: the site occupancies changed since, and the displacement parameters are held at values fitted beside the former ones: both scale the sites' scattering. Refined together (not held), each takes its own share.`); });
+      warnings.push(MSG.info(`${nm(k)}: the site occupancies changed since, and the displacement parameters are held at values fitted beside the former ones: both scale the sites' scattering. Refined together (not held), each takes its own share.`)); });
   const LABEL = { linear: 'scales and background', cell: std ? 'zero and displacement' : 'cell and displacement', instrument: 'instrumental profile', size: 'size', strain: 'strain',
     shape: 'free shape', faults: 'planar faults', adp: 'displacement parameters', occ: 'site occupancy', texture: 'preferred orientation' };
   // (the size and the strain apart: a new solid frees Y_s and leaves X_s held)
@@ -4457,8 +4457,8 @@ function lastReport(A, L, P, res){
     const same = m.has('size') && m.has('strain') && [...m.get('size')].join() === [...m.get('strain')].join();
     return Object.keys(LABEL).filter(g=> m.has(g) && !(same && g === 'strain')).map(g=> (same && g === 'size' ? 'size and strain' : LABEL[g]) + (m.get(g).size ? ' of ' + [...m.get(g)].join(' and ') : '')).join('; ');
   };
-  warnings.push(['Refined from the last result.', irfMoved && BROAD_GROUPS.some(g=> hold.has(g)) && 'The standard has been refined again since: the size, strain, shape and faults, fitted above its former profile, are refined rather than held.', axNote, zeroNote, lists.held.size && `Held at its values: ${say(lists.held)} (with no esds here: they are that refinement's; what is refined here is conditional on them, and a last refinement with nothing held gives values and esds free of that).`,
-    lists.kept.size && `Refined from its values: ${say(lists.kept)}.`, lists.fresh.size && `New or changed since, refined from their usual start: ${say(lists.fresh)}.`].filter(Boolean).join(' '));
+  warnings.push(MSG.info(['Refined from the last result.', irfMoved && BROAD_GROUPS.some(g=> hold.has(g)) && 'The standard has been refined again since: the size, strain, shape and faults, fitted above its former profile, are refined rather than held.', axNote, zeroNote, lists.held.size && `Held at its values: ${say(lists.held)} (with no esds here: they are that refinement's; what is refined here is conditional on them, and a last refinement with nothing held gives values and esds free of that).`,
+    lists.kept.size && `Refined from its values: ${say(lists.kept)}.`, lists.fresh.size && `New or changed since, refined from their usual start: ${say(lists.fresh)}.`].filter(Boolean).join(' ')));
 }
 
 /* placePeaks(A) → { cs, notFound, len0 }: stage 1, where the peaks are: on a sample the
@@ -4490,7 +4490,7 @@ function cellStage(A, len0, notFound){
   // Over ±cellRange (a setting), within the lattice bounds the model was built with
   // (buildModel's cellRange: twice it, LAT_RANGE at least).
   const latR = model.latRange || LAT_RANGE, range = Math.min(F.cellRange, latR), per = [];
-  if (F.cellRange > latR) warnings.push(`The cell search covers ±${+(latR*100).toFixed(1)} %, not the ±${+(F.cellRange*100).toFixed(1)} % set: the model's lattice bounds stop there (it was built for a narrower range).`);
+  if (F.cellRange > latR) warnings.push(MSG.info(`The cell search covers ±${+(latR*100).toFixed(1)} %, not the ±${+(F.cellRange*100).toFixed(1)} % set: the model's lattice bounds stop there (it was built for a narrower range).`));
   const rounds = model.phases.length > 1 ? 2 : 1;
   for (let r = 0; r < rounds; r++) model.phases.forEach((q, k)=> {
     if (r && !(per[k] && per[k].found)) return;
@@ -4510,8 +4510,8 @@ function cellStage(A, len0, notFound){
   per.forEach((p, k)=> { if (p && !p.found){
     notFound.add(k);
     const pct = x => +(x*100).toFixed(1), off = pct(p.f - 1), name = model.phases[k].name || 'Phase ' + p.id;
-    warnings.push(p.round ? `${name}: the cell search's second round (the other phases placed) found no minimum within ±${pct(range)} % of the cell its first round found (${off < 0 ? '−' : '+'}${Math.abs(off)} % from the file's), which is kept.`
-      : `${name}: the cell search found no minimum within ±${pct(model.phases.length === 1 ? wide : range)} % of the file's cell, which is kept.`);
+    warnings.push(MSG.warn(p.round ? `${name}: the cell search's second round (the other phases placed) found no minimum within ±${pct(range)} % of the cell its first round found (${off < 0 ? '−' : '+'}${Math.abs(off)} % from the file's), which is kept.`
+      : `${name}: the cell search found no minimum within ±${pct(model.phases.length === 1 ? wide : range)} % of the file's cell, which is kept.`));
   } });
   /* Then each placed phase's own starting width (widthSearch): the estimate is one
      peak's, so one phase's. A sharp perovskite at 5 wt % beside 8 nm SrTiO3, started at
@@ -4543,7 +4543,7 @@ function zeroStage(A){
   let found = kmin >= 0 && !edgeOrFlat(sc.curve, kmin), z = found ? parabolicMin(sc.curve, kmin) : z0;
   if (found && Math.abs(z) > ZR*(1 + 1e-9)){ found = false; z = z0; }
   const vv = model.v.slice(); vv[model.iZero] = z;
-  if (!found) warnings.push(`The zero-shift scan found no minimum within ±${ZR}°: the zero is left at its start.`);
+  if (!found) warnings.push(MSG.warn(`The zero-shift scan found no minimum within ±${ZR}°: the zero is left at its start.`));
   solveLinear(model, vv, evaluate(model, vv), linIdx);
   setParams(model, vv);
   stageStats(A, 'zero search', null, { zero: z, found });
@@ -4826,9 +4826,9 @@ function leaveOutNext(A, D, res){
 // The detection's warnings: the phases left out, and those put back.
 function detectionWarnings(A, D){
   const { model, warnings } = A, nm = k => phaseName(model, k);
-  warnings.push(...D.outWarn);
-  D.keptOwn.forEach((b, k)=> { if (!D.out.has(k)) warnings.push(`${nm(k)}: ${b.why}; but leaving it out raises χ²_ν from ${b.chi2.toFixed(2)} to ${b.without.toFixed(2)}, more than twice: the other phases cannot take up its intensity, and it is kept.`); });
-  D.keptBIC.forEach((b, k)=> { if (!D.out.has(k)) warnings.push(`${nm(k)}: its scale stands at only ${(Math.floor(b.z*10)/10).toFixed(1)} esd (it correlates with its widths or another phase's), but leaving it out raises χ² by ${b.dchi.toFixed(0)} for its ${b.dP} parameters, above the ${(b.need + 10).toFixed(0)} at which a BIC keeps it: kept, with a large esd on its fraction.`); });
+  warnings.push(...D.outWarn.map(t=> MSG.warn(t)));
+  D.keptOwn.forEach((b, k)=> { if (!D.out.has(k)) warnings.push(MSG.warn(`${nm(k)}: ${b.why}; but leaving it out raises χ²_ν from ${b.chi2.toFixed(2)} to ${b.without.toFixed(2)}, more than twice: the other phases cannot take up its intensity, and it is kept.`)); });
+  D.keptBIC.forEach((b, k)=> { if (!D.out.has(k)) warnings.push(MSG.warn(`${nm(k)}: its scale stands at only ${(Math.floor(b.z*10)/10).toFixed(1)} esd (it correlates with its widths or another phase's), but leaving it out raises χ² by ${b.dchi.toFixed(0)} for its ${b.dP} parameters, above the ${(b.need + 10).toFixed(0)} at which a BIC keeps it: kept, with a large esd on its fraction.`)); });
 }
 
 /* ---------- the free shape's search ----------

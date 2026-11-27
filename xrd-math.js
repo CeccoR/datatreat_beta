@@ -1,8 +1,9 @@
 /* =========================================================
    XRD SHARED NUMERICS — the small numerics and number formats the XRPD modules share:
    Gauss–Legendre nodes, a bisection, a 3×3 inverse (in two forms); Miller indices, esds
-   and angles as text. Up to v479 each module had its own copy of them (the 3×3 inverse
-   nine times, Miller indices with three different minus signs).
+   and angles as text; the messages of the readings and the refinement, with their kinds.
+   Up to v479 each module had its own copy of them (the 3×3 inverse nine times, Miller
+   indices with three different minus signs).
    Pure functions: no DOM, importable by the page, a Worker and Node.
 ========================================================= */
 
@@ -105,4 +106,14 @@ function fmtEsd(v, e, unit = ''){
 const fmtDeg = x => !(x > 0) ? '0' : x < 0.095 ? String(+x.toPrecision(1)) : x < 9.95 ? x.toFixed(1) : String(Math.round(x));
 const fmtOff = x => x < 0.05 ? '0' : x.toFixed(1);
 
-export { gaussLegendre, lowerBound, det3, inv3, inv3n, hklText, fmtEsd, fmtDeg, fmtOff };
+/* ---------- messages ----------
+   What a reading (a file's instrument, xrd-instr.js; a CIF, xrd-cryst.js) and a refinement
+   (xrd-rietveld.js and its worker) say, each with its kind, given where it is said (v572,
+   ALERTS-REVIEW.md X11, U4; to v571 words alone, which the page sorted by their words):
+   'info' a report, or a choice that holds in the normal case; 'warn' what may be wrong, to
+   check; 'bad' a result that cannot hold. `more`: what the page needs besides the words of
+   one it says apart (its key, and what it names: xrd-rv-html.js). */
+const msg = kind => (text, more)=> ({ kind, text, ...more });
+const MSG = { info: msg('info'), warn: msg('warn'), bad: msg('bad') };
+
+export { gaussLegendre, lowerBound, det3, inv3, inv3n, hklText, fmtEsd, fmtDeg, fmtOff, MSG };

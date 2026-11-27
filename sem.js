@@ -1,9 +1,10 @@
-import { esc, csvLine, fmtNum, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, fileAlertHtml, NOT_READ, bytesOf, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, registerBusy, busyChanged, registerModule, onSectionChange, flashFieldInvalid, numRule, confirmBanner, kept, getModuleHistory } from './utils.js';
+import { esc, csvLine, fmtNum, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, fileAlertHtml, notesHtml, NOT_READ, bytesOf, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, registerBusy, busyChanged, registerModule, onSectionChange, flashFieldInvalid, numRule, confirmBanner, kept, getModuleHistory } from './utils.js';
 import { readTescanTiff, readFile, SemReadError, reducedCopy, cropStats, resample, cardKey, cardLevels } from './sem-read.js';
 import { snavHtml, snav } from './snav.js';
 import { isObj } from './modkit.js';
 import * as M from './sem-model.js';
 import * as H from './sem-html.js';
+import { markSeen } from './alerts.js';
 
 /* =========================================================
    SEM MODULE
@@ -362,7 +363,7 @@ function readField(el, lo, hi){
 // The page's helpers the model takes (sem-model.js U), and what the markup takes
 // (sem-html.js u).
 const U = { isObj, fmtNum, csvLine, info, statsOf, rawOf };
-const HU = { esc, fileAlertHtml };
+const HU = { esc, fileAlertHtml, notesHtml };
 const drawable = S => S.shown() || !(S.stale = true);
 
 function createSem({ key, root, layer, shown }){
@@ -425,29 +426,33 @@ function destroy(S){
 }
 
 /* ---- Alerts ----
-   What an upload found (files refused, files already loaded, files loaded with a
-   warning) and the images a project opened could not read. They belong to the
-   instance, its tab's, by its line of history: each snapshot carries the line it was
-   taken on (lineOf); a state put back from one (an undo, a redo) is on that line, any
-   other (a tab's state as it wakes; a project read in for its CSV or its saved key, in
-   an instance of its own: utils.js withState) starts a new one. Within its tab, each is
-   about files: those it names (an image loaded with a warning, the image a file dropped
+   What an upload found (files refused, files already loaded) and the images a project
+   opened could not read. They belong to the instance, its tab's, by its line of history:
+   each snapshot carries the line it was taken on (lineOf); a state put back from one (an
+   undo, a redo) is on that line, any other (a tab's state as it wakes; a project read in
+   for its CSV or its saved key, in an instance of its own: utils.js withState) starts a
+   new one. Within its tab, each is about files: those it names (the image a file dropped
    is a copy of), or, for the refused and the unreadable, which name files never loaded,
    those in the list when it was made (none: while the list is empty). It shows while
    those files are in the list, and goes when they go: an image removed takes its own
    with it, Remove all all of them. An undo leaves them as they are: to v487 every
    restore wiped them, though they are about the upload, not the state. A line's alerts
-   (the last 32 lines'): sem-model.js alertsNow, setAlerts, dropAlertsOf. */
+   (the last 32 lines'): sem-model.js alertsNow, setAlerts, dropAlertsOf.
+   What the reading of an image said (its warning) is worked out from the images in the
+   list (sem-html.js fileNotes), each image's until its box's ×, which marks it seen in the
+   list and the history (alerts.js markSeen; v572: to v571 a line's, lost as the project
+   was reopened or its tab woken). */
+const fileNotes = S => H.fileNotes(HU, S.allFiles, info);
 function alertClicked(S, e){
   const btn = e.target.closest('[data-action]');
   if (!btn) return;
   if (btn.dataset.action === 'sem-dismiss-invalid'){ M.setAlerts(S, { bad: null }); rebuildAlerts(S); }
   else if (btn.dataset.action === 'sem-dismiss-upload'){ M.setAlerts(S, { dup: [] }); rebuildAlerts(S); }
-  else if (btn.dataset.action === 'sem-dismiss-warn'){ M.setAlerts(S, { warn: [] }); rebuildAlerts(S); }
+  else if (btn.dataset.action === 'sem-dismiss-check'){ markSeen(S.hist, fileNotes(S), 'check', { same: M.sameImage }); rebuildAlerts(S); }
 }
 function rebuildAlerts(S){
   const here = new Set(S.allFiles.map(f=> f.raw.id));
-  S.$('semAlerts').innerHTML = H.alertsHtml(HU, M.alertsNow(S), here);
+  S.$('semAlerts').innerHTML = H.alertsHtml(HU, M.alertsNow(S), here, fileNotes(S));
 }
 
 /* ---- Loading ----
@@ -485,7 +490,7 @@ function dropped(S, list){
   return drained(S, S.queue);
 }
 async function loadFiles(S, list){
-  const job = { ids: new Set(), stopped: false }, said = { bad: [], dup: [], warn: [] }, add = [], mark = S.hist.hold();
+  const job = { ids: new Set(), stopped: false }, said = { bad: [], dup: [] }, add = [], mark = S.hist.hold();
   S.loading = job;
   try {
     for (const file of list){
@@ -502,7 +507,7 @@ async function loadFiles(S, list){
   // back one of them: already loaded then).
   const here = new Set(S.allFiles.map(f=> f.raw.id));
   add.forEach(f=>{ if (here.has(f.raw.id)) said.dup.push({ id: f.raw.id, html: esc(f.name) }); else S.allFiles.push(f); });
-  M.setAlerts(S, { bad: said.bad.length ? { names: said.bad, ids: S.allFiles.map(f=> f.raw.id) } : null, dup: said.dup, warn: said.warn });
+  M.setAlerts(S, { bad: said.bad.length ? { names: said.bad, ids: S.allFiles.map(f=> f.raw.id) } : null, dup: said.dup });
   afterFilesChange(S);
 }
 // A file read (res: readOne's): refused, already loaded, or kept and added (add), what the
@@ -515,7 +520,6 @@ function took(S, file, res, job, said, add){
   job.ids.add(id);
   remember(id, r, res.small, res.card, res.px);
   statsCache.set(statsKey(id, M.defaultCrop(r)), res.st);
-  if (r.warning) said.warn.push({ id, html: H.fileLine(HU, file.name, r.warning) });
   // (its bytes those another tab holds already, where one does: rawOf)
   add.push(M.newFile(file.name, r, rawOf(id, res.bytes)));
 }
@@ -530,7 +534,7 @@ function fileCallbacks(S){
     // Everywhere the label shows: the groups' captions and the Reference menu too (to
     // v474 only the navigator and the thumbnails).
     onLabelChange(i, v){ S.allFiles[i].label = v; renderNav(S); renderThumbs(S); renderGroups(S); renderIntensity(S); S.hist.commit(); },
-    onRemoveAll(){ S.allFiles.length = 0; M.setAlerts(S, { bad: null, dup: [], warn: [] }); afterFilesChange(S); },
+    onRemoveAll(){ S.allFiles.length = 0; M.setAlerts(S, { bad: null, dup: [] }); afterFilesChange(S); },
   };
 }
 function afterFilesChange(S){

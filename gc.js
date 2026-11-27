@@ -1,4 +1,4 @@
-import { settings, fmtNum, csvLine, cumtrapz, maxArr, minArr, meanArr, stdArr, alertHtml, fileAlertHtml, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, esc, registerModule, keeper, objId, exactKey } from './utils.js';
+import { settings, fmtNum, csvLine, cumtrapz, maxArr, minArr, meanArr, stdArr, alertHtml, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, esc, registerModule, keeper, objId, exactKey } from './utils.js';
 import { Plot, svgEl } from './plot.js';
 import { cardInfo, fileSafe, nameDownloads } from './cards.js';
 import { moduleKit, wideCsv, isObj, num, numStr, oneOf, dateOf, arrOf, without, cardList } from './modkit.js';
@@ -32,7 +32,7 @@ import * as H from './gc-html.js';
 // utils.js's and modkit.js's helpers the model takes (gc-model.js U), and what the markup
 // takes (gc-html.js u).
 const U = { settings, fmtNum, csvLine, cumtrapz, maxArr, minArr, meanArr, stdArr, objId, exactKey, num, numStr, oneOf, dateOf, arrOf, without, wideCsv };
-const HU = { esc, num, plotWrap, CSV_ICON, alertHtml, fileAlertHtml };
+const HU = { esc, num, plotWrap, CSV_ICON, alertHtml };
 const GC_INFO = H.gcInfo(cardInfo(false, true));
 
 /* A sample's tables (gc-model.js tablesOf: each gas's times, readings, flows and their
@@ -62,18 +62,17 @@ const tablesKept = keeper('gc-tables', 8);
                           readGc), and sample, the file it is a replicate of, where it is one
                           (REPLICATES)}, and the included ones, which the analysis sees,
                           `files`, with which the per-sample arrays each card keeps are
-                          aligned; the alerts under the drop zone (gc-html.js), the dates
-                          read day first or left out, the empty cells skipped, the files
-                          read as the alternative export and the pairs to check among them;
-                          each card's settings in the history. A gas's values, which nothing
+                          aligned; the alerts under the drop zone (gc-html.js fileNotes), the
+                          dates read day first or left out, the empty cells skipped, the files
+                          read as the alternative export and the pairs to check among them,
+                          each box's × marking its files seen (modkit.js notes, v572: `seen`
+                          in the record; to v571 marks in memory, S.seen); each card's
+                          settings in the history. A gas's values, which nothing
                           changes once read, are fixed (db.js: the same array in a tab's
                           states and its parked state). From v544 a record may also be raw
                           chromatograms ({ name, label, color, rawBytes, tcd: { n } }) or a
                           pair, the first file's record with the second as its `mate` (PAIRS,
                           gc-model.js): only a table heading its row is a sample (`files`)
-     seen                 the alerts dismissed (gc-html.js dropAlertsHtml): { check, read,
-                          pairs }, marks on the files' data as this load holds them (a
-                          gas's values, a file's bytes), which the undo steps share
      walk                 a walk through a Sample select's options (gc-model.js setSample),
                           let go as the list is drawn anew by any other change
                           (afterFilesChange: to v556 it kept the files it named, a file
@@ -88,7 +87,6 @@ const tablesKept = keeper('gc-tables', 8);
 const drawable = S => S.shown() || !(S.stale = true);
 const cards = S => S.deck.records;
 const each = (S, fn)=> cards(S).forEach(a=> fn(S.live.get(a.id), a));
-const tables = S => S.all.filter(M.isTable);
 // Something to show in the cards: a sample, or raw chromatograms (an Integration card's).
 const shownAny = S => S.files.length > 0 || S.all.some(f=> f.included !== false && M.hasTcd(f));
 
@@ -96,7 +94,7 @@ const shownAny = S => S.files.length > 0 || S.all.some(f=> f.included !== false 
 function createGc({ key, root, layer, shown }){
   const S = {
     root, key, layer, shown, $: id => root.querySelector('#' + id), stale: false, drawnAt: '',
-    kit: null, all: null, files: null, seen: { check: new WeakSet(), read: new WeakSet(), pairs: new WeakSet() },
+    kit: null, all: null, files: null,
     walk: null, deck: null, live: new Map(), integ: null, resList: null, cardsNext: null,
   };
   S.kit = moduleKit('gc', kitHooks(S));
@@ -142,9 +140,8 @@ function kitHooks(S){
     // (the plots' gas chips, H₂ / O₂: the view alone, a step but no change unsaved; utils.js VIEW_KEYS)
     // (and the Integration cards' run overview: its gases and its y, v544)
     view: ['gasSel', 'ovGas', 'ovY'],
-    alerts: p =>{ S.$('gcAlerts').innerHTML = p.invalid + H.dropAlertsHtml(S.all, tables(S), S.seen, HU) + p.upload; },
-    dismiss: { check: ()=>{ tables(S).forEach(f=> S.seen.check.add(f.gas)); S.all.forEach(f=> M.pairMarks(f).forEach(b=> S.seen.pairs.add(b))); },
-      read: ()=> tables(S).forEach(f=> S.seen.read.add(f.gas)) },
+    // (what the reading of the files said, gc-html.js fileNotes)
+    notes: ()=> H.fileNotes(S.all, HU),
     // Only a table heading its row is a sample (raw chromatograms alone, or paired with raw
     // chromatograms, have no injection times: Analysis leaves them out, v544).
     sample: M.isTable,

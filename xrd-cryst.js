@@ -8,7 +8,7 @@
 //   numbers, acting as x' = R·x + t. A reflection is a row vector and goes as h' = h·R.
 // - a cell is {a, b, c, alpha, beta, gamma} in Å and degrees; s = sinθ/λ = 1/(2d).
 import { speciesKey, labelSpecies, atomicMass } from './xrd-data.js';
-import { det3, inv3 } from './xrd-math.js';
+import { det3, inv3, MSG } from './xrd-math.js';
 
 const IDENT = [1,0,0, 0,1,0, 0,0,1];
 // Å², B of a site the CIF gives none: a middle value of inorganic solids at room temperature
@@ -368,7 +368,7 @@ function makeLoop(tags, vals, warnings){
       return { tags, rows };
     }
   }
-  if (vals.length % n) warnings.push(`The loop of ${tags[0]} has ${vals.length} values for ${n} columns: the incomplete last row is dropped.`);
+  if (vals.length % n) warnings.push(MSG.warn(`The loop of ${tags[0]} has ${vals.length} values for ${n} columns: the incomplete last row is dropped.`));
   for (let r = 0; r + n <= vals.length; r += n) rows.push(vals.slice(r, r+n).map(tk => tk.v));
   return { tags, rows };
 }
@@ -505,7 +505,9 @@ function equivIso(Uij, G, Gs){
 // of the sites given no displacement parameter), warnings }. Reads the first data block that
 // has fractional atom sites. Throws (with a message for the user) when the file has no data
 // block, no such atom sites, or no cell: whatever it returns is usable. Everything else it
-// can work around is in `warnings`. Its stages, in the order they read the file and warn:
+// can work around is in `warnings`, each with its kind (xrd-math.js MSG, v572: 'info' a
+// reading's choice, 'bad' a cell it cannot fill whole, 'warn' the rest; to v571 words, which
+// the page sorted by their words). Its stages, in the order they read the file and warn:
 // the block, the cell, the symmetry, the rounding the cell's digits hide, the angles it
 // lacks, the cell checked, the operations checked, the sites, the formula, a group named
 // without its operations.
@@ -544,7 +546,7 @@ function cifBlockOf(text){
   }
   const b = withAtoms[0];
   const warnings = lexWarnings.slice();
-  if (withAtoms.length > 1) warnings.push(`The file holds ${withAtoms.length} structures: the first, data_${b.name}, is used.`);
+  if (withAtoms.length > 1) warnings.push(MSG.info(`The file holds ${withAtoms.length} structures: the first, data_${b.name}, is used.`));
   return { b, warnings };
 }
 // The cell as written, and the angles it lacks or gives invalid.
@@ -569,7 +571,7 @@ function cifSymmetry(b, warnings){
   const itn = num(item(b, '_space_group_it_number', '_symmetry_int_tables_number'));
   const itNumber = itn >= 1 && itn <= 230 ? Math.round(itn) : null;
   const opsCol = column(b, XYZ_TAGS[0]) || column(b, XYZ_TAGS[1]);
-  const read = col => { const out = []; for (const s of col || []){ if (isNull(s)) continue; try { out.push(readSymop(s)); } catch(e){ warnings.push(e.message + ' It is ignored.'); } } return out; };
+  const read = col => { const out = []; for (const s of col || []){ if (isNull(s)) continue; try { out.push(readSymop(s)); } catch(e){ warnings.push(MSG.warn(e.message + ' It is ignored.')); } } return out; };
   let [ops] = symopsOf([read(opsCol)]);
   const magName = named('_space_group_magn_name_bns', '_space_group_magn_number_bns', '_space_group_magn_name_og', '_space_group_magn_number_og');
   const parent = named('_parent_space_group_name_h-m_alt', '_parent_space_group_it_number');
@@ -592,7 +594,7 @@ function cifMagneticOps(b, ops, { read, magName, warnings }){
       const Rt = apply3(c.R, o.t), w = c.w || o.w ? allowance(c.R, o.w || [0, 0, 0], c.w || [0, 0, 0]) : null;
       ops.push({ R: mul3(c.R, o.R), t: [0, 1, 2].map(i => w ? mod1(Rt[i] + c.t[i]) : snapT(Rt[i] + c.t[i])), ...(w ? { w } : {}) });
     }
-    if (ops.length) warnings.push(`A magnetic CIF${magName ? ` (${String(magName).trim()})` : ''}: its ${uniqueOps(ops).length} space-group operations are taken, without time reversal; the magnetic moments are not used (they scatter X-rays negligibly).`);
+    if (ops.length) warnings.push(MSG.info(`A magnetic CIF${magName ? ` (${String(magName).trim()})` : ''}: its ${uniqueOps(ops).length} space-group operations are taken, without time reversal; the magnetic moments are not used (they scatter X-rays negligibly).`));
   }
 }
 // The rounding the written cell may hide: half a unit of the last decimal. Exact: a length
@@ -628,7 +630,7 @@ function missingAngles(cell, noAngle, ops, { eLen, eAngOf, eAng }, warnings){
   const pick = fits.length === 1 ? fits[0] : null;
   for (const k of noAngle){
     cell[k] = pick ? pick[k] : 90;
-    warnings.push(pick ? `No valid _cell_angle_${k}: ${cell[k]}°, the angle the symmetry operations require.` : `No valid _cell_angle_${k}: 90° assumed.`);
+    warnings.push(MSG.info(pick ? `No valid _cell_angle_${k}: ${cell[k]}°, the angle the symmetry operations require.` : `No valid _cell_angle_${k}: 90° assumed.`));
   }
 }
 // Each angle may lie in (0, 180°) and the three still close no cell (120/120/120°
@@ -645,17 +647,17 @@ function closedCell(cell, { eLen, eAng }){
 function checkOps(sg, cell, warnings){
   const { ops, hm } = sg;
   const idIdx = ops.findIndex(o => o.R.every((v, i) => v === IDENT[i]) && o.t.every(v => !v));
-  if (idIdx < 0){ warnings.push('The symmetry operations do not include the identity: it is added.'); ops.unshift({ R: IDENT.slice(), t: [0,0,0] }); }
+  if (idIdx < 0){ warnings.push(MSG.info('The symmetry operations do not include the identity: it is added.')); ops.unshift({ R: IDENT.slice(), t: [0,0,0] }); }
   else if (idIdx > 0) ops.unshift(ops.splice(idIdx, 1)[0]);
   const miss = closureMisses(ops);
-  if (miss.length) warnings.push(`The ${ops.length} symmetry operations do not form a group (e.g. ${symopString(miss[0])} is missing): the list looks incomplete, check the CIF.`);
+  if (miss.length) warnings.push(MSG.warn(`The ${ops.length} symmetry operations do not form a group (e.g. ${symopString(miss[0])} is missing): the list looks incomplete, check the CIF.`));
   // A centred symbol needs its centring translations in the list.
   const L = hm ? hm.trim()[0].toUpperCase() : '';
   // (an R group in hexagonal axes: γ = 120° within 0.01° and its written digits)
   const hexAx = Math.abs(cell.gamma - 120) < 0.01 + cellSlack(cell).ang[2];
   const want = { I:1, A:1, B:1, C:1, F:3 }[L] ?? (L === 'R' && hexAx ? 2 : 0);
   const have = ops.filter(o => o.R.every((v, i) => v === IDENT[i]) && o.t.some(v => v)).length;
-  if (want && have < want) warnings.push(`${hm.trim()} is centred but the operations hold ${have} of its ${want} centring translation${want > 1 ? 's' : ''}: the cell will be filled incompletely.`);
+  if (want && have < want) warnings.push(MSG.bad(`${hm.trim()} is centred but the operations hold ${have} of its ${want} centring translation${want > 1 ? 's' : ''}: the cell will be filled incompletely.`));
 }
 // Anisotropic displacements, by label, for sites without an isotropic value: B_eq.
 function anisoBOf(b, G, Gs){
@@ -688,17 +690,17 @@ function cifSites(b, warnings, aniso){
   for (let i = 0; i < n; i++) cifSite(C, i, { fEls, aniso, warnings, A });
   const { sites, written, defaultB, fallback, mixed, doubt } = A;
   if (!sites.length) throw new Error('None of the atom sites in the CIF could be read.');
-  if (doubt.length) warnings.push(`Element read from the site label, in doubt: ${doubt.join('; ')}. A _atom_site_type_symbol column (or the formula) would settle it.`);
+  if (doubt.length) warnings.push(MSG.warn(`Element read from the site label, in doubt: ${doubt.join('; ')}. A _atom_site_type_symbol column (or the formula) would settle it.`));
   // The rounding the coordinates and the occupancies may hide, from their digits (a full
   // site is exact).
   const partial = written.filter(w => w[3] != null);
   const epsXYZ = roundingOf(written.map(w => w.slice(0, 3))), epsOcc = roundingOf(partial.map(w => [w[3]]));
   let ip = 0;
   sites.forEach((s, i)=> { s.eps = epsXYZ[i]; s.occEps = written[i][3] != null ? epsOcc[ip++][0] : 0; });
-  if (fallback.length) warnings.push(`No tabulated form factor for ${fallback.join('; ')}.`);
-  if (mixed.length) warnings.push(`No tabulated form factor of its own, taken as the tabulated charges around it with the same mean charge: ${mixed.join('; ')}.`);
-  if (defaultB.length) warnings.push(`No displacement parameter for ${defaultB.join(', ')}: B = ${B_DEFAULT} Å² assumed.`);
-  if (sites.some(s => s.Biso < 0)) warnings.push('Negative displacement parameters in the CIF.');
+  if (fallback.length) warnings.push(MSG.warn(`No tabulated form factor for ${fallback.join('; ')}.`));
+  if (mixed.length) warnings.push(MSG.info(`No tabulated form factor of its own, taken as the tabulated charges around it with the same mean charge: ${mixed.join('; ')}.`));
+  if (defaultB.length) warnings.push(MSG.info(`No displacement parameter for ${defaultB.join(', ')}: B = ${B_DEFAULT} Å² assumed.`));
+  if (sites.some(s => s.Biso < 0)) warnings.push(MSG.warn('Negative displacement parameters in the CIF.'));
   return { sites, defaultB };
 }
 // Site i of the columns C: its species, its position, occupancy and B (into A.sites, its
@@ -715,11 +717,11 @@ function cifSite(C, i, { fEls, aniso, warnings, A }){
     if (sp && sp.alt) A.doubt.push(`${label} as ${sp.element} (or ${sp.alt})`);
     else if (sp && sp.inFormula === false) A.doubt.push(`${label} as ${sp.element}, which the formula lacks`);
   }
-  if (!sp){ warnings.push(`Site ${label}: no X-ray scattering factor for '${type}', the site is left out.`); return; }
+  if (!sp){ warnings.push(MSG.warn(`Site ${label}: no X-ray scattering factor for '${type}', the site is left out.`)); return; }
   if (sp.fallback) A.fallback.push(`${type} (${label}), taken as ${sp.key === sp.element ? 'the neutral atom' : sp.key} (${Number.isFinite(sp.charge) ? 'the nearest tabulated charge' : 'its charge not read'})`);
   else if (sp.mix) A.mixed.push(`${type} (${label}) as ${sp.mix.map(([k, w])=> `${+w.toFixed(3)} ${k}`).join(' + ')}`);
   const x = num(fx[i]), y = num(fy ? fy[i] : null), z = num(fz ? fz[i] : null);
-  if (![x, y, z].every(Number.isFinite)){ warnings.push(`Site ${label}: incomplete coordinates, the site is left out.`); return; }
+  if (![x, y, z].every(Number.isFinite)){ warnings.push(MSG.warn(`Site ${label}: incomplete coordinates, the site is left out.`)); return; }
   const o = cifOccupancy(C, i, label, warnings), B = cifBiso(C, i, label, aniso, A.defaultB);
   const m = mult ? num(mult[i]) : NaN;
   // D scatters as H (speciesKey) but weighs its own: a deuterated cell would otherwise
@@ -735,8 +737,8 @@ function cifSite(C, i, { fEls, aniso, warnings, A }){
 function cifOccupancy({ occ }, i, label, warnings){
   let o = occ ? num(occ[i]) : 1;
   if (Number.isNaN(o)) o = 1;
-  if (o < 0){ warnings.push(`Site ${label}: occupancy ${o} < 0, taken as 0 (the site is empty).`); o = 0; }
-  if (o > 1.0005) warnings.push(`Site ${label}: occupancy ${o} > 1.`);
+  if (o < 0){ warnings.push(MSG.warn(`Site ${label}: occupancy ${o} < 0, taken as 0 (the site is empty).`)); o = 0; }
+  if (o > 1.0005) warnings.push(MSG.warn(`Site ${label}: occupancy ${o} > 1.`));
   return o;
 }
 // A site's B: B_iso, else 8π²U_iso, else its anisotropic one's B_eq, else B_DEFAULT (its
@@ -777,7 +779,7 @@ function symbolOnlyCheck({ sg, cell, sites, formula, Z, warnings }){
   const groupName = hm ? `the space group ${hm.trim()}` : hall ? `the space group ${hall.trim()}` : itNumber ? `the space group No. ${itNumber}`
     : magName ? `the magnetic group ${String(magName).trim()}` : `a magnetic group (parent ${String(parent).trim()})`;
   if (!whole) throw new Error(`The CIF names ${groupName} but lists ${onlyIdentity ? 'only the identity (x, y, z) as its symmetry operations' : 'no symmetry operations'}, and they are not generated from the symbol: the ${sites.length} site${sites.length > 1 ? 's' : ''} given cannot be the whole cell (${why.join('; ')}). A CIF with its operations (_space_group_symop_operation_xyz${magName || parent ? '; in a magnetic CIF, _space_group_symop_magn_operation.xyz' : ''}) is needed: COD, ICSD and the Materials Project (symmetrized CIF) give them${magName || parent ? ', MAGNDATA the magnetic ones' : ''}.`);
-  warnings.push(`The CIF lists ${onlyIdentity ? 'only the identity (x, y, z) as its symmetry operation' : 'no symmetry operations'}${hm ? ` for ${hm.trim()}` : ''}: the atoms are taken as they are (P1), so the cell is filled only if they are all listed.`);
+  warnings.push(MSG.warn(`The CIF lists ${onlyIdentity ? 'only the identity (x, y, z) as its symmetry operation' : 'no symmetry operations'}${hm ? ` for ${hm.trim()}` : ''}: the atoms are taken as they are (P1), so the cell is filled only if they are all listed.`));
 }
 // Do the atoms show by themselves the crystal system, the lattice centring and the centre
 // of symmetry the group's symbol names (symbolOnlyCheck)? What they lack into why.

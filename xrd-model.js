@@ -26,6 +26,9 @@ const reread = new WeakMap();
 // A file just read: its scans kept by its bytes (as readAgain keeps its readings: up to
 // v490 the first restore after a file was loaded, an undo, read it again).
 export const keepScans = (bytes, scans)=>{ reread.set(bytes, scans); };
+// The scans a pattern's file was read into, kept by its bytes (what the reading said of it,
+// xrd-html.js fileNotes); null where none are (no bytes, not an XRDML file: readAgain).
+export const keptScans = f => f.rawBytes && typeof f.rawBytes === 'object' && /\.(xrdml|xml)$/i.test(f.name || '') ? reread.get(f.rawBytes) || null : null;
 
 /* ---- A file read, and a state put back (pure: the module's, for every instance) ---- */
 // A scan run downwards (start above end) turned round: the plots, the peak search and
@@ -72,33 +75,32 @@ export const freshOf = (r, existing)=> r.pats.filter(q=> !(q.f.src && existing.h
    took for the counts: the user's LaB6, so kept, fitted at χ²_ν 3.93, R_exp 3.89 % where
    the file itself gives 2.17 and 3.54 % (the same parameters, the esds and the weights
    off). Restored, a file is read again from its own bytes (rawBytes), as a file loaded
-   now is, and a note names those whose arrays changed; one whose bytes were not kept is
-   used as it was, with a note where its lowest point is exactly 0. The readings are kept
+   now is, and one whose arrays changed keeps how (oldData, below: said under the drop zone
+   until its box's ×, xrd-html.js openedNote; v572, to v571 a note of the restore's, gone at
+   the next undo); one whose bytes were not kept is used as it was. The readings are kept
    by their bytes, so an undo does not read a file again. A pattern is its scan of the
    file (f.scan; the first, none given), so a file of several gives its scans again, in
    their order. (reread: the module's, above) */
 export function readAgain(U, f){
   const b = f.rawBytes;
-  if (!b || typeof b !== 'object' || !/\.(xrdml|xml)$/i.test(f.name || '')){
-    let lo = Infinity; for (const v of f.y || []) if (v < lo) lo = v;
-    return { f: fixedArrs(ascending({ ...f })), note: !b && lo === 0 ? 'its lowest point is exactly 0 and the project does not hold the file itself: its minimum may have been subtracted, as an older version did, which the Rietveld weights would take for the counts; load the file again' : null };
-  }
+  if (!b || typeof b !== 'object' || !/\.(xrdml|xml)$/i.test(f.name || '')) return fixedArrs(ascending({ ...f }));
   let all = reread.get(b);
   if (!all){
     try { all = U.scansOf(b); } catch (e){ all = [{ error: String(e && e.message || e) }]; }
     reread.set(b, all);
   }
   const sc = all[Number.isInteger(f.scan) && f.scan >= 0 ? f.scan : 0] || { error: 'no such scan' };
-  if (sc.error) return { f: fixedArrs(ascending({ ...f })), note: null };
+  if (sc.error) return fixedArrs(ascending({ ...f }));
   const { varMul: _, ...rest } = f, a = scanArrays(sc);
   const g = { ...rest, x: a.x, y: a.y, ...(a.varMul ? { varMul: a.varMul } : {}) };
-  const old = ascending({ ...f });
-  return { f: g, note: movedNote(old, g, sc) };
+  const old = movedOf(ascending({ ...f }), g, sc);
+  return old ? { ...g, oldData: old } : g;
 }
-// What a file read again says: nothing where its arrays are the ones the state held (old),
-// else that they changed (points left out that an earlier version, to v484, kept as no
-// number, or its minimum subtracted, up to v262).
-function movedNote(old, g, sc){
+/* What a file read again found: nothing where its arrays are the ones the state held (old),
+   else how they changed (oldData): the points left out that an earlier version, to v484,
+   kept as no number ({ dropped: n }), or its minimum subtracted, up to v262 ({ minimum:
+   true }). */
+function movedOf(old, g, sc){
   const n = g.y.length;
   // (the arrays the state holds, the scan's own: nothing moved)
   const same = old.x === g.x && old.y === g.y && old.varMul === g.varMul;
@@ -107,8 +109,7 @@ function movedNote(old, g, sc){
     moved = Math.abs(old.y[i] - g.y[i]) > 1e-9*Math.max(1, Math.abs(g.y[i])) || Math.abs(old.x[i] - g.x[i]) > 1e-9 || (g.varMul && Math.abs(old.varMul[i] - g.varMul[i]) > 1e-12);
   // (points left out that an earlier version, to v484, kept as no number: those)
   const lost = sc.dropped && old.y && old.y.length === n + sc.dropped;
-  return !moved ? null : lost ? `read again from the file itself, ${sc.dropped} point${sc.dropped > 1 ? 's' : ''} whose values are no finite number left out: the project held ${sc.dropped > 1 ? 'them' : 'it'}, as an older version did. Results refined before are from those: refine again`
-    : 'read again from the file itself: the project held its data as an older version had read them, with their minimum subtracted. Results refined before are from those: refine again';
+  return !moved ? null : lost ? { dropped: sc.dropped } : { minimum: true };
 }
 /* A project read in may hold anything (an imported .json): the restore takes what it reads
    only as what it should be — a file an object with its pattern, 2θ and intensities as
@@ -129,7 +130,7 @@ export function keptFile(U, f, i, color){
   if (!(isArr(g.varMul) && isArr(g.y) && g.varMul.length === g.y.length)) delete g.varMul;
   let r;
   try { r = readAgain(U, g); } catch (e){ return null; }
-  return isArr(r.f.x) && isArr(r.f.y) && r.f.x.length === r.f.y.length && r.f.x.length > 1 ? r : null;
+  return isArr(r.x) && isArr(r.y) && r.x.length === r.y.length && r.x.length > 1 ? r : null;
 }
 /* A project from before the cards (v460): one Analysis and one Rietveld card, and the
    standard a file among the samples, chosen in a select. It becomes the standard's own
@@ -170,10 +171,10 @@ export function keptState(U, k, v, gone){
 }
 // A state as the restore takes it: of this version (v 2), or migrated.
 export const stateIn = (U, s0)=> U.isObj(s0) && s0.v === 2 ? s0 : migrate(U, U.isObj(s0) ? s0 : {});
-/* Its files read again (each its default colour by its place: U.colorOf), the standard's,
-   how many are lost, and the places among the included of the files left out (an entry
-   that is no file counts as included: it holds no included:false), whose entries the
-   cards' per-sample lists drop. → { reads, stdRead, lost, gone } */
+/* Its files read again (each its default colour by its place: U.colorOf; null, one left
+   out), the standard's, how many are lost, and the places among the included of the files
+   left out (an entry that is no file counts as included: it holds no included:false),
+   whose entries the cards' per-sample lists drop. → { reads, stdRead, lost, gone } */
 export function readsOf(U, s){
   const raw = Array.isArray(s.files) ? s.files : [], reads = raw.map((f, i)=> keptFile(U, f, i, U.colorOf(i)));
   const stdRead = s.std ? keptFile(U, s.std, 0, '#d4a72c') : null, lost = reads.filter(r=> !r).length;

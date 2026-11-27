@@ -420,8 +420,6 @@ export function partsOf(r){
   const fs = rowFiles(r), two = fs.length > 1, tt = two && isTable(fs[0]) && isTable(fs[1]), cc = two && isTcd(fs[0]) && isTcd(fs[1]);
   return fs.map((f, k)=> ({ name: f.name, warn: tt && k ? 'a second table: ignored (the first is the sample)' : cc ? 'raw chromatograms paired with raw chromatograms: no injection times' : '' }));
 }
-// (what dismisses a pair's alert: its files' bytes)
-export const pairMarks = f => rowFiles(f).map(x=> x.rawBytes).filter(b=> b instanceof Uint8Array);
 
 // The analyses' kinds (cards.js), as the menu lists them.
 // (v544: Integration, the raw chromatograms integrated again, gc-integ.js; offered while

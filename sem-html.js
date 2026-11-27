@@ -5,8 +5,8 @@
    it), the groups' boxes, the options of the settings' scope and of the reference, and the
    chain on a thumbnail. Taken out of v557's sem.js as they were: the same markup to the
    byte.
-   What they need from the page is handed in, u = { esc, fileAlertHtml } (utils.js's:
-   sem.js HU).
+   What they need from the page is handed in, u = { esc, fileAlertHtml, notesHtml }
+   (utils.js's: sem.js HU).
 ========================================================= */
 import { sig, magText, byId, inFigure } from './sem-model.js';
 
@@ -17,18 +17,22 @@ export const LINK_SVG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="n
 // A file in the alerts: its name, and what is said of it, a full stop after (utils.js
 // fileLine; to v566 "{name} — {why}").
 export const fileLine = (u, name, why) => `${u.esc(name)}: ${u.esc(why)}${/[.?!]$/.test(why) ? '' : '.'}`;
+/* What the reading of the images in the list said (alerts.js notes, v572): an image's
+   warning (sem-read.js readTescanTiff's, info(f)), to check. */
+export const fileNotes = (u, files, info)=> files.filter(f=> info(f) && info(f).warning).map(f=> ({ what: 'check', line: fileLine(u, f.name, info(f).warning), files: [f] }));
 /* The alerts of a line (sem-model.js alertsNow: A) about the files in the list now (their
-   ids, here): each about files, those it names (an image loaded with a warning, the image
-   a file dropped is a copy of), or, for the refused and the unreadable, which name files
-   never loaded, those in the list when it was made (none: while the list is empty). One
+   ids, here): each about files, those it names (the image a file dropped is a copy of),
+   or, for the refused and the unreadable, which name files never loaded, those in the list
+   when it was made (none: while the list is empty); and what the reading of those in the
+   list said (`notes`, fileNotes: each image's until its box's ×, which marks it seen). One
    box a kind (utils.js FILE ALERTS), in the order error, warning, info: the files refused
    (or, a project opened, those left out: `A.bad.opened`, a warning), those loaded to
    check, those already loaded. */
-export function alertsHtml(u, A, here){
-  const dup = A.dup.filter(a=> here.has(a.id)), warn = A.warn.filter(a=> here.has(a.id));
+export function alertsHtml(u, A, here, notes){
+  const dup = A.dup.filter(a=> here.has(a.id));
   const bad = A.bad && (A.bad.ids.length ? A.bad.ids.some(id=> here.has(id)) : !here.size);
   return (bad ? u.fileAlertHtml(A.bad.opened ? 'opened' : 'bad', A.bad.names, 'sem-dismiss-invalid') : '')
-    + u.fileAlertHtml('check', warn.map(a=> a.html), 'sem-dismiss-warn')
+    + u.notesHtml(notes, w=> 'sem-dismiss-' + w)
     + u.fileAlertHtml('dup', dup.map(a=> a.html), 'sem-dismiss-upload');
 }
 // The images a project opened left out, their bytes no longer reading as a Tescan TIFF.

@@ -52,18 +52,21 @@ function decl(file, name){
   if (m && /^[}\])]/.test(rest.slice(end + 1))) end = rest.indexOf('\n', end + 1);
   return rest.slice(0, end).replace(/^export /, '');
 }
-const UN = ['esc', 'fmtNum', 'csvField', 'csvJoin', 'csvLine', 'cumtrapz', 'meanArr', 'stdArr', 'maxArr', 'minArr', 'X_SVG', 'ALERT_ICON', 'alertHtml', 'FILE_ALERT', 'fileAlertHtml', 'fileLine', 'exactKey'];
+const UN = ['esc', 'fmtNum', 'csvField', 'csvJoin', 'csvLine', 'cumtrapz', 'meanArr', 'stdArr', 'maxArr', 'minArr', 'X_SVG', 'ALERT_ICON', 'seenFor', 'notesFor', 'alertHtml', 'FILE_ALERT', 'fileAlertHtml', 'fileLine', 'notesHtml', 'exactKey'];
+const IN_ALERTS = new Set(['ALERT_ICON', 'seenFor', 'notesFor']);
 const KN = ['isObj', 'isArr', 'num', 'numStr', 'oneOf', 'dateOf', 'arrOf', 'without', 'wideCsv'];
 const CN = ['PLOT_DL_ICON', 'CSV_ICON', 'plotWrap'];
 // (the CSVs' settings as a fresh page has them; a decimal comma where a case asks for one)
 const settings = { decimal: '.', field: ';' };
-const PAGE = new Function('settings', [...UN.map(n=> decl(n === 'ALERT_ICON' ? 'alerts.js' : 'utils.js', n)), ...KN.map(n=> decl('modkit.js', n)), ...CN.map(n=> decl('modcharts.js', n))].join('\n') +
+const PAGE = new Function('settings', [...UN.map(n=> decl(IN_ALERTS.has(n) ? 'alerts.js' : 'utils.js', n)), ...KN.map(n=> decl('modkit.js', n)), ...CN.map(n=> decl('modcharts.js', n))].join('\n') +
   `\nreturn { ${[...UN, ...KN, ...CN].join(', ')} };`)(settings);
 const ids = new WeakMap();
 let nid = 0;
 const objId = o => o == null || typeof o !== 'object' ? String(o) : ids.get(o) || (ids.set(o, ++nid), nid);
 const U = { settings, objId, ...Object.fromEntries(['fmtNum', 'csvLine', 'cumtrapz', 'maxArr', 'minArr', 'meanArr', 'stdArr', 'exactKey', 'num', 'numStr', 'oneOf', 'dateOf', 'arrOf', 'without', 'wideCsv'].map(k=> [k, PAGE[k]])) };
-const HU = { esc: PAGE.esc, num: PAGE.num, plotWrap: PAGE.plotWrap, CSV_ICON: PAGE.CSV_ICON, alertHtml: PAGE.alertHtml, fileAlertHtml: PAGE.fileAlertHtml };
+const HU = { esc: PAGE.esc, num: PAGE.num, plotWrap: PAGE.plotWrap, CSV_ICON: PAGE.CSV_ICON, alertHtml: PAGE.alertHtml };
+// The drop zone's boxes of what the reading of the files said, as modkit.js draws them.
+const boxes = all => PAGE.notesHtml(H.fileNotes(all, HU), w=> 'gc-dismiss-' + w);
 const near = (a, b, tol, what)=> assert.ok(Math.abs(a - b) <= tol*Math.max(1, Math.abs(b)), `${what}: ${a} against ${b}`);
 const iso = d => d && d.toISOString().slice(0, 19);
 // A canonical dump: every number by its shortest round-trip string, NaN, ±∞ and −0 too; a
@@ -321,7 +324,6 @@ test('files as a project holds them, the replicates\' links, the pairs', ()=>{
   assert.deepEqual(M.partsOf({ ...tcd, mate: tcd }).map(x=> x.warn), Array(2).fill('raw chromatograms paired with raw chromatograms: no injection times'));
   assert.deepEqual(M.rowFiles(all[0]).map(f=> f.name), ['b', 'b_TCD.csv']);
   assert.ok(M.hasTcd(all[0]) && !M.isTable(tcd) && M.isTcd(tcd));
-  assert.deepEqual(M.pairMarks({ rawBytes: new Uint8Array(1), mate: { rawBytes: null } }).length, 1);
 });
 
 test('the cards\' markup, the parameter table and the alerts, every label escaped', ()=>{
@@ -348,21 +350,19 @@ test('the cards\' markup, the parameter table and the alerts, every label escape
   P.norm = 'area';
   assert.ok(H.paramTableHtml(P, [f], HU).includes('data-f="a"') && H.paramTableHtml(P, [f], HU).includes('A (cm²)'));
   // The drop zone's alerts (v567, utils.js FILE ALERTS): one box to check (the pairs, the rows
-  // left out, the empty cells), one of how the files were read (day/month, the alternative export).
-  const seen = { check: new WeakSet(), read: new WeakSet(), pairs: new WeakSet() };
-  const A = H.dropAlertsHtml([f], [f], seen, HU);
+  // left out, the empty cells), one of how the files were read (day/month, the alternative
+  // export); each file's until its box's × marks it seen (v572, alerts.js).
+  const A = boxes([f]);
   assert.equal(A, PAGE.alertHtml('warn', 'Loaded, to check:', ['x.csv: 2 rows left out: their injection date does not exist.',
     'x.csv: 1 empty H<sub>2</sub> cell: each of those injections is left out of that gas only, its rate, production and mean from the injections with a value.',
     'x.csv: 1 row with no gas value left out.'], 'gc-dismiss-check')
     + PAGE.alertHtml('info', 'How these files were read:', ['x.csv: dates read as day/month.', 'x.csv: the alternative export (Inject Time, Amount in ppm).'], 'gc-dismiss-read'));
-  seen.read.add(f.gas);
-  assert.equal(H.dropAlertsHtml([f], [f], seen, HU), A.slice(0, A.indexOf('<div class="alert info"')), 'how they were read, dismissed');
-  seen.check.add(f.gas);
-  assert.equal(H.dropAlertsHtml([f], [f], seen, HU), '', 'dismissed');
-  const fresh = { check: new WeakSet(), read: new WeakSet(), pairs: new WeakSet() };
-  assert.ok(!H.dropAlertsHtml([], [{ ...f, gas: {}, dayMonth: 'yes', badDates: 2.5, emptyRows: 'x', altExport: 1 }], fresh, HU), 'a project\'s .json: only true and a whole count');
+  assert.equal(boxes([{ ...f, seen: ['read'] }]), A.slice(0, A.indexOf('<div class="alert info"')), 'how they were read, dismissed');
+  assert.equal(boxes([{ ...f, seen: ['read', 'check'] }]), '', 'dismissed');
+  for (const seen of ['check read', [['check', 'read']], { check: true }, null]) assert.equal(boxes([{ ...f, seen }]), A, 'a project\'s .json: a mark that is none marks nothing');
+  assert.ok(!boxes([{ ...f, gas: {}, dayMonth: 'yes', badDates: 2.5, emptyRows: 'x', altExport: 1 }]), 'a project\'s .json: only true and a whole count');
   const tcd = { name: '<t>_TCD.csv', label: 'T', tcd: { n: 1 } };
-  assert.match(H.dropAlertsHtml([tcd, { ...f, mate: { ...f, name: 'y.csv' } }], [], fresh, HU), /&lt;t&gt;_TCD\.csv: raw chromatograms with no table: shown in Integration, left out of Analysis, with no injection times\.[\s\S]*&lt;b&gt;&amp;&quot;: two tables paired \(x\.csv, y\.csv\)/);
+  assert.match(boxes([tcd, { ...f, mate: { ...f, name: 'y.csv' } }]), /&lt;t&gt;_TCD\.csv: raw chromatograms with no table: shown in Integration, left out of Analysis, with no injection times\.[\s\S]*&lt;b&gt;&amp;&quot;: two tables paired \(x\.csv, y\.csv\)/);
   const all = [f, { ...f, name: 'h.csv', label: 'H' }, { ...f, name: 'm.csv', label: 'M', sample: 'h.csv' }, tcd];
   assert.equal(H.sampleCell(all, all[2], 2, HU), '<select class="file-sample" data-i="2" aria-label="Sample" title="The sample this trace is: its own, or the one another trace heads (its replicates), by its label"><option value="x.csv" title="x.csv">&lt;b&gt;&amp;&quot;</option><option value="h.csv" title="h.csv" selected>H</option><option value="m.csv" title="m.csv">M</option></select>');
   assert.equal(H.sampleCell(all, tcd, 3, HU), '');
@@ -432,9 +432,8 @@ function runCase(c){
     const files = all.filter(f=> f.included !== false && M.isTable(f)), P = M.newParams(files);
     M.restoreParams(U, P, JSON.parse(JSON.stringify(c.st)), files);
     const k = card(P, files, all, 'card');
-    const seen = { check: new WeakSet(), read: new WeakSet(), pairs: new WeakSet() }, tables = all.filter(M.isTable);
     return canon([all.map(f=> [f.name, f.sample, f.included]), M.snapshotOf(P), H.paramTableHtml(P, files, HU), k.csvs,
-      H.dropAlertsHtml([], tables, seen, HU), all.map((f, i)=> H.sampleCell(all, f, i, HU))]);
+      boxes(all.filter(M.isTable)), all.map((f, i)=> H.sampleCell(all, f, i, HU))]);
   } finally { settings.decimal = '.'; }
 }
 

@@ -189,9 +189,9 @@ test('the markup: a card\'s body and instructions; how the files were read (v567
   assert.equal(H.P({ id: 3 }), 'epr3');
   assert.ok(H.eprInfo('TAIL').endsWith(' TAIL') && H.eprInfo('').includes('<b>g = hν / (μ<sub>B</sub>·B)</b>'));
   // (v567: a lone half is said among the files not loaded, epr.js onDrop; a spectrum with no
-  // microwave frequency, how it was read, named by its .DSC, else its stem)
-  assert.deepEqual(M.readNotes([{ name: 'a', rescaled: true }, { name: 'b', rescaled: false, rawFiles: [{ name: 'b.DSC' }, { name: 'b.DTA' }] }, { name: 'c', rescaled: false }]),
-    ['b.DSC: no microwave frequency (MWFQ): plotted on the field measured, not at 9.5 GHz; no g axis.', 'c: no microwave frequency (MWFQ): plotted on the field measured, not at 9.5 GHz; no g axis.']);
+  // microwave frequency, how it was read, named by its .DSC, else its stem; v572: a file's)
+  assert.deepEqual([{ name: 'a', rescaled: true }, { name: 'b', rescaled: false, rawFiles: [{ name: 'b.DSC' }, { name: 'b.DTA' }] }, { name: 'c', rescaled: false }].map(M.readNote),
+    ['', 'b.DSC: no microwave frequency (MWFQ): plotted on the field measured, not at 9.5 GHz; no g axis.', 'c: no microwave frequency (MWFQ): plotted on the field measured, not at 9.5 GHz; no g axis.']);
   assert.deepEqual([M.extOf('x.dta'), M.extOf('y.DSC')], ['.DTA', '.DSC']);
 });
 

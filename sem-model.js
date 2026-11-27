@@ -403,20 +403,24 @@ export const linkAllText = fs => fs.length && fs.every(g=> g.linked) ? 'Unlink a
 
 /* ---- Alerts ----
    A line's alerts (sem.js: by its line of history, the last 32 lines'): { bad: { names
-   (markup), ids } | null, dup: [{ id, html }], warn: [{ id, html }] }. */
-export const NO_ALERTS = { bad: null, dup: [], warn: [] };
+   (markup), ids } | null, dup: [{ id, html }] }. What the reading of an image said (its
+   warning) is none of them: worked out from the images in the list (sem-html.js fileNotes,
+   v572; to v571 `warn`, a line's, which a project reopened or a tab woken lost). */
+export const NO_ALERTS = { bad: null, dup: [] };
 export const alertsNow = S => S.alertsOf.get(S.line) || NO_ALERTS;
 export function setAlerts(S, a){
   const now = { ...alertsNow(S), ...a };
   S.alertsOf.delete(S.line);
-  if (now.bad || now.dup.length || now.warn.length) S.alertsOf.set(S.line, now);
+  if (now.bad || now.dup.length) S.alertsOf.set(S.line, now);
   if (S.alertsOf.size > 32) S.alertsOf.delete(S.alertsOf.keys().next().value);
 }
 // An image removed from the list: what was said about it goes.
 export function dropAlertsOf(S, id){
   const A = alertsNow(S), ids = A.bad ? A.bad.ids.filter(x=> x !== id) : [];
-  setAlerts(S, { dup: A.dup.filter(a=> a.id !== id), warn: A.warn.filter(a=> a.id !== id), bad: ids.length ? { ...A.bad, ids } : null });
+  setAlerts(S, { dup: A.dup.filter(a=> a.id !== id), bad: ids.length ? { ...A.bad, ids } : null });
 }
+// An image of the list and one of a state the same: its id (alerts.js markSeen's `same`).
+export const sameImage = (a, b)=> !!(a.raw && b.raw) && a.raw.id === b.raw.id;
 
 /* ---- The list ---- */
 // A file read (r: its header; raw: its RawRef) as the list holds it: its default crop.

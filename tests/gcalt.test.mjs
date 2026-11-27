@@ -200,7 +200,7 @@ test('dates: every form in both layouts, numeric ones found month/day or day/mon
   } finally { await close(); }
 });
 
-test('the info alert: for the alternative alone, a circled i in azure in both themes, dismissed through undo and redo, said again in a reopened project', async ()=>{
+test('the info alert: for the alternative alone, a circled i in azure in both themes, dismissed through undo and redo and in a reopened project', async ()=>{
   const { page, errors, close } = await env.page();
   try {
     await openModule(page, 'gc');
@@ -247,12 +247,13 @@ test('the info alert: for the alternative alone, a circled i in azure in both th
     assert.equal(await infoAlert(page), null, 'undone: the files on show dismissed');
     await undo(page, true);
     assert.deepEqual(await infoAlert(page), [INFO_HEAD, 'twin-alt.txt'], 'redone');
-    // A project reopened: said again, for each file read so.
+    // A project reopened: said again for each file read so, but the one dismissed (v572,
+    // ALERTS-REVIEW.md R3: its mark in its record; to v571 in memory, lost).
     const st = await encoded(page);
     await restore(page, st);
-    assert.deepEqual(await infoAlert(page), [INFO_HEAD, MAIN_NAME, 'twin-alt.txt'], 'reopened');
+    assert.deepEqual(await infoAlert(page), [INFO_HEAD, 'twin-alt.txt'], 'reopened');
     // By hand: anything but true says nothing; a name is text.
-    const edited = JSON.parse(JSON.stringify(st)), f0 = edited.files.find(f=> f.name === MAIN_NAME);
+    const edited = JSON.parse(JSON.stringify(st)), { seen: _, ...f0 } = edited.files.find(f=> f.name === MAIN_NAME);
     edited.files = [PAYLOAD, 'true', 1, null, {}].map((v, i)=> ({ ...f0, altExport: v, name: `${PAYLOAD} ${i}.txt` }));
     edited.files.push({ ...f0, name: PAYLOAD + '.txt' });
     await restore(page, edited);

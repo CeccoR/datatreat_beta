@@ -1,4 +1,4 @@
-# Avvisi ed errori: revisione (v565 → v571)
+# Avvisi ed errori: revisione (v565 → v572)
 
 Mappa rifatta dal codice di v565 (331 voci: 309 messaggi con testo, 3 flash, 4 solo tooltip, 15 casi muti). Sostituisce la revisione di v540: delle sue 79 proposte 73 valevano ancora, sono riprese qui sotto. I testi dell'interfaccia restano in inglese.
 
@@ -79,15 +79,15 @@ ID della mappa tra parentesi. Fase: 1 file illeggibile, 2 drop zone e testi, 3 c
 | X01 | `Loaded, with a caveat:` → info `How these files were read:` (più scansioni, tempi diversi, tempo stimato) + warn `Loaded, to check:` (scansione non letta, punti tolti, fattori o tempi mancanti) | fatto in v567 |
 | X02 | Finestra dello standard: più file, più scansioni → info | fatto in v567 |
 | X03 | `Restored, with a caveat:` → `Opened, to check:`, senza vNNN | fatto in v567 |
-| X04 | Avvisi di lettura calcolati dai file, × per file | da fare (fase 4) |
+| X04 | Avvisi di lettura calcolati dai file, × per file | fatto in v572 (dai byte letti: scansioni, note, scansioni non lette; `Opened, to check:` dal record, `oldData`; la riga dei file lasciati fuori resta della riapertura) |
 | X05 | Riga dello strumento "— ⚠ …" → fatti in grigio + box compatti info/warn | fatto in v571 (`instrNoteKind`: info XI03–XI06 XI08 XI09 XI14, warn il resto) |
-| X06 | Assunzione dello strumento detta subito (XE04) | fatto in v571 (tolto dai risultati alla vista, il motore lo scrive ancora) |
+| X06 | Assunzione dello strumento detta subito (XE04) | fatto in v571 (tolto dai risultati alla vista, il motore lo scrive ancora); v572: non per un pattern riaperto senza i suoi byte (già detto dal banner) |
 | X07 | Fallimenti nella riga di stato → error compatto | fatto in v571 (anche XV10: gave no profile e failed; stopped resta grigio) |
 | X08 | `No phase ticked…` un testo solo | fatto in v571 |
 | X09 | XV02 XV03 → info compatto | fatto in v571 |
-| X10 | Profilo strumentale mancante detto una volta, warn | fatto in v571 (XE07 XE15 nel box; profilo rifiutato: solo l'elenco; tabella: titolo `(not corrected for the instrument)`) |
-| X11 | Avvisi del raffinamento → box info/warn (tipo dato dal motore) | da fare (fase 4, risultati salvati) |
-| X12 | Avvisi dei CIF → box compatti per fase | fatto in v571 (`cifNoteKind`) |
+| X10 | Profilo strumentale mancante detto una volta, warn | fatto in v571 (XE07 XE15 nel box; profilo rifiutato: solo l'elenco; tabella: titolo `(not corrected for the instrument)`); v572: riconosciuti dalla chiave del motore, le parole solo per i risultati salvati prima |
+| X11 | Avvisi del raffinamento → box info/warn (tipo dato dal motore) | fatto in v572 (`{ kind, text }`, `xrd-math.js` MSG: info XE01 XE05 XE06 XE10 XE16–XE18 XE23–XE27, error XE21, warn il resto; salvati così; risultati senza tipo letti come warn; XV20 nel box warn, XV22 nei box; anche il lettore dei CIF e dello strumento danno il tipo, `instrNoteKind` resta per gli strumenti salvati prima, `cifNoteKind` tolto) |
+| X12 | Avvisi dei CIF → box compatti per fase | fatto in v571 (`cifNoteKind`); v572: il tipo dal lettore dei CIF |
 | X13 | XV37 → warn | fatto in v571 (nel box Structure) |
 | X14 | Curva persa in silenzio (XV39) → warn | fatto in v571 |
 | X15 | XS07 → warn | fatto in v571 |
@@ -101,9 +101,9 @@ ID della mappa tra parentesi. Fase: 1 file illeggibile, 2 drop zone e testi, 3 c
 | S01 | `{file} — {reason}` → `{file}: {reason}.` | fatto in v567 |
 | S02 | `Loaded, but check:` → `Loaded, to check:` | fatto in v567 |
 | S03 | `⚠ narrowed to fit` → ⓘ, info | fatto in v567 |
-| S04 | Avvisi calcolati dai file (non legati alla linea della storia) | da fare (fase 4) |
+| S04 | Avvisi calcolati dai file (non legati alla linea della storia) | fatto in v572 (l'avviso dell'immagine; rifiuti e doppioni restano della drop, per linea) |
 | D01 | `Verify how these files were read:` → info `How these files were read:` (formati) + warn `Loaded, to check:` (punti tolti) | fatto in v567 |
-| D02 | × per file che regge undo/redo | da fare (fase 4) |
+| D02 | × per file che regge undo/redo | fatto in v572 |
 | D03 | `…for the regression!` → `…for the regression.` | fatto in v567 |
 | D04 | E_g o E_U negativi: warn → error | fatto in v567 |
 
@@ -140,6 +140,8 @@ Trovati dopo la mappa, fatti in v571: (i) tabella GC con date ma nessun valore d
 
 Custom non ha modifiche proprie: le prende da C01–C05.
 
-## Ordine che resta
+## Fase 4 (v572): fatta
 
-4. Persistenza (X04, S04, D02), poi X11, che tocca il formato dei risultati salvati (con XV20 e XV22, ancora righe ambra).
+Persistenza (U3, R3): in ogni modulo gli avvisi di lettura sono note calcolate dai file presenti (`alerts.js`: `{ what, line, files }`, `notesFor`, `markSeen`; `utils.js` `notesHtml`; modkit `o.notes`); la × marca i file della sua box (`seen` nel record), in tutti gli stati della storia (`UndoStack.patch`, nessun passo), quindi regge undo e redo e si salva col progetto (una modifica da salvare, come un'etichetta). GC: i segni in memoria (`S.seen`) sostituiti dal record. Iodometria: le coppie di colonne lasciate fuori dalla tabella letta (`pairsOut`). EPR e DRS: niente più flag del modulo. X11 come sopra.
+
+Restano fuori (BACKLOG): la box della finestra Calibration GC per le calibrazioni di v544–v548 (× tenuta finché la finestra è aperta), gli avvisi della finestra dello standard XRPD (della drop), tre testi del motore con "—" (XE14, XE30, XE39: cambiarli cambia i golden del motore).

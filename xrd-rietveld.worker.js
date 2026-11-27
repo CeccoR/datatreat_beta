@@ -9,7 +9,7 @@ import { buildModel, autoRefine, fitSettings, displacementMm, shapeOf, siteU, lo
 import { measureWidths, williamsonHall } from './xrd-widths.js';
 import { metric, cellFrom, uEquiv, betaOf } from './xrd-cryst.js';
 import { evalQuartic } from './xrd-broad.js';
-import { inv3n, hklText, fmtEsd, fmtDeg, fmtOff } from './xrd-math.js';
+import { inv3n, hklText, fmtEsd, fmtDeg, fmtOff, MSG } from './xrd-math.js';
 
 const D2R = Math.PI/180;
 // What a parameter is, for the notes on parameters at a bound or undetermined.
@@ -189,7 +189,7 @@ function deltaB(S, q, ph, nm, lines){
   const bMin = Math.min(...(ph.atoms || []).map(a=> Number.isFinite(a.Biso) ? a.Biso : 0));
   // Only a ΔB that lowers B below 0: a negative B of the CIF's own is the phase list's
   // warning, and a positive ΔB takes up nothing of the kind.
-  if (Number.isFinite(bMin) && P[key] < 0 && bMin + P[key] < 0) S.warnings.push(`${ph.name || q.name}: with ΔB = ${fmtEsd(P[key], E[key], ' Å²')} some atom's B is negative (${(bMin + P[key]).toFixed(2)} Å²), which no displacement gives: it more likely takes up absorption, surface roughness, the background or a site's occupancy (Site occupancy, in the settings).`);
+  if (Number.isFinite(bMin) && P[key] < 0 && bMin + P[key] < 0) S.warnings.push(MSG.warn(`${ph.name || q.name}: with ΔB = ${fmtEsd(P[key], E[key], ' Å²')} some atom's B is negative (${(bMin + P[key]).toFixed(2)} Å²), which no displacement gives: it more likely takes up absorption, surface roughness, the background or a site's occupancy (Site occupancy, in the settings).`));
 }
 /* B per site (isotropic), or U^ij per site within its symmetry with B_eq = 8π²U_eq
    (Fischer & Tillmanns), esd by propagation. A negative B, or a U that is not
@@ -203,7 +203,7 @@ function siteB(S, q, ph, nm, lines){
     const k = model.par[st.iB].name;
     lines.push({ label: `B(${st.label})`, value: fmtEsd(P[k], E[k], ' Å²'), title: `The isotropic displacement parameter of site ${st.label} (${st.members.length} atom${st.members.length > 1 ? 's' : ''} of ${st.element} in the cell), B = 8π²⟨u²⟩` });
     row(S, nm, `B_A2_${st.label}`, P[k], E[k]);
-    if (P[k] < 0) S.warnings.push(`${nm}: B(${st.label}) = ${fmtEsd(P[k], E[k], ' Å²')} is negative, which no vibration gives: it more likely takes up absorption, surface roughness, the background or a site's occupancy (Site occupancy, in the settings).`);
+    if (P[k] < 0) S.warnings.push(MSG.warn(`${nm}: B(${st.label}) = ${fmtEsd(P[k], E[k], ' Å²')} is negative, which no vibration gives: it more likely takes up absorption, surface roughness, the background or a site's occupancy (Site occupancy, in the settings).`));
   }
 }
 // A site's anisotropic displacements (siteB).
@@ -221,7 +221,7 @@ function siteUij(S, q, st, nm, lines){
   row(S, nm, `Beq_A2_${st.label}`, b, bE);
   const Ns = Nof(cellAt(P)), Bt = betaOf(siteU(st, vAt(P), Ns), Ns);
   const m2 = Bt[0]*Bt[4] - Bt[1]*Bt[3], det = Bt[0]*(Bt[4]*Bt[8] - Bt[5]*Bt[7]) - Bt[1]*(Bt[3]*Bt[8] - Bt[5]*Bt[6]) + Bt[2]*(Bt[3]*Bt[7] - Bt[4]*Bt[6]);
-  if (!(Bt[0] > 0 && m2 > 0 && det > 0)) S.warnings.push(`${nm}: the displacements of site ${st.label} are not positive definite (some direction has ⟨u²⟩ ≤ 0), which no vibration gives: they more likely take up absorption, roughness, the background or a wrong occupancy.`);
+  if (!(Bt[0] > 0 && m2 > 0 && det > 0)) S.warnings.push(MSG.warn(`${nm}: the displacements of site ${st.label} are not positive definite (some direction has ⟨u²⟩ ≤ 0), which no vibration gives: they more likely take up absorption, roughness, the background or a wrong occupancy.`));
 }
 /* The refined site occupancies: each the share of its site the CIF's species fills, as
    the pattern reads it — scattering alike at every angle, so a site that has lost atoms
@@ -236,8 +236,8 @@ function occLines(S, q, nm, lines){
     lines.push({ label: `occupancy (${st.label})`, value: fmtEsd(v, e), title: `The occupancy of site ${st.label} (${n} atom${n > 1 ? 's' : ''} of ${st.element} in the cell; ${st.occ} in the CIF), refined: the share of the site its species fills, read from how strongly it scatters at every angle alike. Under 1, atoms missing (vacancies, a depleted surface) or a lighter species beside them; over 1, a heavier one. It is correlated with the scale and the displacement parameters: on data to 80° hold B or refine one ΔB beside it` });
     row(S, nm, `occupancy_${st.label}`, v, e);
     const z = Number.isFinite(e) && e > 0 ? (v - 1)/e : NaN;
-    if (v >= OCC_MAX - 1e-6 || v <= 1e-6) S.warnings.push(`${nm}: the occupancy of site ${st.label} is on its bound (${v <= 1e-6 ? 0 : OCC_MAX}): it takes up something the model lacks rather than a share of the site.`);
-    else if (z > 3) S.warnings.push(`${nm}: the occupancy of site ${st.label} is ${fmtEsd(v, e)}, ${z.toFixed(0)} esd over 1: the site scatters more than ${st.element} alone can — a heavier species on it, or the occupancy taking up something else (absorption, the background, a texture).`);
+    if (v >= OCC_MAX - 1e-6 || v <= 1e-6) S.warnings.push(MSG.warn(`${nm}: the occupancy of site ${st.label} is on its bound (${v <= 1e-6 ? 0 : OCC_MAX}): it takes up something the model lacks rather than a share of the site.`));
+    else if (z > 3) S.warnings.push(MSG.warn(`${nm}: the occupancy of site ${st.label} is ${fmtEsd(v, e)}, ${z.toFixed(0)} esd over 1: the site scatters more than ${st.element} alone can — a heavier species on it, or the occupancy taking up something else (absorption, the background, a texture).`));
   }
 }
 // The preferred orientation (March–Dollase), its axis and r: a sample's phase, or the
@@ -254,13 +254,13 @@ function textureLine(S, q, nm, lines){
 // profile the samples take.
 function fitNotes(S){
   const { res, model, warnings } = S;
-  if (res.converged === false) warnings.push('The last refinement stopped at its iteration limit before converging: the values may still move a little.');
+  if (res.converged === false) warnings.push(MSG.warn('The last refinement stopped at its iteration limit before converging: the values may still move a little.'));
   const atB = (res.atBound || []).filter(n=> !/^bg/.test(n));
-  if (atB.length) warnings.push(`On a bound, so to be read as limits: ${atB.map(n=> friendly(model, n)).join(', ')}.`);
+  if (atB.length) warnings.push(MSG.warn(`On a bound, so to be read as limits: ${atB.map(n=> friendly(model, n)).join(', ')}.`));
   const und = (res.undetermined || []).filter(n=> !/^bg/.test(n));
   // Those the pattern sees only in a combination (X with a phase's Xs: the profile has X + Xs).
   const ties = (res.tied || []).map(t=> t.filter(n=> !/^bg/.test(n))).filter(t=> t.length > 1);
-  if (und.length) warnings.push(`Not determined by the data (no esd): ${und.map(n=> friendly(model, n)).join(', ')}${ties.length ? ` — the pattern sees only a combination of ${ties.map(t=> t.map(n=> friendly(model, n)).join(' and ')).join('; of ')}` : ''}.`);
+  if (und.length) warnings.push(MSG.warn(`Not determined by the data (no esd): ${und.map(n=> friendly(model, n)).join(', ')}${ties.length ? ` — the pattern sees only a combination of ${ties.map(t=> t.map(n=> friendly(model, n)).join(' and ')).join('; of ')}` : ''}.`));
 }
 /* A log-normal distribution of sizes (WPPM): σ of ln D, and the sphere's diameters
    read three ways — the volume-weighted mean (⟨D⁴⟩/⟨D³⟩, what the breadth measures
@@ -292,7 +292,7 @@ function sizeDist(S, q, nm, lines, shaped){
      within 1.1 esd. */
   if (sg >= Math.sqrt(Math.log(16/9))){
     const med = !shaped && P[ys] > 0 ? scherrerNm(S, P[ys])*Math.exp(-3.5*sg*sg) : NaN;
-    S.warnings.push(`${nm}: σ of ln D = ${fmtEsd(sg, sgE)} is a distribution wider than the Lorentzian profile's (its tails heavier)${Number.isFinite(med) ? `, its median at ${med.toPrecision(2)} nm` : ''}: the profiles' far tails set it, which a background, a broad second phase or a strain with long tails can shape as well. The volume-weighted mean stands; the median and the number mean rest on that tail.`);
+    S.warnings.push(MSG.warn(`${nm}: σ of ln D = ${fmtEsd(sg, sgE)} is a distribution wider than the Lorentzian profile's (its tails heavier)${Number.isFinite(med) ? `, its median at ${med.toPrecision(2)} nm` : ''}: the profiles' far tails set it, which a background, a broad second phase or a strain with long tails can shape as well. The volume-weighted mean stands; the median and the number mean rest on that tail.`));
   }
 }
 /* The microstrain: isotropic, or Stephens' (anisotropic: ε² = ε₀² + 10⁻⁶ Σ S_j q_j(u),
@@ -588,7 +588,7 @@ self.addEventListener('message', e=>{
     if (!opts.standard){
       const onProgress = (i, n)=> self.postMessage({ id, type: 'progress', frac: 1, stage: `peak widths, ${i} of ${n}` });
       try { widths = summariseWidths(measureWidths(model, res, { irf: res.irf || null, isoParams: res.isoParams || null, shapeIds: Object.keys(res.shapes || {}), onProgress }), phases, table, model, res); }
-      catch(e){ warnings.push('The peak widths could not be measured: ' + String(e && e.message || e)); }
+      catch(e){ warnings.push(MSG.warn('The peak widths could not be measured: ' + String(e && e.message || e))); }
     }
     self.postMessage({ id, type: 'result', res: { params: res.params, esd: res.esd, stats: res.stats, stages: res.stages, textures: res.textures, models: res.models,
       atBound: res.atBound, undetermined: res.undetermined, converged: res.converged, ms: res.ms, warnings, phaseResults: groups, table, widths, solids,

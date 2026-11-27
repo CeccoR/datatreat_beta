@@ -1,4 +1,4 @@
-import { fmtNum, fmtData, setupDropzone, maxArr, minArr, NORM_OPTIONS, normOf, fileAlertHtml, fileLine, NOT_READ, bytesOf, nextColor, guardNumericInput, esc, registerModule, keeper, objId, exactKey } from './utils.js';
+import { fmtNum, fmtData, setupDropzone, maxArr, minArr, NORM_OPTIONS, normOf, fileLine, NOT_READ, bytesOf, nextColor, guardNumericInput, esc, registerModule, keeper, objId, exactKey } from './utils.js';
 import { boxSmooth, widthText } from './smooth.js';
 import { Plot } from './plot.js';
 import { cardInfo, fileSafe, nameDownloads } from './cards.js';
@@ -70,8 +70,6 @@ async function processPair(stem, dtaFile, dscFile){
                           the alerts under the drop zone; the cards' settings in the history
      deck                 the cards (cards.js), each its own normalisation and smoothing of
                           the same spectra, stacked on its own plot
-     readDismissed        how the files were read (epr-model.js readNotes), its alert
-                          dismissed, until the next drop, restore or Remove all
 ========================================================= */
 // An EPR tab's instance (utils.js makeInstance: ctx { key, root, layer, shown }).
 function createEpr(ctx){
@@ -86,7 +84,7 @@ function createEpr(ctx){
 }
 function makeState({ key, root, layer, shown }){
   const $ = id => root.querySelector('#' + id);
-  return { key, root, layer, shown, $, stale: false, drawnAt: '', kit: null, allFiles: null, files: null, deck: null, readDismissed: false };
+  return { key, root, layer, shown, $, stale: false, drawnAt: '', kit: null, allFiles: null, files: null, deck: null };
 }
 // Hidden, nothing is drawn (utils.js registerModule): whether to draw, and when not the
 // instance marked to be drawn whole as it is shown.
@@ -95,11 +93,9 @@ const drawable = S => S.shown() || !(S.stale = true);
 function kitHooks(S){
   return {
     root: S.root, key: S.key, layer: S.layer,
-    // (how the files were read: worked out from those there are, until its ×, which a drop,
-    // a restore or Remove all brings back)
-    alerts: p =>{ S.$('eprAlerts').innerHTML = p.invalid + fileAlertHtml('read', S.readDismissed ? [] : M.readNotes(S.allFiles).map(esc), 'epr-dismiss-read') + p.upload; },
-    dismiss: { read: ()=>{ S.readDismissed = true; } },
-    cleared: ()=>{ S.readDismissed = false; },
+    // (how the files were read, epr-model.js readNote: worked out from those there are, each
+    // file's until its box's ×, v572; to v571 the box's until a drop, a restore or Remove all)
+    notes: ()=> S.allFiles.map(f=> [f, M.readNote(f)]).filter(([, t])=> t).map(([f, t])=> ({ what: 'read', line: esc(t), files: [f] })),
     refresh: ()=> afterFilesChange(S),
     // A label or a colour changed: the zoom kept, the data being the same.
     redraw: ()=> updateEpr(S, true),
@@ -134,7 +130,6 @@ function apiOf(S){
 }
 // A state put back: its cards (a card kept, its fields showing its record).
 function restore(S, s){
-  S.readDismissed = false;
   return S.deck.load(M.cardsIn(U, s), c => M.readCard(U, S.files, c), a=>{
     const card = S.deck.cardOf(a);
     card.querySelector('#' + P(a) + 'Norm').value = a.norm;
@@ -172,7 +167,6 @@ async function onDrop(S, fileList){
     }
   }
   S.kit.said(bad, alreadyLoaded);
-  S.readDismissed = false;
   afterFilesChange(S);
 }
 function afterFilesChange(S){

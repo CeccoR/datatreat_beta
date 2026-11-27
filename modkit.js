@@ -1,6 +1,7 @@
-import { esc, fileAlertHtml, fileLine, NOT_READ, bytesOf, includedOf, setIncluded, removeFileAt, moveFileTo, renderUnifiedFileList, setTabLoaded, setupDropzone, registerHistory, registerTabRedraw, registerCsvExport, csvLine, nextColor, colorOf } from './utils.js';
+import { esc, fileAlertHtml, notesHtml, fileLine, NOT_READ, bytesOf, includedOf, setIncluded, removeFileAt, moveFileTo, renderUnifiedFileList, setTabLoaded, setupDropzone, registerHistory, registerTabRedraw, registerCsvExport, csvLine, nextColor, colorOf } from './utils.js';
 import { createDeck } from './cards.js';
 import { decodeText } from './textdata.js';
+import { markSeen } from './alerts.js';
 
 /* =========================================================
    MODULE KIT
@@ -11,16 +12,19 @@ import { decodeText } from './textdata.js';
    - the trace list (the file list to v531: a row a file, here, unless `traces` says
      otherwise) and its steps (remove, move, include, label, colour, palette, remove
      all), the per-sample arrays (`slots`) kept aligned with the included files;
-   - the alerts under the drop zone, each dismissed by its button;
+   - the alerts under the drop zone: a drop's files not loaded or already loaded, and
+     what the reading of the files there are said (o.notes), each box dismissed by its ×;
    - text files dropped, decoded and read (textdata.js), and those not readable or
      already loaded said;
    - the undo history: every file's record and the module's own state;
    - the cards (cards.js), the tab's redraw, the CSV export.
    o: {
-     alerts(parts)     draws the alerts: parts.invalid, parts.upload and o.parts, each
-                       markup or ''
-     parts             the module's other alerts, by name
-     dismiss           { part: fn } what a part's dismiss button does instead of emptying it
+     notes()           what the reading of the files in the list said (alerts.js notes:
+                       { what, line, files }), drawn under the drop zone (its element
+                       "<mod>Alerts") between the files not loaded and those already loaded,
+                       each box's × marking its files seen (v572, ALERTS-REVIEW.md R3; to
+                       v571 o.alerts drew them, o.dismiss a flag of the module's or a mark
+                       in memory); none, nothing
      slots()           the per-sample arrays (utils: INCLUDED FILES)
      listed(op)        the list changed ('remove', 'reorder', 'include', 'palette',
                        'clear'), before refresh: what the module does first
@@ -72,21 +76,23 @@ import { decodeText } from './textdata.js';
 export function moduleKit(mod, o){
   const { root, key } = o;
   const all = [], files = [], $ = id => root.querySelector('#' + id);
-  const parts = Object.fromEntries(['invalid', 'upload', ...(o.parts || [])].map(k=> [k, '']));
+  const parts = { invalid: '', upload: '' };
   const slots = ()=> o.slots ? o.slots() : [];
   const isSample = o.sample || (()=> true);
-  const kit = { all, files, alerts: parts };
+  const notes = ()=> o.notes ? o.notes() : [];
+  const kit = { all, files };
 
-  /* ---- Alerts: each dismiss button (data-action "<mod>-dismiss-<part>") empties its part,
-     or does what o.dismiss says. ---- */
+  /* ---- Alerts: each dismiss button (data-action "<mod>-dismiss-<part>") empties its part
+     (a drop's: invalid, upload), or marks the files of its notes seen (check, opened,
+     read: alerts.js markSeen). ---- */
   const pre = mod + '-dismiss-';
-  kit.drawAlerts = ()=> o.alerts(parts);
+  kit.drawAlerts = ()=>{ $(mod + 'Alerts').innerHTML = parts.invalid + notesHtml(notes(), w=> pre + w) + parts.upload; };
   const clearAlerts = ()=>{ for (const k in parts) parts[k] = ''; };
   root.addEventListener('click', e=>{
     const btn = e.target.closest('[data-action]'), act = btn && root.contains(btn) ? btn.dataset.action : '';
     if (!act.startsWith(pre)) return;
     const part = act.slice(pre.length);
-    if (o.dismiss && o.dismiss[part]) o.dismiss[part](); else parts[part] = '';
+    if (part in parts) parts[part] = ''; else markSeen(hist, notes(), part);
     kit.drawAlerts();
   });
   /* A drop's files not loaded, each its line (utils.js fileLine: the file and why), and

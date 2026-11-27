@@ -116,12 +116,12 @@ export function spectrumOf(stem, p, dsc, buf, dtaName){
 }
 // A file's extension as the alerts name it: '.DTA' or '.DSC'.
 export const extOf = name => '.' + name.split('.').pop().toUpperCase();
-/* How the files were read, said under the drop zone (utils.js FILE ALERTS, v567: to v566
-   with no word): a spectrum with no microwave frequency is drawn on the field measured, and
+/* How a file was read, said under the drop zone (utils.js FILE ALERTS, v567: to v566 with
+   no word), or '': a spectrum with no microwave frequency is drawn on the field measured, and
    the plot has no g axis. Named by its .DSC, as its record keeps it (rawFiles), else by its
    stem. */
-export const readNotes = files => files.filter(f=> f.rescaled === false)
-  .map(f=> `${Array.isArray(f.rawFiles) && f.rawFiles[0] && typeof f.rawFiles[0].name === 'string' ? f.rawFiles[0].name : f.name}: no microwave frequency (MWFQ): plotted on the field measured, not at 9.5 GHz; no g axis.`);
+export const readNote = f => f.rescaled !== false ? ''
+  : `${Array.isArray(f.rawFiles) && f.rawFiles[0] && typeof f.rawFiles[0].name === 'string' ? f.rawFiles[0].name : f.name}: no microwave frequency (MWFQ): plotted on the field measured, not at 9.5 GHz; no g axis.`;
 /* A drop's files grouped by stem WITHIN THIS DROP only — nothing is carried over between
    uploads: a file neither .DTA nor .DSC is refused (`invalid`), one whose stem is loaded
    (`existing`) is said (`already`). */

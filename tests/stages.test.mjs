@@ -256,7 +256,7 @@ test('refineHeld, freeShapeRun, bodyShapeOf, measureWidths and summarise: v564\'
   compare(/^(refine|shape|shapeOf|widths|worker) /);
   assert.equal(std.value.at(-1).type, 'result');
   assert.ok(all.value.at(-1).res.table.some(r=> r.name === 'stephens_anisotropy_rms_1e-6'));
-  assert.match(two.value.at(-1).res.warnings.join('|'), /rutile: not detected/);
+  assert.match(two.value.at(-1).res.warnings.map(m=> `${m.kind}: ${m.text}`).join('|'), /warn: rutile: not detected/);
 });
 
 /* v568: the free shape's line against the isotropic size gives the search's ΔBIC (its keep

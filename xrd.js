@@ -1,4 +1,4 @@
-import { esc, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, fileAlertHtml, fileLine, NOT_READ, bytesOf, nextColor, colorOf, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, registerBusy, busyChanged, registerModule, X_SVG } from './utils.js';
+import { esc, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, fileAlertHtml, notesHtml, fileLine, NOT_READ, bytesOf, nextColor, colorOf, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, registerBusy, busyChanged, registerModule, X_SVG } from './utils.js';
 import { createRietveld, RV_INFO, RV_STD_INFO } from './xrd-rv.js';
 import { createPeakAnalysis, PEAKS_INFO, STD_INFO } from './xrd-peaks.js';
 import { readXrdmlScans, decodeXml } from './xrd-instr.js';
@@ -6,6 +6,7 @@ import { createDeck, cardInfo, fileSafe } from './cards.js';
 import { isObj } from './modkit.js';
 import * as M from './xrd-model.js';
 import * as H from './xrd-html.js';
+import { markSeen } from './alerts.js';
 
 /* =========================================================
    XRD MODULE
@@ -86,10 +87,13 @@ function sampleName(xml){
                           arrays the cards keep are aligned with those
      curIdx               the sample every card shows
      stdFile              the instrumental standard's file, or none
-     loadAlerts, noteAlerts, readAlerts, uploadAlerts   the alerts under the drop zone
-                          (utils.js FILE ALERTS, in this order): the files refused, those
-                          loaded to check (a project opened: what changed), how they were
-                          read, those already loaded (to v566 the caveats in one box)
+     loadAlerts, leftOut, uploadAlerts   the alerts under the drop zone (utils.js FILE
+                          ALERTS, in this order): the files refused (the last drop's), what
+                          the reading of the files in the list said (xrd-html.js fileNotes:
+                          to check, what a project opened found, how they were read; each
+                          box's × marks its files seen, v572), with what a project opened
+                          left out (its line), those already loaded (to v566 the caveats in
+                          one box)
      peaksModal, rvModal  the standard's two windows ({ el, box, body }), and the one open
      openModal, onStdKey  (none: null), its Escape (a document listener while it is open)
      stdPeaks, stdRv      the standard's peak analysis and its Rietveld refinement
@@ -122,7 +126,7 @@ function createXrd(ctx){
 }
 function makeState({ key, root, layer, shown }){
   const $ = id => root.querySelector('#' + id);
-  const S = { key, root, layer, shown, $, allFiles: [], files: [], curIdx: 0, stdFile: null, deck: null, loadAlerts: '', noteAlerts: '', readAlerts: '', uploadAlerts: '',
+  const S = { key, root, layer, shown, $, allFiles: [], files: [], curIdx: 0, stdFile: null, deck: null, loadAlerts: '', leftOut: '', uploadAlerts: '',
     peaksModal: null, rvModal: null, openModal: null, stdPeaks: null, stdRv: null, live: new Map(), cardsNext: null, patNext: null, stdNext: null, resList: null, hist: null };
   S.onStdKey = e => onStdKey(S, e);
   return S;
@@ -162,16 +166,22 @@ function shows(S){
   [['peaks', S.stdPeaks], ['rv', S.stdRv]].forEach(([k, i])=>{ const v = i.shows(); if (v) std[k] = v; });
   return M.showsOf(S.files[S.curIdx], out, std);
 }
+// What the reading of the files said (xrd-html.js fileNotes), the standard's what a project
+// opened found in it too.
+const fileNotes = S => H.fileNotes(S.allFiles, S.stdFile, M.keptScans, HU);
+// A box's ×: a drop's emptied; one of the notes', its files marked seen in the list, the
+// standard and the history (alerts.js markSeen), a project opened's line with them.
 function onDismiss(S, e){
-  const btn = e.target.closest('[data-action]');
-  if (!btn || !S.root.contains(btn)) return;
-  if (btn.dataset.action === 'xrd-dismiss-upload'){ S.uploadAlerts=''; rebuildXrdAlerts(S); }
-  if (btn.dataset.action === 'xrd-dismiss-invalid'){ S.loadAlerts=''; rebuildXrdAlerts(S); }
-  if (btn.dataset.action === 'xrd-dismiss-notes'){ S.noteAlerts=''; rebuildXrdAlerts(S); }
-  if (btn.dataset.action === 'xrd-dismiss-read'){ S.readAlerts=''; rebuildXrdAlerts(S); }
+  const btn = e.target.closest('[data-action]'), act = btn && S.root.contains(btn) ? btn.dataset.action : '';
+  if (!act.startsWith('xrd-dismiss-')) return;
+  const what = act.slice('xrd-dismiss-'.length);
+  if (what === 'upload') S.uploadAlerts = '';
+  else if (what === 'invalid') S.loadAlerts = '';
+  else { markSeen(S.hist, fileNotes(S), what, { keys: ['files', 'std'] }); if (what === 'opened') S.leftOut = ''; }
+  rebuildXrdAlerts(S);
 }
 function rebuildXrdAlerts(S){
-  S.$('xrdAlerts').innerHTML = S.loadAlerts + S.noteAlerts + S.readAlerts + S.uploadAlerts;
+  S.$('xrdAlerts').innerHTML = S.loadAlerts + notesHtml(fileNotes(S), w=> 'xrd-dismiss-' + w, { opened: S.leftOut ? [S.leftOut] : [] }) + S.uploadAlerts;
 }
 
 /* ---- The samples ---- */
@@ -214,17 +224,18 @@ function fileCallbacks(S){
 function removeAll(S){
   S.allFiles.length=0;
   cards(S).forEach(a=>{ const e = S.live.get(a.id); if (a.type === 'scherrer' && e) e.inst.clear(); const s = a.states.scherrer; if (a.type !== 'scherrer' && s){ s.perParams = []; s.manualPeaks = []; s.removedPeaks = []; } });
-  S.loadAlerts=''; S.noteAlerts=''; S.readAlerts=''; S.uploadAlerts=''; rebuildXrdAlerts(S); afterFilesChange(S);
+  S.loadAlerts = ''; S.leftOut = ''; S.uploadAlerts = ''; afterFilesChange(S);
 }
 
 /* Files dropped. Each file on its own: one that cannot be read at all (its bytes gone from
    the disk, anything thrown) is refused with why, the others loaded. Up to v484 a throw
    ended the batch: the files read before it were in the list, unseen, no card drawn. What
-   the drop says (xrd-html.js dropAlerts) replaces what the last one said. */
+   the drop says (xrd-html.js dropAlerts) replaces what the last one said; what the reading
+   of the files said is the files' (fileNotes). */
 async function onDrop(S, fileList){
   // (by the patterns' names: a file of several scans is tested scan by scan, below)
   const existing = new Set(S.allFiles.map(f=> f.name));
-  const alreadyLoaded = [], invalidFiles = [], loadNotes = [];
+  const alreadyLoaded = [], invalidFiles = [];
   for (const f of fileList){
     if (existing.has(f.name)){ alreadyLoaded.push(esc(f.name)); continue; }
     let r;
@@ -236,21 +247,17 @@ async function onDrop(S, fileList){
     if (!fresh.length){ alreadyLoaded.push(esc(f.name)); continue; }
     existing.add(f.name);
     for (const q of r.pats) if (!fresh.includes(q)) alreadyLoaded.push(esc(q.f.name));
-    if (r.n > 1) loadNotes.push(esc(H.scansNote(f.name, r.n, fresh.length)));
-    for (const t of r.skipped) loadNotes.push(esc(fileLine(f.name, t)));
-    for (const q of fresh) addPattern(S, q, existing, loadNotes);
+    for (const q of fresh) addPattern(S, q.f, existing);
   }
-  const A = H.dropAlerts(invalidFiles, loadNotes, alreadyLoaded, HU);
-  S.loadAlerts = A.load; S.noteAlerts = A.note; S.readAlerts = A.read; S.uploadAlerts = A.upload;
-  rebuildXrdAlerts(S);
+  const A = H.dropAlerts(invalidFiles, alreadyLoaded, HU);
+  S.loadAlerts = A.load; S.uploadAlerts = A.upload;
   afterFilesChange(S);
 }
-// A pattern loaded: its colour, its notes said, and its entry in every card's per-sample
-// arrays. A new file comes in included, so it goes last among the included as well.
-function addPattern(S, { f: p, notes }, existing, loadNotes){
+// A pattern loaded: its colour and its entry in every card's per-sample arrays. A new file
+// comes in included, so it goes last among the included as well.
+function addPattern(S, p, existing){
   p.color = nextColor(S.allFiles);
   existing.add(p.name);
-  for (const t of notes) loadNotes.push(esc(fileLine(p.name, t)));
   S.allFiles.push(p); S.files.push(p);
   cards(S).forEach(a=>{
     const e = S.live.get(a.id);
@@ -260,10 +267,12 @@ function addPattern(S, { f: p, notes }, existing, loadNotes){
   });
 }
 
+// (the alerts too: what the reading of the files said is theirs, v572)
 function afterFilesChange(S){
   S.files = includedOf(S.allFiles);
   setTabLoaded(S.key, S.allFiles.length || S.stdFile ? 1 : 0);
   renderUnifiedFileList(S.$('xrdFileTableWrap'), S.allFiles, fileCallbacks(S));
+  rebuildXrdAlerts(S);
   if (S.curIdx >= S.files.length) S.curIdx = Math.max(0, S.files.length-1);
   S.$('xrdAnalyses').style.display = S.files.length ? 'block' : 'none';
   syncResults(S);
@@ -364,9 +373,11 @@ function setStd(S, f){
   syncStdFile(S);
   S.stdPeaks.refresh();
   S.stdRv.refresh();
-  // Every card takes the standard's correction (or loses it).
+  // Every card takes the standard's correction (or loses it); what a project opened found in
+  // the standard it had goes with it.
   eachCard(S, (e, a)=> a.type === 'scherrer' ? e.inst.sizesChanged() : e.inst.redraw());
   setTabLoaded(S.key, S.allFiles.length || S.stdFile ? 1 : 0);
+  rebuildXrdAlerts(S);
   S.hist.commit();
 }
 function openStd(S, which){
@@ -512,9 +523,9 @@ function snapshot(S){
 // sample on show, the cards' records.)
 function restore(S, s0, step){
   const s = M.stateIn(U, s0), R = M.readsOf(U, s);
-  S.allFiles = R.reads.filter(Boolean).map(r=> r.f);
+  S.allFiles = R.reads.filter(Boolean);
   S.files = includedOf(S.allFiles);
-  S.stdFile = R.stdRead ? R.stdRead.f : null;
+  S.stdFile = R.stdRead;
   S.curIdx = M.curIdxOf(s, R.gone, S.files.length);
   // (a wake's or a reload's: the pattern its tab showed, by its name, over the record's state,
   // which a step writes no sooner than the next change: showNext)
@@ -527,11 +538,11 @@ function restore(S, s0, step){
   syncStdFile(S);
   S.stdPeaks.refresh();
   S.stdRv.refresh();
+  // A drop's alerts are the drop's, not the state's (nor another tab's); what the reading of
+  // the files said is theirs, as a project opened left out is the restore's.
+  S.loadAlerts = ''; S.uploadAlerts = '';
+  S.leftOut = H.leftOutLine(R.lost, !!s.std, R.stdRead, HU);
   afterFilesChange(S);
-  // Clear the previous tab's transient upload alert and rebuild for this tab.
-  S.loadAlerts = ''; S.noteAlerts = ''; S.readAlerts = ''; S.uploadAlerts = '';
-  S.noteAlerts = H.restoredAlert(R.reads, R.stdRead, R.lost, s.std, HU);
-  rebuildXrdAlerts(S);
 }
 function restoreStd(S, s, step){
   S.stdPeaks.restore(isObj(s.stdPeaks) ? s.stdPeaks : {});

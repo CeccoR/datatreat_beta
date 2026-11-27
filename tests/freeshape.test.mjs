@@ -31,6 +31,8 @@ const phase = (shape, more = {}) => ({ id: 1, name: SRT.name, cell: SRT.cell, co
   size: true, shape, profile: 'lorentz', strain: 'iso', adp: 'overall', po: null, occ: null, faults: null, ...more });
 // The width (°) of a dimension D (nm), as the engine reads one: D = Kλ/(W·π/180).
 const widthOf = D => K_SCHERRER*LAM1/(D*10)*180/Math.PI;
+// A run's messages' words (each { kind, text }: xrd-math.js MSG, v572).
+const texts = ws => ws.map(m=> m.text).join(' | ');
 // A pattern drawn at P (the engine's names) with the phase as `shape` by WPPM (a sphere's exact
 // line too): the strongest point at 2·10⁴ counts over 200, Poisson noise (normal, √counts) from
 // a fixed seed.
@@ -58,7 +60,7 @@ const boxRes = ()=> boxRun || (boxRun = counted(()=> refineAs(BOX, 'box')));
 
 test('a box of 8 × 5 × 3 nm on the cube\'s axes: kept, held on ⟨100⟩, its dimensions within their 95 % intervals, the check quiet', ()=>{
   const { model, res, randoms } = boxRes(), info = res.shapes[1];
-  assert.ok(info, 'the shape kept: ' + res.warnings.join(' | '));
+  assert.ok(info, 'the shape kept: ' + texts(res.warnings));
   assert.equal(randoms(), 0, 'no random number drawn');
   assert.equal(res.models[1].profile, 'wppm', 'a body is a WPPM phase whatever the profile asked');
   // The keep test: the gain over the cubic class's threshold (k = 0: χ²₁(0.999) + 2)
@@ -100,7 +102,7 @@ test('the extra tilt sets (shapeTiltSets): 0 the default exactly; 1 twice the st
   assert.equal(i0.tiltSets, undefined);
   const { res: r1, randoms } = counted(()=> refineAs(BOX, 'box', null, { ...EXACT, shapeTiltSets: 1 })), i1 = r1.shapes[1];
   assert.equal(randoms(), 0, 'no random number drawn');
-  assert.ok(i1, 'the shape kept: ' + r1.warnings.join(' | '));
+  assert.ok(i1, 'the shape kept: ' + texts(r1.warnings));
   assert.equal(i1.tiltSets, 1);
   assert.equal(i1.starts, 2*i0.starts, 'the same starts again');
   assert.ok(i1.full >= i0.full && i1.minimaStage.ends >= i0.minimaStage.ends + i0.starts, `ends ${i1.minimaStage.ends} against ${i0.minimaStage.ends}`);
@@ -114,7 +116,7 @@ test('a 5 nm sphere searched as an ellipsoid and as a spheroid: not kept, the wa
     const { res } = refineAs(y, shape);
     assert.deepEqual(res.shapes, {}, shape);
     assert.equal(res.models[1].shape, shape);
-    const w = res.warnings.find(t=> t.includes('is not supported by the data'));
+    const w = res.warnings.map(m=> m.text).find(t=> t.includes('is not supported by the data'));
     assert.ok(w && /needs over 13\.2 for its Laue class/.test(w), w);
   }
 });
@@ -130,7 +132,7 @@ test('a result of v522 with the Lorentzian line: drawn with it, its solid search
   const old = { params: P, free: res.free, held: [], models: { 1: { ...res.models[1], profile: 'lorentz' } }, textures: {}, shapes: { 1: { ...res.shapes[1], keep: undefined, check: undefined, minima: undefined, minimaStage: undefined } },
     isoParams: res.isoParams, detected: res.detected, irf: IRF };
   const again = refineAs(BOX, 'box', old).res;
-  assert.ok(!again.warnings.some(t=> t.includes('is the last result\'s')), 'not carried: ' + again.warnings.join(' | '));
+  assert.ok(!again.warnings.some(m=> m.text.includes('is the last result\'s')), 'not carried: ' + texts(again.warnings));
   const info = again.shapes[1];
   assert.ok(info && !info.carried && info.keep && info.check && info.minima, 'searched again, with v523\'s records');
   assert.equal(again.models[1].profile, 'wppm');
@@ -148,7 +150,7 @@ test('the shape\'s size line (shapeLine): Lorentzian by default, exact asked; bo
   assert.equal(rL.fit.shapeLine, 'lorentz', 'the default, said in the result\'s settings');
   assert.equal(rL.models[1].profile, 'lorentz', 'the Lorentzian line');
   assert.equal(rL.models[1].shape, 'box');
-  assert.ok(rL.shapes[1] || rL.warnings.some(t=> t.includes('is not supported by the data')), 'searched: ' + rL.warnings.join(' | '));
+  assert.ok(rL.shapes[1] || rL.warnings.some(m=> m.text.includes('is not supported by the data')), 'searched: ' + texts(rL.warnings));
   assert.ok(Number.isFinite(rL.stats.chi2));
   const { res: rE } = boxRes();
   assert.equal(rE.fit.shapeLine, 'exact');

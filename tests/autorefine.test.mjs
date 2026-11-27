@@ -86,14 +86,17 @@ const modelOf = (y, phases, extra = {}) => R.buildModel({ x: extra.x || X, y, in
 const startOf = (r, irf = null) => ({ params: r.params, free: r.free, held: r.held || [], models: r.models, textures: r.textures, shapes: r.shapes || {}, isoParams: r.isoParams || null, detected: r.detected, irf });
 // autoRefine's state as autoRefine makes it, up to where the peaks are
 const setup = (model, opts = {}) => { const A = R.autoSetup(model, opts); R.startingProfile(A); A.tS = Date.now(); return A; };
+// A run's messages, each "{kind}: {words}" (v572: the kind the engine gives, xrd-math.js MSG).
+const said = ws => [].concat(ws).map(w=> `${w.kind}: ${w.text}`).join('|');
 
 test('the setup: the standard\'s profile refused for another λ1, noted for another radius; what needs it switched off without it; the stages counted', ()=>{
   // another λ1: not used, said; the options that need it then switched off
   const m = modelOf(STO_IRF(), [ph(SRT, 1, { profile: 'lognormal', strain: 'aniso', faults: '111:1/6<112>', adp: 'site', occ: ['Sr1'], po: 'auto' })]);
   const A = R.autoSetup(m, { irf: { ...IRF, lam1: 1.78897 } });
   assert.equal(A.irf, null);
-  assert.match(A.warnings[0], /^The standard was measured at λ = 1\.78897 Å, this pattern at 1\.540598 Å: its instrumental profile, in degrees at its own wavelength, does not apply here/);
-  assert.match(A.warnings[1], /^SrTiO3: WPPM, anisotropic strain, planar faults: need the standard's instrumental profile/);
+  assert.match(said(A.warnings[0]), /^warn: The standard was measured at λ = 1\.78897 Å, this pattern at 1\.540598 Å: its instrumental profile, in degrees at its own wavelength, does not apply here/);
+  assert.match(said(A.warnings[1]), /^warn: SrTiO3: WPPM, anisotropic strain, planar faults: need the standard's instrumental profile/);
+  assert.deepEqual([A.warnings[1].key, A.warnings[1].arg], ['needIrf', 'SrTiO3: WPPM, anisotropic strain, planar faults'], 'what the card says apart, named');
   assert.deepEqual([m.phases[0].wppm, m.phases[0].noIrf], [false, true]);
   // what is left of the optional stages: the displacements and the occupancy (the texture is a trial, not counted)
   assert.deepEqual(A.optStages, ['displacement parameters', 'site occupancy']);
@@ -106,7 +109,7 @@ test('the setup: the standard\'s profile refused for another λ1, noted for anot
   const m2 = modelOf(STO_IRF(), [ph(SRT, 1, { profile: 'lognormal', strain: 'aniso', faults: '111:1/6<112>', adp: 'site', occ: ['Sr1'], shape: 'box' })]);
   const A2 = R.autoSetup(m2, { irf: { ...IRF, radius: 200 } });
   assert.equal(A2.irf.radius, 200);
-  assert.match(A2.warnings.join('|'), /goniometer of radius 200 mm, this pattern on one of 240 mm/);
+  assert.match(said(A2.warnings), /warn: The standard was measured on a goniometer of radius 200 mm, this pattern on one of 240 mm/);
   assert.deepEqual(A2.optStages, ['anisotropic strain', 'planar faults', 'size distribution', 'displacement parameters', 'site occupancy']);
   assert.deepEqual([A2.nStages, A2.share, m2.phases[0].wppm, !!m2.phases[0].noIrf], [10, 0.5, true, false]);
   // a standard: no lattice; the older keys under fit; the 1/2θ term on; the zero's bounds over a scan of ±1.5°
@@ -116,9 +119,11 @@ test('the setup: the standard\'s profile refused for another λ1, noted for anot
   assert.deepEqual([m3.par[m3.iZero].lo, m3.par[m3.iZero].hi], [-2.5, 2.5]);
   // no instrument, no tabulated wavelength: said
   const m4 = modelOf(STO(), [ph(SRT, 1)], { instr: null });
-  assert.match(R.autoSetup(m4, {}).warnings[0], /^No instrument description could be read from the file/);
+  const w4 = R.autoSetup(m4, {}).warnings[0];
+  assert.match(said(w4), /^warn: No instrument description could be read from the file/);
+  assert.equal(w4.key, 'noInstr');
   const m5 = modelOf(STO(), [ph(SRT, 1)], { instr: { ...INSTR, lam1: 1.6, lam2: 1.6, ratio: 0 } });
-  assert.match(R.autoSetup(m5, {}).warnings[0], /^λ = 1\.60000 Å is not one of the lines the anomalous scattering factors are tabulated at/);
+  assert.match(said(R.autoSetup(m5, {}).warnings[0]), /^info: λ = 1\.60000 Å is not one of the lines the anomalous scattering factors are tabulated at/);
 });
 
 test('the starting profile: from the width estimate, or the sample\'s width bisected above the standard\'s; the axial divergence\'s parameter', ()=>{
@@ -146,7 +151,7 @@ test('the starting profile: from the width estimate, or the sample\'s width bise
   const m4 = modelOf(ONE(), [ph(SRT, 1)], { instr: INSTR_SOL }), A4 = R.autoSetup(m4, { irf: { ...IRF, axL: 12, axP1: 0.04, axP2: 0.05 } });
   R.startingProfile(A4);
   assert.deepEqual([A4.AS, A4.asFree, m4.v[m4.iAx]], ['axL', [], 12]);
-  assert.match(A4.warnings.join('|'), /Soller slits of 0\.04 and 0\.05 rad, this pattern with 0\.04 and 0\.04 rad/);
+  assert.match(said(A4.warnings), /info: The standard was measured with Soller slits of 0\.04 and 0\.05 rad, this pattern with 0\.04 and 0\.04 rad/);
   // a standard refined with FCJ on a sample whose file gives Sollers: drawn with that standard's A
   const m5 = modelOf(ONE(), [ph(SRT, 1)], { instr: INSTR_SOL }), A5 = R.autoSetup(m5, { irf: { ...IRF, asym: 0.02 } });
   R.startingProfile(A5);
@@ -175,7 +180,7 @@ test('where the peaks are: the cell found, a cell 6 % off by the lone phase\'s w
   const m4 = modelOf(LAB6_FAR(), [ph(LAB6, 1)]), A4 = setup(m4, { standard: true, fit: { zeroRange: 0.1 } });
   R.placePeaks(A4);
   assert.deepEqual([A4.stages[0].found, A4.stages[0].zero], [false, 0]);
-  assert.match(A4.warnings.at(-1), /^The zero-shift scan found no minimum within ±0\.1°: the zero is left at its start\.$/);
+  assert.match(said(A4.warnings.at(-1)), /^warn: The zero-shift scan found no minimum within ±0\.1°: the zero is left at its start\.$/);
   // no phase: the background alone, solved
   const m5 = modelOf(STO(), []), A5 = setup(m5);
   assert.equal(R.placePeaks(A5).cs, null);
@@ -376,12 +381,12 @@ test('autoRefine\'s whole output on 26 cases through its branches: v552\'s, bit 
     .map(k=> `${k}: χ²_ν ${now[k] ? now[k].chi2 : '(not run)'}, golden ${want[k] ? want[k].chi2 : '(none)'}`);
   assert.deepEqual(diff, [], 'autoRefine\'s output differs from the golden file\'s');
   // and what the cases are there for
-  assert.match(got['kept-bic'].warnings.join('|'), /its scale stands at only 2\.\d esd .* above the 40 at which a BIC keeps it: kept/);
-  assert.match(got['kept-own'].warnings.join('|'), /SrTiO3: .* but leaving it out raises χ²_ν from 2\.44 to 8\.37, more than twice/);
-  assert.match(got.implausible.warnings.join('|'), /rutile: not detected — its crystallites come out 0\.9 nm across/);
-  assert.match(got['absent-rutile'].warnings.join('|'), /rutile: not detected — its scale is not above 3 esd once the cells and widths are refined \(2\.6 esd\)\. Leaving it out raises χ² by 16/);
-  assert.match(got['few-points'].warnings.join('|'), /The pattern has 11 points for 11 refined parameters/);
-  assert.match(got['shape-sphere-last'].warnings.join('|'), /was not supported by the data in the last result, which kept the isotropic size: held so/);
-  assert.match(got['std-fcj-to-soller'].warnings.join('|'), /The last result was refined with FCJ’s axial divergence .* this one with the Soller model/);
+  assert.match(said(got['kept-bic'].warnings), /warn: [^|]*: its scale stands at only 2\.\d esd .* above the 40 at which a BIC keeps it: kept/);
+  assert.match(said(got['kept-own'].warnings), /warn: SrTiO3: .* but leaving it out raises χ²_ν from 2\.44 to 8\.37, more than twice/);
+  assert.match(said(got.implausible.warnings), /warn: rutile: not detected — its crystallites come out 0\.9 nm across/);
+  assert.match(said(got['absent-rutile'].warnings), /warn: rutile: not detected — its scale is not above 3 esd once the cells and widths are refined \(2\.6 esd\)\. Leaving it out raises χ² by 16/);
+  assert.match(said(got['few-points'].warnings), /bad: The pattern has 11 points for 11 refined parameters/);
+  assert.match(said(got['shape-sphere-last'].warnings), /info: [^|]*was not supported by the data in the last result, which kept the isotropic size: held so/);
+  assert.match(said(got['std-fcj-to-soller'].warnings), /info: Refined from the last result\.[^|]* The last result was refined with FCJ’s axial divergence .* this one with the Soller model/);
   assert.deepEqual(got['two-phase-last-new'].stages.map(s=> s.name), ['linear start', 'from the last result', 'size distribution']);
 });

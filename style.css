@@ -2203,8 +2203,8 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 .rv-fit-set { display: flex; flex-wrap: wrap; column-gap: 14px; row-gap: 2px; min-width: 0; font-size: 12px; line-height: 1.5; color: var(--muted); }
 .rv-fit-set.is-next { font-style: italic; }
 .rv-fit-set .rv-key-sm { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; vertical-align: 1px; }
-.rv-fit-grid .rv-note.rv-warn { color: var(--warn); }
-/* (a compact box across the columns: no instrumental profile, a CIF's warnings, a curve lost) */
+/* (a compact box across the columns: no instrumental profile, a CIF's warnings, a curve lost,
+   the refinement's messages, v572) */
 .rv-fit-grid > .alert.compact.rv-wide { line-height: 1.5; }
 .rv-fit-grid { columns: 230px; column-gap: 24px; }
 .rv-fit-grid > .rv-wide { column-span: all; margin-top: 6px; }

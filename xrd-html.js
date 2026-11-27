@@ -2,8 +2,8 @@
    XRPD — the host's words and markup that need no page (xrd.js puts them in the standard's
    two windows and the alerts under the drop zone; tests/xrdmodel.test.mjs reads them in
    Node): a standard's window, the standard's file in it, the alerts of a file dropped
-   there, of a drop on the samples' zone and of a project restored. Taken out of v562's
-   xrd.js as they were: the same markup to the byte.
+   there, of a drop on the samples' zone, of the files in the list and of a project
+   restored. Taken out of v562's xrd.js as they were: the same markup to the byte.
    What they need from the page is handed in, u = { esc, X_SVG, fileAlertHtml, fileLine }
    (utils.js's: xrd.js HU).
 ========================================================= */
@@ -47,28 +47,58 @@ export function stdDropAlerts(n, name, scans, k, pname, notes, u){
 }
 
 /* ---- The alerts under the samples' drop zone (utils.js FILE ALERTS) ---- */
-// A file of several scans dropped: each a pattern (k of them loaded, of n).
+// A file of several scans: each a pattern (k of them in the list, of n).
 export const scansNote = (name, n, k)=> `${name}: ${n} scans, ${k === n ? '' : k + ' of them loaded, '}each a pattern of its own.`;
 /* Whether a note of a file loaded (xrd-instr.js readScan's, a file's scans) says how it was
    read, the normal case's choice, nothing to check: a file of several scans, counts over
    unequal times read as counts per second, a time per point estimated from the noise. The
    others (a scan not read, points left out, factors or times missing) are to check. */
 export const isReadNote = t => /: \d+ scans, |(^|: )counts over unequal counting times|with no counting time: .* estimated from the noise/.test(t);
-/* A drop's alerts (its lines escaped, each "{file}: {what}."): the files refused, the
-   caveats to check, how the files were read (isReadNote), those already loaded (v567: to
-   v566 every caveat in one warning, "Loaded, with a caveat:"). */
-export const dropAlerts = (invalid, notes, already, u)=> ({
+/* A drop's alerts (its lines escaped, each "{file}: {what}."): the files refused, those
+   already loaded (v567: to v566 every caveat in one warning, "Loaded, with a caveat:"; what
+   the reading of the files loaded said, fileNotes, v572). */
+export const dropAlerts = (invalid, already, u)=> ({
   load: u.fileAlertHtml('bad', invalid, 'xrd-dismiss-invalid'),
-  note: u.fileAlertHtml('check', notes.filter(t=> !isReadNote(t)), 'xrd-dismiss-notes'),
-  read: u.fileAlertHtml('read', notes.filter(isReadNote), 'xrd-dismiss-read'),
   upload: u.fileAlertHtml('dup', already, 'xrd-dismiss-upload') });
-/* A project restored: the files read again whose data changed (each read's note), those
-   with no pattern to show, left out (lost, and the standard where the state has one,
-   hasStd, but it was not read); '' none. A warning to check (utils.js FILE ALERTS,
-   'opened'; to v566 "Restored, with a caveat:"). */
-export function restoredAlert(reads, stdRead, lost, hasStd, u){
-  const notes = [...reads, ...(stdRead ? [stdRead] : [])].filter(r=> r && r.note).map(r=> u.esc(u.fileLine(r.f.label || r.f.name, r.note)));
-  const std = hasStd && !stdRead;
-  if (lost || std) notes.push(u.esc(`${lost ? `${lost} file${lost > 1 ? 's' : ''}` : ''}${lost && std ? ' and ' : ''}${std ? 'the standard' : ''} left out: no data in the project.`));
-  return u.fileAlertHtml('opened', notes, 'xrd-dismiss-notes');
+/* What a project opened found in a pattern, to check, or '': read again from its own bytes,
+   its arrays changed (xrd-model.js readAgain, oldData: the points left out that an older
+   version kept, or its minimum subtracted); no file kept and its lowest point exactly 0. A
+   project read in may hold anything: only a whole count, or true, says. */
+export function openedNote(f){
+  const d = f.oldData, n = d && d.dropped;
+  if (Number.isInteger(n) && n > 0) return `read again from the file itself, ${n} point${n > 1 ? 's' : ''} whose values are no finite number left out: the project held ${n > 1 ? 'them' : 'it'}, as an older version did. Results refined before are from those: refine again`;
+  if (d && d.minimum === true) return 'read again from the file itself: the project held its data as an older version had read them, with their minimum subtracted. Results refined before are from those: refine again';
+  let lo = Infinity; for (const v of f.y || []) if (v < lo) lo = v;
+  return !f.rawBytes && lo === 0 ? 'its lowest point is exactly 0 and the project does not hold the file itself: its minimum may have been subtracted, as an older version did, which the Rietveld weights would take for the counts; load the file again' : '';
+}
+/* What the reading of the files said (alerts.js notes, v572: worked out from the patterns in
+   the list, each until its box's ×; to v571 the drop's words and the restore's, gone at the
+   next undo and left when their file was removed): of each file, from the scans its bytes
+   were read into (`scans(f)`, xrd-model.js keptScans), how many it holds, among them the
+   patterns in the list, and those not read (about all its patterns); of each pattern, its
+   scan's notes, to check or how it was read (isReadNote), and what a project opened found
+   in it (openedNote), the standard's (`std`) too. */
+export function fileNotes(all, std, scans, u){
+  const out = [], done = new Set(), opened = p =>{ const o = openedNote(p); if (o) out.push({ what: 'opened', line: u.esc(u.fileLine(p.label || p.name, o)), files: [p] }); };
+  for (const p of all){
+    const sc = scans(p);
+    if (sc && !done.has(p.rawBytes)){
+      done.add(p.rawBytes);
+      const pats = all.filter(q=> q.rawBytes === p.rawBytes), name = p.src || p.name;
+      if (sc.length > 1) out.push({ what: 'read', line: u.esc(scansNote(name, sc.length, pats.length)), files: pats });
+      sc.forEach((x, k)=>{ if (x.error) out.push({ what: 'check', line: u.esc(u.fileLine(name, `scan ${k+1} not read: ${x.error}`)), files: pats }); });
+    }
+    const own = sc && sc[Number.isInteger(p.scan) && p.scan >= 0 ? p.scan : 0];
+    for (const t of own && own.notes || []) out.push({ what: isReadNote(t) ? 'read' : 'check', line: u.esc(u.fileLine(p.name, t)), files: [p] });
+    opened(p);
+  }
+  if (std) opened(std);
+  return out;
+}
+/* What a project opened left out (no file in the list), beside those notes in its box
+   (utils.js notesHtml's `more`): the files with no pattern to show (lost), and the
+   standard where the state has one (hasStd) but it was not read (std); '' none. */
+export function leftOutLine(lost, hasStd, std, u){
+  const gone = hasStd && !std;
+  return lost || gone ? u.esc(`${lost ? `${lost} file${lost > 1 ? 's' : ''}` : ''}${lost && gone ? ' and ' : ''}${gone ? 'the standard' : ''} left out: no data in the project.`) : '';
 }

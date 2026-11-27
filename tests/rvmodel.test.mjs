@@ -50,7 +50,7 @@ test('a phase from its CIF: SrTiO3, the built-in LaB6; one read kept for the sam
   assert.deepEqual(q.atoms.map(a=> [a.label, a.element, a.x, a.y, a.z, a.occ]), [['Sr1', 'Sr', 0, 0, 0, 1], ['Ti1', 'Ti', 0.5, 0.5, 0.5, 1], ['O1', 'O', 0.5, 0.5, 0, 1], ['O2', 'O', 0.5, 0, 0.5, 1], ['O3', 'O', 0, 0.5, 0.5, 1]]);
   assert.deepEqual([q.cell.a, q.cell.alpha, q.constraint], [3.905, 90, { kind: 'cubic', params: ['a'] }]);
   assert.ok(Math.abs(q.mass - 183.484) < 1e-9);
-  assert.deepEqual(q.warnings, ['The CIF lists only the identity (x, y, z) as its symmetry operation for P m -3 m: the atoms are taken as they are (P1), so the cell is filled only if they are all listed.']);
+  assert.deepEqual(q.warnings, [{ kind: 'warn', text: 'The CIF lists only the identity (x, y, z) as its symmetry operation for P m -3 m: the atoms are taken as they are (P1), so the cell is filled only if they are all listed.' }]);
   assert.equal(M.formulaOf(q), 'SrTiO3');
   // The built-in LaB6: in P1, its symmetry found from the atoms.
   const l = M.prepPhase(LAB6, 'LaB6 (NIST SRM 660c)');
@@ -78,12 +78,12 @@ test('a CIF whose H-M symbol is blank: read as one that gives none', ()=>{
   const cif = (hm, ops) => `data_x\n_cell_length_a 3.905\n_cell_length_b 3.905\n_cell_length_c 3.905\n_cell_angle_alpha 90\n_cell_angle_beta 90\n_cell_angle_gamma 90\n${hm}`
     + (ops ? "loop_\n_symmetry_equiv_pos_as_xyz\n'x, y, z'\n'-x, -y, -z'\n" : '')
     + 'loop_\n_atom_site_label\n_atom_site_type_symbol\n_atom_site_fract_x\n_atom_site_fract_y\n_atom_site_fract_z\nSr1 Sr 0 0 0\nTi1 Ti 0.5 0.5 0.5\nO1 O 0.5 0.5 0\nO2 O 0.5 0 0.5\nO3 O 0 0.5 0.5\n';
-  const B = 'No displacement parameter for Sr1, Ti1, O1, O2, O3: B = 0.5 Å² assumed.';
-  const read = (hm, ops)=>{ const q = M.prepPhase(cif(hm, ops), 'blank.cif'); return [q.sg, q.sgFrom, q.order, q.warnings, q.notes]; };
+  const B = 'info: No displacement parameter for Sr1, Ti1, O1, O2, O3: B = 0.5 Å² assumed.';
+  const read = (hm, ops)=>{ const q = M.prepPhase(cif(hm, ops), 'blank.cif'); return [q.sg, q.sgFrom, q.order, q.warnings.map(w=> `${w.kind}: ${w.text}`), q.notes]; };
   assert.deepEqual(read("_symmetry_space_group_name_H-M ' '\n", true), ['Pm-3m', 'atoms', 48, [B], ['2 operations in the file; the structure has 48']], 'with its operations: read');
   assert.deepEqual(read("_symmetry_space_group_name_H-M ' '\n", false), ['Pm-3m', 'atoms', 48, [B], []], 'without: no note of a group');
   assert.deepEqual(read("_space_group_name_H-M_alt ''\n_symmetry_space_group_name_H-M 'P m -3 m'\n", false),
-    ['Pm-3m', 'cif', 48, [B, 'The CIF lists no symmetry operations for P m -3 m: the atoms are taken as they are (P1), so the cell is filled only if they are all listed.'], []], 'the next tag\'s symbol');
+    ['Pm-3m', 'cif', 48, [B, 'warn: The CIF lists no symmetry operations for P m -3 m: the atoms are taken as they are (P1), so the cell is filled only if they are all listed.'], []], 'the next tag\'s symbol');
   // (a Hall symbol or a magnetic group's name written blank alike: no group named, no note)
   assert.deepEqual(read("_space_group_name_Hall ' '\n_space_group_magn_name_BNS ' '\n", false), ['Pm-3m', 'atoms', 48, [B], []]);
 });
@@ -404,8 +404,15 @@ test('the words: indices barred, formulae, what a phase is refined with, the ins
   const ins0 = M.instrOf(pattern('s00.xrdml', xrdml(0)));
   assert.equal(H.instrLine(ins0), ' Kα₁ 1.540598 Å, Kα₂ 1.544426 Å (×0.5) · R 240 mm');
   assert.equal(H.instrNotesHtml(ins0), '<div class="alert info compact">' + ALERT_ICON.info + 'No goniometer radius in the file: 240 mm assumed (the specimen displacement in mm depends on it).<br>No divergence slit in the file: a fixed slit is assumed.</div>');
-  assert.equal(H.instrNotesHtml(null), '<div class="alert warn compact">⚠ No instrument description could be read from the file: Cu Kα₁/Kα₂ (ratio 0.5), a 240 mm goniometer and no monochromator are assumed.</div>');
-  // Each assumption's kind: neutral (info) or one that may be wrong (warn), by its words.
+  assert.equal(H.instrNotesHtml(null, true), '<div class="alert warn compact">⚠ No instrument description could be read from the file: Cu Kα₁/Kα₂ (ratio 0.5), a 240 mm goniometer and no monochromator are assumed.</div>');
+  // (v572: a pattern whose file is not held, a project opened without its bytes, is said so as it
+  // opens: not taken for a file of no header)
+  assert.equal(H.instrNotesHtml(null, false), '');
+  assert.deepEqual([{ rawBytes: new Uint8Array(3) }, { rawBytes: [1, 2] }, { rawBytes: null }, {}, { rawBytes: new Uint8Array(0) }, { rawBytes: 'x' }].map(M.bytesHeld), [true, true, false, false, false, false]);
+  // Each assumption's kind: neutral (info) or one that may be wrong (warn), the reader's (v572:
+  // the file's own, ins0's; xrd-math.js MSG); an instrument a project saved to v571 kept as words
+  // alone, by its words.
+  assert.deepEqual(ins0.warnings.map(w=> [w.kind, M.instrNoteKind(w.text)]), [['info', 'info'], ['info', 'info']]);
   const said = { warnings: ['No wavelength in the file: Cu Kα assumed (Kα₁ 1.540598 Å, Kα₂ 1.544426 Å, Kα₂/Kα₁ 0.5)', 'No Kα₂ in the file: a single wavelength is modelled', 'No Kα₂/Kα₁ ratio in the file: 0.5 assumed',
     'Kα₂/Kα₁ ratio 2 out of range: 0.5 assumed', 'Diffracted-beam monochromator: crystal "x" not recognised, graphite (002) assumed for the polarisation (K = 0.800)',
     'Diffracted-beam monochromator: Ge(333) cannot reflect λ = 2.29 Å, graphite(002) assumed for the polarisation (K = 0.800)', 'Incident-beam monochromator: no reflection given, Ge(111) assumed for the polarisation (K = 0.799)',
@@ -425,7 +432,6 @@ test('the words: indices barred, formulae, what a phase is refined with, the ins
   assert.deepEqual([NaN, 0, 0.00041234, 0.0999, 0.1, 1.23456].map(H.f3), ['—', '0.000', '0.000412', '0.0999', '0.100', '1.235']);
   assert.deepEqual([1e-301, 2e-4, 0.0012345, 0.5].map(H.fmtP), ['< 1e-300', '2e-4', '0.0012', '0.5']);
   assert.equal(H.group('Fit', '<b>x</b>', true), '<div class="rv-group"><div class="txt-mini rv-phase-name">Fit</div><b>x</b></div>');
-  assert.equal(H.warnNote('t'), '<div class="rv-note rv-wide rv-warn">⚠ t</div>');
   // A CIF's name, file and notes go in as text: no element made, an apostrophe as it is (xrd-rv.js's own esc).
   assert.equal(H.esc(`<a href="x">it's & co</a>`), '&lt;a href=&quot;x&quot;&gt;it\'s &amp; co&lt;/a&gt;');
   const evil = `"'><i data-x=1></i>`, q = { id: 3, color: '#000', file: evil + '.cif', ...M.defSettings(), off: {}, prep: { ...M.prepOf(SRT, 'SrTiO3.cif'), name: evil, notes: [evil] } };
@@ -686,16 +692,14 @@ test('the card\'s markup: its frame, its section of the Results, its settings wi
   assert.deepEqual([H.noPatternHtml(true), H.noPatternHtml(false)], ['<div class="rv-note rv-wide">No standard loaded: drop its file above.</div>', '<div class="rv-note rv-wide">No pattern.</div>']);
   // The results: not refined (a phase, none ticked, none at all), refined; the standard's
   // profile asked only where the words need it.
-  const q = { prep: { name: evil, warnings: [evil] } }, calls = [];
+  const q = { prep: { name: evil, warnings: [{ kind: 'warn', text: evil }] } }, calls = [];
   const irf = v => ()=>{ calls.push('irf'); return v; }, stale = v => ()=>{ calls.push('stale'); return v; };
   const none = H.resultsHtml({ r: null, std: false, shown: [q], n: 1, any: 1, irf: irf(null), stale: stale(false) });
-  // (a CIF's warnings, a compact box a kind per phase, v571, X12: to v570 an amber line each)
+  // (a CIF's warnings, a compact box a kind per phase, v571, X12: to v570 an amber line each;
+  // v572: of the kind the reader gives, xrd-cryst.js parseCif)
   assert.ok(none.startsWith('<div class="rv-note rv-wide">Not refined yet.') && none.endsWith(`<div class="alert warn compact rv-wide">⚠ ${esc}: ${esc}</div>`), none);
-  const kinds = { prep: { name: 'P', warnings: ['The file holds 2 structures: the first, data_a, is used.', 'Fm-3m is centred but the operations hold 1 of its 4 centring translations: the cell will be filled incompletely.',
-    'Negative displacement parameters in the CIF.', 'No displacement parameter for O1: B = 0.5 Å² assumed.', 'Site X: occupancy 2 > 1.'] } };
-  assert.deepEqual(kinds.prep.warnings.map(M.cifNoteKind), ['info', 'bad', 'warn', 'info', 'warn']);
-  assert.ok(['A magnetic CIF: its 4 space-group operations are taken, without time reversal; the magnetic moments are not used (they scatter X-rays negligibly).', 'No valid _cell_angle_beta: 90° assumed.',
-    'The symmetry operations do not include the identity: it is added.', 'No tabulated form factor of its own, taken as the tabulated charges around it with the same mean charge: Fe2.5+ (Fe1) as 0.5 Fe2+ + 0.5 Fe3+.'].every(w=> M.cifNoteKind(w) === 'info'));
+  const kinds = { prep: { name: 'P', warnings: [['info', 'The file holds 2 structures: the first, data_a, is used.'], ['bad', 'Fm-3m is centred but the operations hold 1 of its 4 centring translations: the cell will be filled incompletely.'],
+    ['warn', 'Negative displacement parameters in the CIF.'], ['info', 'No displacement parameter for O1: B = 0.5 Å² assumed.'], ['warn', 'Site X: occupancy 2 > 1.']].map(([kind, text])=> ({ kind, text })) } };
   const kb = H.resultsHtml({ r: null, std: false, shown: [kinds], n: 1, any: 1, irf: irf(null), stale: stale(false) });
   assert.ok(kb.endsWith('<div class="alert bad compact rv-wide">✕ P: Fm-3m is centred but the operations hold 1 of its 4 centring translations: the cell will be filled incompletely.</div>'
     + '<div class="alert warn compact rv-wide">⚠ P: Negative displacement parameters in the CIF.<br>P: Site X: occupancy 2 &gt; 1.</div>'
@@ -708,8 +712,22 @@ test('the card\'s markup: its frame, its section of the Results, its settings wi
   const done = H.resultsHtml({ r, std: false, shown: [q], n: 1, any: 1, irf: irf({ U: 2 }), stale: stale(true) });
   assert.deepEqual(calls, ['stale', 'irf']);
   assert.ok(done.includes('R<sub>wp</sub>: <b>12.34%</b>') && done.includes('χ²: <b>6.10</b>') && done.includes(`<div class="txt-mini rv-phase-name">${esc}</div>`) && done.includes(`title="${esc}"`));
-  assert.ok(done.includes('a (1<span class="hkl-bar"><span class="hkl-sign">-</span>1</span>0): <b>1(2)</b>') && done.includes('⚠ w (<span class="hkl-bar"><span class="hkl-sign">-</span>1</span> 1 0)'));
-  assert.ok(done.endsWith('The standard has been refined again since this result: its profile, zero and asymmetry are not the ones these numbers rest on. Refine this pattern again, or <b>Refine all</b>.</div>'));
+  // (v572, ALERTS-REVIEW.md X11: a result's messages in a compact box a kind; one saved to v571,
+  // words alone, a warning, U4; the standard refined since in the warning's box, XV20; then
+  // the CIFs')
+  assert.ok(done.includes('a (1<span class="hkl-bar"><span class="hkl-sign">-</span>1</span>0): <b>1(2)</b>'));
+  assert.ok(done.endsWith('<div class="alert warn compact rv-wide">⚠ w (<span class="hkl-bar"><span class="hkl-sign">-</span>1</span> 1 0)<br>The standard has been refined again since this result: its profile, zero and asymmetry are not the ones these numbers rest on. Refine this pattern again, or <b>Refine all</b>.</div>'
+    + `<div class="alert warn compact rv-wide">⚠ ${esc}: ${esc}</div>`), done);
+  assert.ok(!done.includes('rv-warn'), 'no amber line');
+  // Of the engine's kinds (xrd-math.js MSG): error, warning, info; a kind that is none, and the
+  // standard's refinement gone, warnings; what is no message, left out.
+  const said = H.resultsHtml({ r: { ...r, warnings: [{ kind: 'info', text: 'Refined from the last result.' }, 'old <words>', { kind: 'bad', text: 'b' }, { kind: 'warn', text: 'w' }, { kind: 'x', text: 'odd' }, 5, null, { text: 7 }, { kind: 'info' }] },
+    std: false, shown: [], n: 1, any: 1, irf: irf(null), stale: stale(true) });
+  assert.ok(said.endsWith('<div class="alert bad compact rv-wide">✕ b</div><div class="alert warn compact rv-wide">⚠ old &lt;words&gt;<br>w<br>odd<br>The standard\'s refinement this result used is gone (cleared, or another standard loaded): its profile, zero and asymmetry are not the ones these numbers rest on. Refine this pattern again, or <b>Refine all</b>.</div>'
+    + `<div class="alert info compact rv-wide">${ALERT_ICON.info}Refined from the last result.</div>`), said);
+  calls.length = 0;
+  const words = H.resultsHtml({ r: { ...r, warnings: ['On a bound, so to be read as limits: p1.a.', 'Refined from the last result.'] }, std: false, shown: [], n: 1, any: 1, irf: irf({ U: 1 }), stale: stale(false) });
+  assert.ok(words.endsWith('<div class="alert warn compact rv-wide">⚠ On a bound, so to be read as limits: p1.a.<br>Refined from the last result.</div>'), 'a result saved to v571, its words alone: warnings, every one');
   calls.length = 0;
   // No instrumental profile: one compact warning, what was refined without it in it (v571, X10:
   // to v570 a grey note, two amber warnings and the table's note); no instrument description
@@ -720,8 +738,15 @@ test('the card\'s markup: its frame, its section of the Results, its settings wi
   const noIrf = H.resultsHtml({ r: rn, std: false, shown: [], n: 1, any: 1, irf: irf(null), stale: stale(true) });
   assert.deepEqual(calls, ['irf']);
   assert.ok(noIrf.includes('<div class="alert warn compact rv-wide">⚠ No instrumental profile: the widths, and the sizes from them, include the instrument\'s. Refine the standard first: <b>Instrumental standard…</b>.'
-    + '<br>Refined without, as they need it: P1: WPPM, planar faults; P2: anisotropic strain.<br>The free shape needs it: P1 refined with an isotropic size.</div><div class="rv-note rv-wide rv-warn">⚠ w</div>'), noIrf);
+    + '<br>Refined without, as they need it: P1: WPPM, planar faults; P2: anisotropic strain.<br>The free shape needs it: P1 refined with an isotropic size.</div><div class="alert warn compact rv-wide">⚠ w</div>'), noIrf);
   assert.ok(!noIrf.includes('No instrument description') && !noIrf.includes('refined without.') && (noIrf.match(/No instrumental profile/g) || []).length === 1);
+  // (v572: the engine's key and what it names, the words not read; a result saved to v571, by them)
+  const keyed = { ...r, irf: null, warnings: [{ kind: 'warn', text: 'none of these words', key: 'noInstr' }, { kind: 'warn', text: 'nor these', key: 'needIrf', arg: 'P1: WPPM <x>' },
+    { kind: 'warn', text: 'nor', key: 'needIrfShape', arg: 'P2' }, { kind: 'info', text: 'i' }] };
+  assert.ok(H.resultsHtml({ r: keyed, std: false, shown: [], n: 1, any: 1, irf: irf(null), stale: stale(true) }).endsWith('<br>Refined without, as they need it: P1: WPPM &lt;x&gt;.<br>The free shape needs it: P2 refined with an isotropic size.</div>'
+    + `<div class="alert info compact rv-wide">${ALERT_ICON.info}i</div>`));
+  assert.ok(H.resultsHtml({ r: keyed, std: true, shown: [], n: 1, any: 1, irf: irf(null), stale: stale(true) }).endsWith('<div class="alert warn compact rv-wide">⚠ nor these<br>nor</div>'
+    + `<div class="alert info compact rv-wide">${ALERT_ICON.info}i</div>`), 'the standard\'s: what needed its profile among its warnings');
   assert.match(H.resultsHtml({ r: { ...r, irf: null }, std: false, shown: [], n: 1, any: 1, irf: irf({}), stale: stale(true) }), /⚠ No instrumental profile: the widths, and the sizes from them, include the instrument's\. Refine this pattern again\.<\/div>/);
   // (the standard's profile refused here: its warning says why; the box only for what was refined without it)
   assert.ok(!H.resultsHtml({ r: { ...r, irf: null, irfRefused: true }, std: false, shown: [], n: 1, any: 1, irf: irf({}), stale: stale(true) }).includes('No instrumental profile'));

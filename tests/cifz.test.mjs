@@ -63,8 +63,9 @@ test('a pymatgen CIF (formula sum for the whole cell, Z per formula unit) is not
   try {
     const read = cases => page.evaluate(async cases=>{
       const M = await import('./xrd-rv-model.js');
-      return cases.map(([name, text])=>{ const p = M.prepPhase(text, name); return { name: p.name, n: p.atoms.length, warnings: p.warnings }; });
+      return cases.map(([name, text])=>{ const p = M.prepPhase(text, name); return { name: p.name, n: p.atoms.length, warnings: p.warnings.map(w=> `${w.kind}: ${w.text}`) }; });
     }, cases);
+    // (each "{kind}: {words}": the kind the reader gives, v572)
     const fill = w => w.filter(t=> /symmetry operations fill|multiplicities differ/.test(t));
     const [pmg, noZ, std, asCell, bad, badSum, origin1] = await read([
       ['pymatgen.cif', cif()],
@@ -81,13 +82,13 @@ test('a pymatgen CIF (formula sum for the whole cell, Z per formula unit) is not
     ]);
     assert.equal(pmg.name, 'TiO2');
     assert.equal(pmg.n, 12, 'Ti 4, O 8 in the cell');
-    assert.deepEqual(pmg.warnings, ['No displacement parameter for Ti0, O1: B = 0.5 Å² assumed.'], 'no composition warning: ' + pmg.warnings.join(' | '));
+    assert.deepEqual(pmg.warnings, ['info: No displacement parameter for Ti0, O1: B = 0.5 Å² assumed.'], 'no composition warning: ' + pmg.warnings.join(' | '));
     for (const r of [noZ, std, asCell]) assert.deepEqual(fill(r.warnings), [], r.name + ': ' + r.warnings.join(' | '));
     // The structural formula × Z named first, then what else was compared.
-    assert.deepEqual(fill(bad.warnings), ['The symmetry operations fill the cell with Ti 4, O 8, but TiO2 × Z = 8 is Ti 8, O 16 (every element 0.5× the formula: Z is wrong, or the coordinates belong to another origin choice or setting than the operations). Nor is it Ti8O16 (_chemical_formula_sum) × Z, Ti 64, O 128, nor Ti8O16 as the whole cell.']);
-    assert.deepEqual(fill(badSum.warnings), ['The symmetry operations fill the cell with Ti 4, O 8, but Ti8O16 × Z = 8 is Ti 64, O 128 (every element 0.063× the formula: Z is wrong, or the coordinates belong to another origin choice or setting than the operations). Nor is it Ti8O16 as the whole cell.']);
+    assert.deepEqual(fill(bad.warnings), ['warn: The symmetry operations fill the cell with Ti 4, O 8, but TiO2 × Z = 8 is Ti 8, O 16 (every element 0.5× the formula: Z is wrong, or the coordinates belong to another origin choice or setting than the operations). Nor is it Ti8O16 (_chemical_formula_sum) × Z, Ti 64, O 128, nor Ti8O16 as the whole cell.']);
+    assert.deepEqual(fill(badSum.warnings), ['warn: The symmetry operations fill the cell with Ti 4, O 8, but Ti8O16 × Z = 8 is Ti 64, O 128 (every element 0.063× the formula: Z is wrong, or the coordinates belong to another origin choice or setting than the operations). Nor is it Ti8O16 as the whole cell.']);
     assert.equal(fill(origin1.warnings).length, 1);
-    assert.match(fill(origin1.warnings)[0], /^Site multiplicities differ from the CIF's: Ti0 8 \(CIF 4\)\. The symmetry operations fill the cell with Ti 8, O 8, but TiO2 × Z = 4 is Ti 4, O 8\. .* Nor is it Ti4O8 \(_chemical_formula_sum\) × Z, Ti 16, O 32, nor Ti4O8 as the whole cell\.$/);
+    assert.match(fill(origin1.warnings)[0], /^warn: Site multiplicities differ from the CIF's: Ti0 8 \(CIF 4\)\. The symmetry operations fill the cell with Ti 8, O 8, but TiO2 × Z = 4 is Ti 4, O 8\. .* Nor is it Ti4O8 \(_chemical_formula_sum\) × Z, Ti 16, O 32, nor Ti4O8 as the whole cell\.$/);
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });

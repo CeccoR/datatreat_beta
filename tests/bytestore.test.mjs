@@ -15,7 +15,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
-import { start, ready, settle, openModule, loadFiles, saveAs, switchTab, tabLabels, download, banner, answer,
+import { start, ready, settle, openModule, loadFiles, saveAs, switchTab, tabLabels, download, banner, answer, moduleState,
   exportProject, signature, projectFile, importProject, openProject, readZip } from './helpers.mjs';
 import { xrdml } from './fixtures.mjs';
 
@@ -368,6 +368,34 @@ test('bytes missing or unreadable: the other files and tabs back, said so; XRPD 
     assert.equal((await banner(page)).text, '“S”: 2 of its files are not stored in this browser any more: the file holds them without their bytes.');
     await answer(page, 'ok');
     assert.deepEqual(JSON.parse(d.buf.toString()).state.files.map(f=> f.raw.b64 === null), [true, true, false]);
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+/* v572 (ALERTS-REVIEW.md X06): a pattern a project opens without its file (its bytes not stored
+   any more, said as it opens) is not taken for a file of no instrument description: nothing
+   assumed is said under it, where to v571 "No instrument description could be read from the
+   file" was; a pattern whose file is held says what it read. */
+test('XRPD: a pattern back without its bytes is said so, not as a file of no instrument description', async ()=>{
+  const { page, errors, close } = await env.page();
+  const [s0, s1] = env.fx.files.xrd, P = '#xrdR2';
+  try {
+    await openModule(page, 'xrd'); await loadFiles(page, 'xrd', [s0, s1]);
+    // (the second never on show in the Rietveld card: its instrument not read, nor kept)
+    assert.deepEqual((await moduleState(page, 'xrd')).files.map(f=> 'instr' in f), [true, false]);
+    await drain(page);
+    await page.evaluate(h=> new Promise(res=>{ const q = indexedDB.open('datatreat'); q.onsuccess = ()=>{ const t = q.result.transaction('bytes', 'readwrite');
+      t.objectStore('bytes').delete(h); t.oncomplete = ()=>{ q.result.close(); res(); }; }; }), shaOf(s1));
+    await page.reload(); await ready(page);
+    await page.waitForSelector('.pwa-confirm.show');
+    assert.equal((await banner(page)).text, 'Your open tabs: 1 of their files is not stored in this browser any more: it comes back without its bytes.');
+    await answer(page, 'ok'); await settle(page);
+    const notes = ()=> page.$$eval(P + 'InstrNotes .alert', as=> as.map(a=> [a.className, a.innerText]));
+    assert.deepEqual((await notes()).map(n=> n[0]), ['alert info compact'], 's00, held: what its file says');
+    await page.click(P + 'Next'); await settle(page);
+    assert.equal(await page.textContent(P + 'Label'), (await moduleState(page, 'xrd')).files[1].label, 'on s01');
+    assert.deepEqual(await notes(), [], 's01, not held: nothing assumed said');
+    assert.equal(await page.textContent(P + 'Instr'), '');
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });

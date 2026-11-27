@@ -11,8 +11,10 @@
    accessor, a parsed DOM Document's or the small reader's (the scans are read from either),
    so the two cannot drift apart. No DOM required. Not an .xrdml → null.
    Numbers the file does not give are left undefined (not null, not NaN), so isFinite,
-   `??` and `||` all read them as missing.
+   `??` and `||` all read them as missing. Each warning a message with its kind (xrd-math.js
+   MSG, v572): 'info' a choice that holds in the normal case, 'warn' one that may be wrong.
 ========================================================= */
+import { MSG } from './xrd-math.js';
 
 const XSI = 'http://www.w3.org/2001/XMLSchema-instance';
 const RAD = Math.PI/180;
@@ -313,15 +315,15 @@ function readInstrument(A, doc, k = 0){
   if (!(lam1 > 0)){
     const known = ANODE_LINES[anode] ? anode : 'Cu', L = ANODE_LINES[known];
     [lam1, lam2, kBeta] = L; ratio = 0.5;
-    warnings.push(`${noLam('wavelength')}: ${known} Kα assumed (Kα₁ ${L[0]} Å, Kα₂ ${L[1]} Å, Kα₂/Kα₁ 0.5)`
-      + (anode && !ANODE_LINES[anode] ? ` (no line table for a ${anode} anode)` : ''));
+    warnings.push(MSG.warn(`${noLam('wavelength')}: ${known} Kα assumed (Kα₁ ${L[0]} Å, Kα₂ ${L[1]} Å, Kα₂/Kα₁ 0.5)`
+      + (anode && !ANODE_LINES[anode] ? ` (no line table for a ${anode} anode)` : '')));
   } else if (!(lam2 > 0)){
     // Kα1 alone: a monochromatic beam. λ2 = λ1 with a zero ratio adds nothing to the
     // pattern and leaves no consumer with an undefined second position.
     lam2 = lam1; ratio = 0;
-    warnings.push(`${noLam('Kα₂')}: a single wavelength is modelled`);
+    warnings.push(MSG.info(`${noLam('Kα₂')}: a single wavelength is modelled`));
   } else if (!(ratio >= 0 && ratio <= 1)){
-    warnings.push(`${Number.isFinite(ratio) ? `Kα₂/Kα₁ ratio ${ratio} out of range` : 'No Kα₂/Kα₁ ratio in the file'}: 0.5 assumed`);
+    warnings.push(MSG.info(`${Number.isFinite(ratio) ? `Kα₂/Kα₁ ratio ${ratio} out of range` : 'No Kα₂/Kα₁ ratio in the file'}: 0.5 assumed`));
     ratio = 0.5;
   }
 
@@ -330,7 +332,7 @@ function readInstrument(A, doc, k = 0){
   const radiusD = radOf(kid(A, dif, 'radius'));
   let radius = radOf(kid(A, inc, 'radius'));
   if (!(radius > 0)) radius = radiusD;
-  if (!(radius > 0)){ radius = 240; warnings.push('No goniometer radius in the file: 240 mm assumed (the specimen displacement in mm depends on it)'); }
+  if (!(radius > 0)){ radius = 240; warnings.push(MSG.info('No goniometer radius in the file: 240 mm assumed (the specimen displacement in mm depends on it)')); }
 
   // ---- optics ----
   const divEl = find(A, inc, 'divergenceSlit');
@@ -357,15 +359,15 @@ function readInstrument(A, doc, k = 0){
   const monos = [monoI && readMonochromator(A, monoI, 'incident', lam1), monoD && readMonochromator(A, monoD, 'diffracted', lam1)].filter(Boolean);
   const monoLabel = M => `${M.side === 'incident' ? 'Incident' : 'Diffracted'}-beam monochromator${M.name ? ` ("${M.name}")` : ''}`;
   for (const M of monos){
-    if (M.assumed) warnings.push(`${monoLabel(M)}: crystal ${M.given ? `"${M.given}" ` : ''}not recognised, graphite (002) assumed for the polarisation (K = ${M.K.toFixed(3)})`);
-    else if (M.unreachable) warnings.push(`${monoLabel(M)}: ${M.unreachable} cannot reflect λ = ${+lam1.toFixed(5)} Å, ${M.crystal} assumed for the polarisation (K = ${M.K.toFixed(3)})`);
+    if (M.assumed) warnings.push(MSG.info(`${monoLabel(M)}: crystal ${M.given ? `"${M.given}" ` : ''}not recognised, graphite (002) assumed for the polarisation (K = ${M.K.toFixed(3)})`));
+    else if (M.unreachable) warnings.push(MSG.warn(`${monoLabel(M)}: ${M.unreachable} cannot reflect λ = ${+lam1.toFixed(5)} Å, ${M.crystal} assumed for the polarisation (K = ${M.K.toFixed(3)})`));
     // (graphite reflects with its (002) alone: no doubt to report)
-    else if (!M.hklGiven && M.crystal !== 'graphite(002)') warnings.push(`${monoLabel(M)}: no reflection given, ${M.crystal} assumed for the polarisation (K = ${M.K.toFixed(3)})`);
+    else if (!M.hklGiven && M.crystal !== 'graphite(002)') warnings.push(MSG.info(`${monoLabel(M)}: no reflection given, ${M.crystal} assumed for the polarisation (K = ${M.K.toFixed(3)})`));
   }
   // A perfect crystal before the sample: Kα1 alone, whatever ratio the file gives.
   const perfectI = monos.find(M=> M.side === 'incident' && M.perfect && !M.assumed);
   if (perfectI && lam2 !== lam1 && ratio > 0){
-    warnings.push(`${monoLabel(perfectI)}: ${perfectI.crystal} passes Kα₁ alone, so the file's Kα₂/Kα₁ ratio of ${ratio} is not used`);
+    warnings.push(MSG.info(`${monoLabel(perfectI)}: ${perfectI.crystal} passes Kα₁ alone, so the file's Kα₂/Kα₁ ratio of ${ratio} is not used`));
     ratio = 0;
   }
 
@@ -388,19 +390,19 @@ function readInstrument(A, doc, k = 0){
   // ---- what the Bragg–Brentano model cannot take at face value ----
   // (Warnings are fragments with no full stop and no inner semicolon: the card joins them with '; '.)
   if (sampleMode && !/^reflection$/i.test(sampleMode))
-    warnings.push(`Sample mode "${sampleMode}": the model is Bragg–Brentano reflection, whose Lorentz–polarisation and displacement terms do not hold here`);
+    warnings.push(MSG.warn(`Sample mode "${sampleMode}": the model is Bragg–Brentano reflection, whose Lorentz–polarisation and displacement terms do not hold here`));
   if (scan.axis && !/^gonio$/i.test(scan.axis))
-    warnings.push(`Scan axis "${scan.axis}": the model assumes a coupled θ–2θ (Gonio) scan, which Bragg–Brentano focusing needs`);
+    warnings.push(MSG.warn(`Scan axis "${scan.axis}": the model assumes a coupled θ–2θ (Gonio) scan, which Bragg–Brentano focusing needs`));
   if (divergence.type === 'automatic')
-    warnings.push(`Automatic divergence slit${divergence.irradiatedLength ? ` (irradiated length ${divergence.irradiatedLength} mm)` : ''}: the intensities grow as sinθ against a fixed slit, which the model does not correct yet (the data need dividing by sinθ)`);
+    warnings.push(MSG.warn(`Automatic divergence slit${divergence.irradiatedLength ? ` (irradiated length ${divergence.irradiatedLength} mm)` : ''}: the intensities grow as sinθ against a fixed slit, which the model does not correct yet (the data need dividing by sinθ)`));
   else if (divergence.type === 'programmable')
-    warnings.push(`Programmable divergence slit with no irradiated length in the file: modelled as a fixed slit${divergence.deg ? ` of ${+divergence.deg.toFixed(4)}°` : ''} (if it ran in automatic mode, the data need dividing by sinθ)`);
+    warnings.push(MSG.warn(`Programmable divergence slit with no irradiated length in the file: modelled as a fixed slit${divergence.deg ? ` of ${+divergence.deg.toFixed(4)}°` : ''} (if it ran in automatic mode, the data need dividing by sinθ)`));
   else if (!divergence.type)
-    warnings.push(divEl ? `Divergence slit of unknown kind${divergence.name ? ` ("${divergence.name}")` : ''}: a fixed slit is assumed` : 'No divergence slit in the file: a fixed slit is assumed');
+    warnings.push(MSG.info(divEl ? `Divergence slit of unknown kind${divergence.name ? ` ("${divergence.name}")` : ''}: a fixed slit is assumed` : 'No divergence slit in the file: a fixed slit is assumed'));
   // (a crystal not recognised before the sample: Kα2 kept, as the file says, but in doubt)
   const unknownI = monos.find(M=> M.side === 'incident' && M.assumed);
   if (unknownI && ratio > 0)
-    warnings.push(`${monoLabel(unknownI)}: it usually passes Kα₁ alone, but the file gives a Kα₂/Kα₁ ratio of ${ratio} (check it)`);
+    warnings.push(MSG.warn(`${monoLabel(unknownI)}: it usually passes Kα₁ alone, but the file gives a Kα₂/Kα₁ ratio of ${ratio} (check it)`));
 
   return {
     lam1, lam2, kBeta: fin(kBeta), ratio, anode, intended: attrOf(A, wl, 'intended'),

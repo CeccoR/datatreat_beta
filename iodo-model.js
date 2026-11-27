@@ -120,6 +120,8 @@ export function tableOf(f){
   return tables.get(b);
 }
 export const traceOf = f =>{ const t = tableOf(f); return t && Number.isInteger(f.k) && t.traces[f.k] || null; };
+// The pairs of columns a trace's file left out (fewer than three points), 0 where none.
+export const pairsOut = f =>{ const t = tableOf(f); return t ? t.traces.filter(tr=> !tr).length : 0; };
 // A file's bytes read: its traces, or null when they cannot be (its reason in `error`).
 export function readBytes(rawBytes){
   try { return readKinetics(decodeText(rawBytes)); } catch(e){ return null; }

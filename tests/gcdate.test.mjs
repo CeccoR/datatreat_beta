@@ -17,8 +17,10 @@
      date, the rest counted; by its name alone when no row had a value, as at v509;
    - the fixture as before: its dates, no key more in its record, no alert;
    - the alert dismissed by its button for the files on show, through undo and redo, and
-     said again for a file dropped since; a project reopened says it again; one edited by
-     hand puts nothing in it but `true` and a whole count, and a name in it as text. */
+     said again for a file dropped since; a project reopened says it again, but for the
+     files dismissed, which it keeps so (v572, ALERTS-REVIEW.md R3: their mark in their
+     records; to v571 a mark in memory, lost); one edited by hand puts nothing in it but
+     `true` and a whole count, and a name in it as text. */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -173,7 +175,7 @@ test('the dates alert: dismissed for the files on show, through undo and redo; s
   } finally { await close(); }
 });
 
-test('a project reopened says it again; one edited by hand puts only true and a whole count in it', async ()=>{
+test('a project reopened says it again but for the files dismissed; one edited by hand puts only true and a whole count in it', async ()=>{
   const { page, errors, close } = await env.page();
   try {
     await openModule(page, 'gc');
@@ -187,10 +189,14 @@ test('a project reopened says it again; one edited by hand puts only true and a 
     const by = files(await moduleState(page, 'gc'));
     assert.equal(by['dm.csv'].dayMonth, true);
     assert.equal(by['feb30.csv'].badDates, 1);
+    assert.deepEqual([by['dm.csv'].seen, by['feb30.csv'].seen], [['read'], ['check']], 'each file marked for the box that named it');
+    assert.equal(await page.locator('#gcAlerts .alert').count(), 0, 'reopened: dismissed still');
+    // Not marked, said again.
+    await restore(page, { ...st, files: st.files.map(({ seen: _, ...f })=> f) });
     assert.deepEqual([await datesAlert(page), await dmAlert(page)], [[CHECK, 'feb30.csv: 1 row left out: its injection date does not exist.'], [READ, 'dm.csv: dates read as day/month.']], 'reopened: said again');
     // By hand: anything but true and a whole count above 0 says nothing; a name is text.
     const notTrue = [PAYLOAD, 'true', 1, null, {}], notCount = [PAYLOAD, '3', 1.5, -2, 0, true, null, { n: 3 }];
-    const edited = JSON.parse(JSON.stringify(st)), [f0, f1] = edited.files;
+    const edited = JSON.parse(JSON.stringify(st)), [f0, f1] = edited.files.map(({ seen: _, ...f })=> f);
     edited.files = [...notTrue.map(v=> ({ dayMonth: v })), ...notCount.map(v=> ({ badDates: v }))].map((o, i)=> ({ ...(i % 2 ? f1 : f0), dayMonth: undefined, badDates: undefined, ...o, name: `${PAYLOAD} ${i}.csv` }));
     edited.files.push({ ...f0, name: PAYLOAD + '.csv', dayMonth: true, badDates: 2 });
     await restore(page, edited);

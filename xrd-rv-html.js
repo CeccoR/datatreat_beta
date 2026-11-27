@@ -8,7 +8,7 @@
    settings window, the legends, the size chart's chips, the solids' boxes and the results
    under the pattern.
 ========================================================= */
-import { MODE, formulaOf, hklRuns, hklShow, engineOf, START_RULE, listOf, NO_TICK, NO_INSTR, instrNoteKind, cifNoteKind } from './xrd-rv-model.js';
+import { MODE, formulaOf, hklRuns, hklShow, engineOf, START_RULE, listOf, NO_TICK, NO_INSTR, msgOf, instrMsgs } from './xrd-rv-model.js';
 import { boxHtml } from './alerts.js';
 import { metric } from './xrd-cryst.js';
 import { sgPretty } from './xrd-sg.js';
@@ -98,15 +98,17 @@ function instrLine(ins){
 }
 /* What the instrument's line rests on (v571, ALERTS-REVIEW.md X05, X06, U6): under it, a
    compact warning box for the assumptions that may be wrong and an info one for those that
-   hold in the normal case (xrd-rv-model.js instrNoteKind), a line each; with no description
-   at all, what the model assumes (to v570 said only once refined, among the results). */
-function instrNotesHtml(ins){
-  if (!ins) return boxHtml('warn', esc(NO_INSTR));
-  const ws = ins.warnings || [], of = k => ws.filter(w=> instrNoteKind(w) === k).map(w=> esc(w) + '.');
+   hold in the normal case (their kinds: xrd-rv-model.js instrMsgs), a line each; with no
+   description at all, what the model assumes (to v570 said only once refined, among the
+   results), where the file is held (`held`): a pattern whose file a project opened without
+   (its bytes not stored any more) is said so as it opens, not taken for one of no header
+   (v572). */
+function instrNotesHtml(ins, held){
+  if (!ins) return held ? boxHtml('warn', esc(NO_INSTR)) : '';
+  const ms = instrMsgs(ins), of = k => ms.filter(m=> m.kind === k).map(m=> esc(m.text) + '.');
   return boxHtml('warn', of('warn')) + boxHtml('info', of('info'));
 }
 const group = (title, body, phase) => `<div class="rv-group"><div class="txt-mini${phase ? ' rv-phase-name' : ''}">${title}</div>${body}</div>`;
-const warnNote = t => `<div class="rv-note rv-wide rv-warn">⚠ ${t}</div>`;
 // What a result was refined with, or what Refine will refine (renderFitSet: done, a result
 // refined): each phase's line, its name before it when there are several, and the
 // Refinement settings used that are not the defaults (used: fitUsed).
@@ -299,38 +301,46 @@ const whLegendHtml = (phs, colorOf, iso, shp) => phs.map(ph=> `<span><i style="b
 const CELL_NONE = '<div class="rv-empty">No phase yet: a CIF added in Phases shows its structure here.</div>';
 // The results' box with no pattern (renderResults).
 const noPatternHtml = std => `<div class="rv-note rv-wide">${std ? 'No standard loaded: drop its file above.' : 'No pattern.'}</div>`;
-/* A result's warnings that the results say in a box of their own, not among the others: no
-   instrument description (said under the pattern, instrNotesHtml), what needed the standard's
-   profile and was refined without it (the box of no instrumental profile, noIrfHtml). The
-   engine's words (xrd-rietveld.js autoSetup). */
+/* A result's messages (xrd-rv-model.js msgOf: each { kind, text }, the engine's kind; one saved
+   to v571, words alone, a warning), those the results say in a box of their own marked by what
+   they are about (key) and what they name (arg): no instrument description (noInstr: said under
+   the pattern, instrNotesHtml), what needed the standard's profile and was refined without it
+   (needIrf, needIrfShape: the box of no instrumental profile, noIrfHtml). The engine's key
+   (xrd-rietveld.js autoSetup, v572); a result saved before, by the engine's words. */
 const NEED_IRF = /^(.+): need the standard's instrumental profile \(refine the standard first\), else the instrument's broadening and the sample's are one and the same; refined without\.$/;
 const NEED_IRF_SHAPE = /^Free shape: needs the standard's instrumental profile \(refine the standard first\), else the shape's widths and the instrument's are one and the same; (.+) refined with an isotropic size\.$/;
-const saidApart = w => w === NO_INSTR || NEED_IRF.test(w) || NEED_IRF_SHAPE.test(w);
+function apart(m){
+  if (m.key) return m;
+  const a = m.text.match(NEED_IRF), b = m.text.match(NEED_IRF_SHAPE);
+  return m.text === NO_INSTR ? { ...m, key: 'noInstr' } : a ? { ...m, key: 'needIrf', arg: a[1] } : b ? { ...m, key: 'needIrfShape', arg: b[1] } : m;
+}
+const resultMsgs = r => (Array.isArray(r.warnings) ? r.warnings : []).map(w=> msgOf(w)).filter(Boolean).map(apart);
 /* A sample's result with no instrumental profile, said once (v571, ALERTS-REVIEW.md X10: to
    v570 in up to five places, grey and amber): a compact warning, what follows from it, what to
    do (the standard refined since: this pattern again; else the standard first), and what was
-   refined without it. The standard's profile refused here (another λ: its warning says why):
-   only what was refined without it. irf(): the standard's profile now. */
-function noIrfHtml(r, irf){
-  const ws = r.warnings || [];
-  const without = ws.map(w=> (w.match(NEED_IRF) || [])[1]).filter(Boolean).map(t=> `Refined without, as they need it: ${barIdx(esc(t))}.`)
-    .concat(ws.map(w=> (w.match(NEED_IRF_SHAPE) || [])[1]).filter(Boolean).map(t=> `The free shape needs it: ${esc(t)} refined with an isotropic size.`));
+   refined without it (ms: its messages). The standard's profile refused here (another λ: its
+   warning says why): only what was refined without it. irf(): the standard's profile now. */
+function noIrfHtml(r, ms, irf){
+  const of = key => ms.filter(m=> m.key === key && typeof m.arg === 'string').map(m=> m.arg);
+  const without = of('needIrf').map(t=> `Refined without, as they need it: ${barIdx(esc(t))}.`).concat(of('needIrfShape').map(t=> `The free shape needs it: ${esc(t)} refined with an isotropic size.`));
   if (r.irfRefused) return without.length ? boxHtml('warn', ['No instrumental profile: the standard\'s does not apply to this pattern (the warnings say why).', ...without], 'rv-wide') : '';
   return boxHtml('warn', [`No instrumental profile: the widths, and the sizes from them, include the instrument's. ${irf() ? 'Refine this pattern again.' : 'Refine the standard first: <b>Instrumental standard…</b>.'}`, ...without], 'rv-wide');
 }
 /* The phases' CIF warnings (v571, ALERTS-REVIEW.md X12: to v570 an amber line each): for each
-   phase, a compact box of each kind (xrd-rv-model.js cifNoteKind), error, warning, info, a line
-   each, named by the phase. */
-const cifBoxesHtml = shown => shown.map(q=> ['bad', 'warn', 'info'].map(k=> boxHtml(k, q.prep.warnings.filter(w=> cifNoteKind(w) === k).map(w=> `${esc(q.prep.name)}: ${esc(w)}`), 'rv-wide')).join('')).join('');
+   phase, a compact box of each kind (the CIF reader's, xrd-cryst.js parseCif: v572; to v571 by
+   their words), error, warning, info, a line each, named by the phase. */
+const cifBoxesHtml = shown => shown.map(q=> ['bad', 'warn', 'info'].map(k=> boxHtml(k, q.prep.warnings.filter(w=> w.kind === k).map(w=> `${esc(q.prep.name)}: ${esc(w.text)}`), 'rv-wide')).join('')).join('');
 /* The results across the card under the pattern (renderResults): the statistics, then each
    group the worker made of the result (the specimen or the instrument, each phase's values);
-   under them all, the notes and every warning: the curve that cannot be drawn (lost), no
-   instrumental profile, the refinement's (a cell search without a minimum, a phase not
-   detected, a parameter on a bound), the CIFs' (their composition against the formula) and
-   the standard's. Not refined yet, what Refine will do. r: the pattern's result; shown: its
-   phases; n: the phases refined on it now, any: the card's; irf(): the standard's profile now,
-   stale(): the result's not the one now (each asked only where the words need it, as up to
-   v558); lost: its curve could not be drawn (its phases changed since). */
+   under them all, the notes and every message in compact boxes: the curve that cannot be
+   drawn (lost), no instrumental profile, the refinement's in a box a kind, error, warning (a
+   cell search without a minimum, a phase not detected, a parameter on a bound; the standard
+   refined again since, stale), info (what it chose, what it started from), then the CIFs'
+   (v572, ALERTS-REVIEW.md X11: to v571 an amber line each). Not refined yet, what Refine will
+   do. r: the pattern's result; shown: its phases; n: the phases refined on it now, any: the
+   card's; irf(): the standard's profile now, stale(): the result's not the one now (each asked
+   only where the words need it, as up to v558); lost: its curve could not be drawn (its phases
+   changed since). */
 function resultsHtml({ r, std, shown, n, any, irf, stale, lost }){
   const cifWarn = cifBoxesHtml(shown);
   if (!r || !r.params) return (n ? `<div class="rv-note rv-wide">Not refined yet. <b>Refine</b> starts from the CIF's cell${std ? ' (the certified one, held fixed)' : ''}, finds where the pattern's peaks are, and refines step by step.</div>`
@@ -346,11 +356,14 @@ function resultsHtml({ r, std, shown, n, any, irf, stale, lost }){
   });
   // (its curve gone in silence to v570, v571: X14)
   if (lost) html += boxHtml('warn', 'This result\'s curve cannot be drawn: its phases changed since. Refine it again.', 'rv-wide');
+  const ms = resultMsgs(r);
   if (std) html += `<div class="rv-note rv-wide">The samples take this profile, its axial divergence, zero and sin 2θ shift as their instrument's.</div>`;
-  else if (!r.irf) html += noIrfHtml(r, irf);
-  html += (r.warnings || []).filter(w=> !saidApart(w) || (std && w !== NO_INSTR)).map(w=> warnNote(barIdx(esc(w)))).join('') + cifWarn;
-  if (!std && r.irf && stale()) html += warnNote(`${irf() ? 'The standard has been refined again since this result' : 'The standard\'s refinement this result used is gone (cleared, or another standard loaded)'}: its profile, zero and asymmetry are not the ones these numbers rest on. Refine this pattern again, or <b>Refine all</b>.`);
-  return html;
+  else if (!r.irf) html += noIrfHtml(r, ms, irf);
+  // (those said apart not again; on the standard's, which has no box of no instrumental
+  // profile, what needed its profile among the others)
+  const said = ms.filter(m=> !m.key || (std && m.key !== 'noInstr')), of = k => said.filter(m=> m.kind === k).map(m=> barIdx(esc(m.text)));
+  const was = !std && r.irf && stale() ? [`${irf() ? 'The standard has been refined again since this result' : 'The standard\'s refinement this result used is gone (cleared, or another standard loaded)'}: its profile, zero and asymmetry are not the ones these numbers rest on. Refine this pattern again, or <b>Refine all</b>.`] : [];
+  return html + boxHtml('bad', of('bad'), 'rv-wide') + boxHtml('warn', [...of('warn'), ...was], 'rv-wide') + boxHtml('info', of('info'), 'rv-wide') + cifWarn;
 }
 
 // The card's instructions (cards.js shows them under its title), the standard's window's.
@@ -493,6 +506,6 @@ const settingsModalHtml = (p, std) => `<div class="modal-box rvs-box" role="dial
     </div>`;
 
 export { esc, modelsLine, summaryOf, refinedOf, hklHtml, barIdx, optBars, formulaPretty,
-  f3, fmtP, solidCaption, instrLine, instrNotesHtml, widthsNote, group, warnNote, fitLineHtml, phaseRowsHtml, cellDetailsHtml, settingsBodyHtml, widthsTableHtml, testsHtml,
+  f3, fmtP, solidCaption, instrLine, instrNotesHtml, widthsNote, group, fitLineHtml, phaseRowsHtml, cellDetailsHtml, settingsBodyHtml, widthsTableHtml, testsHtml,
   RV_INFO, RV_STD_INFO, legendHtml, patternLegendHtml, sizeChipsHtml, solidsNoneHtml, solidHeadHtml, whLegendHtml, CELL_NONE, noPatternHtml, resultsHtml,
   resHtml, cardHtml, settingsModalHtml };
