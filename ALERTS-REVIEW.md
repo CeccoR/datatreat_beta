@@ -164,3 +164,20 @@ Restavano fuori, fatti in v573 (sotto): la box della finestra Calibration GC per
 | Ordine nella box info della finestra dello standard XRPD | La riga della drop (`{n} files dropped: …`) di nuovo prima, poi le note del file (`utils.js` `notesHtml`, `lead`); in v573 dopo |
 | "—" nei tooltip e nelle istruzioni | ":" o "," al suo posto: titoli delle righe del worker Rietveld, `T_TITLE` e `P_TITLE` e istruzioni GC, `RV_INFO`, `RV_STD_INFO`, `STD_INFO`, titoli delle impostazioni Rietveld, miniature SEM, chip dei grafici, composer. Golden: gcmodel, integmodel, rvmodel e stages cambiano solo in quelle stringhe (i dump di v573 con le stringhe sostituite sono quelli di v574 byte per byte). Restano il "—" che sta per un valore assente (celle, placeholder, l'opzione "—" dei ruoli di colonna), il footer e i meta della pagina |
 | Maniglie dei file GC con sole tabelle | Non cambiato: voluto da v544 ("as to v543", test "tables alone: no grip"); in BACKLOG la proposta |
+
+## Integrazione GC su richiesta (v578)
+
+Bug 20 (risultati del "metodo precedente" mostrati dopo un cambio delle finestre): non c'è più quello stato. Una finestra cambiata resta in attesa finché si preme **Integrate** (sotto Peaks e nella finestra Calibration, una sola esecuzione); i risultati, i grafici, la calibrazione e i CSV restano quelli delle finestre applicate. Le parole della riga di stato stanno ora dove stanno quelle del Rietveld (R2): sopra la barra e il bottone, in fondo alla colonna di destra; nella finestra Calibration sotto la tabella degli standard.
+
+| Prima (v577) | Dopo (v578) | Tipo |
+|---|---|---|
+| Box warn sopra il cromatogramma: `Method changed: the model and the values shown are the previous method's until this file is integrated again.` (G10) | tolto | — |
+| Grigio: `Method changed: integrating again in a moment…` | tolto | — |
+| — | Grigio: `The results shown come from H₂-O₂ fit 268–326 s, not from these windows.` (finestre in attesa; solo fatti, R4) | grigio |
+| Grigio: `Stopped: {n} chromatograms not integrated with this method.` | `Stopped: {n} chromatograms not integrated.`, e se ci sono finestre in attesa `…; the results shown come from {finestre}, not from these windows.` | grigio |
+| Grigio: `Integrating… {i} / {n} chromatograms · {file}` con la barra nella riga | la stessa frase; la barra è quella del Rietveld (`.rv-prog`) sotto la riga | grigio |
+| Calibration: `Stopped: {n} chromatograms of the standards not integrated (↻ Re-integrate on the card).` | `Stopped: {n} chromatograms of the standards not integrated.` (Integrate è anche nella finestra) | grigio |
+| Calibration: `Integrating the standards… ({n} left)` | in corsa la riga del lavoro (`Integrating… {i} / {n} chromatograms · {file}`); ferma `{n} chromatograms of the standards to integrate.` | grigio |
+| Calibration senza standard: `No standards: each pair takes the GC software's scale (k).` | tolto: la finestra vuota mostra solo la drop zone e ciò che una drop ha detto | — |
+
+I nomi nel box Windows hanno i pedici (`H₂-O₂ fit`, `H₂`, `O₂`; S310 com'è), anche nelle aria-label e nella riga delle finestre in attesa. Restano col nome della chiave la riga rossa di una finestra troppo corta (`The H2O2 window must start at least 5 s before it ends.`) e l'avviso di un bordo dentro un picco vicino (BACKLOG).

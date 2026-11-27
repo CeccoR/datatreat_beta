@@ -33,20 +33,17 @@ was proposed; nothing here is in the code yet.
   tube's Kα2, named "(hkl) Kα2" there and left out of the sizes; with a λ of one's own,
   nothing); (3) a sample's cell shifted from its CIF's (a solid solution, strain, a
   displacement): a zero or a cell refined from the assigned peaks before they are named again,
-  as the tolerance is fixed. Seen in v576's tests, and tied to (3): a sample's Kα1 peak
-  shifted to higher angle than its CIF's line can fall on that line's Kα2 position and be
-  named "(hkl) Kα2" (left out of the sizes, as it was when unassigned); and a resolved Kα2
-  peak whose half-maximum walk runs over its Kα1 peak (a valley above half its height, the
-  smoothing widening both) has a FWHM so wide that its tolerance reaches the Kα1 line: it
-  keeps that line's hkl and is sized, as to v575. To try: a peak within the tolerance of both
-  a line and another line's Kα2 named by the nearer; the Kα2 peak's width read on its own
-  side only. And (v576) the CIFs' texts are kept once in a card's state, but a file left out
-  holds its sample's CIF whole in its own record (the pool is the card's): one copy more for
-  each such file, until it is taken back in.
-- **Box plots of one value elsewhere (v576).** XRPD's size chart draws a box of one value (its
-  quartiles one) at least its mean's cross tall (plot.js minBox, the composer too); the Figure
-  card's box plot does not ask for it, and a series of one value, or of values all alike,
-  draws there as its lines alone, no colour. To weigh: the same for every box plot.
+  as the tolerance is fixed. Seen in v576's tests (v577, done): a Kα1 peak of a cell smaller
+  than its CIF's fell on its line's Kα2 and was named "(hkl) Kα2", and a resolved Kα2 peak
+  whose valley stands above half its height, its FWHM read so wide that its tolerance reached
+  its line at λ, kept that line's hkl and was sized. A peak is now at Kα2 where its nearest
+  line within its tolerance is a reflection's Kα2 and a taller peak below it is assigned to
+  that reflection at λ; else it is named at λ, or unassigned. Left: such a Kα2 peak's width is
+  still read over its Kα1 peak (to try: on its own side only), and with λ the Kα mean a
+  resolved Kα1 peak can lie beyond its tolerance of the mean's line, so its Kα2 peak has no
+  partner and is named by the mean's line and sized. And the CIFs' texts kept once in a card's
+  state (v576), a file left out referring to that pool too in the state saved (v577: to v576
+  its text whole, once more for each such file).
 - **Free shape: a size distribution and a texture refined with the solid (round 2's open
   limits).** Round 2 (research/free-shape/round2/VALIDATION.md) leaves both as model errors
   the solid takes up: a log-normal size distribution gives every sphere carrying one a
@@ -177,6 +174,22 @@ was proposed; nothing here is in the code yet.
 
 ## GC
 
+- **The previous method's results after a window changed (bug 20, v578, done: windows
+  integrated on demand).** To v577 a window's edge changed was applied at once and its files
+  integrated again a second later, the results of the method before shown meanwhile ("Method
+  changed: …" over the chromatogram); integration.csv had no values for them and
+  chromatogram.csv gave that method's model with no word of it. From v578 an edit is pending:
+  the results, plots, tables, calibration and CSVs stay the windows applied ones (each CSV row
+  ends with them), a grey line names them, and Integrate (under Peaks and in the Calibration
+  window, one run) integrates every file and standard with the edited windows, the
+  chromatogram in view first, then applies them all at once, one step (Stop keeps everything
+  as it was). No "previous method" state is left. Left for later, seen while doing it: (1)
+  the red rule of a window made too short and the warning of an edge in a neighbour still
+  name the window by its key ("The H2O2 window…"), where Windows now says "H₂-O₂ fit"; (2) a
+  Stop holds the files left of every Integration card of the tab (as to v577), not only its
+  own card's; (3) the windows edited while the card has no raw chromatograms at all are
+  pending as any edit, and the files loaded after them are integrated with the windows
+  applied, Integrate then applying the edit.
 - **Other gases from the raw chromatograms.** The Integration card fits H₂ and O₂ only (one
   window, 268–326 s, with the system peak at 310 s and the baseline step); N₂ and the
   others need windows of their own, as the Python's N₂ window (321–346 s, with the system
@@ -825,7 +838,7 @@ was proposed; nothing here is in the code yet.
   `_build` (117); xrd-cryst.js's `checkComposition` (120); xrd-widths.js's `fitPeak` (109);
   xrd-rietveld.js's `wppmLineOf` (90), `shapeOf` (85), `phasePattern` (80), `solveLinear`
   (77). The others when work takes us into them.
-- **A trace's menu on its row (25; v579, done).** A right-click anywhere on a row of a module's
+- **A trace's menu on its row (25, v579, done).** A right-click anywhere on a row of a module's
   trace list, the ContextMenu key or Shift+F10 with the focus in it, or a finger held on it
   half a second opens a menu of what the row's include box and buttons at the right do
   (*Include in the analysis*, ticked while the trace is in; *Download its file*; after a line,

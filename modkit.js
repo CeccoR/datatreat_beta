@@ -215,6 +215,10 @@ export function moduleKit(mod, o){
   kit.commit = ()=> hist.commit();
   // What a job worked out, written into every state of the history (utils.js UndoStack.patch).
   kit.patch = fn => hist.patch(fn);
+  // A job holding the history from the state on show, its mark let go as it ends (UndoStack
+  // hold and release, the Rietveld card's: GC's Integrate, v578).
+  kit.hold = ()=> hist.hold();
+  kit.release = h => hist.release(h);
   // The cards, in the module's list above its "+" bar; each change a step of the history.
   let deck = null;
   kit.deck = d => (deck = createDeck({ list: $(mod + 'Analyses'), addBar: $(mod + 'AddBar'), addBtn: $(mod + 'AddAn'), commit: kit.commit, layer: o.layer, ...d }));

@@ -11,6 +11,11 @@
   change of each six runs `npm run lint`, the 6th the full suite (`npm test`); every change runs
   the tests related to it. A big change, or a user request, runs lint and the full suite at once.
 - Never commit untested or half-done work: the branch deploys to GitHub Pages.
+- Backward compatibility: an old project is opened by redoing the calculations with the current
+  engine, from the parameters that still exist and the original data. Parameters that no longer
+  exist are ignored (they are no longer useful); new parameters take their defaults. Results saved
+  by an old version are never kept or shown as they were, and no code is kept for old algorithms
+  or old formats: no per-version cases for old projects.
 - Never commit the user's data (files they upload, screenshots of them), symlinks, nested git
   repositories or `.claude/worktrees`. Tests use synthetic fixtures only.
 
