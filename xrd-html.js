@@ -50,8 +50,8 @@ export function stdNotes(std, scans, u){
     ...(sc[k] && sc[k].notes || []).map(t=> ({ what: isReadNote(t) ? 'read' : 'check', line: u.esc(u.fileLine(std.name, t)), files: [std] }))];
 }
 // A drop of several files on a window: the first the standard, the others not used (an info
-// of the drop's, beside the standard's notes: until the next drop, the standard removed or a
-// state put back). '' for one.
+// of the drop's, its box's first line, before the standard's notes: until the next drop, the
+// standard removed or a state put back; v574: to v573 after them). '' for one.
 export const stdDropLine = (n, name, u)=> n > 1 ? u.esc(`${n} files dropped: the first, ${name}, is the standard; the others are not used.`) : '';
 
 /* ---- The alerts under the samples' drop zone (utils.js FILE ALERTS) ---- */

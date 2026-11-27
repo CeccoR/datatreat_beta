@@ -17,7 +17,8 @@
    - Two tables paired (the first used, the second ignored, said) and two files of raw
      chromatograms paired (shown in Integration, no sample, said); raw chromatograms alone.
      v573: a pair's note dismissed marks that pair alone: the file paired wrongly again with
-     another is said again, the same pair made again is not.
+     another is said again, the same pair made again is not. v574: a note dismissed marks its
+     file where a state holds it as a pair's second too: undone to it and unpaired, not said.
    - A count that differs: said in Integration, the table's values in Analysis, gc_raw.csv's
      source column saying why.
    - The Integration card: its two selectors (the file's over the chromatogram, the plot's
@@ -349,6 +350,34 @@ test('a pair\'s note: its × marks that pair; the file paired wrongly again with
     await undo(page);
     assert.deepEqual(await pairs(), ['two tables paired (twin.csv, other.csv)'], 'undone to the other pair: said');
     assert.deepEqual((await moduleState(page, 'gc')).files[0].seen, ['check:pair:twin_TCD.csv'], 'the row marked for the pair dismissed alone');
+    assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
+  } finally { await close(); }
+});
+
+/* A file's note dismissed while it heads its row (v574): marked in every state, those that
+   hold it as a pair's second too; undone to one and unpaired again, not said (to v573 marked
+   there only where it headed a row, and said again). */
+test('a note dismissed marks its file where a state holds it paired: undone to that state and unpaired, not said again', async ()=>{
+  const { page, errors, csp, close } = await env.page();
+  try {
+    await openModule(page, 'gc');
+    // (twin_TCD.txt a table, the alternative export: paired by its name with twin.csv)
+    await load(page, [table('twin.csv', tableRows()), altTable('twin_TCD.txt', tableRows(2)), table('other.csv', tableRows(3))], 2);
+    const alt = async ()=> (await alerts(page)).filter(a=> a.includes('twin_TCD.txt: the alternative export'));
+    assert.deepEqual((await rowsOf(page)).map(r=> r.files), [['twin.csv', 'twin_TCD.txt'], ['other.csv']]);
+    assert.equal((await alt()).length, 0, 'a pair\'s second: no note of its own');
+    await dragFile(page, 'twin_TCD.txt', null);
+    assert.deepEqual((await rowsOf(page)).map(r=> r.files), [['twin.csv'], ['twin_TCD.txt'], ['other.csv']]);
+    assert.equal((await alt()).length, 1, 'heading its row: said');
+    const h = await history(page, 'gc');
+    await page.click('#gcAlerts [data-action="gc-dismiss-read"]'); await settle(page);
+    assert.equal((await alt()).length, 0, 'dismissed');
+    assert.deepEqual(await history(page, 'gc'), h, 'no step of the history');
+    await undo(page);
+    assert.deepEqual((await rowsOf(page)).map(r=> r.files), [['twin.csv', 'twin_TCD.txt'], ['other.csv']]);
+    assert.deepEqual((await moduleState(page, 'gc')).files[0].mate.seen, ['read'], 'the pair\'s second marked in the state undone to');
+    await dragFile(page, 'twin_TCD.txt', null);
+    assert.equal((await alt()).length, 0, 'unpaired again: seen');
     assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
   } finally { await close(); }
 });

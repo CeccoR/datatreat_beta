@@ -689,8 +689,8 @@ function thumbEl(S, f, i, cv){
   const cap = document.createElement('span');
   const r = M.isRef(S, f);
   cap.className = 'sem-thumb-cap'; cap.textContent = (r ? '◎ ' : '') + f.label + (f.clamped ? ' ⓘ' : '');
-  if (r) b.title = f.label + ' — the reference';
-  if (f.clamped) b.title += ' — its crop was narrowed to fit it';
+  if (r) b.title = f.label + ': the reference';
+  if (f.clamped) b.title += (r ? ', ' : ': ') + 'its crop was narrowed to fit it';
   // Out of the images the selector chose: dimmed (a click on it chooses its group).
   const sc = M.scopeOf(S);
   if (sc !== 'all' && (!M.groupOf(S, f) || M.groupOf(S, f).id !== sc)) wrap.classList.add('is-out');

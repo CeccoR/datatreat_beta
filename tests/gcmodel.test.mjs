@@ -366,6 +366,20 @@ test('a pair\'s note marked for its issue: paired wrongly again with another fil
   assert.ok(!('seen' in M.fileIn(U, { ...tc('t_TCD.csv'), seen: 'check', mate: tb('a.csv') }).mate), 'no mark: no seen');
 });
 
+/* A box's × marks its files in the states that hold them as a pair's second too (v574,
+   inRows: to v573 the rows' records alone, and such a file, undone to that state and unpaired,
+   was said again). A state with nothing to mark the same object; a state's own never changed. */
+test('a note dismissed marks its file where a state holds it as a pair\'s second (inRows)', ()=>{
+  const d = new Date(2026, 0, 1), tb = (n, x = {})=> ({ name: n, label: n.slice(0, 1).toUpperCase(), injDates: [d], gas: { h2: [1] }, ...x });
+  const all = [tb('a.csv'), tb('b.csv', { altExport: true })];
+  const paired = { files: [{ ...tb('a.csv'), mate: tb('b.csv', { altExport: true }) }] }, other = { files: [tb('c.csv')] };
+  const hist = { states: [paired, other, { files: all.map(f=> ({ ...f })) }], patch(fn){ this.states = this.states.map(fn); } };
+  markSeen(hist, H.fileNotes(all, HU), 'read', { put: M.inRows });
+  const [p, o, n] = hist.states;
+  assert.deepEqual([all[1].seen, n.files[1].seen, p.files[0].mate.seen, p.files[0].seen], [['read'], ['read'], ['read'], undefined], 'in the list, heading its row, and as a pair\'s second');
+  assert.ok(o === other && !('seen' in paired.files[0].mate), 'a state with nothing to mark the same; a state\'s own objects never changed');
+});
+
 test('the cards\' markup, the parameter table and the alerts, every label escaped', ()=>{
   const b = H.cardBody({ id: 4 }, HU), r = H.resHtml({ id: 4 }, HU);
   for (const id of ['gc4Src', 'gc4ParamTableWrap', 'gc4Svg1', 'gc4Legend']) assert.ok(b.includes(`id="${id}"`), id);

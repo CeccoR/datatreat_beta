@@ -134,7 +134,7 @@ const MODES = [
     title: "Off: the CIF's B, held (0.5 Å² for every atom where the CIF gives none; a B 0.5 Å² off goes into the strain and the size, 10–20 % in the size). On: one ΔB added to every atom's B; one B per crystallographic site; or Uⁱʲ per site, those its symmetry leaves free. Each is strongly correlated with the scale, the background and, on broad peaks, the widths: they want data to high angle. On nanocrystalline patterns they can come out unphysical (negative, or on their bound), whatever the size model, taking up what the model lacks rather than vibrations" },
   // Its depth is a site of the phase's own (siteList): the list is the phase's.
   { k: 'occ', label: 'Site occupancy', on: false, list: [], sites: true,
-    title: "Off: the CIF's occupancies, held. On: the occupancy of the site chosen refined — the share of it its species fills, read from how strongly it scatters at every angle alike (a B lowers it more the higher the angle). Under 1, atoms missing (vacancies, a depleted surface) or a lighter species beside them; over 1, a heavier one. On a nanocrystalline SrTiO₃ whose Sr site scatters 0.7 of a full one, the CIF's full site had been read as a negative B, a texture and B per site of +4 and −2 Å². Correlated with the scale and the displacement parameters: on data to 80° hold B or refine one ΔB beside it" },
+    title: "Off: the CIF's occupancies, held. On: the occupancy of the site chosen refined: the share of it its species fills, read from how strongly it scatters at every angle alike (a B lowers it more the higher the angle). Under 1, atoms missing (vacancies, a depleted surface) or a lighter species beside them; over 1, a heavier one. On a nanocrystalline SrTiO₃ whose Sr site scatters 0.7 of a full one, the CIF's full site had been read as a negative B, a texture and B per site of +4 and −2 Å². Correlated with the scale and the displacement parameters: on data to 80° hold B or refine one ΔB beside it" },
   { k: 'po', label: 'Preferred orientation', on: false, list: [['auto', 'best axis'], ...TEXTURE_AXES.map(a=> [a, `(${a})`])],
     title: "March–Dollase: the crystallites' planes (hkl) lie preferentially parallel to the surface (r under 1, plates) or across it (r over 1, needles), which changes the intensities, not the widths. Best axis: the lowest χ² of the low-index planes" },
 ];
@@ -199,7 +199,7 @@ const HOLD_KEYS = HOLDS.map(([k])=> k), HOLD_DEFAULT = HOLD_KEYS.filter(k=> k !=
 // The groups of the models the standard has none of (STD_NA, no free shape): its settings
 // do not show them (to v493 shown, ticked, holding nothing there); kept as they are.
 const STD_HOLD_NA = ['sizestrain', 'shape', 'faults', 'occ'];
-const START_RULE = 'Each pattern starts from its own last refinement. A group ticked is held at its values there — but only the parameters that refinement refined with the same model: whatever is new or changed since (an option switched on, a depth changed, a shape type changed) is refined, from its usual start. Everything not held is refined from the last values. A pattern with no last result, or one refined with other phases or another cell, is refined from the CIF.';
+const START_RULE = 'Each pattern starts from its own last refinement. A group ticked is held at its values there, but only the parameters that refinement refined with the same model: whatever is new or changed since (an option switched on, a depth changed, a shape type changed) is refined, from its usual start. Everything not held is refined from the last values. A pattern with no last result, or one refined with other phases or another cell, is refined from the CIF.';
 /* The Refinement settings (card-wide, the settings' last section): the least squares' and
    the searches' hyperparameters, sent as opts.fit (xrd-rietveld fitSettings). Only the
    keys changed are kept, absent is the engine's default. The defaults and ranges are
@@ -294,7 +294,7 @@ const SIZE_KINDS = {
   scherrer: ['Scherrer size', "Scherrer size: the Lorentzian's, K = 0.9, an apparent size (spheres of one size read 1.0–1.7 times their diameter).", 'Scherrer'],
   sphere: ['sphere diameter (WPPM)', 'Sphere diameter (WPPM): the true diameter of spheres of one size.', 'sphere'],
   volume: ['volume-weighted mean diameter (WPPM)', 'Volume-weighted mean diameter (WPPM, log-normal sizes): what the breadth measures; the median and the number-weighted mean are in the results.', 'volume mean'],
-  shape: ["free shape's dimensions", "Free shape: its dimensions, each measured one with its esd (dimensions not told apart, their mean) — with WPPM the solid's own, else read as the Scherrer size is.", 'shape'],
+  shape: ["free shape's dimensions", "Free shape: its dimensions, each measured one with its esd (dimensions not told apart, their mean): with WPPM the solid's own, else read as the Scherrer size is.", 'shape'],
 };
 /* Reflections at one 2θ (a cubic phase's 300 and 221: the same h² + k² + l²) are one peak,
    the sum of both: written "300 + 221" (up to v462 "300/221", which read as a division).

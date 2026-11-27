@@ -26,7 +26,7 @@ import { textLines, readTable, parseNum, width } from './textdata.js';
 import { readTcd } from './gc-tcd.js';
 import { looksTcd } from './gc-pair.js';
 import { fixed } from './db.js';
-import { keepSeen } from './alerts.js';
+import { keepSeen, inKeys } from './alerts.js';
 
 /* ---- The gases, the flow and the pressure (pure: the module's, for every instance) ---- */
 // Axis titles. The SVG form carries the superscripts (g⁻¹, cm⁻², h⁻¹); the plain form is
@@ -316,6 +316,16 @@ export function pairIn(U, f){
 }
 // A file as a restore takes it (tableIn), raw chromatograms and pairs too (pairIn, v544).
 export const fileIn = (U, f)=> isTcd(f) || 'mate' in f ? pairIn(U, f) : tableIn(U, f);
+/* A state's rows marked by a box's × under the drop zone (alerts.js markSeen's `put`,
+   modkit.js markIn): each row's record and its pair's second, so that a file heading its row
+   now is marked too where an older state holds it paired (v574: to v573 the rows' records
+   alone, and such a file, undone to that state and unpaired, was said again). The state
+   itself where none changed. */
+export const inRows = (s, mark)=> inKeys(['files'])(s, v =>{
+  if (!Array.isArray(v)) return mark(v);
+  const w = v.map(r=>{ const g = mark(r), m = isObj(g) && isObj(g.mate) ? mark(g.mate) : null; return m && m !== g.mate ? { ...g, mate: m } : g; });
+  return w.some((g, i)=> g !== v[i]) ? w : v;
+});
 
 /* ---- REPLICATES ----
    Each file is a sample of its own, or a replicate of another file's: its record's

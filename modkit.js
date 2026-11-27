@@ -25,6 +25,9 @@ import { markSeen, keepSeen } from './alerts.js';
                        each box's × marking its files seen (v572, ALERTS-REVIEW.md R3; to
                        v571 o.alerts drew them, o.dismiss a flag of the module's or a mark
                        in memory); none, nothing
+     markIn(s, mark)   a state with the files a box's × marks marked in it (alerts.js
+                       markSeen's `put`; GC's a pair's second too, gc-model.js inRows);
+                       none, inKeys(['files'])
      slots()           the per-sample arrays (utils: INCLUDED FILES)
      listed(op)        the list changed ('remove', 'reorder', 'include', 'palette',
                        'clear'), before refresh: what the module does first
@@ -92,7 +95,7 @@ export function moduleKit(mod, o){
     const btn = e.target.closest('[data-action]'), act = btn && root.contains(btn) ? btn.dataset.action : '';
     if (!act.startsWith(pre)) return;
     const part = act.slice(pre.length);
-    if (part in parts) parts[part] = ''; else markSeen(hist, notes(), part);
+    if (part in parts) parts[part] = ''; else markSeen(hist, notes(), part, { put: o.markIn });
     kit.drawAlerts();
   });
   /* A drop's files not loaded, each its line (utils.js fileLine: the file and why), and

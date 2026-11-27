@@ -140,8 +140,9 @@ function kitHooks(S){
     // (the plots' gas chips, H₂ / O₂: the view alone, a step but no change unsaved; utils.js VIEW_KEYS)
     // (and the Integration cards' run overview: its gases and its y, v544)
     view: ['gasSel', 'ovGas', 'ovY'],
-    // (what the reading of the files said, gc-html.js fileNotes)
-    notes: ()=> H.fileNotes(S.all, HU),
+    // (what the reading of the files said, gc-html.js fileNotes; a box's × marking a file in
+    // the states that hold it as a pair's second too, gc-model.js inRows)
+    notes: ()=> H.fileNotes(S.all, HU), markIn: M.inRows,
     // Only a table heading its row is a sample (raw chromatograms alone, or paired with raw
     // chromatograms, have no injection times: Analysis leaves them out, v544).
     sample: M.isTable,
