@@ -204,10 +204,10 @@ function resultsFor(R, whole = false){
 function instance(all, cards){
   const apis = new Map();
   const S = { ctx: { all, cards: ()=> cards, inst: id => apis.get(id), isTcd: GM.isTcd, readTable: t => GM.readGc(t, true), gases: GASES },
-    ...M.gasTable(U, GASES), read: new WeakMap(), tabs: new WeakMap(), store: new Map(), job: null, halted: false, failed: '', dead: false };
+    ...M.gasTable(U, GASES), read: new WeakMap(), tabs: new WeakMap(), store: new Map(), job: null, failed: '', dead: false };
   const card = (a, view = ()=> [])=>{
-    const C = { a, method: M.methodIn(U, null), edit: M.methodIn(U, null), run: null, stopped: false, cal: M.calIn(U, null), ovGas: 'h2', ovY: 'conc', selName: null, selK: 0, valuesKept: new Map(), calSel: 0, drawn: null, calDrawn: null };
-    apis.set(a.id, { tcdRecs: ()=> M.tcdRecs(S, C), method: ()=> C.method, runMethod: ()=> C.run ? C.run.m : null, inView: view });
+    const C = { a, method: M.methodIn(U, null), edit: M.methodIn(U, null), run: null, stopped: false, halted: false, cal: M.calIn(U, null), ovGas: 'h2', ovY: 'conc', selName: null, selK: 0, valuesKept: new Map(), calSel: 0, drawn: null, calDrawn: null };
+    apis.set(a.id, { tcdRecs: ()=> M.tcdRecs(S, C), method: ()=> C.method, runMethod: ()=> C.run ? C.run.m : null, inView: view, halted: ()=> C.halted });
     return C;
   };
   return { S, card };
@@ -260,7 +260,17 @@ test('the method, its key and v544\'s; a result as the store keeps it; the calib
      the state only where they differ; a window an edit lacks (or one refused) the method's; no
      edit (a state of before, or none pending), the method's; a stop said let go. */
   assert.ok(!M.isPending(U, C) && C.edit !== C.method, 'the same windows, its own copy');
-  M.takeEdit(U, C, { ...M.clone(DEF), extra: 1 });
+  /* v581: windows edited on a card with no result of the windows applied (none of its files
+     and standards integrated: here its calibration's) applied as they are, nothing to keep; with
+     one, pending as v578 made them. */
+  assert.equal(M.takeEdit(U, S, C, DEF), true);
+  assert.deepEqual([M.isPending(U, C), M.isDefault(U, C.method), C.method !== C.edit], [false, true, true], 'applied, each its own copy');
+  C.method = M.clone(ALT_M); C.edit = M.clone(ALT_M);
+  S.store.set(M.keyOf(U, C.cal.files[0], ALT_M), [null, null]);
+  assert.equal(M.takeEdit(U, S, C, ALT_M), true, 'no chromatogram integrated: none yet');
+  C.method = M.clone(ALT_M); C.edit = M.clone(ALT_M);
+  S.store.set(M.keyOf(U, C.cal.files[0], ALT_M), [null, { gases: {}, windows: [] }]);
+  assert.equal(M.takeEdit(U, S, C, { ...M.clone(DEF), extra: 1 }), false);
   assert.deepEqual([M.isPending(U, C), M.methodKey(U, C.edit) === M.methodKey(U, DEF), 'extra' in C.edit, C.method.windows[0].from], [true, true, false, 270]);
   assert.equal(canon(M.snapshotOf(U, C)), canon({ method: ALT_M, edit: DEF, cal: M.calCopy(C.cal), ovGas: ['o2'], ovY: 'area' }));
   C.stopped = true;
@@ -328,7 +338,7 @@ test('the results taken in, saved and written into the states that hold their fi
   S2.store.set(kLone, [{ gases: {}, windows: [] }, null, null]);
   C2.run = { m: ALT_M };
   assert.deepEqual(W2(), [[2, '4,0,1,2,3,5'], [1, '2,1'], [0, all12], ['alt2', '4,0,1,2,3,5'], ['alt1', '2,0,1'], ['alt0', all12]], 'the run\'s after');
-  S2.halted = true;
+  C2.halted = true;
   assert.deepEqual(W2().map(g=> g[0]), ['alt2', 'alt1', 'alt0'], 'a Stop holds the method\'s alone');
   assert.deepEqual([M.leftUnder(U, S2, C2, DEF), M.leftUnder(U, S2, C2, ALT_M)], [20, 21]);
   recs.forEach(r=> S2.store.set(alt(r), new Array(M.dataOf(S2, r).cols.length).fill({ gases: {}, windows: [] })));
@@ -343,6 +353,27 @@ test('the results taken in, saved and written into the states that hold their fi
   const b = new Uint8Array([1]); M.prime(S, b, { t: [], cols: [] }); assert.deepEqual(M.dataOf(S, { rawBytes: b }), { t: [], cols: [] });
   const t = M.tableOf(S, BYTES['standards.csv']);
   assert.deepEqual([t === M.tableOf(S, BYTES['standards.csv']), t.names.length, M.tableOf(S, null), M.tableOf(S, BYTES['nothing.csv']).error.slice(0, 10)], [true, 6, null, 'not a GC t']);
+});
+
+/* v581: a Stop holds its own card's files alone (to v580 the instance's `halted`, every card's):
+   two Integration cards of other windows, one stopped, the other's files still wanted and its
+   job its own; the one stopped said stopped, not running, while the job goes on for the other;
+   what Analysis takes of a file under the card stopped says so, under the other not. */
+test('a Stop holds its own card\'s files alone (v581)', ()=>{
+  const all = [ROWS[0](), ROWS[4]()], cards = [{ id: 1, type: 'integ' }, { id: 2, type: 'integ' }];
+  const { S, card } = instance(all, cards), A = card(cards[0]), B = card(cards[1]);
+  B.method = M.clone(ALT_M); B.edit = M.clone(ALT_M);
+  const keys = ()=> M.wanted(U, S).map(g=> [g.key === M.keyOf(U, g.rec, DEF) ? 'A' : g.key === M.keyOf(U, g.rec, ALT_M) ? 'B' : '?', g.rec.name]);
+  assert.deepEqual(keys(), [['A', 'run_TCD.csv'], ['A', 'lone_TCD.csv'], ['B', 'run_TCD.csv'], ['B', 'lone_TCD.csv']]);
+  A.halted = true;
+  assert.deepEqual(keys(), [['B', 'run_TCD.csv'], ['B', 'lone_TCD.csv']], 'A\'s Stop holds A\'s alone');
+  S.job = { total: 15, done: 3, name: 'run_TCD.csv', works: new Map() };
+  assert.deepEqual([M.progressOf(U, S, A).state, M.progressOf(U, S, B).state], ['stopped', 'running']);
+  assert.deepEqual([M.valuesFor(U, S, A, all[0]).why, M.valuesFor(U, S, B, all[0]).why], ['its integration was stopped before its end', 'its integration is not done yet']);
+  S.job = null; A.halted = false; B.halted = true;
+  assert.deepEqual(keys(), [['A', 'run_TCD.csv'], ['A', 'lone_TCD.csv']], 'B\'s Stop, B\'s alone');
+  assert.deepEqual([M.progressOf(U, S, A).state, M.progressOf(U, S, B).state], ['left', 'stopped']);
+  assert.ok(!('halted' in M.status(S)), 'no Stop of the instance\'s');
 });
 
 test('the entries, their results and names; the concentrations; what Analysis takes; the suspicious rule', ()=>{
@@ -369,7 +400,7 @@ test('the entries, their results and names; the concentrations; what Analysis ta
   const R = rng(5), res = resultsFor(R), kMini = M.keyOf(U, all[2].mate, DEF);
   M.loadResults(U, S.store, { [kMini]: MINI_RES });
   assert.equal(M.resOf(U, S, C, all[0].mate).res, null);
-  M.takeEdit(U, C, ALT_M);
+  M.takeEdit(U, S, C, ALT_M);
   assert.deepEqual([M.resOf(U, S, C, all[2].mate).res === S.store.get(kMini), M.resOf(U, S, C, all[2].mate).m === C.method, 'stale' in M.resOf(U, S, C, all[2].mate)], [true, true, false]);
   C.method = ALT_M;
   assert.deepEqual([M.resOf(U, S, C, all[2].mate).res, M.resOf(U, S, C, all[2].mate).m], [null, ALT_M]);
@@ -433,8 +464,8 @@ test('the entries, their results and names; the concentrations; what Analysis ta
   assert.deepEqual(M.valuesFor(U, S, C, all[1]), { why: '12 injections in the table, 11 chromatograms', integ: true });
   C.method = ALT_M;
   assert.deepEqual(M.valuesFor(U, S, C, all[0]), res[M.keyOf(U, all[0].mate, ALT_M)] ? M.valuesFor(U, S, C, all[0]) : { why: 'its integration is not done yet', waiting: true });
-  S.halted = true; if (!res[M.keyOf(U, all[0].mate, ALT_M)]) assert.equal(M.valuesFor(U, S, C, all[0]).why, 'its integration was stopped before its end');
-  S.halted = false; C.method = DEF;
+  C.halted = true; if (!res[M.keyOf(U, all[0].mate, ALT_M)]) assert.equal(M.valuesFor(U, S, C, all[0]).why, 'its integration was stopped before its end');
+  C.halted = false; C.method = DEF;
   C.cal = M.calIn(U, null);
   const vt = M.valuesFor(U, S, C, all[0]);
   assert.deepEqual([vt.how, Object.keys(vt.k)], [{ h2: 'transfer', o2: 'transfer' }, ['h2', 'o2']]);
@@ -501,7 +532,7 @@ test('the status, the alerts\' facts, the CSVs; the calibration window\'s files 
   // the status line in every state
   const st = ()=> M.progressOf(U, S, C).state;
   assert.equal(st(), 'left');
-  S.halted = true; assert.equal(st(), 'stopped'); S.halted = false;
+  C.halted = true; assert.equal(st(), 'stopped'); C.halted = false;
   S.failed = 'x'; assert.equal(st(), 'failed'); S.failed = '';
   S.job = { total: 3, done: 1, name: 'a' }; assert.deepEqual([st(), M.progressOf(U, S, C).pct], ['running', 33]); S.job = null;
   const R = rng(3), res = resultsFor(R);
@@ -512,15 +543,15 @@ test('the status, the alerts\' facts, the CSVs; the calibration window\'s files 
   /* v578: the windows edited (pending: the method applied named); a job going on is this card's
      only while it has its run or its files left; a run stopped with the windows still edited;
      a failure said where something is left or edited. */
-  M.takeEdit(U, C, ALT_M);
+  M.takeEdit(U, S, C, ALT_M);
   let x = M.progressOf(U, S, C);
   assert.deepEqual([x.state, x.pending, x.left, x.m === C.method], ['pending', true, 0, true]);
   S.job = { total: 4, done: 3, name: 'b' }; assert.equal(st(), 'pending', 'another card\'s job');
   C.run = { m: ALT_M }; x = M.progressOf(U, S, C); assert.deepEqual([x.state, x.pct], ['running', 75]);
   C.run = null; S.job = null; C.stopped = true; assert.equal(st(), 'stopped');
-  S.halted = true; S.failed = 'x'; assert.equal(st(), 'failed');
+  C.halted = true; S.failed = 'x'; assert.equal(st(), 'failed');
   C.edit = M.clone(C.method); assert.equal(st(), 'done', 'nothing left, nothing edited: no failure said, no stop');
-  S.halted = false; S.failed = ''; C.stopped = false;
+  C.halted = false; S.failed = ''; C.stopped = false;
   // the alerts' facts: unreadable, a count that differs, two raw chromatograms paired, alone; transfer
   const f = M.alertFacts(U, S, C);
   // (v567: the GC software's scale is said by the Production Rate cards, gc-html.js srcAlertsHtml)
@@ -532,7 +563,7 @@ test('the status, the alerts\' facts, the CSVs; the calibration window\'s files 
   assert.equal(csv.length, 1 + 12 + 11 + 2 + 2 + 3 + 1);
   assert.match(csv[1], /^run_TCD\.csv;run\.csv;1;2026-11-13 10:00:00;\d+\.\d{6};\d+\.\d{6};287\.\d{3};.*;268\.00;326\.00$/);
   assert.ok(csv.some(l=> /transfer \(k = /.test(l)));
-  M.takeEdit(U, C, ALT_M);
+  M.takeEdit(U, S, C, ALT_M);
   assert.equal(M.integrationCsv(U, S, C, es), csv.join('\n'), 'windows edited: the same, the windows applied');
   C.edit = M.clone(C.method);
   const mini = instance([ROWS[2]()], cards), Cm = mini.card(cards[0]);
@@ -594,15 +625,23 @@ test('the markup: the instructions, the card\'s and the window\'s bodies, Window
   assert.ok(cal.indexOf('gci-cal-levels') < cal.indexOf('id="gc7CalIntegrate"'), 'under the standards\' table');
   const gasOf = M.gasTable(U, GASES).gasOf;
   const m = M.methodIn(U, { windows: [{ key: 'H2O2', from: 264, to: 331 }] });
-  const mh = H.methodHtml(HU, gasOf, { ...m, windows: [{ ...m.windows[0], key: 'K<b>', peaks: m.windows[0].peaks.map(pk=> pk.gas ? pk : { ...pk, name: 'S<1>' }) }] }, ['a <i>']);
+  const mh = H.methodHtml(HU, gasOf, { ...m, windows: [{ ...m.windows[0], key: 'K<b>', peaks: m.windows[0].peaks.map(pk=> pk.gas ? pk : { ...pk, name: 'S<1>' }) }] }, [{ w: { key: 'a <i>', from: 1, to: 2 }, z: { name: 'z', from: 1, to: 2 } }]);
   // (v571: the windows' intrusions a compact warning, G08; a window not taken its rule in red
   // under it, C19 and G11; v578: a window named by its gases, H₂-O₂, its gases' peaks too, the
   // others as they are)
-  assert.ok(mh.includes('<span class="gci-win-name">H₂-O₂ fit</span>') && mh.includes('aria-label="H₂-O₂ window from (s)"') && mh.includes('aria-label="H₂-O₂ window to (s)"') && mh.includes('value="264"') && mh.endsWith('<div class="alert warn compact gci-flag">⚠ a &lt;i&gt;</div>'));
+  assert.ok(mh.includes('<span class="gci-win-name">H₂-O₂ fit</span>') && mh.includes('aria-label="H₂-O₂ window from (s)"') && mh.includes('aria-label="H₂-O₂ window to (s)"') && mh.includes('value="264"')
+    && mh.endsWith('<div class="alert warn compact gci-flag">⚠ The a &lt;i&gt; window (1–2 s) reaches z (1–2 s), which its model has no peak for: the fit degrades there.</div>'), mh);
+  /* v581: the window's red rule and its edge in a neighbour named as Windows names it (H₂-O₂),
+     not by its key (H2O2); a window of no gas by its key. */
+  const ins = M.intrusions(m), wh = H.methodHtml(HU, gasOf, m, ins);
+  assert.deepEqual([ins.length, ins.every(x=> x.w === m.windows[0])], [2, true]);
+  assert.ok(ins.every(x=> wh.includes(H.intrusionText(gasOf, x))) && wh.includes('⚠ The H₂-O₂ window (264–331 s) reaches ') && !wh.includes('H2O2'), wh);
+  assert.equal(H.tooShortText(gasOf, m.windows[0]), 'The H₂-O₂ window must start at least 5 s before it ends.');
+  assert.equal(H.intrusionText(gasOf, { w: { key: 'K', from: 1, to: 9 }, z: { name: 'Z', from: 2, to: 3 } }), 'The K window (1–9 s) reaches Z (2–3 s), which its model has no peak for: the fit degrades there.');
   assert.ok(mh.includes('H₂ 287.3 · O₂ 302.3 · S&lt;1&gt; 310.2') && !mh.includes('field-rule'), mh);
   const nogas = H.methodHtml(HU, gasOf, { windows: [{ key: 'K<b>', from: 1, to: 9, peaks: [{ name: 'X2', t: 3 }] }] }, []);
   assert.ok(nogas.includes('<span class="gci-win-name">K&lt;b&gt; fit</span>') && nogas.includes('X2 3.0'), 'no gas: its key, its peaks as they are');
-  const refused = H.methodHtml(HU, gasOf, m, [], { wi: 0, text: H.tooShortText('K<b>') });
+  const refused = H.methodHtml(HU, gasOf, m, [], { wi: 0, text: H.tooShortText(gasOf, { key: 'K<b>' }) });
   assert.ok(refused.endsWith('</div><p class="field-rule gci-win-rule" role="alert">The K&lt;b&gt; window must start at least 5 s before it ends.</p>') && !refused.includes('alert warn'), refused);
   assert.equal(H.methodHtml(HU, gasOf, m, [], { wi: 1, text: 'x' }).includes('field-rule'), false, 'the rule under its own window');
   // Peaks
@@ -772,7 +811,8 @@ export function caseEnv(c){
 }
 const renderSel = (S, C)=>{ const e = M.curOf(S, C); if (e){ C.selName = e.name; if (C.selK >= e.n) C.selK = Math.max(0, e.n - 1); } return e; };
 // (v578: windows edited, pending; applied by Integrate's swap, its run's windows the card's: 'apply')
-function setMethod(C, m){ if (M.tooShort(m) || M.methodKey(U, m) === M.methodKey(U, C.edit)) return; M.takeEdit(U, C, m); }
+// (v581: on a card with no result of the windows applied, applied as they are: takeEdit)
+function setMethod(S, C, m){ if (M.tooShort(m) || M.methodKey(U, m) === M.methodKey(U, C.edit)) return; M.takeEdit(U, S, C, m); }
 export function step(E, [op, a, b, x]){
   const { S, C, W, all } = E;
   const calChanged = ()=> C.valuesKept.clear();
@@ -782,8 +822,8 @@ export function step(E, [op, a, b, x]){
   else if (op === 'stepK') M.stepK(S, C, a);
   else if (op === 'gas'){ if (S.GAS[a] && a !== C.ovGas) C.ovGas = a; }
   else if (op === 'y'){ if (a !== C.ovY) C.ovY = U.oneOf(a, ['conc', 'area']); }
-  else if (op === 'edge'){ const v = +String(b).replace(',', '.'), m = M.clone(C.edit); if (M.fin(v)){ m.windows[0][a] = v; setMethod(C, m); } }
-  else if (op === 'reset') setMethod(C, M.methodIn(U, null));
+  else if (op === 'edge'){ const v = +String(b).replace(',', '.'), m = M.clone(C.edit); if (M.fin(v)){ m.windows[0][a] = v; setMethod(S, C, m); } }
+  else if (op === 'reset') setMethod(S, C, M.methodIn(U, null));
   else if (op === 'apply'){ C.method = M.clone(C.edit); calChanged(); }
   else if (op === 'open') W.open = true;
   else if (op === 'close'){ if (W.open){ W.open = false; W.held = []; W.alerts = ''; } }

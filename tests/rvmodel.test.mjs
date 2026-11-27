@@ -620,6 +620,22 @@ test('what the views are drawn from: the keys, the pattern\'s frame and ticks, t
   assert.equal(M.cellKeyOf(q), '1|3.905,3.905,3.905,90,90,90|znjilf.507|SrTiO3');
 });
 
+/* v581, bug 23: a pattern named after a property every object has (constructor, toString,
+   __proto__): its results and the phases it leaves out, by its own key (to v580 a pattern
+   named constructor left every phase out, a result under __proto__ was lost into the
+   results' prototype). */
+test('patterns named constructor, toString and __proto__: their phases and results as any other\'s (bug 23)', ()=>{
+  const q = { id: 1, cif: SRT, file: 'SrTiO3.cif', color: '#d4a72c', prep: M.prepOf(SRT, 'SrTiO3.cif'), ...M.defSettings(), off: {} };
+  const S = card(false, { phases: [q] });
+  for (const name of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) assert.deepEqual(M.phasesFor(S, { name }).map(x=> x.id), [1], name);
+  const R = card(false);
+  M.restoreInto(U, R, { phases: [], results: JSON.parse('{"__proto__": {"params": {"a": 1}, "at": 3}, "constructor": {"params": {"a": 2}}}') }, false);
+  assert.deepEqual([Object.keys(R.results), Object.getPrototypeOf(R.results) === Object.prototype, R.results.at], [['__proto__', 'constructor'], true, undefined]);
+  const W = card(false, { wrote: JSON.parse('{"__proto__": {"mine": 1}}') });
+  M.restoreInto(U, W, { phases: [], results: { s: { a: 1 } } }, true);
+  assert.deepEqual([Object.keys(W.results), Object.getPrototypeOf(W.results) === Object.prototype], [['s', '__proto__'], true], 'a run\'s, written over the state\'s');
+});
+
 test('the state saved and put back (every value made valid, a run\'s kept through a step), what the card shows beside it', ()=>{
   const prep = M.prepOf(SRT, 'SrTiO3.cif'), q = { id: 1, cif: SRT, file: 'SrTiO3.cif', color: '#d4a72c', prep, ...M.defSettings(), off: { 's00.xrdml': true } };
   const S = card(false, { phases: [q], nextId: 2, sel: 1, results: { 's00.xrdml': { params: { a: 1 }, at: 3 } }, sizeBy: 'peak', resNorm: 'local' });

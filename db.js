@@ -275,6 +275,13 @@ function fixed(a){
   return a;
 }
 const isFixed = a => _fixed.has(a);
+/* A key of an object's own (v581, bug 23): a map keyed by file names (XRPD's Rietveld results,
+   a phase's patterns left out) holds a file named after a property every object has
+   (constructor, toString, __proto__) as any other name. own reads it, not the prototype's;
+   setOwn writes it, a __proto__ one too (o.__proto__ = v would set the object's prototype:
+   its key lost, its value's properties every key's); the copies below write so. */
+const own = (o, k)=> o != null && Object.prototype.hasOwnProperty.call(o, k) ? o[k] : undefined;
+const setOwn = (o, k, v)=>{ if (k === '__proto__') Object.defineProperty(o, k, { value: v, writable: true, enumerable: true, configurable: true }); else o[k] = v; return v; };
 function walk(v, keep){
   const met = new Map();   // a Uint8Array → its encoded form
   let ids = 0;
@@ -290,7 +297,7 @@ function walk(v, keep){
     if (!keep && isRaw(x) && x.bytes instanceof Uint8Array) return { id: x.id, b64: toB64(x.bytes) };
     if (ArrayBuffer.isView(x)) return Array.from(x);
     if (Array.isArray(x)) return keep && isFixed(x) ? x : x.map(enc);
-    if (x && typeof x === 'object'){ const o = {}; for (const k in x) o[k] = enc(x[k]); return o; }
+    if (x && typeof x === 'object'){ const o = {}; for (const k in x) setOwn(o, k, enc(x[k])); return o; }
     return x;
   };
   return enc(v);
@@ -327,7 +334,7 @@ function decode(v){
       }
       // (a reference whose bytes were not read first: a path that missed hydrate)
       if (isRef(x)){ console.error('DataTreat: bytes not read before the restore (' + x.h + ')'); return null; }
-      const o = {}; for (const k in x) o[k] = dec(x[k]); return o;
+      const o = {}; for (const k in x) setOwn(o, k, dec(x[k])); return o;
     }
     return x;
   };
@@ -433,7 +440,7 @@ async function stored(v){
       }
       if (isText(x)){
         const h = _hash.get(x), o = {};
-        for (const k in x) o[k] = k === 'b64' && h ? { __t:'b64', h } : x[k];
+        for (const k in x) setOwn(o, k, k === 'b64' && h ? { __t:'b64', h } : x[k]);
         if (h) want(h, ()=> fromB64Fast(x.b64));
         return o;
       }
@@ -453,7 +460,7 @@ async function stored(v){
       if (x && typeof x === 'object'){
         if (isRef(x)){ want(x.h, null); return x; }   // (a stored form met again)
         let o = null;
-        for (const k in x){ const a = x[k], e = a && typeof a === 'object' ? enc(a) : a; if (e !== a && !o){ o = {}; for (const j in x){ if (j === k) break; o[j] = x[j]; } } if (o) o[k] = e; }
+        for (const k in x){ const a = x[k], e = a && typeof a === 'object' ? enc(a) : a; if (e !== a && !o){ o = {}; for (const j in x){ if (j === k) break; setOwn(o, j, x[j]); } } if (o) setOwn(o, k, e); }
         return o || x;
       }
       return x;
@@ -583,7 +590,7 @@ function fill(v, got){
     const t = x.b64 && typeof x.b64 === 'object' && x.b64.__t === 'b64' && typeof x.b64.h === 'string' ? x.b64.h : null;
     if (t && got.get(t) && typeof x.id === 'string' && Object.keys(x).length === 2) return { id: x.id, bytes: arr(t) };
     const o = Object.create(Object.getPrototypeOf(x));   // (an object of a class, unload's, one again)
-    for (const k in x) o[k] = go(x[k]);
+    for (const k in x) setOwn(o, k, go(x[k]));
     // (another, none of the app's: its text; bytes not stored, null)
     if (t){
       const b = got.get(t);
@@ -611,7 +618,7 @@ function expand(v, got){
       const o = { __t:'u8', v:toB64(b) }; if (x.id != null) o.id = x.id; return o;
     }
     if (x.__t === 'b64' && typeof x.h === 'string'){ const b = got.get(x.h); return b ? toB64(b) : null; }
-    const o = {}; for (const k in x) o[k] = go(x[k]); return o;
+    const o = {}; for (const k in x) setOwn(o, k, go(x[k])); return o;
   };
   return go(v);
 }
@@ -646,8 +653,8 @@ function unload(v){
     } else {
       for (const k in x){
         const e = go(x[k]);
-        if (e !== x[k] && !o){ o = Object.create(Object.getPrototypeOf(x)); for (const j in x){ if (j === k) break; o[j] = x[j]; } }
-        if (o) o[k] = e;
+        if (e !== x[k] && !o){ o = Object.create(Object.getPrototypeOf(x)); for (const j in x){ if (j === k) break; setOwn(o, j, x[j]); } }
+        if (o) setOwn(o, k, e);
       }
     }
     done.set(x, o || x);
@@ -677,4 +684,4 @@ const unread = v => refsIn(v).size > 0;
 
 export { allProjects, putProject, deleteProject, retitleProject, readProject, exportedProject,
          allTabStates, putTabRec, deleteTabRec, uid, encode, decode, park, stored,
-         hydrate, sweep, sweepSoon, dbBlocked, onDbBlocked, onDbClosing, onDbClosed, unload, load, unread, refsIn, fixed, isFixed, isObj };
+         hydrate, sweep, sweepSoon, dbBlocked, onDbBlocked, onDbClosing, onDbClosed, unload, load, unread, refsIn, fixed, isFixed, isObj, own, setOwn };

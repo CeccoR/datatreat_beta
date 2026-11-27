@@ -189,7 +189,10 @@ was proposed; nothing here is in the code yet.
   Stop holds the files left of every Integration card of the tab (as to v577), not only its
   own card's; (3) the windows edited while the card has no raw chromatograms at all are
   pending as any edit, and the files loaded after them are integrated with the windows
-  applied, Integrate then applying the edit.
+  applied, Integrate then applying the edit. v581 (the user's decisions, done): (1) the red rule
+  and the warning name the window as Windows does (H₂-O₂); (2) a Stop holds its own card's files
+  alone, another card's run on; (3) on a card with no result of its windows applied, an edit is
+  applied as it is (nothing to keep), the files loaded after it integrated with it.
 - **Other gases from the raw chromatograms.** The Integration card fits H₂ and O₂ only (one
   window, 268–326 s, with the system peak at 310 s and the baseline step); N₂ and the
   others need windows of their own, as the Python's N₂ window (321–346 s, with the system
@@ -201,18 +204,11 @@ was proposed; nothing here is in the code yet.
   of a negative E_g. Whether that is a real consumption or an artefact (a leak, a drift of
   the baseline) is the user's call: a warning like DRS's, the bar hidden, or as it is.
   Decided for v567: no new message; left as it is until the user says.
-- **Tables alone have no grip: two tables unpaired cannot be paired again by hand (looked at
-  in v574, as v544 made it).** While no raw chromatograms and no pair are in the list, its
-  files have no grip of their own (gc.js traceRows: no `parts`), the list exactly v543's. So
-  v544 meant it: its prototype's notes ("While no raw chromatograms and no pair are loaded,
-  `parts` is null and the list is exactly v543's"), the comment it wrote ("as to v543") and
-  gctcd-ui's test "tables alone: no grip", unchanged since (`git log -S`: v544, then v557's
-  split). Its other side: two tables paired by their names (a table named `…_TCD`) and
-  unpaired by hand leave tables alone, the grips go with the pair, and the tables cannot be
-  paired by hand again (an undo can). Two tables paired serve nothing (the second is
-  ignored), so only the way back is lost. Proposed, for the user: the grips whenever the list
-  has two files, whatever they are (the list then no longer v543's with tables alone), or
-  kept while the tab's history holds a pair. Left as it is meanwhile.
+- **Tables alone have no grip (v574, done in v581).** To v580, while no raw chromatograms and no
+  pair were in the list, its files had no grip of their own (as v544 made it, its test "tables
+  alone: no grip"), so two tables paired by their names and unpaired by hand could not be paired
+  again by hand. The user decided: the grips always, a list of tables alone too (and EPR's, made
+  as GC's in v581). Done.
 
 ## EPR
 
@@ -221,15 +217,23 @@ was proposed; nothing here is in the code yet.
 - The rest of what the module does not do yet (2D data, a non-linear field axis, spectra
   with and without a frequency on one axis, normalisation by the acquisition's gain,
   scans, power and modulation, the CSV's columns): [EPR-TODO.md](EPR-TODO.md).
-- **A pair named after an object's own property is lost (found in v563, as v562 has it).**
-  A drop's files are grouped by stem in a plain object (`epr-model.js` `groupsOf`): a pair
-  whose stem is a name every object has (`constructor`, `toString`, `valueOf`, …) finds
-  that property there instead of a group of its own, its files are written onto it, and
-  the pair is neither loaded nor said (no row, no alert); one whose stem is `__proto__`
-  writes its files onto every object's prototype (`({}).dsc` is that `.DSC` file from then
-  on, until the page is reloaded). Checked on v562 in the browser. Proposed: groups in a
-  `Map` (or an object with no prototype), so such a pair loads as any other. Left as it is
-  meanwhile (a visible change).
+- **A pair named after an object's own property is lost (found in v563, bug 23, done in v581).**
+  A drop's files were grouped by stem in a plain object (`epr-model.js` `groupsOf`): a pair
+  whose stem is a name every object has (`constructor`, `toString`, `valueOf`, …) found that
+  property there, and was neither loaded nor said; one whose stem is `__proto__` wrote its
+  files onto every object's prototype. From v581 the files pair as GC's do
+  (`filelist-model.js` `autoPair`, a `Map`), and such a pair loads as any other. The same
+  pattern elsewhere, keyed by file names, fixed with it: XRPD's Rietveld results and the
+  patterns a phase leaves out (`xrd-rv*.js`, `xrd-model.js`: read and written as own keys,
+  `db.js` `own`, `setOwn`; a pattern named `constructor` left every phase out, a result under
+  `__proto__` was lost), and `db.js`'s copies of a state (`encode`, `decode`, `park`, a project
+  file's: a key `__proto__` set the copy's prototype).
+- **The EPR list as GC's (v581, done).** A row a `.DTA` and its `.DSC`, both under File, each
+  with its grip: a half waits in the list (to v580 refused), paired later by its name or by a
+  grip whatever the names, swapped, unpaired; the row's menu's download a pair's two files (a
+  zip, as GC's pair rows). Left: a row's label kept where its first file headed a row whose
+  label was renamed; any other row made anew takes its `.DSC`'s title, so a label typed on the
+  second file of a pair is lost when it is unpaired (GC keeps a label a file).
 
 ## General
 

@@ -2,6 +2,7 @@ import { esc, fileAlertHtml, notesHtml, fileLine, NOT_READ, bytesOf, includedOf,
 import { createDeck } from './cards.js';
 import { decodeText } from './textdata.js';
 import { markSeen, keepSeen } from './alerts.js';
+import { dropPart } from './filelist-model.js';
 
 /* =========================================================
    MODULE KIT
@@ -30,7 +31,7 @@ import { markSeen, keepSeen } from './alerts.js';
                        none, inKeys(['files'])
      slots()           the per-sample arrays (utils: INCLUDED FILES)
      listed(op)        the list changed ('remove', 'reorder', 'include', 'palette',
-                       'clear'), before refresh: what the module does first
+                       'clear', 'pair'), before refresh: what the module does first
      refresh()         the files changed: the module draws again (it calls showFiles
                        first, and commits)
      redraw(what)      a file's 'label', 'color' or 'note' (noteChange) changed: what is
@@ -44,6 +45,16 @@ import { markSeen, keepSeen } from './alerts.js';
      traces(cb)        the trace list's rows and callbacks, { rows, cb }, where a file is
                        not one trace (Custom: a row a series): `cb` the kit's, for the
                        module to keep or override; none, a row a file with the kit's
+     pairs             where a row may be two files (GC's table and its raw chromatograms,
+                       EPR's .DTA and .DSC: v581, out of v580's gc.js), { files(rec) the
+                       row's files in order, parts(rec) FILE's lines ([{ name, warn }],
+                       utils.js renderUnifiedFileList's callbacks.parts), regroup(rows) the
+                       module's records made of the rows given anew (arrays of files), row(rec)
+                       the record as the list shows it (none: as it is) }: every row's files
+                       in FILE, each with a grip of its own, whatever the rows hold (v581: to
+                       v580 GC's only while raw chromatograms or a pair were loaded); a file
+                       dragged by its grip onto another pairs or swaps them, off every file it
+                       stands alone (filelist-model.js dropPart), a step ('pair')
      noteChange(i, v, again)  a select in a file's note changed (GC's Sample): file
                        all[i], `v` its value; the module takes it, then the list is drawn
                        again (the other rows' choices may follow) and redraw('note'), a step
@@ -120,12 +131,18 @@ export function moduleKit(mod, o){
     onPaletteChange(colors){ all.forEach((f, i)=>{ f.color = colors[i % colors.length]; }); changed('palette'); },
     onRemoveAll(){ all.length = 0; clearAlerts(); if (o.cleared) o.cleared(); changed('clear'); },
   };
+  const pairs = o.pairs && { rows: ()=> o.pairs.row ? all.map(o.pairs.row) : all, cb: { ...cb, parts: o.pairs.parts, onPartDrop(from, to){
+    const rows = all.map(o.pairs.files), out = dropPart(rows, from, to);
+    if (out === rows) return;
+    o.pairs.regroup(out);
+    changed('pair');
+  } } };
   // The files changed: the included ones taken again, the list and the alerts drawn. Until
   // then `files` holds the ones included before the change.
   kit.showFiles = ()=>{
     files.splice(0, files.length, ...includedOf(all, isSample));
     setTabLoaded(key, all.length);
-    const list = o.traces ? o.traces(cb) : { rows: all, cb };
+    const list = pairs ? { rows: pairs.rows(), cb: pairs.cb } : o.traces ? o.traces(cb) : { rows: all, cb };
     renderUnifiedFileList($(mod + 'FileTableWrap'), list.rows, list.cb, o.note, o.noteHead);
     kit.drawAlerts();
   };

@@ -214,22 +214,24 @@ test('p: all/one, files added and left out, undo and redo, a project saved befor
 });
 
 // The parameter table's headers and date field, as laid out: each header's content within
-// its cell, its height, the top of its name and of its pill; the select's box.
+// its cell, its height, the top of its name and of its pill (p's against Q's); the selects'
+// boxes on their pills' middles, m's pill (v581: its header a select, m or A) level with p's.
 const layout = page => page.evaluate(()=>{
   const t = document.querySelectorAll('#tab-gc .gc-param-table')[1], ths = [...t.querySelectorAll('thead .gc-th')];
   const top = h =>{ const r = document.createRange(); r.selectNodeContents(h.firstElementChild.firstChild); return r.getClientRects()[0].top; };
-  const box = e => e.getBoundingClientRect();
-  const dc = t.querySelector('.gc-date-cell'), sel = t.querySelector('.gc-unit'), p = sel.closest('.gc-th'), m = ths[1];
+  const box = e => e.getBoundingClientRect(), mid = e =>{ const b = box(e); return (b.top + b.bottom)/2; }, chip = h => h.querySelector('.mode-chip');
+  const dc = t.querySelector('.gc-date-cell'), sel = t.querySelector('.gc-unit'), p = sel.closest('.gc-th'), q = ths[2], ns = t.querySelector('.gc-norm'), m = ns.closest('.gc-th');
   return {
     width: Math.round(box(t).width),
     over: ths.filter(h=> h.scrollWidth > h.clientWidth).map(h=> h.textContent.trim()),
     tall: Math.max(...ths.filter(h=> h.querySelector('.mode-chip')).map(h=> box(h).height)),
     dateOver: dc.scrollWidth > dc.clientWidth || dc.firstElementChild.scrollWidth > dc.clientWidth - 16 + 0.5,
-    level: { name: top(p) - top(m), pill: box(p.querySelector('.mode-chip')).top - box(m.querySelector('.mode-chip')).top, height: box(p).height - box(m).height },
-    unit: (box(sel).top + box(sel).bottom)/2 - (box(p.querySelector('.mode-chip')).top + box(p.querySelector('.mode-chip')).bottom)/2,
+    level: { name: top(p) - top(q), pill: box(chip(p)).top - box(chip(q)).top, height: box(p).height - box(q).height },
+    unit: mid(sel) - mid(chip(p)),
+    mPill: Math.round((box(chip(m)).top - box(chip(p)).top)*2)/2, norm: mid(ns) - mid(chip(m)),
   };
 });
-test('p: the table at 1300 px and at 1000 px, the least width it is laid out for', async ()=>{
+test('p: the table at 1300 px and at 1060 px, the least width it is laid out for', async ()=>{
   const { page, errors, close } = await env.page();
   try {
     await openModule(page, 'gc');
@@ -240,18 +242,20 @@ test('p: the table at 1300 px and at 1000 px, the least width it is laid out for
     assert.deepEqual(l.over, []);
     assert.ok(l.tall < 22, `one line: ${l.tall} px`);
     assert.ok(!l.dateOver, 'the date field whole');
-    assert.deepEqual(l.level, { name: 0, pill: 0, height: 0 }, 'p\'s name and pill level with m\'s');
+    assert.deepEqual(l.level, { name: 0, pill: 0, height: 0 }, 'p\'s name and pill level with Q\'s');
     assert.ok(Math.abs(l.unit) <= 1.5, `the unit's box on the pill's middle: ${l.unit}`);
-    // At 1000 px (the least width style.css is to give it; forced here) the names on two
-    // lines where they must, every pill still beside its name, the date field whole.
-    await page.addStyleTag({ content: '.gc-param-table { min-width: 1000px; }' });
+    assert.ok(Math.abs(l.norm) <= 1.5 && l.mPill === 0, `m's select on its pill's middle, its pill level with p's: ${JSON.stringify(l)}`);
+    // At 1060 px (the least width style.css gives it, v581: 1000 to v580, before m's select)
+    // the names on two lines where they must, every pill still beside its name and on their
+    // last line, level with m's select, which cannot wrap; the date field whole.
     await page.setViewportSize({ width: 900, height: 900 });
     await settle(page);
     l = await layout(page);
-    assert.equal(l.width, 1000);
+    assert.equal(l.width, 1060);
     assert.deepEqual(l.over, []);
     assert.ok(!l.dateOver, 'the date field whole');
-    assert.deepEqual(l.level, { name: 0, pill: 0, height: 0 }, 'p\'s name and pill level with m\'s');
+    assert.deepEqual(l.level, { name: 0, pill: 0, height: 0 }, 'p\'s name and pill level with Q\'s');
+    assert.ok(Math.abs(l.norm) <= 1.5 && l.mPill === 0, `m's select on its pill's middle, its pill level with p's: ${JSON.stringify(l)}`);
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });

@@ -1,4 +1,4 @@
-# Avvisi ed errori: revisione (v565 → v574)
+# Avvisi ed errori: revisione (v565 → v581)
 
 Mappa rifatta dal codice di v565 (331 voci: 309 messaggi con testo, 3 flash, 4 solo tooltip, 15 casi muti). Sostituisce la revisione di v540: delle sue 79 proposte 73 valevano ancora, sono riprese qui sotto. I testi dell'interfaccia restano in inglese.
 
@@ -36,7 +36,7 @@ Due punti tra nome e motivo, niente parentesi intorno al motivo, niente "—" n�
 | U | Decisione |
 |---|---|
 | U1 | "Già caricato": ogni modulo tiene il suo criterio (nome, file sorgente, radice, contenuto); si unifica solo il testo |
-| U2 | Mezza coppia: nella Calibration GC il file aspetta l'altra metà; in EPR è rifiutato, nel box `Not loaded:` col motivo (`its .DSC is missing: drop the two together.`) |
+| U2 | Mezza coppia: il file aspetta l'altra metà, nella Calibration GC e (da v581, decisione dell'utente: "la lista dei file EPR come quella GC") in EPR, dove resta nella lista, non disegnato, detto in `Loaded, to check:` finché la sua metà non arriva o non gli viene trascinata sopra; fino a v580 in EPR era rifiutato, nel box `Not loaded:` (`its .DSC is missing: drop the two together.`) |
 | U3 | Avvisi di lettura calcolati dai file presenti in tutti i moduli, × per file che regge undo/redo (X04, S04, D02) |
 | U4 | Classificazione info/warn degli avvisi di Rietveld e CIF come in X11/X12; risultati salvati senza tipo letti come warn |
 | U5 | Tassi negativi in GC: nessun nuovo avviso; domanda aperta all'utente (BACKLOG) |
@@ -130,8 +130,8 @@ Trovati dopo la mappa, fatti in v571: (i) tabella GC con date ma nessun valore d
 
 | ID | Modifica | Stato |
 |---|---|---|
-| E01 | Coppia rifiutata nominata dai file: `{stem}.DTA + {stem}.DSC: {reason}.` | fatto in v567 |
-| E02 | Mezza coppia nel box `Not loaded:`: `{file}: its .DSC is missing: drop the two together.` (e simmetrico) | fatto in v567 |
+| E01 | Coppia che non si legge nominata dai file: `{stem}.DTA + {stem}.DSC: {reason}.` | fatto in v567 (nel box `Not loaded:`); da v581 la coppia resta nella lista, non disegnata, warn `Loaded, to check:` `{file}.DTA + {file}.DSC: {reason}: not plotted.` (una coppia fatta a mano che non si legge è detta allo stesso modo) |
+| E02 | Mezza coppia: `{file}: its .DSC is missing: …` (e simmetrico) | fatto in v567 (nel box `Not loaded:`, `…: drop the two together.`); da v581 (U2) aspetta nella lista, warn `Loaded, to check:` `{file}: its .DSC is missing: not plotted until it is paired; drop it, or drag one onto it by its own grip.`, la nota con la sua chiave (`alone`) come quelle delle coppie GC (v573) |
 | E03 | Senza MWFQ (muto) → info `{file}: no microwave frequency (MWFQ): plotted on the field measured, not at 9.5 GHz; no g axis.` | fatto in v567 |
 | I01 | Coppie di colonne scartate (muto) → warn `{file}: {n} pairs of columns left out: fewer than 3 points.` | fatto in v567 |
 | I02 | `none: click the plot` → `none` | fatto in v567 |
@@ -180,4 +180,17 @@ Bug 20 (risultati del "metodo precedente" mostrati dopo un cambio delle finestre
 | Calibration: `Integrating the standards… ({n} left)` | in corsa la riga del lavoro (`Integrating… {i} / {n} chromatograms · {file}`); ferma `{n} chromatograms of the standards to integrate.` | grigio |
 | Calibration senza standard: `No standards: each pair takes the GC software's scale (k).` | tolto: la finestra vuota mostra solo la drop zone e ciò che una drop ha detto | — |
 
-I nomi nel box Windows hanno i pedici (`H₂-O₂ fit`, `H₂`, `O₂`; S310 com'è), anche nelle aria-label e nella riga delle finestre in attesa. Restano col nome della chiave la riga rossa di una finestra troppo corta (`The H2O2 window must start at least 5 s before it ends.`) e l'avviso di un bordo dentro un picco vicino (BACKLOG).
+I nomi nel box Windows hanno i pedici (`H₂-O₂ fit`, `H₂`, `O₂`; S310 com'è), anche nelle aria-label e nella riga delle finestre in attesa. Restano col nome della chiave la riga rossa di una finestra troppo corta (`The H2O2 window must start at least 5 s before it ends.`) e l'avviso di un bordo dentro un picco vicino (BACKLOG): fatti in v581, sotto.
+
+## Decisioni dell'utente (v581)
+
+| Cosa | Prima | Dopo (v581) | Tipo |
+|---|---|---|---|
+| Mezza coppia EPR (U2, E02) | error `Not loaded:` `{file}: its .DSC is missing: drop the two together.` | warn `Loaded, to check:` `{file}: its .DSC is missing: not plotted until it is paired; drop it, or drag one onto it by its own grip.` (e simmetrico); la riga resta nella lista con la sua maniglia | warn |
+| Coppia EPR che non si legge (E01) | error `Not loaded:` `{stem}.DTA + {stem}.DSC: {reason}.` | warn `Loaded, to check:` `{a}.DTA + {b}.DSC: {reason}: not plotted.` (anche fatta a mano, coi nomi diversi) | warn |
+| Due file EPR dello stesso tipo appaiati a mano | — | warn `{a}.DTA + {b}.DTA: two .DTA files paired: not plotted; drag a file by its own grip to pair it.` (come le due tabelle GC) | warn |
+| Le note delle righe EPR | — | con la loro chiave (`alone`, `pair:{file}`): la × marca quel problema; una riga rifatta (file cambiati) riparte senza segni | — |
+| Riga rossa di una finestra GC troppo corta | `The H2O2 window must start at least 5 s before it ends.` | `The H₂-O₂ window must start at least 5 s before it ends.` | riga rossa |
+| Bordo di una finestra GC dentro un picco vicino | `The H2O2 window (…) reaches S264 (…), which its model has no peak for: the fit degrades there.` | `The H₂-O₂ window (…) reaches …` | warn compatto |
+| GC, rate non normalizzate (m o A nell'intestazione della colonna; un valore vuoto è nessuno) | — | info compatto sotto i parametri: `No {m\|A} for {campioni}: the rates are not normalised, in µmol h⁻¹ and µmol.` | info |
+| Regola del campo m o A rifiutato (0, sotto, non un numero) | `A number, at least 0.001.` | `A number, at least 0.001, or none (empty).` (vuoto è un valore) | riga rossa |

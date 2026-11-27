@@ -3,7 +3,8 @@ import { Plot, svgEl } from './plot.js';
 import { cardInfo, fileSafe, nameDownloads } from './cards.js';
 import { moduleKit, wideCsv, isObj, num, numStr, oneOf, dateOf, arrOf, without, cardList } from './modkit.js';
 import { CSV_ICON, plotWrap, viewOf, setView, viewKey, chipRow, toggleChip, valueBars } from './modcharts.js';
-import { autoPair, dropPart } from './gc-pair.js';
+import { autoPair } from './filelist-model.js';
+import { sideOf } from './gc-pair.js';
 import { createInteg, INTEG_INFO } from './gc-integ.js';
 import * as M from './gc-model.js';
 import * as H from './gc-html.js';
@@ -149,8 +150,9 @@ function kitHooks(S){
     // (a record as a state holds it, before the restore takes it: a place among the per-sample
     // arrays unless it is raw chromatograms, so that one left out takes its entries with it)
     rawSample: f => !M.isTcd(f),
-    // A pair is one row, its two files in FILE, each with a grip of its own (v544).
-    traces: cb => traceRows(S, cb),
+    // A pair is one row, its two files in FILE, each with a grip of its own (v544; always, a
+    // list of tables alone too: v581).
+    pairs: pairsOf(S),
     // Every card's per-sample arrays. An excluded file holds its own values; one with none
     // (never so far, or in a card added since) gets the upload defaults.
     slots: ()=> slotsAll(S),
@@ -216,27 +218,22 @@ function sampleNames(S){
   S.root.querySelectorAll('#gcFileTableWrap select.file-sample option').forEach(o=>{ const g = by.get(o.value); if (g && o.textContent !== g.label) o.textContent = g.label; });
 }
 
-/* ---- PAIRS (gc-model.js) ---- */
-// The trace list's rows: a pair's its record with both files' bytes for its download, its
-// files in FILE (none while no raw chromatograms and no pair are loaded: as to v543).
-function traceRows(S, cb){
-  const rows = S.all.map(r=> r.mate ? { ...r, rawFiles: [{ name: r.name, bytes: r.rawBytes }, { name: r.mate.name, bytes: r.mate.rawBytes }] } : r);
-  const paired = S.all.some(r=> r.mate || M.isTcd(r));
-  return { rows, cb: { ...cb, parts: paired ? M.partsOf : null, onPartDrop: (from, to)=> onPartDrop(S, from, to) } };
-}
-// A file dragged by its own grip (gc-pair.js dropPart): paired, swapped or alone.
-function onPartDrop(S, from, to){
-  const rows = S.all.map(M.rowFiles), out = dropPart(rows, from, to);
-  if (out === rows) return;
-  M.regroup(S.all, S.files, slotsAll(S), out);
-  each(S, c=> c.unselect());
-  M.relink(S.all);
-  afterFilesChange(S);
-}
+/* ---- PAIRS (gc-model.js) ----
+   The trace list's rows (modkit.js pairs): a pair's its record with both files' bytes for its
+   download, every row's files in FILE, each with its grip, a list of tables alone too (v581:
+   to v580 none while no raw chromatograms and no pair were loaded, as to v543, and two tables
+   unpaired by hand could not be paired again). A file dragged by its grip (filelist-model.js
+   dropPart): paired, swapped or alone, the samples' values following (regroup; the cards'
+   samples picked let go, listed). */
+const pairsOf = S => ({
+  files: M.rowFiles, parts: M.partsOf,
+  row: r => r.mate ? { ...r, rawFiles: [{ name: r.name, bytes: r.rawBytes }, { name: r.mate.name, bytes: r.mate.rawBytes }] } : r,
+  regroup(rows){ M.regroup(S.all, S.files, slotsAll(S), rows); M.relink(S.all); },
+});
 // The records a drop read, paired by their names and placed (modkit dropText's collect).
 function collect(S, recs){
   if (!recs.length) return;
-  const rows = autoPair(S.all.map(M.rowFiles), recs);
+  const rows = autoPair(S.all.map(M.rowFiles), recs, sideOf);
   M.regroup(S.all, S.files, slotsAll(S), rows);
   M.relink(S.all);
   if (S.all.some(M.hasTcd) && !cards(S).some(a=> a.type === 'integ')){
@@ -383,13 +380,13 @@ function wireUnit(S, C, wrap){
     S.kit.commit();
   });
 }
-// What the rates are normalised by: the m column shown again as the one in force, the
-// rates and their labels worked out anew; the focus kept on the select (an arrow key
-// on it is a change at once).
+// What the rates are normalised by, m or A (its header, v581): the column shown again as the
+// one in force, the rates and their labels worked out anew, a step; the focus kept on the
+// select (an arrow key on it is a change at once).
 function wireNorm(S, C, wrap){
   const P = C.P, normIn = wrap.querySelector('.gc-norm');
   normIn.addEventListener('change', ()=>{
-    P.norm = oneOf(normIn.value, M.NORMS);
+    P.normBy = oneOf(normIn.value, M.PER);
     renderTable(S, C);
     wrap.querySelector('.gc-norm').focus({ preventScroll: true });
     compute(S, C); S.kit.commit();
@@ -412,23 +409,24 @@ function modeToggled(S, C, btn){
   renderTable(S, C); compute(S, C); S.kit.commit();
 }
 // m/A/Q/T/p inputs (shared + per-sample) — recompute the whole series on a valid change.
-function wireNum(S, C, inp, apply, min = 0.001, max = null){
-  guardNumericInput(inp, { min, max });
+// (`blank`: m and A, a field left empty is none, null: v581)
+function wireNum(S, C, inp, apply, min = 0.001, max = null, blank = false){
+  guardNumericInput(inp, { min, max, blank });
   const shared = inp.classList.contains('gcShared');
   inp.addEventListener('change', ()=>{
-    apply(+inp.value);
+    apply(inp.value.trim() === '' ? null : +inp.value);
     if (shared) mirrorShared(C, inp.dataset.f, inp.value);
     compute(S, C); S.kit.commit();
   });
 }
 function wireNums(S, C, wrap){
   const P = C.P, all = sel => wrap.querySelectorAll(sel);
-  all('.gcShared[data-f="m"]').forEach(inp=> P.mMode==='all' && wireNum(S, C, inp, v=> P.mShared=v));
+  // m, or A where it is in force (v540): above 0, or empty, none (v581).
+  all('.gcShared[data-f="m"]').forEach(inp=> P.mMode==='all' && wireNum(S, C, inp, v=> P.mShared=v, 0.001, null, true));
   all('.gcShared[data-f="q"]').forEach(inp=> P.qMode==='all' && wireNum(S, C, inp, v=> P.qShared=v));
-  all('.gcCell[data-f="m"]').forEach(inp=>{ if(P.mMode==='one'){ const i=+inp.dataset.i; wireNum(S, C, inp, v=> P.ms[i]=v); }});
-  // A, where it is in force, as m: above 0 (v540).
-  all('.gcShared[data-f="a"]').forEach(inp=> P.aMode==='all' && wireNum(S, C, inp, v=> P.aShared=v));
-  all('.gcCell[data-f="a"]').forEach(inp=>{ if(P.aMode==='one'){ const i=+inp.dataset.i; wireNum(S, C, inp, v=> P.As[i]=v); }});
+  all('.gcCell[data-f="m"]').forEach(inp=>{ if(P.mMode==='one'){ const i=+inp.dataset.i; wireNum(S, C, inp, v=> P.ms[i]=v, 0.001, null, true); }});
+  all('.gcShared[data-f="a"]').forEach(inp=> P.aMode==='all' && wireNum(S, C, inp, v=> P.aShared=v, 0.001, null, true));
+  all('.gcCell[data-f="a"]').forEach(inp=>{ if(P.aMode==='one'){ const i=+inp.dataset.i; wireNum(S, C, inp, v=> P.As[i]=v, 0.001, null, true); }});
   all('.gcCell[data-f="q"]').forEach(inp=>{ if(P.qMode==='one'){ const i=+inp.dataset.i; wireNum(S, C, inp, v=> P.Qs[i]=v); }});
   all('.gcShared[data-f="t"]').forEach(inp=> P.tMode==='all' && wireNum(S, C, inp, v=> P.tShared=v, -273));
   all('.gcCell[data-f="t"]').forEach(inp=>{ if(P.tMode==='one'){ const i=+inp.dataset.i; wireNum(S, C, inp, v=> P.Ts[i]=v, -273); }});
@@ -515,7 +513,7 @@ const noSample = (S, C)=>{ if (S.files.length) return false; blank(S, C); return
 function blank(S, C){
   C.dataTables = []; C.costResults = []; C.plot1 = null; C.prevView = null;
   ['Svg1', 'SvgRate', 'SvgCum', 'SvgBar'].forEach(id=> unplot(C.$(id)));
-  ['Legend', 'ResLegend', 'BarLegend', 'Src'].forEach(id=>{ C.$(id).innerHTML = ''; });
+  ['Legend', 'ResLegend', 'BarLegend', 'Src', 'NormInfo'].forEach(id=>{ C.$(id).innerHTML = ''; });
   gasEls(C).forEach(el=>{ el.innerHTML = ''; });
   showRates(S, C);
 }
@@ -535,17 +533,20 @@ function compute(S, C, preserveView){
   if (drawable(S)) renderPlots(S, C); else updateRegression(S, C);
 }
 // The data, from the card's parameters and each sample's source of values (srcFor), kept
-// (tablesKept); where they came from said at the card's top.
+// (tablesKept), normalised by what the samples have of the quantity chosen (gc-model.js
+// normKey); where they came from said at the card's top, the samples lacking it under the
+// parameters (v581).
 function computeTables(S, C){
-  const P = C.P;
+  const P = C.P, nk = M.normKey(P, S.files);
   C.dataTables = S.files.map((f,h)=>{
     const src = srcFor(S, C.a, f), G = src && src.gas ? src.gas : f.gas;
     const ks = Object.keys(G), lightOn = P.lightOnDates[h];
-    const key = M.tablesKey(U, P, f, h, G, lightOn);
-    const made = tablesKept(ks.length ? G[ks[0]] : null, key, ()=> M.tablesOf(U, P, f, h, lightOn, G));
+    const key = M.tablesKey(U, P, f, h, G, lightOn, nk);
+    const made = tablesKept(ks.length ? G[ks[0]] : null, key, ()=> M.tablesOf(U, P, f, h, lightOn, nk, G));
     return M.dataTable(made, f, src);
   });
   paintSrc(S, C);
+  C.$('NormInfo').innerHTML = H.normInfoHtml(P, S.files, HU);
 }
 // (gc-html.js srcAlertsHtml, naming the Integration card above)
 function paintSrc(S, C){
@@ -617,6 +618,8 @@ function onGasChip(S, C, e){
 }
 
 /* ---- The card's plots ---- */
+// What the card's rates are in (gc-model.js NORM): by mass, by area, or not normalised.
+const units = (S, C)=> M.NORM[M.normKey(C.P, S.files)];
 /* One line per sample per gas, the sample's colour throughout and the gas told by
    the dash pattern, so a sample stays recognisable across both gases. The name
    carries the gas only when more than one is on show (gc-model.js seriesName). */
@@ -632,7 +635,7 @@ function drawGasLines(plot, tables, shown, key){
 }
 function renderPlots(S, C){
   const legend = C.$('Legend'); legend.innerHTML='';
-  C.plot1 = new Plot(C.$('Svg1'), {xlabel:'Time (h)', ylabelSvg:M.NORM[C.P.norm].rateSvg});
+  C.plot1 = new Plot(C.$('Svg1'), {xlabel:'Time (h)', ylabelSvg:units(S, C).rateSvg});
   const resLegend = C.$('ResLegend'); resLegend.innerHTML='';
   legend.innerHTML   = C.dataTables.map(d=> H.gasLegendHtml(d, M.shownGases(C.P, S.files, 'a'), HU)).join('');
   resLegend.innerHTML = C.dataTables.map(d=> H.gasLegendHtml(d, M.shownGases(C.P, S.files, 'r'), HU)).join('');
@@ -712,9 +715,9 @@ function refreshRows(C){
 function drawResultPlots(S, C){
   const cut = M.cutTables(C.P, C.dataTables), x = M.cutRange(U, cut);
   if (!x) return;
-  const shown = M.shownGases(C.P, S.files, 'r');
-  resultPlot(C, 'SvgRate', M.NORM[C.P.norm].rateSvg, 'Fm', cut, shown, x);
-  resultPlot(C, 'SvgCum',  M.NORM[C.P.norm].cumSvg,  'FmInt', cut, shown, x);
+  const shown = M.shownGases(C.P, S.files, 'r'), N = units(S, C);
+  resultPlot(C, 'SvgRate', N.rateSvg, 'Fm', cut, shown, x);
+  resultPlot(C, 'SvgCum',  N.cumSvg,  'FmInt', cut, shown, x);
 }
 function resultPlot(C, id, ylabelSvg, key, cut, shown, [tmin, tmax]){
   const svg = C.$(id);
@@ -735,7 +738,7 @@ function resultPlot(C, id, ylabelSvg, key, cut, shown, [tmin, tmax]){
    show draws nothing: the section's visibility is updateRegression's. */
 function drawBarChart(S, C){
   const svg = C.$('SvgBar'), sm = M.sampleRates(U, C.costResults, M.samplesOf(S.all, S.files));
-  valueBars(svg, { cats: sm, digits: 2, yLabel: M.NORM[C.P.norm].rateSvg, legend: C.$('BarLegend'),
+  valueBars(svg, { cats: sm, digits: 2, yLabel: units(S, C).rateSvg, legend: C.$('BarLegend'),
     series: M.barSeries(M.shownGases(C.P, S.files, 'r'), sm),
     chips: svg.closest('.plot-wrap').querySelector('.gc-gas-sel') });
 }

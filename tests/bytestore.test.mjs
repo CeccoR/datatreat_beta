@@ -421,10 +421,11 @@ test('an EPR pair whose .DTA bytes are not stored: its download says so, not a z
     await answer(page, 'ok');
     assert.deepEqual([said, got], [[], null]);
     const z = readZip((await dl(page, 'epr', 1)).buf);
-    assert.deepEqual(z.map(e=> e.name), ['e2.DSC', 'e2.DTA']);
-    assert.ok(z[0].data.equals(fs.readFileSync(E[2])) && z[1].data.equals(fs.readFileSync(E[3])));
+    // (a pair's files in the list's order, its .DTA first: v581)
+    assert.deepEqual(z.map(e=> e.name), ['e2.DTA', 'e2.DSC']);
+    assert.ok(z[0].data.equals(fs.readFileSync(E[3])) && z[1].data.equals(fs.readFileSync(E[2])));
     const all = readZip((await download(page, ()=> page.click('#eprFileTableWrap .download-all'))).buf);
-    assert.deepEqual(all.map(e=> e.name), ['e2.DSC', 'e2.DTA']);
+    assert.deepEqual(all.map(e=> e.name), ['e2.DTA', 'e2.DSC']);
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });

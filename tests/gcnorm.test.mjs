@@ -1,8 +1,12 @@
 /* GC: what a card's rates are normalised by (v540), the photocatalyst's mass (as to v539) or,
    for a film, its area. Every file here is made up for the test.
-   - One choice a card, "Normalize by: mass | area" on the injection delay's row; mass by
-     default. With area the m column is A (cm²), with its own all/one and per-sample values,
-     an area above 0 as a mass is (0, below it, no number refused).
+   - One choice a card, made in the m column's header (v581: to v580 "Normalize by: mass |
+     area" on the injection delay's row, gone), a select named for screen readers, m (mg) by
+     default, A (cm²); with A the column is A, with its own all/one and per-sample values, an
+     area above 0 as a mass is (0, below it, no number refused), or empty: none (v581).
+   - v581: the rates normalised where every included sample has a value of the one chosen;
+     with one lacking, not normalised (µmol h⁻¹ and µmol, the axis titles, the CSVs and
+     gc_info.csv's empty cell), a compact info under the parameters naming the samples.
    - The rates by hand: a gas's flow in µmol/h over A in cm² (µmol cm⁻² h⁻¹), over m in g
      (µmol g⁻¹ h⁻¹, v541: to v540 mmol g⁻¹ h⁻¹, µmol/h over m in mg, the numbers 1000 times
      smaller); the mean rate of constant concentrations over an interval, with area and with
@@ -25,9 +29,10 @@
    - Switching back and forth keeps both the masses and the areas, each with its all/one;
      the choice a step of the history (undo, redo) and a change unsaved ("*").
    - A project saved before v540 (no choice in its state) opens with mass and the same
-     CSVs, byte for byte; one saved with area opens with area and its areas; a choice
-     edited by hand to anything else opens with mass. Its rates and production, with mass, in
-     µmol: 1000 times the numbers it gave to v540. */
+     CSVs, byte for byte; v540–v580's choice, `norm`, a parameter no longer, ignored: opened
+     with m (v581, CLAUDE.md); one saved with A opens with A and its areas, an area none kept
+     so; a choice edited by hand to anything else opens with m. Its rates and production,
+     with mass, in µmol: 1000 times the numbers it gave to v540. */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { start, openModule, loadFiles, settle, moduleState, undo, history, download, readZip, parseCsv, saveAs, tabLabels } from './helpers.mjs';
@@ -54,7 +59,8 @@ const zip = async page =>{
   return Object.fromEntries(readZip(z.buf).map(e=> [e.name.replace(/^.* - /, ''), e.data.toString('utf8')]));
 };
 const csv = text => parseCsv(text.replace(/^﻿/, ''), ';');
-const head = async page => page.$eval('#tab-gc .gc-param-table:not(.gc-delay) thead th:nth-child(2) .gc-th span', e=> e.textContent);
+// (the m column's header: its select's choice, as it reads)
+const head = async page => page.$eval('#tab-gc .gc-param-table:not(.gc-delay) thead th:nth-child(2) .gc-th span select', e=> e.selectedOptions[0].textContent);
 // Each plot's y-axis title, its words without spaces (a long one is wrapped), and its superscripts.
 const yTitles = page => page.$$eval('#tab-gc svg[id$="Svg1"], #tab-gc svg[id$="SvgRate"], #tab-gc svg[id$="SvgCum"], #tab-gc svg[id$="SvgBar"]', svgs=> svgs.map(s=>{
   const t = s.querySelector('text.plot-label[transform]');
@@ -110,11 +116,15 @@ test('area: the rates per cm² by hand; every label and CSV header follows the c
     await openModule(page, 'gc');
     await loadFiles(page, 'gc', [film('film-a.csv', '0.05', '0.02'), film('film-b.csv', '0.08', '0.03')]);
     await saveAs(page, 'norm test');
-    // Mass by default, as before.
+    // m by default, as before, chosen in the column's header, named for screen readers; no
+    // "Normalize by" on the delay's row (v581).
     let c = await card(page);
-    assert.equal(c.norm, 'mass');
-    assert.equal(await page.inputValue(NORM), 'mass');
-    assert.deepEqual(await page.$$eval(`${NORM} option`, os=> os.map(o=> o.value)), ['mass', 'area']);
+    assert.equal(c.normBy, 'm');
+    assert.ok(!('norm' in c), 'no norm in the state');
+    assert.equal(await page.inputValue(NORM), 'm');
+    assert.deepEqual(await page.$$eval(`${NORM} option`, os=> os.map(o=> [o.value, o.textContent])), [['m', 'm (mg)'], ['A', 'A (cm²)']]);
+    assert.equal(await page.getByRole('combobox', { name: 'Normalize the rates by m or A' }).count(), 1);
+    assert.equal(await page.locator('#tab-gc .gc-delay').evaluate(t=> /Normalize/.test(t.textContent) || !!t.querySelector('select')), false, 'none on the delay\'s row');
     assert.equal(await head(page), 'm (mg)');
     await type(page, '#tab-gc .gcShared[data-f="start"]', '0.5');
     await type(page, '#tab-gc .gcShared[data-f="end"]', '1.2');
@@ -134,22 +144,37 @@ test('area: the rates per cm² by hand; every label and CSV header follows the c
     const h0 = (await history(page, 'gc')).index;
 
     // Area: the column A (cm²), 1 cm² for each to start with, the mass kept.
-    await norm(page, 'area');
+    await norm(page, 'A');
     c = await card(page);
-    assert.deepEqual([c.norm, c.aMode, c.aShared, c.As, c.mShared, c.mMode], ['area', 'all', 1, [1, 1], 20, 'all']);
+    assert.deepEqual([c.normBy, c.aMode, c.aShared, c.As, c.mShared, c.mMode], ['A', 'all', 1, [1, 1], 20, 'all']);
     assert.equal(await head(page), 'A (cm²)');
     assert.equal(await page.inputValue(SH('a')), '1');
     assert.equal(await page.locator(SH('m')).count(), 0, 'the m column is A');
     assert.equal(await page.evaluate(()=> document.activeElement && document.activeElement.classList.contains('gc-norm')), true, 'the focus kept on the select');
     assert.equal((await history(page, 'gc')).index, h0 + 1, 'a step of the history');
     assert.equal((await tabLabels(page))[0].endsWith('*'), true, 'a change unsaved');
-    // Refused as a mass is: 0, below it, no number.
+    // Refused as a mass is: 0, below it, no number; its rule says empty is none (v581).
     for (const v of ['0', '-1', 'abc']){
       await page.fill(SH('a'), v); await page.press(SH('a'), 'Enter');
       assert.ok(await page.$eval(SH('a'), e=> e.classList.contains('field-invalid')), `"${v}" shaken`);
+      assert.equal(await page.locator('.field-rule-float').textContent(), 'A number, at least 0.001, or none (empty).');
       await settle(page);
       assert.equal((await card(page)).aShared, 1, `"${v}" refused`);
     }
+    assert.equal(await page.locator('#tab-gc [id$="NormInfo"] .alert').count(), 0, 'every sample its A: nothing said');
+    /* Empty: none (v581). Not normalised, the rates as they flow (µmol h⁻¹, µmol), the
+       titles, the CSVs and gc_info.csv's cells so; an info under the parameters names the
+       samples. */
+    await type(page, SH('a'), '');
+    c = await card(page);
+    assert.deepEqual([c.aShared, await page.inputValue(SH('a'))], [null, '']);
+    assert.equal(await page.locator('#tab-gc [id$="NormInfo"] .alert.info.compact').innerText(), 'No A for film-a, film-b: the rates are not normalised, in µmol h⁻¹ and µmol.');
+    z = await zip(page); m = csv(z['mean_rates.csv']);
+    assert.equal(m[0][1], 'Mean H2 Production Rate (umol h^-1)');
+    assert.ok(Math.abs(meanOf(m, 'film-a', 'H2') - umolH(0.05)) <= 1e-6, `not normalised: ${meanOf(m, 'film-a', 'H2')} for ${umolH(0.05)}`);
+    assert.ok(csv(z['gc_raw.csv'])[0].includes('H2 Production (umol) [film-a]'));
+    assert.deepEqual(csv(z['gc_info.csv']).slice(0, 3).map(r=> r[1]), ['A (cm^2)', '', '']);
+    for (const y of await yTitles(page)) assert.equal(y.text, y.id === 'SvgCum' ? 'Production(µmol)' : 'ProductionRate(µmolh-1)', y.id);
     await type(page, SH('a'), '2.5');
     z = await zip(page); m = csv(z['mean_rates.csv']);
     assert.equal(m[0][1], 'Mean H2 Production Rate (umol cm^-2 h^-1)');
@@ -174,9 +199,13 @@ test('area: the rates per cm² by hand; every label and CSV header follows the c
       assert.equal(y.text, cum ? 'Production(µmolcm-2)' : 'ProductionRate(µmolcm-2h-1)', y.id);
       assert.deepEqual(y.sup, cum ? ['-2'] : ['-2', '-1'], y.id + ': superscripts');
     }
-    // Per sample: A one each, film-b's 4 cm²; its rate halves against 2 cm².
+    // Per sample: A one each, film-b's 4 cm²; its rate halves against 2 cm². One emptied: that
+    // one named, not normalised; given again, normalised.
     await page.click('#tab-gc .gc-toggle[data-pair="a"]'); await settle(page);
+    await type(page, CELL(1, 'a'), '');
+    assert.equal(await page.locator('#tab-gc [id$="NormInfo"]').innerText(), 'No A for film-b: the rates are not normalised, in µmol h⁻¹ and µmol.');
     await type(page, CELL(1, 'a'), '4');
+    assert.equal(await page.locator('#tab-gc [id$="NormInfo"] .alert').count(), 0);
     c = await card(page);
     assert.deepEqual([c.aMode, c.As], ['one', [2.5, 4]]);
     m = csv((await zip(page))['mean_rates.csv']);
@@ -192,9 +221,9 @@ test('area: the rates per cm² by hand; every label and CSV header follows the c
     assert.deepEqual(await barLabels(page), [h2, o2].map(a=> `${mean(a).toFixed(2)}±${sd(a).toFixed(2)}`), 'area with replicates: the bar labels');
 
     // Back to mass: the masses as they were, the labels and the numbers mass's again.
-    await norm(page, 'mass');
+    await norm(page, 'm');
     c = await card(page);
-    assert.deepEqual([c.norm, c.mShared, c.mMode, c.aMode, c.As], ['mass', 20, 'all', 'one', [2.5, 4]], 'both kept');
+    assert.deepEqual([c.normBy, c.mShared, c.mMode, c.aMode, c.As], ['m', 20, 'all', 'one', [2.5, 4]], 'both kept');
     assert.equal(await head(page), 'm (mg)');
     assert.equal(await page.inputValue(SH('m')), '20');
     z = await zip(page); m = csv(z['mean_rates_by_file.csv']);
@@ -203,16 +232,18 @@ test('area: the rates per cm² by hand; every label and CSV header follows the c
     assert.deepEqual(csv(z['gc_info.csv'])[0][1], 'm (mg)');
     await massTitles(page);
     // And to area again: the areas per sample as they were.
-    await norm(page, 'area');
+    await norm(page, 'A');
     assert.deepEqual(await page.$$eval('#tab-gc .gcCell[data-f="a"]', is=> is.map(i=> i.value)), ['2.5', '4']);
-    // Undo and redo the choice.
+    // Undo and redo the choice: one step each way.
+    const h1 = (await history(page, 'gc')).index;
     await undo(page);
-    assert.equal((await card(page)).norm, 'mass');
-    assert.equal(await page.inputValue(NORM), 'mass');
+    assert.equal((await history(page, 'gc')).index, h1 - 1);
+    assert.equal((await card(page)).normBy, 'm');
+    assert.equal(await page.inputValue(NORM), 'm');
     assert.equal(await head(page), 'm (mg)');
     await undo(page, true);
-    assert.equal((await card(page)).norm, 'area');
-    assert.equal(await page.inputValue(NORM), 'area');
+    assert.equal((await card(page)).normBy, 'A');
+    assert.equal(await page.inputValue(NORM), 'A');
     assert.deepEqual(await page.$$eval('#tab-gc .gcCell[data-f="a"]', is=> is.map(i=> i.value)), ['2.5', '4']);
     assert.deepEqual(errors, []);
   } finally { await close(); }
@@ -277,7 +308,7 @@ test('the instructions: from the reading to the rates, numbered steps in a box o
       ['x={table(frac(c,100),|c in %mol;c⋅sup(10,−6),|c in ppm)'],
       ['sub(V,m)=frac(R(T+273.15),p/101325)', 'over(n,˙)=frac(Q,1000)⋅frac(60,sub(V,m))'],
       ['F=x⋅over(n,˙)⋅sup(10,6)'],
-      ['r={table(frac(F,m/1000),|by mass;frac(F,A),|by area)'],
+      ['r={table(frac(F,m/1000),|by mass;frac(F,A),|by area;F,|not normalised)'],
       ['t=frac(sub(t,inj)+Δsub(t,delay)−sub(t,on),3600)'],
       ['P(t)=subsup(∫,sub(t,s),t)r dsup(t,′)', 'P(t)=underover(∑,i=0,n−1)frac(sub(r,i)+sub(r,i+1),2)⋅(sub(t,i+1)−sub(t,i))'],
       ['over(r,¯)=frac(P(sub(t,e)),sub(t,e)−sub(t,s))'],
@@ -287,7 +318,7 @@ test('the instructions: from the reading to the rates, numbered steps in a box o
     assert.equal(S[1].lines[1], `At 1 atm, Vm is ${(R*273.15).toFixed(3)} L mol⁻¹ at 0 °C and ${(R*298.15).toFixed(3)} L mol⁻¹ at 25 °C.`);
     assert.match(S[1].lines[0], /Q: mL min⁻¹, at the controller's reference T and p/);
     assert.match(S[2].lines[1], /^Assumed: the carrier's flow n˙ is the total flow leaving the reactor.*\(ppm to a few %mol\)\.$/);
-    assert.match(S[3].lines[0], /^r: µmol g⁻¹ h⁻¹ with m in mg \(1000 mg g⁻¹\), or µmol cm⁻² h⁻¹ with A in cm²\.$/);
+    assert.match(S[3].lines[0], /^r: µmol g⁻¹ h⁻¹ with m in mg \(1000 mg g⁻¹\), µmol cm⁻² h⁻¹ with A in cm², or µmol h⁻¹ not normalised\.$/);
     assert.match(S[4].lines[1], /^At light-on, t=0: a point with the last reading before it \(r=0 if there is none\)\.$/);
     // The example, 0.05 %mol of 2 mL/min at 25 °C and 1 atm over 15 mg or 2.5 cm², step by step as worked out here.
     const vm = (R*298.15).toFixed(3), nd = (F*1e3).toFixed(4), fl = umolH(0.05).toFixed(4);
@@ -329,7 +360,7 @@ test('the instructions: from the reading to the rates, numbered steps in a box o
   } finally { await narrow.close(); }
 });
 
-test('projects: one saved before v540 opens with mass and the same CSVs; one with area, with area; a choice edited by hand, mass', async ()=>{
+test('projects: one saved before v540 opens with mass and the same CSVs; v540–v580\'s choice ignored (m); one with A, with A, an area none kept; a choice edited by hand, m', async ()=>{
   const { page, errors, close } = await env.page();
   try {
     await openModule(page, 'gc');
@@ -338,34 +369,47 @@ test('projects: one saved before v540 opens with mass and the same CSVs; one wit
     const before = await zip(page), st = await encoded(page);
     // As v539 saved it: no choice, no areas.
     const old = JSON.parse(JSON.stringify(st));
-    for (const a of old.cards){ for (const k of ['norm', 'As', 'aMode', 'aShared']){ assert.ok(k in a, k); delete a[k]; } }
+    for (const a of old.cards){ for (const k of ['normBy', 'As', 'aMode', 'aShared']){ assert.ok(k in a, k); delete a[k]; } }
     await type(page, SH('m'), '30');
     await restore(page, old);
     let c = await card(page);
-    assert.deepEqual([c.norm, c.mShared, c.aMode, c.aShared, c.As], ['mass', 12.5, 'all', 1, [1, 1]]);
+    assert.deepEqual([c.normBy, c.mShared, c.aMode, c.aShared, c.As], ['m', 12.5, 'all', 1, [1, 1]]);
     assert.deepEqual(await zip(page), before, 'the CSVs byte for byte');
     assert.ok(csv(before['mean_rates.csv'])[0].includes('Mean H2 Production Rate (umol g^-1 h^-1)'));
     // Its rates and production in µmol: 1000 times the numbers v540 wrote, the flow over m in
     // mg, which area gives with A 12.5 cm² for m 12.5 mg.
-    await norm(page, 'area');
+    await norm(page, 'A');
     await type(page, SH('a'), '12.5');
     x1000(before, await zip(page));
-    // Saved with area: opened with it.
+    // Saved with A: opened with it.
     await type(page, SH('a'), '3');
     const withArea = await encoded(page), areaCsv = await zip(page);
-    await norm(page, 'mass');
+    await norm(page, 'm');
     await restore(page, withArea);
     c = await card(page);
-    assert.deepEqual([c.norm, c.aShared, c.mShared], ['area', 3, 12.5]);
-    assert.equal(await page.inputValue(NORM), 'area');
+    assert.deepEqual([c.normBy, c.aShared, c.mShared], ['A', 3, 12.5]);
+    assert.equal(await page.inputValue(NORM), 'A');
     assert.deepEqual(await zip(page), areaCsv);
-    // By hand: anything but 'area' is mass; an area that is none, 1 cm².
-    for (const v of ['Area', 'volume', 1, null, true]){
+    // v540–v580's choice, `norm` (area), a parameter no longer: ignored, opened with m (v581).
+    const v580 = JSON.parse(JSON.stringify(withArea));
+    delete v580.cards[0].normBy; v580.cards[0].norm = 'area';
+    await restore(page, v580);
+    c = await card(page);
+    assert.deepEqual([c.normBy, 'norm' in c, c.aShared, await page.inputValue(NORM)], ['m', false, 3, 'm']);
+    // An area none (left empty) saved so, opened so: not normalised, said.
+    const none = JSON.parse(JSON.stringify(withArea));
+    none.cards[0].aShared = null;
+    await restore(page, none);
+    c = await card(page);
+    assert.deepEqual([c.normBy, c.aShared, await page.inputValue(SH('a'))], ['A', null, '']);
+    assert.match(await page.locator('#tab-gc [id$="NormInfo"]').innerText(), /^No A for .*: the rates are not normalised, in µmol h⁻¹ and µmol\.$/);
+    // By hand: anything but 'A' is m; an area that is no number above 0, 1 cm².
+    for (const v of ['a', 'area', 'mass', 1, null, true]){
       const ed = JSON.parse(JSON.stringify(withArea));
-      ed.cards[0].norm = v; ed.cards[0].aShared = -2; ed.cards[0].As = ['x', 0];
+      ed.cards[0].normBy = v; ed.cards[0].aShared = -2; ed.cards[0].As = ['x', 0];
       await restore(page, ed);
       c = await card(page);
-      assert.deepEqual([c.norm, c.aShared, c.As], ['mass', 1, [1, 1]], JSON.stringify(v));
+      assert.deepEqual([c.normBy, c.aShared, c.As], ['m', 1, [1, 1]], JSON.stringify(v));
     }
     assert.deepEqual(errors, []);
   } finally { await close(); }

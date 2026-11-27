@@ -95,10 +95,10 @@ const runHtml = (p, cls)=> `<div id="${p}Status" class="txt-meta rv-status ${cls
    and the CSVs', stay as they are. */
 const peakName = (gasOf, pk)=> pk.gas ? gasOf(pk.gas).txt : pk.name;
 const windowName = (gasOf, w)=>{ const gs = (w.peaks || []).filter(pk=> pk.gas); return gs.length ? gs.map(pk=> peakName(gasOf, pk)).join('-') : w.key; };
-/* (m: the method shown; warn: its windows' intrusions, a compact warning under them (v571: to
-   v570 an amber line); refused: a window's edges not taken, { wi, text }, its rule in red
-   under that window (v571, ALERTS-REVIEW.md C19, G11: to v570 a warning box "Not taken:" over
-   the chromatogram)) */
+/* (m: the method shown; warn: its windows' intrusions (gc-integ-model.js intrusions), a
+   compact warning under them (v571: to v570 an amber line); refused: a window's edges not
+   taken, { wi, text }, its rule in red under that window (v571, ALERTS-REVIEW.md C19, G11: to
+   v570 a warning box "Not taken:" over the chromatogram)) */
 export function methodHtml(u, gasOf, m, warn, refused = null){
   const field = (k, v, label)=> `<input type="text" inputmode="decimal" data-k="${k}" value="${u.esc(String(v))}" aria-label="${u.esc(label)}">`;
   return m.windows.map((w, wi)=>{
@@ -108,10 +108,13 @@ export function methodHtml(u, gasOf, m, warn, refused = null){
       + `<label>to ${field(`w${wi}:to`, w.to, `${n} window to (s)`)} s</label>`
       + `<span class="gci-win-peaks">${(w.peaks || []).map(pk=> `${u.esc(peakName(gasOf, pk))} ${fin(pk.t) ? pk.t.toFixed(1) : ''}`).join(' · ')}</span></div>`
       + (refused && refused.wi === wi ? `<p class="field-rule gci-win-rule" role="alert">${u.esc(refused.text)}</p>` : '');
-  }).join('') + boxHtml('warn', warn.length ? warn.map(u.esc).join(' ') : '', 'gci-flag');
+  }).join('') + boxHtml('warn', warn.length ? warn.map(x=> u.esc(intrusionText(gasOf, x))).join(' ') : '', 'gci-flag');
 }
-// Why a window's edges are not taken (setMethod: methodHtml's refused).
-export const tooShortText = key => `The ${key} window must start at least 5 s before it ends.`;
+// A window's edge inside a neighbour's peak (an intrusion, { w, z }), and why a window's edges
+// are not taken (setMethod: methodHtml's refused), the window named as Windows names it (v581:
+// to v580 by its key, "H2O2").
+export const intrusionText = (gasOf, { w, z })=> `The ${windowName(gasOf, w)} window (${w.from}–${w.to} s) reaches ${z.name} (${z.from}–${z.to} s), which its model has no peak for: the fit degrades there.`;
+export const tooShortText = (gasOf, w)=> `The ${windowName(gasOf, w)} window must start at least 5 s before it ends.`;
 
 /* ---- Peaks: the values of the chromatogram on show (gc-integ-model.js peaksOf's v) ---- */
 export function valuesHtml(u, gasOf, v){

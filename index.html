@@ -305,7 +305,7 @@
     <section class="tab" id="tab-gc" role="tabpanel" tabindex="0">
       <div class="card">
         <h3 class="txt-head" style="margin:0 0 12px">File</h3>
-        <div class="instr-block" style="max-width:100%">Compatible with Agilent Gas Chromatographer. Accepts comma-separated value files with an "Injection date" column and an "H2 (B) [%Mol]" and/or "O2 (B) [%Mol]" column (the default format), and the instrument's tab-separated .txt export, its "Inject Time" and its Hydrogen and Oxygen "Amount" columns in ppm (the alternative, read as %mol and said in a blue info alert). Raw chromatograms (the TCD's .csv, a column per injection) can be dropped beside their tables: a table and its raw chromatograms (the same name with _TCD) share a row, and an Integration card integrates them again.</div>
+        <div class="instr-block" style="max-width:100%">Compatible with Agilent Gas Chromatographer. Accepts comma-separated value files with an "Injection date" column and an "H2 (B) [%Mol]" and/or "O2 (B) [%Mol]" column (the default format), and the instrument's tab-separated .txt export, its "Inject Time" and its Hydrogen and Oxygen "Amount" columns in ppm (the alternative, read as %mol and said in a blue info alert). Raw chromatograms (the TCD's .csv, a column per injection) can be dropped beside their tables: a table and its raw chromatograms (the same name with _TCD) share a row, and an Integration card integrates them again. Each file has a grip of its own: dragged onto another it pairs the two (onto one paired, they swap), off every file it stands alone.</div>
         <div class="dropzone" id="gcDropzone">
           <div class="dz-icon">⤒</div>
           <div class="dz-title">Drag here your files, or click to select them.</div>
@@ -332,7 +332,7 @@
     <section class="tab" id="tab-epr" role="tabpanel" tabindex="0">
       <div class="card">
         <h3 class="txt-head" style="margin:0 0 12px">File</h3>
-        <div class="instr-block" style="max-width:100%">Compatible with Bruker EPR spectrometers (BES3T format). Upload paired .DTA and .DSC files: both are required for each sample. Pairs are matched by filename stem.</div>
+        <div class="instr-block" style="max-width:100%">Compatible with Bruker EPR spectrometers (BES3T format). Upload paired .DTA and .DSC files: both are required for each sample. Pairs are matched by filename stem and share a row of the list; a file dropped alone waits there, not plotted, until its partner is dropped or dragged onto it by its own grip, whatever its name (dragged off every file, a file leaves its partner).</div>
         <div class="dropzone" id="eprDropzone">
           <div class="dz-icon">⤒</div>
           <div class="dz-title">Drag here your files, or click to select them.</div>
@@ -546,7 +546,7 @@
       </div>
     </section>
 
-    <footer>DataTreat <span class="app-version">v579</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
+    <footer>DataTreat <span class="app-version">v581</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
   </main>
 
   <!-- Save project as… dialog -->

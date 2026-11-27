@@ -58,7 +58,8 @@ const NAMES = {
   tauc: [['drs1', 'drs1.csv'], ['drs2', 'drs2.csv']],
   xrd: [0, 1, 2].map(k=> [`s0${k}`, `s0${k}.xrdml`]),
   gc: [['alpha', 'alpha.csv'], ['beta', 'beta.csv']],
-  epr: [['sample one', 'e1'], ['sample two', 'e2']],
+  // (EPR's a pair's two files, its .DTA first, each with its grip, as GC's: v581)
+  epr: [['sample one', 'e1.DTAe1.DSC'], ['sample two', 'e2.DTAe2.DSC']],
   sem: [1, 2, 3].map(k=> [`S${k}`, `img${k}.tif`]),
 };
 for (const [vw, vh] of [[1400, 900], [800, 800], [375, 740]]){
@@ -78,7 +79,8 @@ for (const [vw, vh] of [[1400, 900], [800, 800], [375, 740]]){
         for (const [k, r] of [['head', { w: m.headW }], ...m.rows.map((r, i)=> ['row ' + i, r])])
           r.w.forEach((x, j)=> assert.ok(Math.abs(x - want[j]) < 0.6, `${mod} ${k}: column ${j} ${x} px for ${want[j].toFixed(2)} (${r.w.join(', ')})`));
         m.rows.forEach((r, i)=>{
-          assert.deepEqual(r.cls, ['drag-cell', 'incl-cell', 'trace-cell', 'fname', 'note-cell', 'row-acts'], `${mod} row ${i}`);
+          // (GC's and EPR's rows their files, each with its grip, always: v581)
+          assert.deepEqual(r.cls, ['drag-cell', 'incl-cell', 'trace-cell', mod === 'gc' || mod === 'epr' ? 'fname fname-parts' : 'fname', 'note-cell', 'row-acts'], `${mod} row ${i}`);
           assert.ok(r.order, `${mod} row ${i}: the file right of the trace, the note right of the file`);
           assert.equal(r.note, (NOTES[mod] || [])[i] || '', `${mod} row ${i}: its note`);
           assert.ok(r.inCell, `${mod} row ${i}: the name field inside its cell`);

@@ -79,6 +79,26 @@ test('a row dragged, a file dragged by its grip', ()=>{
   assert.deepEqual([[0, 0, 3, 3], [0, 0, 4, 0], [0, 0, 3, 4], [5, 5, 5, 0]].map(a => M.movedFrom(...a)), [true, false, true, true], 'more than 4 px');
 });
 
+/* v581: a row of several files, GC's and EPR's alike (out of v580's gc-pair.js): files dropped
+   paired by their names (a file alone in the list taking its partner, the first side first, a
+   name every object has as any other: bug 23), and a file dragged by its own grip. */
+test('rows of several files: paired by their names, a file dragged by its grip (v581)', ()=>{
+  const f = n => ({ name: n }), sideOf = x =>{ const m = /^(.*)\.(a|b)$/.exec(x.name); return { stem: m[1], first: m[2] === 'a' }; };
+  const names = rows => rows.map(r=> r.map(x=> x.name).join('+'));
+  const lone = [f('w.b')], had = [[f('p.a'), f('p.b')], lone, [f('z.a')]];
+  const out = M.autoPair(had, [f('w.a'), f('constructor.b'), f('__proto__.a'), f('z.a'), f('constructor.a'), f('toString.b'), f('__proto__.b'), f('w.b')], sideOf);
+  assert.deepEqual(names(out), ['p.a+p.b', 'w.a+w.b', 'z.a', 'constructor.a+constructor.b', '__proto__.a+__proto__.b', 'z.a', 'toString.b', 'w.b']);
+  assert.deepEqual([lone.length, had[1].length, out[1] === had[1]], [1, 1, false], 'the rows given are not changed');
+  assert.deepEqual([({}).a, Object.getPrototypeOf(out[3]) === Array.prototype], [undefined, true]);
+  // a file dragged by its grip: onto one alone (paired), onto one paired (swapped), its partner, off every file
+  const rows = [[f('a1'), f('a2')], [f('b1')], [f('c1'), f('c2')]];
+  assert.deepEqual(names(M.dropPart(rows, { i: 0, p: 1 }, { i: 1, p: 0 })), ['a1', 'b1+a2', 'c1+c2']);
+  assert.deepEqual(names(M.dropPart(rows, { i: 1, p: 0 }, { i: 2, p: 1 })), ['a1+a2', 'c2', 'c1+b1']);
+  assert.deepEqual(names(M.dropPart(rows, { i: 0, p: 0 }, { i: 0, p: 1 })), ['a2+a1', 'b1', 'c1+c2']);
+  assert.deepEqual(names(M.dropPart(rows, { i: 2, p: 0 }, null)), ['a1+a2', 'b1', 'c2', 'c1']);
+  for (const [from, to] of [[{ i: 1, p: 0 }, null], [{ i: 0, p: 0 }, { i: 0, p: 0 }], [{ i: 5, p: 0 }, null], [{ i: 0, p: 0 }, { i: 9, p: 0 }]]) assert.equal(M.dropPart(rows, from, to), rows, JSON.stringify([from, to]));
+});
+
 test('the markup: the head, a row, its parts, the list', ()=>{
   const h = H.headHtml(0, false, 'A <&> "b"', U);
   assert.ok(h.startsWith('<div class="table-wrap-box"><table class="file-table"><colgroup>') && h.endsWith('</tr></thead><tbody>'));

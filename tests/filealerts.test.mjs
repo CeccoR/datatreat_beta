@@ -90,12 +90,16 @@ const MODS = {
     why: 'not well-formed XML', names: st => st.files.map(f=> f.name) },
   epr: { name: 'EPR', files: pairs, junk: csv('junk.txt', 'hello'), why: 'not a .DTA or .DSC file', names: st => st.files.map(f=> f.name) },
 };
-// The unreadable file of a module's drop, and the lines it gives (EPR: its partner's too).
+// The unreadable file of a module's drop, and the lines it gives (EPR: its partner, loaded,
+// waits in the list, said to check: v581; to v580 refused, its .DSC not read).
+const EPR_ALONE = f => `${f}: its .DSC is missing: not plotted until it is paired; drop it, or drag one onto it by its own grip.`;
 const goneOf = (mod, n)=> mod === 'sem' ? n + '.tif' : mod === 'epr' ? n + '.DSC' : mod === 'xrd' ? n + '.xrdml' : n + '.csv';
 const goneFiles = (mod, n)=> mod === 'sem' ? [tifs[n === 'gone' ? 3 : 4]] : mod === 'epr' ? [{ name: n + '.DSC', buffer: eprPair({ title: n }).dsc }, { name: n + '.DTA', buffer: eprPair({ title: n }).dta }]
   : mod === 'xrd' ? [{ name: n + '.xrdml', buffer: xrdml(5) }] : mod === 'iodo' ? [kinetics(n + '.csv')] : MODS[mod].files(9).map(f=> ({ ...f, name: n + '.csv' }));
-const goneLines = (mod, n)=> [`${goneOf(mod, n)}: ${GONE}`, ...(mod === 'epr' ? [`${n}.DTA: its .DSC could not be read.`] : [])];
+const goneLines = (mod, n)=> [`${goneOf(mod, n)}: ${GONE}`];
 const loadedName = (mod, f)=> mod === 'epr' ? f.name.replace(/\.[^.]+$/, '') : f.name;
+// (EPR: the halves whose partner was gone waiting, said to check)
+const waiting = (mod, ns)=> mod === 'epr' ? [['warn', '⚠ Loaded, to check:', ...ns.map(n=> EPR_ALONE(n + '.DTA'))]] : [];
 
 for (const [mod, M] of Object.entries(MODS)){
   test(`${M.name}: a file gone from the disk refused with why, the rest of its drop loaded; each drop's alerts replace the last's`, async ()=>{
@@ -111,12 +115,14 @@ for (const [mod, M] of Object.entries(MODS)){
       // last drop's alerts gone.
       await drop(page, input, [...f1, ...goneFiles(mod, 'gone'), ...f2], mod === 'epr' ? ['gone.DSC'] : [goneOf(mod, 'gone')]);
       const st = await moduleState(page, mod);
-      assert.deepEqual(M.names(st), [...new Set([...f0, ...f1, ...f2].map(f=> loadedName(mod, f)))], 'the files before and after it loaded');
-      assert.deepEqual(await boxes(page, alerts), [['bad', '✕ Not loaded:', ...goneLines(mod, 'gone')]], 'said, with why; the last drop\'s alerts gone');
+      const want = [...new Set([...f0, ...f1, ...f2].map(f=> loadedName(mod, f)))];
+      if (mod === 'epr') want.splice(2, 0, 'gone.DTA');
+      assert.deepEqual(M.names(st), want, 'the files before and after it loaded');
+      assert.deepEqual(await boxes(page, alerts), [['bad', '✕ Not loaded:', ...goneLines(mod, 'gone')], ...waiting(mod, ['gone'])], 'said, with why; the last drop\'s alerts gone');
       // A drop that loads nothing: its own alert, the last drop's gone.
       await drop(page, input, goneFiles(mod, 'gone2'), mod === 'epr' ? ['gone2.DSC'] : [goneOf(mod, 'gone2')]);
-      assert.deepEqual(await boxes(page, alerts), [['bad', '✕ Not loaded:', ...goneLines(mod, 'gone2')]]);
-      assert.equal(M.names(await moduleState(page, mod)).length, M.names(st).length, 'nothing more loaded');
+      assert.deepEqual(await boxes(page, alerts), [['bad', '✕ Not loaded:', ...goneLines(mod, 'gone2')], ...waiting(mod, ['gone', 'gone2'])]);
+      assert.equal(M.names(await moduleState(page, mod)).length, M.names(st).length + (mod === 'epr' ? 1 : 0), 'nothing more loaded (EPR: its half waiting)');
       assert.deepEqual(errors, [], 'no page error (to v566 an unhandled rejection)');
     } finally { await close(); }
   });
@@ -194,7 +200,9 @@ test('DRS: error, warning, info in that order, one box a kind: refused with why,
   } finally { await close(); }
 });
 
-test('EPR: a half pair refused saying which half is missing; a pair refused named by its files; a spectrum with no microwave frequency said, an info', async ()=>{
+/* (v581, the user's decision U2: a half waits in the list, said to check which half is missing,
+   as a pair that cannot be read, named by its files: to v580 both refused) */
+test('EPR: a half pair waiting, saying which half is missing; a pair that cannot be read named by its files; a spectrum with no microwave frequency said, an info', async ()=>{
   const { page, errors, close } = await env.page();
   try {
     await openModule(page, 'epr');
@@ -202,10 +210,11 @@ test('EPR: a half pair refused saying which half is missing; a pair refused name
     await drop(page, '#eprFiles', [{ name: 'a.DSC', buffer: a.dsc }, { name: 'a.DTA', buffer: a.dta }, { name: 'lone.DTA', buffer: b.dta }, { name: 'solo.DSC', buffer: b.dsc },
       { name: 'x.txt', buffer: Buffer.from('x') }, { name: 'bad.DSC', buffer: Buffer.from(dsc.replace(/XPTS 1024\n/, ''), 'latin1') }, { name: 'bad.DTA', buffer: a.dta },
       { name: 'nf.DSC', buffer: Buffer.from(dsc.replace(/MWFQ .*\n/, ''), 'latin1') }, { name: 'nf.DTA', buffer: a.dta }]);
-    assert.deepEqual((await moduleState(page, 'epr')).files.map(f=> f.name), ['a', 'nf']);
+    assert.deepEqual((await moduleState(page, 'epr')).files.map(f=> [f.name, Array.isArray(f.b)]), [['a', true], ['lone.DTA', false], ['solo.DSC', false], ['bad', false], ['nf', true]]);
     assert.deepEqual(await boxes(page, '#eprAlerts'), [
-      ['bad', '✕ Not loaded:', 'x.txt: not a .DTA or .DSC file.', 'lone.DTA: its .DSC is missing: drop the two together.', 'solo.DSC: its .DTA is missing: drop the two together.',
-        'bad.DTA + bad.DSC: its .DSC gives no XPTS, the number of points.'],
+      ['bad', '✕ Not loaded:', 'x.txt: not a .DTA or .DSC file.'],
+      ['warn', '⚠ Loaded, to check:', EPR_ALONE('lone.DTA'), 'solo.DSC: its .DTA is missing: not plotted until it is paired; drop it, or drag one onto it by its own grip.',
+        'bad.DTA + bad.DSC: its .DSC gives no XPTS, the number of points: not plotted.'],
       ['info', 'How these files were read:', 'nf.DSC: no microwave frequency (MWFQ): plotted on the field measured, not at 9.5 GHz; no g axis.']]);
     assert.equal(await page.locator('#eprPendingWrap').count(), 0, 'no box of its own for the halves (to v566)');
     assert.deepEqual(errors, []);

@@ -22,10 +22,11 @@
 
    The instance's state is S (gc-integ.js createInteg): its context ctx, the gases (GAS by
    key, gasOf, C_FIT), the raw chromatograms read (read) and the calibrations' tables
-   (tabs), by their bytes, the results (store) and the job (job, halted, failed); a card's
-   is C (gc-integ.js makeCard): its method (the one its results come from: applied), its
-   windows as edited (edit: the same while nothing is pending, v578), its run (Integrate's:
-   the windows it integrates, or null) and whether one was stopped (stopped), its
+   (tabs), by their bytes, the results (store) and the job (job, failed); a card's is C
+   (gc-integ.js makeCard): its method (the one its results come from: applied), its windows
+   as edited (edit: the same while nothing is pending, v578), its run (Integrate's: the
+   windows it integrates, or null), whether one was stopped (stopped) and whether a Stop holds
+   its files (halted: its own, v581; to v580 the instance's, every card's), its
    calibration (cal), the overview's gas and y (ovGas, ovY), what it shows (selName, selK)
    and Analysis's values kept (valuesKept).
 ========================================================= */
@@ -228,7 +229,8 @@ export const withResult = (U, s, fk, key, arr)=> holds(U, s, fk) ? { ...s, integ
 /* ---- The job: every (file, method) a card uses with a chromatogram not integrated ----
    First each card's files under the method its results come from (shown as they come: the
    files of a project first loaded, a file or a standard added since, the rest of a run
-   stopped part way), unless a Stop holds them (`halted`); then the windows a card's run
+   stopped part way), unless a Stop on that card holds them (its `halted`: v581, to v580 a Stop
+   on any card held every card's); then the windows a card's run
    integrates (Integrate: applied all at once when its every file is, gc-integ.js swap). A
    card's files in view first (c.inView(): the chromatogram on show, the standard on show in
    its calibration's window), each its chromatogram on show first, then the rest in list
@@ -249,7 +251,7 @@ export function wanted(U, S){
       if (miss.length) out.push({ key, rec: r, method: m, miss, d });
     });
   };
-  if (!S.halted) cards.forEach(c=> add(c, c.method()));
+  cards.forEach(c=>{ if (!c.halted()) add(c, c.method()); });
   cards.forEach(c=>{ const m = c.runMethod(); if (m) add(c, m); });
   return out;
 }
@@ -275,7 +277,7 @@ export function workOf(S, g){
 // (a chromatogram the engine could not fit is a result too, its error said: else it
 // would be wanted again at once, and fail again)
 export const resultIn = (U, r)=> r && !r.error ? compact(U, r) : { error: String(r && r.error || 'the integration failed'), gases: {}, windows: [] };
-export const status = S => ({ job: S.job, halted: S.halted, failed: S.failed });
+export const status = S => ({ job: S.job, failed: S.failed });
 
 /* ---- A card: the pairs and files of raw chromatograms it shows ----
    One entry each, in list order (the row's included). A table with its raw chromatograms:
@@ -376,7 +378,7 @@ export function valuesFor(U, S, C, f){
   // (`integ`: the Integration card says it, which the card's alert names; gc-html.js srcAlertsHtml)
   if (n !== rows) return { why: `${plural(rows, 'injection')} in the table, ${plural(n, 'chromatogram')}`, integ: true };
   const res = resultsAt(S, keyOf(U, tcd, C.method));
-  if (!res || res.some(x=> !x)){ const st = status(S); return { why: st.halted ? 'its integration was stopped before its end' : 'its integration is not done yet', waiting: true }; }
+  if (!res || res.some(x=> !x)) return { why: C.halted ? 'its integration was stopped before its end' : 'its integration is not done yet', waiting: true };
   const vk = U.exactKey([keyOf(U, tcd, C.method), calKey(U, C), Object.keys(f.gas).map(k=> [k, U.objId(f.gas[k])]), U.objId(res)]);
   if (C.valuesKept.has(vk)) return C.valuesKept.get(vk);
   const out = sampleValues(U, S, C, f, res);
@@ -540,9 +542,9 @@ export function residOf(U, curves){
 }
 // The glitch zones a window's fit left out, as bands ([from, to]).
 export const bandsOf = curves =>{ const out = []; curves.forEach(({ wr })=> (wr.excluded || []).forEach(z=>{ if (Array.isArray(z) && fin(z[0]) && fin(z[1])) out.push(z); })); return out; };
-// A window reaching a neighbour the model has no peak for, said (not refused).
-export const intrusions = m => m.windows.flatMap(w=> NEIGHBOURS.filter(z=> w.from < z.to && w.to > z.from).map(z=>
-  `The ${w.key} window (${w.from}–${w.to} s) reaches ${z.name} (${z.from}–${z.to} s), which its model has no peak for: the fit degrades there.`));
+// A window reaching a neighbour the model has no peak for, said (not refused): each { w, z }
+// (gc-integ-html.js intrusionText).
+export const intrusions = m => m.windows.flatMap(w=> NEIGHBOURS.filter(z=> w.from < z.to && w.to > z.from).map(z=> ({ w, z })));
 // A method's window that does not start 5 s before it ends (refused), or none.
 export const tooShort = m => m.windows.find(x=> !(x.from < x.to - 5));
 // A line dragged snaps to the data's grid (0.2 s).
@@ -630,15 +632,15 @@ export function nearest(P, pts, cx, cy){
    (status), left (this card's chromatograms not integrated with the method its results come
    from), pending (its windows edited and not integrated), m (that method), pct, state:
    'running' (the job, while it has something of this card's to do: its run, its files
-   left) | 'failed' | 'stopped' (a Stop holding its files left, or its run stopped with the
-   windows still edited) | 'pending' | 'left' | 'done' | 'none' }. (v578: to v577 'soon', the
+   left that no Stop on it holds) | 'failed' | 'stopped' (its Stop holding its files left, or
+   its run stopped with the windows still edited) | 'pending' | 'left' | 'done' | 'none' }. (v578: to v577 'soon', the
    method changed and integrated again a moment after.) */
 export function progressOf(U, S, C){
   const st = status(S), left = leftUnder(U, S, C, C.method), pending = isPending(U, C);
-  const total = entriesOf(S).reduce((s, e)=> s + e.n, 0), busy = !!st.job && (!!C.run || left > 0);
+  const total = entriesOf(S).reduce((s, e)=> s + e.n, 0), busy = !!st.job && (!!C.run || (left > 0 && !C.halted));
   const pct = busy && st.job.total ? Math.round(100*st.job.done/st.job.total) : 0;
   // (windows edited with no chromatogram at all: no result shown to say whose)
-  const state = busy ? 'running' : st.failed && (left || pending) ? 'failed' : (st.halted && left) || (C.stopped && pending) ? 'stopped'
+  const state = busy ? 'running' : st.failed && (left || pending) ? 'failed' : (C.halted && left) || (C.stopped && pending) ? 'stopped'
     : pending && (total || C.cal.files.length) ? 'pending' : left ? 'left' : total ? 'done' : 'none';
   return { st, left, pending, m: C.method, pct, state };
 }
@@ -829,9 +831,17 @@ export function restoreCard(U, S, C, s0){
   C.stopped = false;
   C.valuesKept.clear();
 }
-// Windows edited (setMethod): taken as the card's, pending until Integrate applies them (v578:
-// to v577 applied at once, integrated a moment after).
-export function takeEdit(U, C, m){ C.edit = methodIn(U, m); }
+/* Windows edited (setMethod): taken as the card's, pending until Integrate applies them (v578:
+   to v577 applied at once, integrated a moment after); on a card with no result of the windows
+   applied (none of its files and standards integrated yet, or none loaded), nothing to keep:
+   applied as they are (v581; to v580 pending all the same, the files loaded after them
+   integrated with the windows before). → whether applied. */
+export function takeEdit(U, S, C, m){
+  const none = !tcdRecs(S, C).some(r=> (resultsAt(S, keyOf(U, r, C.method)) || []).some(Boolean));
+  C.edit = methodIn(U, m);
+  if (none) C.method = clone(C.edit);
+  return none;
+}
 // (what gc.js shows of a card beside its state, and what it gives back)
 export const showsOf = (S, C)=>{ const e = curOf(S, C); return e ? { file: e.name, k: C.selK } : null; };
 export function showNext(U, C, v){ if (U.isObj(v) && typeof v.file === 'string'){ C.selName = v.file; C.selK = Number.isInteger(v.k) && v.k >= 0 ? v.k : 0; } }

@@ -2430,28 +2430,31 @@ function flashFieldInvalid(el, rule){
    refused: none where it has no bound (a number: obvious). A least bound under any number
    written (Number.MIN_VALUE: above 0) reads "above 0"; a greatest one past any typed
    (1e300), none. */
-function numRule({ min = null, max = null, integer = false } = {}){
+function numRule({ min = null, max = null, integer = false, blank = false } = {}){
   const lo = min == null ? '' : min > 0 && min < 1e-300 ? 'above 0' : `at least ${min}`;
   const hi = max == null || max >= 1e100 ? '' : `at most ${max}`;
   const b = [lo, hi].filter(Boolean);
-  return b.length || integer ? `${integer ? 'A whole number' : 'A number'}${b.length ? ', ' + b.join(' and ') : ''}.` : '';
+  return b.length || integer ? `${integer ? 'A whole number' : 'A number'}${b.length ? ', ' + b.join(' and ') : ''}${blank ? ', or none (empty)' : ''}.` : '';
 }
 // Guard one input so it only ever commits a valid value: views update on confirm
 // (blur / Enter), and any invalid entry (empty, non-numeric, out of range, or a
 // non-integer where one is required) shakes the field and snaps it back to the
 // last value that was successfully confirmed — never a live/partial update.
+// `blank`: empty is a value too, none (GC's m and A, v581), kept as ''.
 function guardNumericInput(el, opts){
   if (!el) return;
-  const { min=null, max=null, integer=false, def=null } = opts || {};
+  const { min=null, max=null, integer=false, def=null, blank=false } = opts || {};
   const parse = ()=>{ const v = parseFloat(String(el.value).trim().replace(',', '.')); return isFinite(v) ? v : NaN; };
+  const empty = ()=> blank && String(el.value).trim() === '';
   // Seed the "last confirmed" value from the field's initial (valid) content.
   const seed = parse();
-  el._lastValid = isFinite(seed) ? seed : (def!=null ? def : (min!=null ? min : 0));
+  el._lastValid = isFinite(seed) ? seed : empty() ? '' : (def!=null ? def : (min!=null ? min : 0));
   // Re-seed on focus so programmatic value changes (session restore, param sync)
   // become the new revert target without every setter having to notify us.
-  el.addEventListener('focus', ()=>{ const v = parse(); if (isFinite(v)) el._lastValid = v; });
+  el.addEventListener('focus', ()=>{ const v = parse(); if (isFinite(v)) el._lastValid = v; else if (empty()) el._lastValid = ''; });
   el.addEventListener('change', e=>{
     const raw = String(el.value).trim().replace(',', '.');
+    if (empty()){ el._lastValid = ''; el.value = ''; el.dispatchEvent(new Event('input', { bubbles:true })); return; }
     const v = parseFloat(raw);
     const bad = raw==='' || !isFinite(v)
       || (integer && !Number.isInteger(v))
@@ -2460,7 +2463,7 @@ function guardNumericInput(el, opts){
       // Reject: shake, restore the last confirmed value, and keep the invalid
       // entry from reaching the module's own listeners (so views stay untouched). Its
       // bounds said under it (v571: numRule).
-      flashFieldInvalid(el, numRule({ min, max, integer }));
+      flashFieldInvalid(el, numRule({ min, max, integer, blank }));
       el.value = String(el._lastValid);
       e.stopImmediatePropagation();
       return;

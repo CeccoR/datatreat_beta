@@ -3,16 +3,20 @@
    field axis in G or mT rescaled to 9.5 GHz, none without MWFQ), its .DTA's values in every
    format (D F I S C, both byte orders, the real part of complex data, an unknown format and
    one too short refused), the spectrum with its baseline taken off, why a pair cannot be (no
-   XPTS, one point, no axis); a drop's files grouped by stem; a spectrum's arrays fixed and
-   shared by its bytes; a file and a card as a project holds them (points not numbers left
+   XPTS, one point, no axis); the list's rows (v581, as GC's: a drop's files paired by their
+   names, a file named constructor, __proto__ or toString as any other, bug 23; a half alone
+   waiting; a file dragged by its grip pairing, swapping, standing alone; each row's record,
+   its label, colour and inclusion kept from the row its first file headed; what is said of a
+   row not plotted, keyed by its issue); a spectrum's arrays fixed and shared by its bytes; a file and a card as a project holds them (points not numbers left
    out, the smoothing of before v510 in points, a project from before the cards), the state
    saved; the smoothing width typed and the points it spans; the smoothed columns and the
    stacking under each normalisation (flat spectra too), the plot's options and the CSV's
-   columns; the markup. Then 40 cases (random pairs of every form, refused ones and lone
-   halves among them; one to three cards, their normalisation and width, old states; six
-   steps each: a normalisation picked, a width typed (a comma, refused, the same), a file
-   left out and taken back) as v562's epr.js gave them, run from its source on a page of
-   stubs: at each step the files read, the alerts' lines, each card's plot (its options,
+   columns; the markup. Then 40 cases (random pairs of every form, ones that cannot be read and
+   lone halves among them, v581: rows of the list, not plotted; one to three cards, their
+   normalisation and width, old states; six steps each: a normalisation picked, a width typed
+   (a comma, refused, the same), a row left out and taken back) as v562's epr.js gave them,
+   run from its source on a page of stubs: at each step the rows, the alerts' lines, each
+   card's plot (its options,
    range and lines), its points, the CSVs and the state; SHA-256 digests in
    tests/golden/eprmodel.json (npm run test:update writes them anew after a change meant to
    alter them). utils.js's and modkit.js's helpers, which need a page to load, are taken from
@@ -25,6 +29,7 @@ import * as M from '../epr-model.js';
 import * as H from '../epr-html.js';
 import { boxSmooth, widthText } from '../smooth.js';
 import { settleNames, saved, recIn } from '../cards-model.js';
+import { autoPair, dropPart } from '../filelist-model.js';
 
 const UPDATE = !!process.env.UPDATE_GOLDEN || process.env.npm_lifecycle_event === 'test:update';
 const GOLDEN = new URL('./golden/eprmodel.json', import.meta.url);
@@ -71,7 +76,7 @@ export function dtaBytes(v, { fmt = 'D', lit = false, cplx = false } = {}){
   v.forEach((x, i)=>{ const o = i*size*st;
     if (fmt === 'D') dv.setFloat64(o, x, lit); else if (fmt === 'F') dv.setFloat32(o, x, lit); else if (fmt === 'I') dv.setInt32(o, x, lit); else if (fmt === 'S') dv.setInt16(o, x, lit); else dv.setInt8(o, x);
     if (cplx && fmt === 'D') dv.setFloat64(o + size, 99, lit); });
-  return buf;
+  return new Uint8Array(buf);
 }
 
 test('a pair read: the .DSC, the field axis, the .DTA in every format, the baseline, why not', ()=>{
@@ -97,20 +102,81 @@ test('a pair read: the .DSC, the field axis, the .DTA in every format, the basel
   assert.deepEqual(M.dtaValues({ XPTS: '5', IKKF: 'CPLX' }, dtaBytes(v, { cplx: true })), { s: v });
   assert.deepEqual(M.dtaValues({ XPTS: '5', IRFMT: 'Q' }, dtaBytes(v)), { error: 'IRFMT Q: a data format not read' });
   assert.deepEqual(M.dtaValues({ XPTS: '6' }, dtaBytes(v)), { error: 'its .DTA holds fewer than the 6 points its .DSC gives' });
-  // the spectrum: the line through its ends taken off, named by its title, its bytes kept
-  const dsc = { name: 'a.DSC', bytes: enc('x') }, buf = dtaBytes([1, 3, 2, 5, 3]);
-  const s = M.spectrumOf('a', p, dsc, buf, 'a.DTA');
-  assert.deepEqual(s.a, [0, 1.5, 0, 2.5, 0]);
-  assert.equal(s.label, 'sample <1>'); assert.equal(s.rescaled, true); assert.deepEqual(s.rawFiles[0], dsc); assert.equal(s.rawFiles[1].name, 'a.DTA'); assert.equal(s.rawFiles[1].bytes.length, 40);
-  const s2 = M.spectrumOf('b', { ...p, MWFQ: undefined, TITL: undefined }, dsc, buf, 'b.DTA');
-  assert.equal(s2.label, 'b'); assert.equal(s2.rescaled, false);
-  assert.deepEqual(Object.keys(s), ['name', 'label', 'b', 'a', 'rescaled', 'rawFiles']);
-  assert.deepEqual(M.spectrumOf('c', { ...p, IRFMT: 'X' }, dsc, buf, 'c.DTA'), { error: 'IRFMT X: a data format not read' });
-  // a drop's files by stem: other extensions refused, stems loaded said, a lone half alone
+  const at = new Uint8Array(48); at.set(dtaBytes(v), 8);
+  assert.deepEqual(M.dtaValues({ XPTS: '5' }, at.subarray(8)), { s: v }, 'a view of its bytes, from where it starts');
+  // the spectrum: the line through its ends taken off; with no MWFQ the field measured
+  const buf = dtaBytes([1, 3, 2, 5, 3]), s = M.spectrumOf(p, buf);
+  assert.deepEqual([s.a, s.rescaled, Object.keys(s)], [[0, 1.5, 0, 2.5, 0], true, ['b', 'a', 'rescaled']]);
+  assert.equal(M.spectrumOf({ ...p, MWFQ: undefined }, buf).rescaled, false);
+  assert.deepEqual(M.spectrumOf({ ...p, IRFMT: 'X' }, buf), { error: 'IRFMT X: a data format not read' });
+  // the kinds, and how a drop's files pair by their names (filelist-model.js autoPair): the same stem, a .DTA first
+  assert.deepEqual(['a.DTA', 'b.dsc', 'c.txt', 'noext', 'x.DTA.bak'].map(M.kindOf), ['dta', 'dsc', '', '', '']);
   const f = n => ({ name: n });
-  const g = M.groupsOf([f('a.DSC'), f('a.dta'), f('b.DTA'), f('x.txt'), f('c.dsc'), f('c.DTA'), f('noext'), f('c.txt')], new Set(['c']));
-  assert.deepEqual(Object.keys(g.groups), ['a', 'b']); assert.equal(g.groups.a.dsc.name, 'a.DSC'); assert.equal(g.groups.b.dsc, null);
-  assert.deepEqual(g.invalid, ['x.txt', 'noext', 'c.txt']); assert.deepEqual(g.already, ['c.dsc', 'c.DTA']);
+  const rows = autoPair([[f('w.DTA')]], [f('a.DSC'), f('a.dta'), f('b.DTA'), f('w.DSC'), f('b.dta')], M.sideOf);
+  assert.deepEqual(rows.map(r=> r.map(x=> x.name)), [['w.DTA', 'w.DSC'], ['a.dta', 'a.DSC'], ['b.DTA'], ['b.dta']], 'a half waiting takes its partner; two of one kind each alone');
+});
+
+/* ---- The list's rows (v581, as GC's) ---- */
+const pairBytes = (title, opts = {})=>{ const v = Array.from({ length: 16 }, (_, i)=> Math.sin(i/2)*100);
+  return { dsc: enc(`XPTS ${opts.n || 16}\nXMIN 3300\nXWID 200\nMWFQ 9.5e9\nTITL '${title}'\n`), dta: dtaBytes(v) }; };
+const file = (name, bytes)=> ({ name, bytes });
+test('bug 23: files named constructor, __proto__ and toString pair and load as any other', ()=>{
+  const c = pairBytes('C'), p = pairBytes('P'), t = pairBytes('T'), all = [];
+  const got = [file('constructor.DTA', c.dta), file('__proto__.DSC', p.dsc), file('toString.DSC', t.dsc), file('constructor.DSC', c.dsc), file('__proto__.DTA', p.dta), file('toString.DTA', t.dta), file('valueOf.DTA', t.dta)];
+  M.regroup(all, autoPair(all.map(M.rowFiles), got, M.sideOf), list => '#' + list.length);
+  assert.deepEqual(all.map(r=> [r.name, r.label, r.color, r.rawFiles.map(x=> x.name), M.isSpectrum(r)]), [
+    ['constructor', 'C', '#0', ['constructor.DTA', 'constructor.DSC'], true], ['__proto__', 'P', '#1', ['__proto__.DTA', '__proto__.DSC'], true],
+    ['toString', 'T', '#2', ['toString.DTA', 'toString.DSC'], true], ['valueOf.DTA', 'valueOf', '#3', ['valueOf.DTA'], false]]);
+  assert.equal(Object.getPrototypeOf(all[1]), Object.prototype, 'no prototype written');
+  assert.deepEqual([({}).dta, ({}).dsc, ({}).constructor === Object], [undefined, undefined, true], 'no object\'s prototype written either');
+  assert.deepEqual(M.rowNote(all[3]), { key: 'alone', line: 'valueOf.DTA: its .DSC is missing: not plotted until it is paired; drop it, or drag one onto it by its own grip.' });
+});
+
+test('the rows: a half waiting, paired by a file\'s grip whatever its name, swapped, standing alone; each row\'s record; what is said', ()=>{
+  const a = pairBytes('Cu <2+>'), b = pairBytes('B'), bad = pairBytes('bad', { n: 99 }), all = [];
+  const add = got => M.regroup(all, autoPair(all.map(M.rowFiles), got, M.sideOf), list => '#' + list.length);
+  const names = ()=> all.map(r=> r.rawFiles.map(x=> x.name).join(' + '));
+  add([file('a.DSC', a.dsc), file('lone.DTA', b.dta), file('x.dsc', b.dsc), file('a.DTA', a.dta)]);
+  assert.deepEqual(names(), ['a.DTA + a.DSC', 'lone.DTA', 'x.dsc'], 'a pair .DTA first; each half a row of its own, waiting');
+  assert.deepEqual(all.map(r=> [r.name, r.label, r.color, M.isSpectrum(r)]), [['a', 'Cu <2+>', '#0', true], ['lone.DTA', 'lone', '#1', false], ['x.dsc', 'B', '#2', false]], 'a half\'s label its .DSC\'s title, else its stem');
+  assert.deepEqual(all.map(M.partsOf), [[{ name: 'a.DTA', warn: '' }, { name: 'a.DSC', warn: '' }], [{ name: 'lone.DTA', warn: 'its .DSC is missing: not plotted' }], [{ name: 'x.dsc', warn: 'its .DTA is missing: not plotted' }]]);
+  assert.deepEqual(all.map(M.rowNote), [null, { key: 'alone', line: 'lone.DTA: its .DSC is missing: not plotted until it is paired; drop it, or drag one onto it by its own grip.' },
+    { key: 'alone', line: 'x.dsc: its .DTA is missing: not plotted until it is paired; drop it, or drag one onto it by its own grip.' }]);
+  // by its grip, the .DSC onto the .DTA alone, whatever their names: a spectrum, in the .DTA's row, its colour; named by its .DTA, labelled by its .DSC
+  all[1].label = 'lone';   // (its label as it started)
+  M.regroup(all, dropPart(all.map(M.rowFiles), { i: 2, p: 0 }, { i: 1, p: 0 }), list => '#n' + list.length);
+  assert.deepEqual(names(), ['a.DTA + a.DSC', 'lone.DTA + x.dsc']);
+  assert.deepEqual([all[1].name, all[1].label, all[1].color, M.isSpectrum(all[1]), M.rowNote(all[1])], ['lone', 'B', '#1', true, null]);
+  const kept = all[0];
+  // the .DTA dragged onto the other .DTA: swapped, a row of two .DTA files not plotted, said; its label renamed kept, its inclusion
+  all[1].label = 'mine'; all[1].included = false; all[1].held = {};
+  M.regroup(all, dropPart(all.map(M.rowFiles), { i: 1, p: 0 }, { i: 0, p: 0 }), list => '#n' + list.length);
+  assert.deepEqual(names(), ['lone.DTA + a.DSC', 'a.DTA + x.dsc']);
+  assert.deepEqual(all.map(r=> [r.name, r.label, r.color, r.included, M.isSpectrum(r)]), [['lone', 'mine', '#1', false, true], ['a', 'B', '#0', undefined, true]], 'each row from the one its first file headed');
+  // off every file: each its own row, under its own; a .DTA onto a .DTA alone: paired, not plotted
+  M.regroup(all, dropPart(all.map(M.rowFiles), { i: 1, p: 1 }, null), list => '#n' + list.length);
+  M.regroup(all, dropPart(all.map(M.rowFiles), { i: 0, p: 1 }, null), list => '#n' + list.length);
+  assert.deepEqual(names(), ['lone.DTA', 'a.DSC', 'a.DTA', 'x.dsc']);
+  M.regroup(all, dropPart(all.map(M.rowFiles), { i: 2, p: 0 }, { i: 0, p: 0 }), list => '#m' + list.length);
+  assert.deepEqual(names(), ['lone.DTA + a.DTA', 'a.DSC', 'x.dsc']);
+  assert.deepEqual(M.rowNote(all[0]), { key: 'pair:a.DTA', line: 'lone.DTA + a.DTA: two .DTA files paired: not plotted; drag a file by its own grip to pair it.' });
+  assert.deepEqual(M.partsOf(all[0]).map(x=> x.warn), ['two .DTA files paired: not plotted', 'two .DTA files paired: not plotted']);
+  // a row of the same files is its record as it is; a pair that cannot be read waits, said with why
+  const before = all.slice();
+  M.regroup(all, all.map(M.rowFiles), ()=> '#z');
+  assert.ok(all.every((r, i)=> r === before[i]), 'nothing new where nothing changed');
+  add([file('bad.DTA', bad.dta), file('bad.DSC', bad.dsc)]);
+  assert.deepEqual([all[3].name, M.isSpectrum(all[3]), M.rowNote(all[3])], ['bad', false, { key: 'pair:bad.DSC', line: 'bad.DTA + bad.DSC: its .DTA holds fewer than the 99 points its .DSC gives: not plotted.' }]);
+  assert.equal(M.readRow([file('q.DTA', a.dta), file('q.DSC', null)]).why, 'its bytes are not stored in this browser any more');
+  assert.equal(kept.name, 'a');
+  // a project's: a row as it is held (its files in the list's order, its spectrum read again where it holds none), else left out
+  const r1 = M.fileIn(U, { name: 'r', label: 'r', color: '#1', rawFiles: [file('r.DSC', a.dsc), file('r.DTA', a.dta)] });
+  assert.deepEqual([r1.rawFiles.map(x=> x.name), M.isSpectrum(r1), r1.b.length], [['r.DTA', 'r.DSC'], true, 16]);
+  const r2 = M.fileIn(U, { name: 'h.DSC', label: 'h', color: '#2', rawFiles: [file('h.DSC', a.dsc), 5], b: 'x', rescaled: 1 });
+  assert.deepEqual([r2.name, 'b' in r2, 'rescaled' in r2, M.rowNote(r2).key], ['h.DSC', false, false, 'alone']);
+  assert.deepEqual([M.fileIn(U, { name: 'n', rawFiles: [{ name: 'n.txt' }] }), M.fileIn(U, { name: 'n' })], [null, null]);
+  assert.deepEqual(M.rowFiles({ name: 'old', b: [1, 2], a: [1, 2] }), [{ name: 'old' }], 'a spectrum with no files: a stand-in, its row one of the list');
+  assert.equal(M.readNote({ rescaled: false, rawFiles: [file('m.DTA', null), file('m.DSC', null)], name: 'm' }), 'm.DSC: no microwave frequency (MWFQ): plotted on the field measured, not at 9.5 GHz; no g axis.');
 });
 
 test('a spectrum kept by its bytes; a file and a card as a project holds them; the state', ()=>{
@@ -188,9 +254,9 @@ test('the markup: a card\'s body and instructions; how the files were read (v567
   assert.ok(b.includes('value="0.2"') && b.includes(PAGE.NORM_OPTIONS));
   assert.equal(H.P({ id: 3 }), 'epr3');
   assert.ok(H.eprInfo('TAIL').endsWith(' TAIL') && H.eprInfo('').includes('<b>g = hν / (μ<sub>B</sub>·B)</b>'));
-  // (v567: a lone half is said among the files not loaded, epr.js onDrop; a spectrum with no
-  // microwave frequency, how it was read, named by its .DSC, else its stem; v572: a file's)
-  assert.deepEqual([{ name: 'a', rescaled: true }, { name: 'b', rescaled: false, rawFiles: [{ name: 'b.DSC' }, { name: 'b.DTA' }] }, { name: 'c', rescaled: false }].map(M.readNote),
+  // (v581: a lone half waits in the list, said to check, rowNote; a spectrum with no
+  // microwave frequency, how it was read, named by its .DSC, else its name; v572: a file's)
+  assert.deepEqual([{ name: 'a', rescaled: true }, { name: 'b', rescaled: false, rawFiles: [{ name: 'b.DTA' }, { name: 'b.DSC' }] }, { name: 'c', rescaled: false }].map(M.readNote),
     ['', 'b.DSC: no microwave frequency (MWFQ): plotted on the field measured, not at 9.5 GHz; no g axis.', 'c: no microwave frequency (MWFQ): plotted on the field measured, not at 9.5 GHz; no g axis.']);
   assert.deepEqual([M.extOf('x.dta'), M.extOf('y.DSC')], ['.DTA', '.DSC']);
 });
@@ -225,26 +291,24 @@ export function caseOf(seed){
 }
 
 /* ---- epr.js's wiring, in short ---- */
-// The case's pairs read as a drop does (each its colour by the files loaded before), the
-// alerts' lines (refused, lone), then the state put back as a restore does.
+// The case's files dropped (each pair's .DSC and .DTA, a lone .DSC after them), paired and made
+// rows as a drop does (v581: a pair that cannot be read and a half alone rows not plotted, each
+// its colour after those before; to v580 refused), what is said of them, then the state put
+// back as a restore does.
 export function loadCase(c){
-  const files = [], invalid = [];
-  for (const q of c.pairs){
-    const p = M.parseDsc(new TextDecoder().decode(enc(q.dsc))), bad = M.dscError(p);
-    const res = bad ? { error: bad } : M.spectrumOf(q.stem, p, { name: q.stem + '.DSC', bytes: enc(q.dsc) }, q.dta.buffer.slice(0), q.stem + '.DTA');
-    if (res.error){ invalid.push(`${q.stem} (${res.error})`); continue; }
-    res.color = PAGE.nextColor(files); files.push(M.keepSpectrum(res));
-  }
-  const S = { all: files, alerts: [invalid.map(PAGE.esc), c.lone.map(PAGE.esc)] };
-  restoreCase(S, { files: files.map(f=> ({ ...f })), ...c.state });
+  const all = [], got = [...c.pairs.flatMap(q=> [{ name: q.stem + '.DSC', bytes: enc(q.dsc) }, { name: q.stem + '.DTA', bytes: q.dta }]), ...c.lone.map(n=> ({ name: n, bytes: enc(`TITL '${n}'\n`) }))];
+  M.regroup(all, autoPair([], got, M.sideOf), PAGE.nextColor);
+  const S = { all, alerts: all.map(M.rowNote).filter(Boolean).map(n=> [n.key, PAGE.esc(n.line)]) };
+  restoreCase(S, { files: all.map(f=> ({ ...f })), ...c.state });
   return S;
 }
+// (the spectra included, which the cards draw: modkit's files, epr.js sample)
+const filesOf = S => S.all.filter(f=> f.included !== false && M.isSpectrum(f));
 function restoreCase(S, s){
   S.all = s.files.map(f=>{ const g = { ...f, name: f.name, label: f.label, color: f.color }; delete g.included; delete g.held; return M.fileIn(U, g); }).filter(Boolean);
-  S.recs = M.cardsIn(U, s).map(src=> recIn(src, c=> M.readCard(U, S.all.filter(f=> f.included !== false), c), M.KINDS, Object.keys(M.KINDS)));
+  S.recs = M.cardsIn(U, s).map(src=> recIn(src, c=> M.readCard(U, filesOf(S), c), M.KINDS, Object.keys(M.KINDS)));
   settleNames(S.recs, Object.keys(M.KINDS), ()=> 'Spectra');
 }
-const filesOf = S => S.all.filter(f=> f.included !== false);
 export function stepCase(S, [k, a, b]){
   const rec = S.recs[a];
   if (k === 'norm'){ if (rec) rec.norm = PAGE.normOf(b); }

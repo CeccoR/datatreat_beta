@@ -1,10 +1,10 @@
 import { fmtNum, fmtData, setupDropzone, maxArr, minArr, NORM_OPTIONS, normOf, fileLine, NOT_READ, bytesOf, nextColor, guardNumericInput, esc, registerModule, keeper, objId, exactKey } from './utils.js';
+import { autoPair } from './filelist-model.js';
 import { boxSmooth, widthText } from './smooth.js';
 import { Plot } from './plot.js';
 import { cardInfo, fileSafe, nameDownloads } from './cards.js';
 import { moduleKit, wideCsv, num, numStr, finitePairs, cardList } from './modkit.js';
 import { plotWrap, swatchLegend, viewOf, setView, viewKey } from './modcharts.js';
-import { decodeText } from './textdata.js';
 import * as M from './epr-model.js';
 import * as H from './epr-html.js';
 
@@ -21,8 +21,8 @@ import * as H from './epr-html.js';
    key). It has no job that runs on while hidden. utils.js registerModule says how a module
    is made so.
 
-   SPLIT (v563): what it works out that touches no page (a pair read, a drop's files
-   grouped, a spectrum kept, a file and a card as a project holds them, the smoothing's
+   SPLIT (v563): what it works out that touches no page (a pair read, the list's rows and
+   their records, a spectrum kept, a file and a card as a project holds them, the smoothing's
    width and points, the stacking, the plot's options, the CSV's columns) in
    epr-model.js, its words and markup in epr-html.js, both tested in Node. Here the page:
    the instance's state (S), the drop, the cards, their fields and plots. Each is a
@@ -43,20 +43,6 @@ const P = H.P;
 const smoothKept = keeper('epr-smoothed', 8);
 const smoothedOf = (f, w)=> smoothKept(f.a, exactKey([objId(f.b), w]), ()=> boxSmooth(f.b, f.a, w));
 
-/* A pair read, .DTA and .DSC (epr-model.js): the spectrum, or { error } saying why it
-   cannot be, or { unread } the file whose bytes cannot be read (gone from the disk: utils.js
-   NOT_READ). Its .DSC first, its .DTA only once that gives a field axis. */
-async function processPair(stem, dtaFile, dscFile){
-  const dscBytes = await bytesOf(dscFile);
-  if (!dscBytes) return { unread: dscFile, other: dtaFile };
-  const p = M.parseDsc(decodeText(dscBytes));
-  const bad = M.dscError(p);
-  if (bad) return { error: bad };
-  const dta = await bytesOf(dtaFile);
-  if (!dta) return { unread: dtaFile, other: dscFile };
-  return M.spectrumOf(stem, p, { name: dscFile.name, bytes: dscBytes }, dta.buffer, dtaFile.name);
-}
-
 /* =========================================================
    THE INSTANCE: its state S, which every function below takes:
      key, root, layer, shown, $  its context (utils.js makeInstance: shown() whether its tab
@@ -65,9 +51,11 @@ async function processPair(stem, dtaFile, dscFile){
                           when not marks the instance to be drawn whole as it is shown
                           (stale); drawnAt, the width it was last drawn whole at, its draw
                           key (redrawTab)
-     kit, allFiles, files the module (modkit.js): every file loaded, in list order, {name,
-                          label, b[], a[]}, and the included ones, which the analysis sees;
-                          the alerts under the drop zone; the cards' settings in the history
+     kit, allFiles, files the module (modkit.js): every row of the list, in list order, {name,
+                          label, color, rawFiles (its files: a .DTA and its .DSC, or a half
+                          waiting for its partner), and its spectrum b[], a[] where its files
+                          read as one}, and the included spectra, which the analysis sees; the
+                          alerts under the drop zone; the cards' settings in the history
      deck                 the cards (cards.js), each its own normalisation and smoothing of
                           the same spectra, stacked on its own plot
 ========================================================= */
@@ -93,9 +81,14 @@ const drawable = S => S.shown() || !(S.stale = true);
 function kitHooks(S){
   return {
     root: S.root, key: S.key, layer: S.layer,
-    // (how the files were read, epr-model.js readNote: worked out from those there are, each
-    // file's until its box's ×, v572; to v571 the box's until a drop, a restore or Remove all)
-    notes: ()=> S.allFiles.map(f=> [f, M.readNote(f)]).filter(([, t])=> t).map(([f, t])=> ({ what: 'read', line: esc(t), files: [f] })),
+    // (what is said of the rows not plotted, to check, epr-model.js rowNote, v581; how the files
+    // were read, readNote: worked out from those there are, each file's until its box's ×, v572;
+    // to v571 the box's until a drop, a restore or Remove all)
+    notes: ()=> notesOf(S),
+    // Only a row whose files read as a spectrum is plotted (v581: a half waits in the list).
+    sample: M.isSpectrum,
+    // A row is a .DTA and its .DSC, both in FILE, each with a grip of its own (v581, as GC's).
+    pairs: { files: M.rowFiles, parts: M.partsOf, regroup: rows => regroup(S, rows) },
     refresh: ()=> afterFilesChange(S),
     // A label or a colour changed: the zoom kept, the data being the same.
     redraw: ()=> updateEpr(S, true),
@@ -146,28 +139,35 @@ function redrawTab(S){
   if (S.files.length){ S.deck.fitNames(); updateEpr(S, true); }
 }
 
-/* ---- Files dropped: complete pairs load; a lone half is not (nothing is held back
-   waiting for its partner), said with the files not loaded, each with why (utils.js FILE
-   ALERTS: v567, to v566 a box of its own, and a pair refused named by its stem); a file
-   whose bytes cannot be read (gone from the disk) said, the other pairs loaded. ---- */
+/* ---- Files dropped (v581, as GC's): each .DTA and .DSC loaded, paired by their names with
+   each other or with a half waiting in the list (filelist-model.js autoPair, a Map of their
+   stems: a file named after an object's own property, constructor or __proto__, pairs as any
+   other, bug 23); a row that reads as a spectrum plotted, any other waiting in the list, said
+   (epr-model.js rowNote; to v580 a lone half and a pair that could not be read were refused).
+   Not loaded, each with why (utils.js FILE ALERTS): a file of another kind, one whose bytes
+   cannot be read (gone from the disk); one of a name loaded (any case) is said as loaded
+   already. ---- */
 async function onDrop(S, fileList){
-  const existingStems = new Set(S.allFiles.map(f=>f.name));
-  const { groups, invalid, already: alreadyLoaded } = M.groupsOf(fileList, existingStems);
-  const bad = invalid.map(n=> fileLine(n, 'not a .DTA or .DSC file'));
-  for (const [stem, pair] of Object.entries(groups)){
-    if (pair.dta && pair.dsc){
-      let result;
-      try { result = await processPair(stem, pair.dta, pair.dsc); } catch(e){ result = { error: `could not be read: ${e && e.message || e}` }; }
-      if (result.unread) bad.push(fileLine(result.unread.name, NOT_READ), fileLine(result.other.name, `its ${M.extOf(result.unread.name)} could not be read`));
-      else if (!result.error){ result.color = nextColor(S.allFiles); S.kit.add(M.keepSpectrum(result)); existingStems.add(stem); }
-      else bad.push(fileLine(`${pair.dta.name} + ${pair.dsc.name}`, result.error));
-    } else {
-      const f = pair.dta || pair.dsc;
-      bad.push(fileLine(f.name, `its ${pair.dta ? '.DSC' : '.DTA'} is missing: drop the two together`));
-    }
+  const names = new Set(S.allFiles.flatMap(r=> M.rowFiles(r).map(f=> f.name.toLowerCase()))), bad = [], dup = [], got = [];
+  for (const f of fileList){
+    if (!M.kindOf(f.name)){ bad.push(fileLine(f.name, 'not a .DTA or .DSC file')); continue; }
+    if (names.has(f.name.toLowerCase())){ dup.push(f.name); continue; }
+    names.add(f.name.toLowerCase());
+    const bytes = await bytesOf(f);
+    if (bytes) got.push({ name: f.name, bytes }); else bad.push(fileLine(f.name, NOT_READ));
   }
-  S.kit.said(bad, alreadyLoaded);
+  if (got.length) regroup(S, autoPair(S.allFiles.map(M.rowFiles), got, M.sideOf));
+  S.kit.said(bad, dup);
   afterFilesChange(S);
+}
+// The list's records made of its rows (epr-model.js regroup), a new row its colour after the others'.
+const regroup = (S, rows)=> M.regroup(S.allFiles, rows, nextColor);
+// What the reading of the rows said: those not plotted, to check; the spectra read on the field measured.
+function notesOf(S){
+  const out = [];
+  S.allFiles.forEach(r=>{ const n = M.rowNote(r); if (n) out.push({ what: 'check', key: n.key, line: esc(n.line), files: [r] }); });
+  S.allFiles.forEach(r=>{ const t = M.readNote(r); if (t) out.push({ what: 'read', line: esc(t), files: [r] }); });
+  return out;
 }
 function afterFilesChange(S){
   S.kit.showFiles();

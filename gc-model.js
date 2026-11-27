@@ -18,9 +18,9 @@
 
    A card's settings are its parameters P (newParams; gc.js's card holds them): the
    per-sample arrays ms, As, Qs, Ts, Ps, startArr, endArr, lightOnDates, aligned with the
-   included samples (`files`); each parameter's all/one mode and shared value; what the rates
-   are normalised by (norm), p's unit, the injection delay, and the gases each section draws
-   (gasSel).
+   included samples (`files`), a mass or an area null where it was left empty (v581: none);
+   each parameter's all/one mode and shared value; what the rates are normalised by (normBy,
+   m or A), p's unit, the injection delay, and the gases each section draws (gasSel).
 ========================================================= */
 import { textLines, readTable, parseNum, width } from './textdata.js';
 import { readTcd } from './gc-tcd.js';
@@ -33,22 +33,28 @@ import { keepSeen, inKeys } from './alerts.js';
 // the matching CSV header.
 const SUP1 = '<tspan baseline-shift="super" font-size="8">-1</tspan>';
 const SUP2 = '<tspan baseline-shift="super" font-size="8">-2</tspan>';
-/* What a card's rates are normalised by (v540), one choice a card so that its plots and its
-   bar chart never mix units: the photocatalyst's mass m (mg), the rate in µmol g⁻¹ h⁻¹ and
-   the production in µmol g⁻¹, or, for a film, its area A (cm²), in µmol cm⁻² h⁻¹ and
-   µmol cm⁻². Both in µmol (from v541; by mass mmol g⁻¹ h⁻¹ and mmol g⁻¹ to v540, the same
-   quantity, its numbers now 1000 times those): a gas's flow in µmol/h over the parameter
-   as typed, times `per`, the parameter's units in one of the rate's denominator — 1000 mg
-   in a g (m mg is m/1000 g), 1 cm² in a cm². Each with its labels, made alike: the axis
-   titles (SVG), the CSV headers, the column of the parameter table and of gc_info.csv. */
-const normOf = (per, svg, csv, col, colCsv)=> ({ per, col, colCsv,
-  rateSvg: `Production Rate (µmol ${svg} h${SUP1})`, cumSvg: `Production (µmol ${svg})`,
-  rateCsv: `Production Rate (umol ${csv} h^-1)`, cumCsv: `Production (umol ${csv})`, unitCsv: `umol ${csv} h^-1` });
-export const NORM = {
-  mass: normOf(1000, `g${SUP1}`, 'g^-1', 'm (mg)', 'm (mg)'),
-  area: normOf(1, `cm${SUP2}`, 'cm^-2', 'A (cm²)', 'A (cm^2)'),
+/* What a card's rates are normalised by (v540; v581 chosen in the m column's header, m or
+   A, its values each its own), one choice a card so that its plots and its bar chart never
+   mix units: the photocatalyst's mass m (mg), the rate in µmol g⁻¹ h⁻¹ and the production in
+   µmol g⁻¹, or, for a film, its area A (cm²), in µmol cm⁻² h⁻¹ and µmol cm⁻²; or nothing,
+   where an included sample has none of the one chosen (none, v581): µmol h⁻¹ and µmol. All
+   in µmol (from v541; by mass mmol g⁻¹ h⁻¹ and mmol g⁻¹ to v540, the same quantity, its
+   numbers now 1000 times those): a gas's flow in µmol/h over the parameter as typed, times
+   `per`, the parameter's units in one of the rate's denominator — 1000 mg in a g (m mg is
+   m/1000 g), 1 cm² in a cm². Each with its labels, made alike: the axis titles (SVG), the
+   CSV headers; m and A the column of the parameter table and of gc_info.csv too. */
+const normOf = (per, svg, csv)=>{
+  const s = svg ? ' ' + svg : '', c = csv ? ' ' + csv : '';
+  return { per, rateSvg: `Production Rate (µmol${s} h${SUP1})`, cumSvg: `Production (µmol${s})`,
+    rateCsv: `Production Rate (umol${c} h^-1)`, cumCsv: `Production (umol${c})`, unitCsv: `umol${c} h^-1` };
 };
-export const NORMS = Object.keys(NORM);
+export const NORM = {
+  m: { ...normOf(1000, `g${SUP1}`, 'g^-1'), col: 'm (mg)', colCsv: 'm (mg)' },
+  A: { ...normOf(1, `cm${SUP2}`, 'cm^-2'), col: 'A (cm²)', colCsv: 'A (cm^2)' },
+  none: normOf(1, '', ''),
+};
+// The quantities the m column's header chooses between.
+export const PER = ['m', 'A'];
 
 /* The gases the module can read, in display order. `col` finds the column: the name
    has to carry the formula as a word of its own, or "O2" would also match the "CO2"
@@ -397,13 +403,14 @@ export const gasPresent = (files, k)=> files.some(f=> hasGas(f, k));
 
 /* ---- PAIRS (v544) ----
    A table and its raw chromatograms share a row of the file list: the table's record, the
-   raw chromatograms its `mate`. Files dropped pair by their names (gc-pair.js autoPair: the
-   same name but for a final _TCD, any case, a browser's " (1)" aside), with each other or
-   with a file alone in the list; a file dragged by its own grip onto another pairs or swaps
-   (dropPart). Which kind each file is never changes the pairing: two tables or two files
-   of raw chromatograms may be paired, which is said (gc-html.js pairNotes): of two
-   tables the first is the sample, the second ignored; two files of raw chromatograms have
-   no times, no sample. Pairing is a change: a step of the history, saved. */
+   raw chromatograms its `mate`. Files dropped pair by their names (filelist-model.js autoPair,
+   by gc-pair.js sideOf: the same name but for a final _TCD, any case, a browser's " (1)"
+   aside), with each other or with a file alone in the list; a file dragged by its own grip
+   onto another pairs or swaps (filelist-model.js dropPart), a list of tables alone too
+   (v581). Which kind each file is never changes the pairing: two tables or two files of raw
+   chromatograms may be paired, which is said (gc-html.js pairNotes): of two tables the first
+   is the sample, the second ignored; two files of raw chromatograms have no times, no sample.
+   Pairing is a change: a step of the history, saved. */
 export const rowFiles = r => r.mate ? [(({ mate: _m, ...x })=> x)(r), r.mate] : [r];
 /* The rows given anew (arrays of files): the list's records (`all`) made of them, the
    table first beside raw chromatograms, and the per-sample arrays (`slots`, every card's)
@@ -458,10 +465,11 @@ export function newParams(files){
     // Each of m, A, Q, T, p, start and end toggles independently. Default: everything shared ('all').
     mMode: 'all', aMode: 'all', qMode: 'all', tMode: 'all', pMode: 'all', startMode: 'all', endMode: 'all',
     mShared: 15, aShared: 1, qShared: 2, tShared: T_NEW, pShared: P_ATM, startShared: 0, endShared: 24,
-    /* What the rates are normalised by (NORM, v540): 'mass' (m, as to v539) or 'area' (A,
-       a film's), the card's one choice. The masses and the areas are both kept, each with
-       its all/one, whichever is in force: switching back and forth loses neither. */
-    norm: 'mass',
+    /* What the rates are normalised by (NORM, v540; v581 the m column's header): 'm' (the
+       mass, as to v539) or 'A' (the area, a film's), the card's one choice. The masses and
+       the areas are both kept, each with its all/one, whichever is in force: switching back
+       and forth loses neither, nor reads one as the other. */
+    normBy: 'm',
     pUnit: 'atm',
     delayAuto: true, delayMan: INJ_DELAY_AUTO,
   };
@@ -473,8 +481,15 @@ export const injectedAt = (P, d)=> new Date(+d + injDelay(P)*1000);
 // Effective per-sample values (respect each parameter's all/one mode).
 export const mOf     = (P, k)=> P.mMode==='all'     ? P.mShared     : P.ms[k];
 export const aOf     = (P, k)=> P.aMode==='all'     ? P.aShared     : P.As[k];   // cm²
-// What sample k's rates are divided by: its mass in mg, or its area in cm².
-export const perOf   = (P, k)=> P.norm==='area' ? aOf(P, k) : mOf(P, k);
+// Sample k's value of the quantity chosen (normBy): its mass in mg, or its area in cm²; null none.
+export const valOf   = (P, k)=> P.normBy==='A' ? aOf(P, k) : mOf(P, k);
+/* The included samples (`files`) with no value above 0 of the quantity chosen (v581: a field
+   left empty), and what the rates are normalised by (NORM's key): the quantity chosen where
+   every sample has one, else none, the rates as they flow. */
+export const lacking = (P, files)=> files.filter((_, k)=> !(valOf(P, k) > 0));
+export const normKey = (P, files)=> lacking(P, files).length ? 'none' : P.normBy;
+// What sample k's rates are divided by, normalised by `nk` (normKey): its mass in mg, its area in cm², or 1.
+export const perOf   = (P, k, nk)=> nk === 'none' ? 1 : valOf(P, k);
 export const qOf     = (P, k)=> P.qMode==='all'     ? P.qShared     : P.Qs[k];
 export const tOf     = (P, k)=> P.tMode==='all'     ? P.tShared     : P.Ts[k];
 export const pOf     = (P, k)=> P.pMode==='all'     ? P.pShared     : P.Ps[k];   // Pa
@@ -542,13 +557,14 @@ export function flipMode(P, files, pair){
    A sample's values (v544): its table's, or, paired with its raw chromatograms and an
    Integration card above the card, that card's (gc-integ.js valuesFor: each gas
    re-integrated where it can be, the table's where it cannot, and why), the table's dates
-   giving the times either way: G, the gases' values. Its tables kept by gc.js (tablesKept)
-   under all they are made from (tablesKey). */
-export const tablesKey = (U, P, f, h, G, lightOn)=>{
+   giving the times either way: G, the gases' values; `nk` what the card's rates are
+   normalised by (normKey). Its tables kept by gc.js (tablesKept) under all they are made from
+   (tablesKey). */
+export const tablesKey = (U, P, f, h, G, lightOn, nk)=>{
   const ks = Object.keys(G);
-  return U.exactKey([f.injDates.map(d=> +d), ks.map(k=> [k, U.objId(G[k])]), +lightOn, injDelay(P), qOf(P, h), tOf(P, h), pOf(P, h), P.norm === 'area' ? ['A', aOf(P, h)] : mOf(P, h)]);
+  return U.exactKey([f.injDates.map(d=> +d), ks.map(k=> [k, U.objId(G[k])]), +lightOn, injDelay(P), qOf(P, h), tOf(P, h), pOf(P, h), nk === 'none' ? nk : [nk, valOf(P, h)]]);
 };
-export function tablesOf(U, P, f, h, lightOn, G = f.gas){
+export function tablesOf(U, P, f, h, lightOn, nk, G = f.gas){
   const hours = d => (d - lightOn)/3600000;
   // The injections in time order; `t`, the sample's times (the light-on instant
   // among them), spans the plot's x-range.
@@ -573,7 +589,7 @@ export function tablesOf(U, P, f, h, lightOn, G = f.gas){
     const tHours = pts.map(p=> hours(p.d));
     const pct = pts.map(p=> p.v);
     const flow = pct.map(v=> v/100*F*1e6);             // umol/h of this gas
-    const flowM = flow.map(v=> v/perOf(P, h)*NORM[P.norm].per);   // per g: µmol/(g h); per cm²: µmol/(cm² h)
+    const flowM = flow.map(v=> v/perOf(P, h, nk)*NORM[nk].per);   // per g: µmol/(g h); per cm²: µmol/(cm² h); none: µmol/h
     // From the first injection on; FmInt, from the interval's start (computeRates).
     const cum = U.cumtrapz(tHours, flowM);
     gas[k] = { t: tHours, pct, flow, Fm: flowM, cum, inj: pts.map(p=> p.i) };
@@ -754,7 +770,7 @@ const asSet = (U, v)=> String(v).replace('.', U.settings.decimal);
    (`costResults`) and samples (`samples`, samplesOf), `files` the included. */
 export function csvEntries(U, P, n, dataTables, costResults, samples, files){
   if (!dataTables.length) return [];
-  const entries = [], N = NORM[P.norm];
+  const entries = [], N = NORM[normKey(P, files)];
   // One block of columns per sample (each keeps its own time axis). gc_raw.csv carries
   // the full series with every intermediate quantity; gc_results.csv keeps only the
   // three plotted columns, between the interval's lines as plotted.
@@ -765,7 +781,7 @@ export function csvEntries(U, P, n, dataTables, costResults, samples, files){
   entries.push({name:`${n} - gc_raw.csv`,     text:seriesCsv(U, N, shown, dataTables, true)});
   entries.push({name:`${n} - gc_results.csv`, text:seriesCsv(U, N, shown, cutTables(P, dataTables), false)});
   entries.push(...meanCsvs(U, P, n, N, shown, costResults, samples));
-  entries.push({name:`${n} - gc_info.csv`, text:infoCsv(U, P, N, dataTables)});
+  entries.push({name:`${n} - gc_info.csv`, text:infoCsv(U, P, dataTables)});
   return entries;
 }
 // The time series, a block of columns a sample (`full`: gc_raw.csv's, every quantity).
@@ -857,24 +873,27 @@ function meanCsvs(U, P, n, N, shown, costResults, samples){
   return [{name:`${n} - mean_rates.csv`, text:t2}];
 }
 // gc_info.csv — per-sample inputs + the integration interval used
-function infoCsv(U, P, N, dataTables){
+function infoCsv(U, P, dataTables){
   // Local time, as the light-on field shows it and as the instrument logged it:
   // toISOString() wrote UTC, two hours early in Italian summer time.
   const pad = n => String(n).padStart(2, '0');
   const fmtDate = v =>{ if (!v) return ''; const d = new Date(v);
     return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
-  // (the mass, or the area where the card normalises by it: its column, v540)
-  let t3 = U.csvLine(['Sample',N.colCsv,'Q (mL/min)','T (°C)',`p (${P.pUnit})`,'Light-on','Interval start (h)','Interval end (h)','Injection delay (s)']);
-  dataTables.forEach((d,k)=> t3 += U.csvLine([d.label, asSet(U, perOf(P, k)), asSet(U, qOf(P, k)), asSet(U, tOf(P, k)), asSet(U, inUnit(pOf(P, k), P.pUnit)), fmtDate(P.lightOnDates[k]), asSet(U, startOf(P, k)), asSet(U, endOf(P, k)), asSet(U, injDelay(P))]));
+  // (the mass, or the area where the card normalises by it: its column, v540; a value left
+  // empty, none: an empty cell, v581)
+  let t3 = U.csvLine(['Sample',NORM[P.normBy].colCsv,'Q (mL/min)','T (°C)',`p (${P.pUnit})`,'Light-on','Interval start (h)','Interval end (h)','Injection delay (s)']);
+  dataTables.forEach((d,k)=> t3 += U.csvLine([d.label, valOf(P, k) == null ? '' : asSet(U, valOf(P, k)), asSet(U, qOf(P, k)), asSet(U, tOf(P, k)), asSet(U, inUnit(pOf(P, k), P.pUnit)), fmtDate(P.lightOnDates[k]), asSet(U, startOf(P, k)), asSet(U, endOf(P, k)), asSet(U, injDelay(P))]));
   return t3;
 }
 
 /* ---- A card's state ---- */
 // The per-sample arrays, for the file list (keys the card's own, `id`).
+// A mass or an area as a restore takes it: one above 0, null none (left empty, v581), else `d`.
+const qtyIn = (U, v, d)=> v === null ? null : U.num(v, d, x=> x > 0);
 export const slotsOf = (U, P, id)=> [
   // (a value held through an exclusion, as a restore takes it: modkit RESTORED)
-  { key: id + ':m', arr:P.ms, make: v=> U.num(v, 15, x=> x > 0) },
-  { key: id + ':A', arr:P.As, make: v=> U.num(v, 1, x=> x > 0) },
+  { key: id + ':m', arr:P.ms, make: v=> qtyIn(U, v, 15) },
+  { key: id + ':A', arr:P.As, make: v=> qtyIn(U, v, 1) },
   { key: id + ':Q', arr:P.Qs, make: v=> U.num(v, 2, x=> x > 0) },
   { key: id + ':T', arr:P.Ts, make: v=> U.num(v, T_NEW, okT) },
   { key: id + ':p', arr:P.Ps, make: v=> U.num(v, P_ATM, okP) },
@@ -890,11 +909,13 @@ export function snapshotOf(P){
     mShared: P.mShared, qShared: P.qShared, tShared: P.tShared, pShared: P.pShared, startShared: P.startShared, endShared: P.endShared, pUnit: P.pUnit,
     gasSel: { a:P.gasSel.a.slice(), r:P.gasSel.r.slice() },
     delayAuto: P.delayAuto, delayMan: P.delayMan,
-    norm: P.norm, As: P.As.slice(), aMode: P.aMode, aShared: P.aShared,
+    normBy: P.normBy, As: P.As.slice(), aMode: P.aMode, aShared: P.aShared,
   };
 }
-/* Each value as it should be (modkit RESTORED): a mode 'all' or 'one', a mass, an area
-   and a flow above 0, the normalisation 'mass' or 'area' (mass when none), a pressure as the fields take it (okP), a temperature from −273 °C,
+/* Each value as it should be (modkit RESTORED): a mode 'all' or 'one', a mass and an area
+   above 0 or none (null), a flow above 0, what the rates are normalised by 'm' or 'A' (m
+   when none: v581, the `norm` of v540–v580 a parameter no longer, ignored), a pressure as
+   the fields take it (okP), a temperature from −273 °C,
    p's unit one of its own, a bound and the delay numbers, a light-on a date (else the sample's first injection),
    every per-sample array one entry a sample (to v500 an array that was none threw, a
    value that was no number drew NaN). */
@@ -904,7 +925,7 @@ export function restoreParams(U, P, s0, files){
   const fromMode = m => GK.includes(m) ? [m] : GK, sel = v => Array.isArray(v) ? GK.filter(k=> v.includes(k)) : GK;
   const gm = isObj(s.gasMode) ? s.gasMode : {};
   P.gasSel = isObj(s.gasSel) ? { a: sel(s.gasSel.a), r: sel(s.gasSel.r) } : { a: fromMode(gm.a), r: fromMode(gm.r) };
-  P.ms = U.arrOf(s.ms, n, v=> U.num(v, 15, pos)); P.Qs = U.arrOf(s.Qs, n, v=> U.num(v, 2, pos));
+  P.ms = U.arrOf(s.ms, n, v=> qtyIn(U, v, 15)); P.Qs = U.arrOf(s.Qs, n, v=> U.num(v, 2, pos));
   P.lightOnDates = U.arrOf(s.lightOnDates, n, (v, i)=> U.dateOf(v) || firstInjection(files[i]));
   // Projects from before the delay existed take it too, on Auto: the timestamps they
   // were computed from are just as late.
@@ -915,7 +936,7 @@ export function restoreParams(U, P, s0, files){
     // (mqMode / intMode), migrated to independent modes.
     if (s.mMode !== undefined){ P.mMode = mode(s.mMode); P.qMode = mode(s.qMode); P.startMode = mode(s.startMode); P.endMode = mode(s.endMode); }
     else { P.mMode = P.qMode = mode(s.mqMode); P.startMode = P.endMode = mode(s.intMode); }
-    P.mShared = U.num(s.mShared, 15, pos); P.qShared = U.num(s.qShared, 2, pos); P.startShared = U.num(s.startShared, 0); P.endShared = U.num(s.endShared, 24);
+    P.mShared = qtyIn(U, s.mShared, 15); P.qShared = U.num(s.qShared, 2, pos); P.startShared = U.num(s.startShared, 0); P.endShared = U.num(s.endShared, 24);
   } else {
     // Migrate the oldest projects: a single global interval → interval 'all' mode.
     P.mMode='one'; P.qMode='one'; P.startMode='all'; P.endMode='all';
@@ -930,10 +951,10 @@ export function restoreParams(U, P, s0, files){
   // One from before the pressure was worked out at 1 atm, where a new card starts too.
   P.pMode = mode(s.pMode); P.pShared = U.num(s.pShared, P_ATM, okP); P.Ps = U.arrOf(s.Ps, n, v=> U.num(v, P.pShared, okP));
   P.pUnit = U.oneOf(s.pUnit, Object.keys(P_UNITS));
-  // What the rates are normalised by (v540): a project from before it, by the mass, as
-  // its rates were worked out; its areas, 1 cm², kept for a switch to them.
-  P.norm = U.oneOf(s.norm, NORMS);
-  P.aMode = mode(s.aMode); P.aShared = U.num(s.aShared, 1, pos); P.As = U.arrOf(s.As, n, v=> U.num(v, 1, pos));
+  // What the rates are normalised by (v581): m where none is said; the areas, 1 cm² where
+  // none is, kept for a switch to them.
+  P.normBy = U.oneOf(s.normBy, PER);
+  P.aMode = mode(s.aMode); P.aShared = qtyIn(U, s.aShared, 1); P.As = U.arrOf(s.As, n, v=> qtyIn(U, v, 1));
 }
 /* A project from before the cards had one analysis, its settings at the top level: its
    card's record, as cards.js loads one (`cards` the state's own list, read: modkit

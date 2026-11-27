@@ -10,6 +10,7 @@
 ========================================================= */
 import { MODE, formulaOf, hklRuns, hklShow, engineOf, START_RULE, listOf, NO_TICK, NO_INSTR, msgOf, instrMsgs } from './xrd-rv-model.js';
 import { boxHtml } from './alerts.js';
+import { own } from './db.js';
 import { metric } from './xrd-cryst.js';
 import { sgPretty } from './xrd-sg.js';
 import { elementColor } from './xrd-cell3d.js';
@@ -121,7 +122,7 @@ function fitLineHtml(list, r, done, used, std){
 // dlIcon and xIcon: utils.js DL_SVG and X_SVG.
 function phaseRowsHtml(list, { p, std, pick, sel, f, lab6, dlIcon: DL_ICON, xIcon: X_SVG }){
   return list.length ? list.map(q=>{
-    const builtIn = q === lab6, on = std ? q.id === pick : !(f && q.off[f.name]);
+    const builtIn = q === lab6, on = std ? q.id === pick : !(f && own(q.off, f.name));
     // (their disabled state and title are lockRows')
     const pickEl = std
       ? `<input type="radio" name="${p}Pick" data-pick="${esc(q.id)}"${on ? ' checked' : ''} aria-label="Refine the standard with ${esc(q.prep.name)}">`

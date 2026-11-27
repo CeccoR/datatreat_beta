@@ -16,7 +16,7 @@
    in as one object, U = { isObj, colorOf, scansOf } (xrd.js U; scansOf: a file's bytes
    parsed as XML, xrd-instr.js readXrdmlScans' scans, or why not).
 ========================================================= */
-import { fixed } from './db.js';
+import { fixed, own } from './db.js';
 import { keepSeen } from './alerts.js';
 import { cifRef, cifIn } from './xrd-peaks-model.js';
 
@@ -147,7 +147,7 @@ export function migrate(U, s){
   const si = s.standardName ? incl.findIndex(f=> U.isObj(f) && f.name === s.standardName) : -1;
   const cut = a => Array.isArray(a) ? a.filter((_, i)=> i !== si) : a;
   const rv = U.isObj(s.rv) ? s.rv : {}, res = U.isObj(rv.results) ? rv.results : {};
-  const stdRes = si >= 0 && res[s.standardName] ? { [s.standardName]: res[s.standardName] } : {};
+  const stdRes = si >= 0 && own(res, s.standardName) ? { [s.standardName]: own(res, s.standardName) } : {};
   const smpRes = Object.fromEntries(Object.entries(res).filter(([k])=> !(si >= 0 && k === s.standardName)));
   let ci = s.curIdx || 0; if (si >= 0 && ci > si) ci--;
   return {
@@ -248,7 +248,7 @@ export const prefixOf = a => (a.type === 'scherrer' ? 'xrdA' : 'xrdR') + a.id;
 // A Rietveld state with what a run wrote for the patterns named (runPatch), put where it
 // goes; null where nothing new goes.
 export function withResults(rv, names, wrote, put){
-  const old = rv.results || {}, add = Object.entries(wrote).filter(([k, r])=> names.has(k) && old[k] !== r);
+  const old = rv.results || {}, add = Object.entries(wrote).filter(([k, r])=> names.has(k) && own(old, k) !== r);
   return add.length ? put({ ...rv, results: { ...old, ...Object.fromEntries(add) } }) : null;
 }
 // A card's settings copied whole (JSON: they are plain data).

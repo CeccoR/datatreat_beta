@@ -3,12 +3,14 @@
    and the Stacked Spectra cards; tests/eprmodel.test.mjs calls it in Node): a pair's .DSC
    read (its parameters, the field axis rescaled to 9.5 GHz), its .DTA's values as IRFMT
    and IKKF store them, the spectrum with its baseline taken off, or why it cannot be; the
-   files of a drop grouped by stem; a spectrum's arrays fixed and kept by its .DTA's bytes;
-   a file and a card as a project holds them (the smoothing of before v510 a number of
-   points) and the state saved; the smoothing width typed and the points it spans; the
-   stacking each normalisation draws, the plot's options and range; the CSV's columns.
-   Taken out of v562's epr.js (createEpr, one closure of 245 lines, and the functions round
-   it) with their operations in their order: the same values to the last bit.
+   list's rows (v581, as GC's: a .DTA and its .DSC, paired by their names or by a file's grip,
+   a half alone waiting for its partner), each one's record, what it reads as and what is said
+   of it; a spectrum's arrays fixed and kept by its .DTA's bytes; a file and a card as a
+   project holds them (the smoothing of before v510 a number of points) and the state saved;
+   the smoothing width typed and the points it spans; the stacking each normalisation draws,
+   the plot's options and range; the CSV's columns. Taken out of v562's epr.js (createEpr,
+   one closure of 245 lines, and the functions round it) with their operations in their
+   order: the same values to the last bit.
 
    utils.js's and modkit.js's helpers, which need a page to load, are handed in as one
    object, U = { num, numStr, normOf, finitePairs, cardList, maxArr, minArr, fmtNum,
@@ -16,6 +18,7 @@
 ========================================================= */
 import { meanStep, widthText, ptsNum, ptsText } from './smooth.js';
 import { fixed } from './db.js';
+import { decodeText } from './textdata.js';
 
 /* ---- A spectrum kept (pure: the module's, for every instance) ----
    Its field and intensities, which nothing changes once read: fixed (db.js), the same
@@ -78,28 +81,28 @@ export function dscError(p){
 /* The .DTA's values as IRFMT stores them (64-bit floats unless it says otherwise), and
    for complex data (IKKF CPLX) the real part of each real/imaginary pair: read
    as plain doubles, those came out as garbage or stretched over twice the axis.
-   The data must be in a format the reader knows and as long as XPTS says.
-   → { s } or { error }. */
-export function dtaValues(p, buf){
+   The data must be in a format the reader knows and as long as XPTS says. `bytes` the
+   .DTA's (a Uint8Array). → { s } or { error }. */
+export function dtaValues(p, bytes){
   const npts = parseInt(p.XPTS);
   const bigEndian = (p.BSEQ || 'BIG') !== 'LIT';
-  const view = new DataView(buf);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const fmt = dscWord(p.IRFMT).split(',')[0].toUpperCase() || 'D';
   const READ = { D: [8, (o, le)=> view.getFloat64(o, le)], F: [4, (o, le)=> view.getFloat32(o, le)],
                  I: [4, (o, le)=> view.getInt32(o, le)],   S: [2, (o, le)=> view.getInt16(o, le)], C: [1, o=> view.getInt8(o)] };
   if (!READ[fmt]) return { error: `IRFMT ${fmt}: a data format not read` };
   const [size, read] = READ[fmt];
   const stride = dscWord(p.IKKF).split(',')[0].toUpperCase() === 'CPLX' ? 2 : 1;
-  if (buf.byteLength < npts * stride * size) return { error: `its .DTA holds fewer than the ${npts} points its .DSC gives` };
+  if (bytes.byteLength < npts * stride * size) return { error: `its .DTA holds fewer than the ${npts} points its .DSC gives` };
   const s = [];
   for (let i = 0; i < npts; i++)
     s.push(read(i * stride * size, !bigEndian));
   return { s };
 }
-/* A pair read (its .DSC's parameters p and bytes, `dsc` { name, bytes }; its .DTA's
-   bytes `buf` and name): the spectrum, or { error } saying why it cannot be. */
-export function spectrumOf(stem, p, dsc, buf, dtaName){
-  const v = dtaValues(p, buf);
+/* A pair read (its .DSC's parameters p, its .DTA's bytes): the spectrum, { b, a, rescaled },
+   or { error } saying why it cannot be. */
+export function spectrumOf(p, bytes){
+  const v = dtaValues(p, bytes);
   if (v.error) return v;
   const s = v.s, b = buildBAxis(p);
 
@@ -109,34 +112,112 @@ export function spectrumOf(stem, p, dsc, buf, dtaName){
   const a = s.map((v, i) => v - (s[0] + slope * (b[i] - b[0])));
 
   // Whether the field was rescaled to 9.5 GHz: with no MWFQ it is the one measured.
-  // (named as its .DSC names it, TITL, from v532; with none, as its files are)
-  return { name: stem, label: dscWord(p.TITL) || stem, b, a, rescaled: parseFloat(p.MWFQ) > 0,
-           rawFiles: [ { name: dsc.name, bytes: dsc.bytes },
-                       { name: dtaName, bytes: new Uint8Array(buf) } ] };
+  return { b, a, rescaled: parseFloat(p.MWFQ) > 0 };
 }
 // A file's extension as the alerts name it: '.DTA' or '.DSC'.
 export const extOf = name => '.' + name.split('.').pop().toUpperCase();
+
+/* ---- The list's rows (v581: as GC's; filelist-model.js autoPair and dropPart, modkit.js
+   pairs) ----
+   A row is one file or two, each { name, bytes } (its record's rawFiles, in the list's order:
+   a pair's .DTA first). Its record is a spectrum where its files are a .DTA and a .DSC that
+   read as one (b, a: plotted); else it has none, waits in the list, not plotted, and is said
+   (rowNote): a half alone (to v580 refused: "drop the two together"), two files of one kind,
+   a pair that cannot be read (to v580 refused as it was dropped). Files dropped pair by their
+   names, the same but for the extension (sideOf), with each other or with a half waiting in
+   the list; a file dragged by its own grip onto another pairs or swaps them, whatever their
+   names. */
+// A file's kind by its extension: 'dta', 'dsc', or '' (neither: not one of a pair's).
+export const kindOf = name =>{ const m = /\.(dta|dsc)$/i.exec(String(name)); return m ? m[1].toLowerCase() : ''; };
+const kindAt = x => x && typeof x === 'object' ? kindOf(x.name) : '';
+const stemOf = name => String(name).replace(/\.[^.]+$/, '');
+// How a file pairs by its name (filelist-model.js autoPair): its stem, a .DTA first.
+export const sideOf = f => ({ stem: stemOf(f.name), first: kindOf(f.name) === 'dta' });
+// A row's files in the list's order: a .DTA first beside its .DSC.
+export const ordered = fs => fs.length === 2 && kindAt(fs[0]) === 'dsc' && kindAt(fs[1]) === 'dta' ? [fs[1], fs[0]] : fs;
+/* A record's files: those of its rawFiles that are a .DTA or a .DSC; none (a project read in
+   may hold anything), a stand-in named as the record, so that its row is one of the list's. */
+export const rowFiles = r =>{ const fs = Array.isArray(r.rawFiles) ? r.rawFiles.filter(kindAt) : []; return fs.length ? fs : [{ name: String(r.name) }]; };
+// A record plotted: a spectrum.
+export const isSpectrum = r => Array.isArray(r.b);
+/* What a row's files read as (the same files read once, by their bytes): { title } (its .DSC's
+   TITL, '' with none) and the spectrum (spectrumOf), or { why } it has none (`alone`: a half). */
+const dscs = new WeakMap(), pairs = new WeakMap();
+function dscOf(f){
+  if (!(f.bytes instanceof Uint8Array)) return null;
+  if (!dscs.has(f.bytes)) dscs.set(f.bytes, parseDsc(decodeText(f.bytes)));
+  return dscs.get(f.bytes);
+}
+export function readRow(files){
+  const kinds = files.map(kindAt), dta = files[kinds.indexOf('dta')], dsc = files[kinds.indexOf('dsc')];
+  const p = dsc ? dscOf(dsc) : null, title = p ? dscWord(p.TITL) : '';
+  if (files.length < 2) return { title, why: `its ${dta ? '.DSC' : '.DTA'} is missing`, alone: true };
+  if (!dta || !dsc) return { title, why: `two ${extOf(files[0].name)} files paired` };
+  if (!p || !(dta.bytes instanceof Uint8Array)) return { title, why: 'its bytes are not stored in this browser any more' };
+  let m = pairs.get(dta.bytes);
+  if (!m) pairs.set(dta.bytes, m = new WeakMap());
+  if (!m.has(dsc.bytes)){ const bad = dscError(p); m.set(dsc.bytes, bad ? { error: bad } : spectrumOf(p, dta.bytes)); }
+  const r = m.get(dsc.bytes);
+  return r.error ? { title, why: r.error } : { title, ...r };
+}
+/* A row's name (its record's, the key the list and the plots know it by): a pair's its
+   .DTA's stem (as to v580), any other row its first file's name. */
+export function rowName(files){
+  const d = files.find(f=> kindAt(f) === 'dta');
+  return d && files.some(f=> kindAt(f) === 'dsc') ? stemOf(d.name) : files[0].name;
+}
+// A row's label as it starts: as its .DSC names it (TITL, from v532), else its name's stem.
+export const labelOf = (files, r = readRow(files))=> r.title || stemOf(rowName(files));
+/* A row's record made of its files (regroup): the spectrum they read as, or none; named,
+   labelled and coloured (`color`) anew, but where `base`, the record its first file headed,
+   gives them: its colour and whether it is included, and its label where that was renamed
+   (not its own files' label as it started). */
+export function rowRec(files, base, color){
+  const fs = ordered(files), r = readRow(fs), rec = { name: rowName(fs), label: labelOf(fs, r), color, rawFiles: fs };
+  if (base){
+    rec.color = base.color;
+    if (base.label !== labelOf(rowFiles(base))) rec.label = base.label;
+    if (base.included === false){ rec.included = false; rec.held = base.held; }
+  }
+  return r.b ? keepSpectrum({ ...rec, b: r.b, a: r.a, rescaled: r.rescaled }) : rec;
+}
+/* The rows given anew (arrays of files): the list's records (`all`, in place) made of them. A
+   row of the files a record has (by their names, in the list's order) is that record as it
+   is; any other a new one (rowRec), from the record whose first file is its first; one that
+   none gives its colour coloured `colorOf(the records coloured)`, in order (utils.js
+   nextColor: one no other row wears). */
+export function regroup(all, rows, colorOf){
+  const was = all.slice(), names = fs => ordered(fs).map(f=> f.name).join('\n');
+  const out = rows.filter(r=> r.length).map(fs=>{
+    const k = names(fs), head = ordered(fs)[0];
+    return was.find(r=> names(rowFiles(r)) === k) || rowRec(fs, was.find(r=> rowFiles(r)[0].name === head.name) || null, null);
+  });
+  out.forEach(r=>{ if (!r.color) r.color = colorOf(out.filter(x=> x.color)); });
+  all.splice(0, all.length, ...out);
+}
+// FILE's lines for a row (modkit.js pairs' parts): its files, each marked where the row is not plotted, with why.
+export function partsOf(r){
+  const fs = rowFiles(r), x = isSpectrum(r) ? null : readRow(fs);
+  return fs.map(f=> ({ name: f.name, warn: x ? x.why + ': not plotted' : '' }));
+}
+/* What is said of a row not plotted, to check (epr.js notes; ALERTS-REVIEW.md R4, E02, v581),
+   or null: { key, line } (plain text), its key the issue it names (alerts.js markOf, as GC's
+   pairs: `alone`, or the file paired with it), so that a × marks that issue alone. */
+export function rowNote(r){
+  if (isSpectrum(r)) return null;
+  const fs = rowFiles(r), x = readRow(fs);
+  if (x.alone) return { key: 'alone', line: `${fs[0].name}: ${x.why}: not plotted until it is paired; drop it, or drag one onto it by its own grip.` };
+  return { key: 'pair:' + fs[1].name, line: `${fs[0].name} + ${fs[1].name}: ${x.why}: not plotted${x.why.startsWith('two ') ? '; drag a file by its own grip to pair it' : ''}.` };
+}
 /* How a file was read, said under the drop zone (utils.js FILE ALERTS, v567: to v566 with
    no word), or '': a spectrum with no microwave frequency is drawn on the field measured, and
    the plot has no g axis. Named by its .DSC, as its record keeps it (rawFiles), else by its
-   stem. */
-export const readNote = f => f.rescaled !== false ? ''
-  : `${Array.isArray(f.rawFiles) && f.rawFiles[0] && typeof f.rawFiles[0].name === 'string' ? f.rawFiles[0].name : f.name}: no microwave frequency (MWFQ): plotted on the field measured, not at 9.5 GHz; no g axis.`;
-/* A drop's files grouped by stem WITHIN THIS DROP only — nothing is carried over between
-   uploads: a file neither .DTA nor .DSC is refused (`invalid`), one whose stem is loaded
-   (`existing`) is said (`already`). */
-export function groupsOf(list, existing){
-  const invalid = [], already = [], groups = {};
-  for (const f of list){
-    const ext  = f.name.split('.').pop().toLowerCase();
-    const stem = f.name.replace(/\.[^.]+$/, '');
-    if (ext !== 'dta' && ext !== 'dsc'){ invalid.push(f.name); continue; }
-    if (existing.has(stem)){ already.push(f.name); continue; }
-    if (!groups[stem]) groups[stem] = { dta: null, dsc: null };
-    groups[stem][ext] = f;
-  }
-  return { groups, invalid, already };
-}
+   name. */
+export const readNote = f =>{
+  if (f.rescaled !== false) return '';
+  const d = Array.isArray(f.rawFiles) && f.rawFiles.find(x=> kindAt(x) === 'dsc' && typeof x.name === 'string');
+  return `${d ? d.name : f.name}: no microwave frequency (MWFQ): plotted on the field measured, not at 9.5 GHz; no g axis.`;
+};
 
 /* ---- A card's kinds and defaults; the state ---- */
 export const KINDS = { spectra: 'Stacked Spectra' };
@@ -144,11 +225,16 @@ export const KINDS = { spectra: 'Stacked Spectra' };
 // a number of points, `smooth`, 10: readCard converts it)
 export const DEF = { norm: 'global', smoothW: 0.2 };
 /* A file as a restore takes it (modkit RESTORED): its field and intensities, the points
-   where both are numbers, two at least (else it is left out); the arrays its file's
-   bytes already have where they are the same (keepSpectrum). */
+   where both are numbers, two at least, the arrays its file's bytes already have where they
+   are the same (keepSpectrum); with none, what its files read as (readRow: a spectrum, or a
+   row not plotted); none of either, it is left out. Its files in the list's order. */
 export function fileIn(U, f){
-  const p = U.finitePairs(f.b, f.a);
-  return p && p[0].length > 1 ? keepSpectrum({ ...f, b: p[0], a: p[1], rescaled: f.rescaled !== false }) : null;
+  const g = Array.isArray(f.rawFiles) ? { ...f, rawFiles: ordered(f.rawFiles) } : f, p = U.finitePairs(g.b, g.a);
+  if (p && p[0].length > 1) return keepSpectrum({ ...g, b: p[0], a: p[1], rescaled: g.rescaled !== false });
+  const { b: _b, a: _a, rescaled: _r, ...w } = g, fs = Array.isArray(g.rawFiles) ? g.rawFiles.filter(kindAt) : [];
+  if (!fs.length) return null;
+  const r = readRow(ordered(fs));
+  return r.b ? keepSpectrum({ ...w, b: r.b, a: r.a, rescaled: r.rescaled }) : w;
 }
 // The cards a state holds; a project from before the cards had one analysis, its settings
 // at the top level.

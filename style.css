@@ -2444,17 +2444,18 @@ h5.instr-math-head { margin-top: 14px; padding-top: 10px; border-top: 1px solid 
 .xrd-peak-wrap .peak-row.selected td:last-child, .peak-row.selected td:last-child { box-shadow: inset 0 2px 0 var(--sel-inset), inset 0 -2px 0 var(--sel-inset), inset -2px 0 0 var(--sel-inset); }
 
 /* ===== GC parameter table: grouped headers, all/one toggle, row↔plot interaction ===== */
-.gc-param-table { min-width: 1000px; }  /* scrolls in its overflow-x wrapper below this (860 to v500, before p) */
+.gc-param-table { min-width: 1060px; }  /* scrolls in its overflow-x wrapper below this (860 to v500, before p; 1000 to v580, m's select) */
 /* On mobile the table already scrolls, so extra width is free room for the columns
-   (1000 → 1200). Kept right after the base rule so it wins (equal specificity). */
+   (1060 → 1200). Kept right after the base rule so it wins (equal specificity). */
 @media (max-width: 600px) { .gc-param-table { min-width: 1200px; } }
 /* Headers sit at the bottom left of their cells, on their fields: th and td share
    their 8 px padding, so a header starts where its field does; a field's name is on its
-   left edge and its all/one pill on its right. The pill shares the name's baseline,
+   left edge and its all/one pill on its right. The pill shares the name's baseline (its
+   last line's, where a narrow table puts it on two: level with m's select, one line, v581),
    its ALL then centred on the name's capitals (a box centred on the line box sat
    below them). The interval's group line runs over its two fields only. */
 .gc-param-wrap thead th { vertical-align: bottom; }
-.gc-param-wrap .gc-th { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.gc-param-wrap .gc-th { display: flex; align-items: last baseline; justify-content: space-between; gap: 8px; }
 /* The pill's ALL, capitals with no descender, sat 1.5 px above its box's middle
    (the line box keeps room under them): 1.5 px more padding on top and none below
    centres it, and with its baseline on the name's, the box on the name's capitals.
@@ -2467,6 +2468,8 @@ h5.instr-math-head { margin-top: 14px; padding-top: 10px; border-top: 1px solid 
 .gc-param-wrap .gc-all-row .fname { color: var(--muted); }
 .gc-param-wrap input[disabled] { opacity: .35; }
 .gc-param-wrap input[readonly] { opacity: .6; cursor: default; }
+/* Under the parameters, where the rates are not normalised (v581): its samples, a compact info. */
+.gc-norm-info .alert { margin: 8px 0 0; overflow-wrap: anywhere; }
 /* The injection delay's row sits a step above the table, on its columns. Locked by
    Auto its value is still the one in force, so it reads like the read-only echoes,
    not like a cell that does not apply. */

@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 
 globalThis.btoa ??= s => Buffer.from(s, 'binary').toString('base64');
 globalThis.atob ??= s => Buffer.from(s, 'base64').toString('binary');
-const { encode, decode } = await import('../db.js');
+const { encode, decode, park, own, setOwn } = await import('../db.js');
 const roundTrip = v => decode(JSON.parse(JSON.stringify(encode(v))));
 
 test('bytes held in several places are written once and come back as one array', ()=>{
@@ -51,4 +51,20 @@ test('the older forms decode: v471–v484 bytes, arrays of numbers, a dangling r
   assert.ok(dangling instanceof Uint8Array);
   assert.equal(dangling.length, 0);
   assert.equal(decode({ __t: 'u8', v: '%%not base64' }).length, 0);
+});
+
+/* v581, bug 23: a map keyed by file names (XRPD's Rietveld results, a phase's patterns left
+   out) holds a file named after a property every object has as any other name: written as its
+   own key, read as its own, copied so; a key __proto__ sets no prototype. */
+test('keys named constructor, toString and __proto__: own keys, written, read and copied as any other (bug 23)', ()=>{
+  const o = {};
+  setOwn(o, '__proto__', { params: 1 }); setOwn(o, 'constructor', 2);
+  assert.deepEqual([Object.keys(o), Object.getPrototypeOf(o) === Object.prototype, o.params], [['__proto__', 'constructor'], true, undefined]);
+  assert.deepEqual([own(o, '__proto__'), own(o, 'constructor'), own(o, 'toString'), own({}, 'constructor'), own(null, 'x')], [{ params: 1 }, 2, undefined, undefined, undefined]);
+  const st = JSON.parse('{"results": {"__proto__": {"at": 1}, "toString": {"at": 2}}, "off": {"constructor": true}}');
+  for (const back of [decode(JSON.parse(JSON.stringify(encode(st)))), decode(park(st))]){
+    assert.deepEqual(Object.keys(back.results), ['__proto__', 'toString']);
+    assert.equal(Object.getPrototypeOf(back.results), Object.prototype, 'no prototype set');
+    assert.deepEqual([own(back.results, '__proto__'), own(back.results, 'toString'), back.results.at, own(back.off, 'constructor')], [{ at: 1 }, { at: 2 }, undefined, true]);
+  }
 });

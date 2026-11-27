@@ -6,8 +6,9 @@
    Production Rate cards below it taking the re-integrated values. Every file here is made up for the test: the
    chromatograms drawn from the engine's own peak model (gc-tcd.js) with known areas, a
    seeded noise, on 250–340 s (the H₂/O₂ window, 268–326 s, inside).
-   - Tables alone: as v543 (no file grip, no Integration card, "+" adds a Production Rate card
-     with no menu, no key more in the state).
+   - Tables alone: a grip a file (v581: to v580 none, as v543), two tables paired by hand,
+     unpaired and paired again; no Integration card, "+" adds a Production Rate card with no
+     menu, no key more in the state.
    - Auto-pairing by name: a final _TCD, any case, a browser's " (1)" on either name, the .txt
      table; a file of raw chromatograms told by its content (no _TCD in its name); one row a
      pair, both names in FILE, the table's label, one Sample select (none for raw
@@ -19,6 +20,9 @@
      v573: a pair's note dismissed marks that pair alone: the file paired wrongly again with
      another is said again, the same pair made again is not. v574: a note dismissed marks its
      file where a state holds it as a pair's second too: undone to it and unpaired, not said.
+   - v581: a Stop holds its own card's files alone, another Integration card's go on; windows
+     edited on a card with no result applied as they are, the files loaded after integrated
+     with them; the window's red rule and an edge in a neighbour name it H₂-O₂.
    - A count that differs: said in Integration, the table's values in Analysis, gc_raw.csv's
      source column saying why.
    - The Integration card: its two selectors (the file's over the chromatogram, the plot's
@@ -211,24 +215,35 @@ function meanRate(pcts){
   return s/t[t.length - 1];
 }
 
-test('tables alone: no grip, no Integration card, "+" a Production Rate card with no menu, the state as v543\'s', async ()=>{
+test('tables alone: a grip each (v581), two paired by hand, unpaired and paired again; no Integration card, "+" a Production Rate card with no menu, the state as v543\'s', async ()=>{
   const { page, errors, csp, close } = await env.page();
   try {
     await openModule(page, 'gc');
     await load(page, [table('plain.csv', tableRows()), altTable('plain-alt.txt', tableRows())], 2);
-    assert.equal(await page.locator('#gcFileTableWrap .fpart').count(), 0, 'no file grip');
-    assert.deepEqual((await rowsOf(page)).map(r=> r.files), [['plain.csv'], ['plain-alt.txt']]);
+    assert.deepEqual((await rowsOf(page)).map(r=> [r.files, r.grips]), [[['plain.csv'], 1], [['plain-alt.txt'], 1]], 'a grip a file (to v580 none)');
     assert.equal(await page.locator('#tab-gc .an-card').count(), 1);
     assert.equal(await page.locator('#tab-gc .an-card .gci-body').count(), 0, 'no Integration card');
     assert.equal(await page.locator('#tab-gc .an-card .an-type.is-fixed').count(), 1, 'the title names its kind');
-    await page.click('#gcAddAn'); await settle(page);
-    assert.equal(await page.locator('.an-menu:not([hidden])').count(), 0, 'no menu');
-    assert.equal(await page.locator('#tab-gc .an-card').count(), 2, 'a Production Rate card added');
     const st = await moduleState(page, 'gc');
     assert.deepEqual(Object.keys(st).sort(), ['cards', 'files']);
     assert.ok(st.files.every(f=> !('mate' in f) && !('tcd' in f)));
     assert.equal(await fitted(page), 0);
     assert.equal(await page.locator('#tab-gc .gc-src .alert').count(), 0, 'nothing said of a source');
+    // Paired by hand (two tables: the first used, said), unpaired, paired again: each a step.
+    const s0 = await steps(page), files = async ()=> (await rowsOf(page)).map(r=> r.files.join(' + '));
+    await dragFile(page, 'plain-alt.txt', 'plain.csv');
+    assert.deepEqual(await files(), ['plain.csv + plain-alt.txt']);
+    assert.ok((await alerts(page)).some(a=> a.includes('two tables paired (plain.csv, plain-alt.txt)')));
+    await dragFile(page, 'plain-alt.txt', null);
+    assert.deepEqual(await files(), ['plain.csv', 'plain-alt.txt']);
+    assert.deepEqual((await rowsOf(page)).map(r=> r.grips), [1, 1], 'the grips still there (to v580 gone with the pair)');
+    await dragFile(page, 'plain-alt.txt', 'plain.csv');
+    assert.deepEqual(await files(), ['plain.csv + plain-alt.txt'], 'paired again by hand');
+    assert.equal(await steps(page), s0 + 3);
+    assert.equal(await page.locator('#tab-gc .an-card .gci-body').count(), 0, 'still no Integration card');
+    await page.click('#gcAddAn'); await settle(page);
+    assert.equal(await page.locator('.an-menu:not([hidden])').count(), 0, 'no menu');
+    assert.equal(await page.locator('#tab-gc .an-card').count(), 2, 'a Production Rate card added');
     assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
   } finally { await close(); }
 });
@@ -698,7 +713,8 @@ test('the Integration card: its two selectors, the chromatogram over its residua
     // The Windows' numbers: an edge in a neighbour said; a step, undone.
     const s0 = await steps(page), field = k => card.locator(`.gci-method input[data-k="${k}"]`);
     await field('w0:from').fill('263'); await field('w0:from').press('Enter'); await settle(page);
-    assert.match(await card.locator('.gci-method .gci-flag').textContent(), /reaches S264 \(262–267.5 s\), which its model has no peak for/);
+    // (v581: the window named as Windows names it, H₂-O₂; to v580 by its key, H2O2)
+    assert.equal(await card.locator('.gci-method .gci-flag').textContent(), '⚠ The H₂-O₂ window (263–326 s) reaches S264 (262–267.5 s), which its model has no peak for: the fit degrades there.');
     // (a compact warning, v571, G08: to v570 an amber line)
     assert.equal(await card.locator('.gci-method .alert.warn.compact.gci-flag').count(), 1);
     assert.equal(await steps(page), s0 + 1);
@@ -712,7 +728,7 @@ test('the Integration card: its two selectors, the chromatogram over its residua
     await field('w0:from').fill(String(to - 2)); await field('w0:from').press('Enter');
     await page.waitForSelector('#tab-gc .gci-method input[data-k="w0:from"].field-invalid');
     await settle(page);
-    assert.equal(await card.locator('.gci-method .gci-win-rule').textContent(), 'The H2O2 window must start at least 5 s before it ends.');
+    assert.equal(await card.locator('.gci-method .gci-win-rule').textContent(), 'The H₂-O₂ window must start at least 5 s before it ends.');
     assert.equal(await field('w0:from').inputValue(), was, 'the edge as it was');
     assert.equal(await card.locator('.gci-notice .alert').count(), 0, 'no box over the chromatogram');
     assert.equal(await steps(page), s0, 'no step');
@@ -1450,6 +1466,59 @@ test('Stop (v578): Integrate stopped part way keeps everything as it was, its re
     assert.equal(await fitted(page), n0 + 2*N, 'every chromatogram once');
     assert.equal((await integCard(page)).method.windows[0].to, 328);
     assert.notDeepEqual(await shown(page), was);
+    assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
+  } finally { await close(); }
+});
+
+/* v581: a Stop holds its own card's files alone (to v580 every Integration card's of the tab):
+   two cards integrating the same files, the first stopped, the second's run on, every
+   chromatogram integrated once; the first said stopped meanwhile, done at its end. */
+test('Stop (v581): a card\'s Stop holds its own files alone; another Integration card\'s run on', async ()=>{
+  const { page, errors, csp, close } = await env.page();
+  try {
+    await openModule(page, 'gc');
+    await slow(page, 250);
+    await load(page, AB(), 2);
+    await page.click('#gcAddAn'); await page.click('.an-menu:not([hidden]) [data-kind="integ"]'); await settle(page);
+    const cs = page.locator('#tab-gc .an-card'), c1 = cs.nth(0), c2 = cs.nth(2);
+    assert.equal(await c2.locator('.gci-body').count(), 1, 'a second Integration card');
+    await running(page);
+    await until(async ()=> (await fitted(page)) > 0, { what: 'a chromatogram done' });
+    await pressAfterTurn(page, c1.locator('.gci-integ'));
+    const n1 = await fitted(page);
+    assert.ok(n1 < 2*N, `stopped part way: ${n1}`);
+    assert.deepEqual([await c1.locator('.gci-status').getAttribute('data-state'), await c2.locator('.gci-status').getAttribute('data-state')], ['stopped', 'running'], 'the first stopped, the second running');
+    await until(async ()=> (await fitted(page)) === 2*N, { timeout: 60000, what: 'the second card\'s files integrated' });
+    await integrated(page);
+    assert.equal(await fitted(page), 2*N, 'every chromatogram once');
+    assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
+  } finally { await close(); }
+});
+
+/* v581: windows edited on a card with no result (here its raw chromatograms taken out of the
+   list, the table kept) applied as they are, nothing pending; the raw chromatograms dropped
+   again integrated with them (to v580 pending, the files loaded after them integrated with the
+   windows before). */
+test('a window edited on a card with no result (v581): applied as it is, the files loaded after it integrated with it', async ()=>{
+  const { page, errors, csp, close } = await env.page();
+  try {
+    await openModule(page, 'gc');
+    await load(page, [table('a.csv', tableRows()), tcd('a_TCD.csv', areas())], 1);
+    await integrated(page);
+    const card = page.locator('#tab-gc .an-card').nth(0), n0 = await fitted(page);
+    await dragFile(page, 'a_TCD.csv', null);
+    await page.locator('#gcFileTableWrap tr.file-row').nth(1).locator('.row-del').click(); await settle(page);
+    assert.deepEqual((await rowsOf(page)).map(r=> r.files), [['a.csv']], 'its raw chromatograms out of the list');
+    const s0 = await steps(page);
+    await edge(card, 'w0:to', 328); await settle(page);
+    const c = await integCard(page);
+    assert.deepEqual([c.method.windows[0].to, 'edit' in c, await steps(page)], [328, false, s0 + 1], 'applied, a step, nothing pending');
+    assert.notEqual(await card.locator('.gci-status').getAttribute('data-state'), 'pending');
+    await load(page, [tcd('a_TCD.csv', areas())], 1);
+    await integrated(page);
+    assert.equal(await fitted(page), n0 + N, 'integrated again, with the windows edited');
+    const keys = Object.keys((await moduleState(page, 'gc')).integ);
+    assert.ok(keys.length === 1 && applied(keys, 328), 'its results the windows edited: ' + keys.map(k=> k.slice(-60)).join());
     assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
   } finally { await close(); }
 });

@@ -27,7 +27,8 @@ import * as H from './gc-integ-html.js';
      reopened, a tab woken or an undo never fits again;
    - the job: what no result is held for, integrated in the background (gc-tcd-pool.js), all
      of it in one lane of workers, the chromatograms in view first, with its progress and
-     Stop on every Integration card. It is not the module's `busy` (utils.js registerBusy):
+     Stop on every Integration card, a card's Stop holding that card's files alone (v581). It
+     is not the module's `busy` (utils.js registerBusy):
      undo works while it runs, and a tab put to sleep or closed during a run lets it go, the
      files done kept, the rest integrated as the tab wakes or the project reopens.
    ON DEMAND (v578): what integrates by itself is the first loading of raw chromatograms
@@ -66,18 +67,18 @@ export const INTEG_INFO = H.integInfo(cardInfo(false, false));
      read, tabs            the raw chromatograms read and the calibrations' tables, by their
                            bytes (gc-integ-model.js dataOf, tableOf)
      store                 the results: a key `bytes|method` → a result per chromatogram
-     job, halted, failed   what is being integrated ({ ac, groups (gc-integ-model.js
+     job, failed           what is being integrated ({ ac, groups (gc-integ-model.js
                            wanted's files), works (key → its results so far), left (key →
                            how many to go), carry, n, done, total, name (the file last done)
-                           }), a Stop holding the files the cards' results lack, why the last
-                           job failed
+                           }), why the last job failed (a Stop holds a card's files: its own
+                           `halted`, v581)
      dead                  its instance let go, a tab asleep or closed: a job's end writes nothing
      painting, paintAll    the frame every card's status waits for, and whether its plots too
 ========================================================= */
 export function createInteg(ctx){
   const S = {
     ctx, kit: ctx.kit, ...M.gasTable(U, ctx.gases), read: new WeakMap(), tabs: new WeakMap(),
-    store: new Map(), job: null, halted: false, failed: '', dead: false, painting: 0, paintAll: false,
+    store: new Map(), job: null, failed: '', dead: false, painting: 0, paintAll: false,
   };
   return {
     card: (a, el)=> makeCard(S, a, el),
@@ -102,11 +103,12 @@ function write(S, key, arr){
 /* ---- The job: every (file, method) a card uses with a chromatogram not integrated, in one
    call of the pool (gc-integ-model.js wanted: the chromatograms in view first; v578, to v577
    a call a file, its workers made anew) ---- */
-// What is wanted runs (`force`: Integrate, files dropped: a Stop before them not holding them).
+// What is wanted runs (`force`: files dropped, true, a Stop before them on any card not holding
+// them; Integrate or standards dropped on a card, that card, its own Stop let go: v581).
 // A job whose every file left is still wanted goes on, the files wanted since after it; one
 // with a file no longer wanted (a run stopped, a file removed) gives way, what it did kept.
 function ensure(S, force){
-  if (force){ S.halted = false; S.failed = ''; }
+  if (force){ S.failed = ''; if (force === true) M.integCards(S).forEach(c=> c.halt(false)); else force.halted = false; }
   settle(S);
   let w = M.wanted(U, S);
   const j = S.job;
@@ -169,7 +171,7 @@ function runFailed(S, j, e){
   if (S.job !== j || S.dead) return;
   S.job = null;
   keep(S, j);
-  if (!e || e.name !== 'AbortError'){ S.failed = String(e && e.message || e); S.halted = true; M.integCards(S).forEach(c=> c.endRun()); }
+  if (!e || e.name !== 'AbortError'){ S.failed = String(e && e.message || e); M.integCards(S).forEach(c=>{ c.endRun(); c.halt(true); }); }
   paint(S, true);
 }
 // The runs whose every file is integrated, applied (swap), once the task asking it ends (an
@@ -189,8 +191,10 @@ function paint(S, all){
                             edited (the same while nothing is pending: v578; to v577 the
                             method before it, its results shown until the file was
                             integrated again)
-     run, stopped           Integrate's run ({ m: the windows it integrates, mark: the
-                            history's, kit.hold }) or null; whether one was stopped (said)
+     run, stopped, halted   Integrate's run ({ m: the windows it integrates, mark: the
+                            history's, kit.hold }) or null; whether one was stopped (said);
+                            whether a Stop holds its files (v581: its own; to v580 a Stop on
+                            any card held every card's)
      pressT, turnT          Integrate's last press and turn (utils.js quickPress)
      cal                    its calibration (gc-integ-model.js calIn)
      ovGas, ovY             the run overview's gas and y (view keys of the state)
@@ -211,7 +215,7 @@ function makeCard(S, a, el){
   const p = 'gc' + a.id;
   const C = {
     a, el, p, $: id => el.querySelector('#' + p + id),
-    method: M.methodIn(U, null), edit: M.methodIn(U, null), run: null, stopped: false, pressT: -Infinity, turnT: -Infinity,
+    method: M.methodIn(U, null), edit: M.methodIn(U, null), run: null, stopped: false, halted: false, pressT: -Infinity, turnT: -Infinity,
     cal: M.calIn(U, null), ovGas: 'h2', ovY: 'conc', selName: null, selK: 0, chrom: null, resid: null, over: null, ovPts: [],
     calSel: 0, calPlots: { chrom: null, resid: null }, calDrawn: null,
     W: null, valuesKept: new Map(), shownJ: null, fileNav: null, injNav: null, drawn: null, drag: null, hovK: -1, ovLook: null,
@@ -261,6 +265,9 @@ function cardApi(S, C){
   return {
     method: ()=> C.method,
     runMethod: ()=> C.run ? C.run.m : null,
+    // (a Stop holding its files, its own: v581)
+    halted: ()=> C.halted,
+    halt(on){ C.halted = on; },
     inView: ()=> inView(S, C),
     settle(){ if (C.run && !M.leftUnder(U, S, C, C.run.m)) swap(S, C); },
     endRun(){ if (C.run) endRun(S, C); },
@@ -314,13 +321,14 @@ function press(S, C){
   if (M.progressOf(U, S, C).state === 'running'){ stop(S, C); return; }
   C.stopped = false;
   if (!C.run && M.isPending(U, C)) C.run = { m: M.clone(C.edit), mark: S.kit.hold() };
-  ensure(S, true);
+  ensure(S, C);
 }
 // Stop: the run ended (nothing of it applied: what is shown stays as it was), the card's files
-// left held (those of the windows applied, done so far, kept as they came).
+// left held (those of the windows applied, done so far, kept as they came); its own alone (v581:
+// to v580 every card's of the tab).
 function stop(S, C){
   if (C.run){ endRun(S, C); C.stopped = true; }
-  if (M.leftUnder(U, S, C, C.method)) S.halted = true;
+  if (M.leftUnder(U, S, C, C.method)) C.halted = true;
   ensure(S);
 }
 function endRun(S, C){ const r = C.run; C.run = null; S.kit.release(r.mark); }
@@ -333,11 +341,23 @@ function swap(S, C){
   C.run = null; C.stopped = false;
   S.kit.release(r.mark);
   C.method = r.m;
+  shown(S, C);
+}
+// The windows applied changed (a run's swap, an edit on a card with no result: setMethod): a
+// step; the card, its calibration's window and the cards below drawn with them.
+function shown(S, C){
   C.valuesKept.clear();
   S.kit.commit();
   draw(S, C, true);
   if (C.W.isOpen) paintWindow(S, C, C.W);
   S.ctx.changed();
+}
+// Windows edited on a card with no result, applied at once (setMethod): a run under way let
+// go, the files integrated with them.
+function applied(S, C){
+  if (C.run) endRun(S, C);
+  shown(S, C);
+  ensure(S);
 }
 
 /* ---- What it draws ---- */
@@ -481,19 +501,21 @@ function onDrop(S, C, wi, side, v){
    A window made too short is not taken: its edge's field flashes and the rule is said in red
    under the window until the next drawing (v571, ALERTS-REVIEW.md C19, G11: to v570 a warning
    box "Not taken:" over the chromatogram). `edge`: the field's key (w0:from…) when typed or
-   dragged. */
+   dragged. On a card with no result of its windows applied, nothing to keep: applied at once
+   (gc-integ-model.js takeEdit, v581), its run let go, everything drawn with them and its files
+   integrated so. */
 function setMethod(S, C, m, edge){
   const w = M.tooShort(m);
   if (w){
     overlay(S, C);
     const wi = m.windows.indexOf(w);
-    paintMethod(S, C, C.edit, { wi: wi >= 0 ? wi : 0, text: H.tooShortText(w.key) });
+    paintMethod(S, C, C.edit, { wi: wi >= 0 ? wi : 0, text: H.tooShortText(S.gasOf, w) });
     const f = edge && C.$('Method').querySelector(`input[data-k="${edge}"]`);
     if (f) flashFieldInvalid(f);
     return;
   }
   const to = M.methodKey(U, m) !== M.methodKey(U, C.edit);
-  if (to){ M.takeEdit(U, C, m); C.stopped = false; }
+  if (to){ C.stopped = false; if (M.takeEdit(U, S, C, m)){ applied(S, C); return; } }
   overlay(S, C);
   paintMethod(S, C);
   paintStatus(S, C);
@@ -709,7 +731,7 @@ async function onCalDrop(S, C, W, list){
   if (!P.add.length && !P.named.length) return;
   if (P.add.length) C.calSel = M.calRows(U, S, C).length;
   C.cal = M.calWith(C.cal, P.add, P.named);
-  ensure(S, true);
+  ensure(S, C);
   calChanged(S, C, W);
 }
 // Its files removed, its unit, the levels typed or ticked, a row picked, an intercept's chip.

@@ -14,7 +14,7 @@ import { parseCif, expandAtoms, structureCell, checkComposition, cellMass, metri
 import { readXrdmlInstrumentText } from './xrd-instr.js';
 import { buildModel, calc, fitSettings, phaseSites, bgInvOn, shapeNamed, tickLabels } from './xrd-rietveld.js';
 import { spaceGroupName, spaceGroupSymbol } from './xrd-sg.js';
-import { fixed, isFixed, isObj } from './db.js';
+import { fixed, isFixed, isObj, own, setOwn } from './db.js';
 import { MSG } from './xrd-math.js';
 import { decodeText } from './textdata.js';
 
@@ -411,7 +411,7 @@ const roleOf = r => r.standard != null ? !!r.standard : Array.isArray(r.phases) 
 /* The instrumental profile a standard's refinement gives the samples (the standard's
    card: its own, from its file f; a sample's: the standard's, host.irf). */
 function irfOf(f, results){
-  const r = f && results[f.name] && roleOf(results[f.name]) !== false ? results[f.name] : null;
+  const r = f && own(results, f.name) && roleOf(own(results, f.name)) !== false ? own(results, f.name) : null;
   if (!r || !r.params) return null;
   // asym: absent from a standard refined before the asymmetry was modelled (none then).
   // axL and transp (v432): the Soller model's length, where the standard's file gives its
@@ -458,9 +458,9 @@ const bgTerms = (fs, f) => fs.bgDegree + (bgInvOn(scanRange(f)[0], fs.bgInv) ? '
 // the patterns refined from the CIF instead, run.bgFreed those whose scales and
 // background are refined rather than held.
 function payloadFor(f, run, results, std){
-  const list = std ? [run.std] : run.ph.filter(q=> !q.off[f.name]), opts = { standard: std, irf: run.irf, fit: { ...run.fit } };
+  const list = std ? [run.std] : run.ph.filter(q=> !own(q.off, f.name)), opts = { standard: std, irf: run.irf, fit: { ...run.fit } };
   if (run.start === 'last'){
-    const r = results[f.name], why = lastUnusable(f, r, list, std);
+    const r = own(results, f.name), why = lastUnusable(f, r, list, std);
     if (why) run.fell.push(`${f.label} (${why})`);
     // What autoRefine's start takes: the values, what was refined and held, the models,
     // the phases detected, the shapes kept with their isotropic fit, the profile used.
@@ -564,7 +564,7 @@ function sizesOf(r){
   return by;
 }
 // The kinds of size charted by sample, of one phase or of all, in SIZE_KINDS' order.
-const sizeKinds = (fs, results, name) => { const on = new Set(fs.flatMap(f=> [...sizesOf(results[f.name])].filter(([n])=> name == null || n === name).flatMap(([, v])=> v.map(q=> q.kind))));
+const sizeKinds = (fs, results, name) => { const on = new Set(fs.flatMap(f=> [...sizesOf(own(results, f.name))].filter(([n])=> name == null || n === name).flatMap(([, v])=> v.map(q=> q.kind))));
   return Object.keys(SIZE_KINDS).filter(k=> on.has(k)); };
 /* The sizes charted (drawSizes): its columns, its points with their esds and the values
    written above them (marks), and the legend's series; by sample, each phase in its colour
@@ -575,7 +575,7 @@ function sizeMarks(fs, results, sizeBy, colorOf){
   if (sizeBy === 'peak'){
     // The reflections the tests use, in any pattern: a column each, by phase and 2θ.
     const refl = new Map();
-    fs.forEach(f=>{ const wd = results[f.name].widths; if (!wd) return;
+    fs.forEach(f=>{ const wd = own(results, f.name).widths; if (!wd) return;
       wd.phases.forEach(ph=> ph.rows.forEach(w=>{
         if (w.overlapped || w.edge || w.weak || w.flat || w.unread || !Number.isFinite(w.D)) return;
         // (by its indices as numbers: a result of v479 or older wrote a negative index's
@@ -593,7 +593,7 @@ function sizeMarks(fs, results, sizeBy, colorOf){
       fs.forEach((f, si)=>{ const w = c.by.get(f.name); if (w) marks.push({ x: i + 1, v: w.D, e: w.Desd, color: f.color, dx: (si - (fs.length - 1)/2)*step }); });
     });
   } else {
-    const names = [...new Set(fs.flatMap(f=> [...sizesOf(results[f.name]).keys()]))];
+    const names = [...new Set(fs.flatMap(f=> [...sizesOf(own(results, f.name)).keys()]))];
     // Each phase with the sizes it has; one with sizes of several kinds (a pattern refined
     // with WPPM, another without) has its kind written by each value too.
     const kinds = new Map(names.map(n=> [n, sizeKinds(fs, results, n)]));
@@ -601,7 +601,7 @@ function sizeMarks(fs, results, sizeBy, colorOf){
     const step = names.length > 1 ? 18 : 0;
     fs.forEach((f, i)=>{
       cols.push({ label: f.label, name: f.name });
-      const by = sizesOf(results[f.name]);
+      const by = sizesOf(own(results, f.name));
       names.forEach((n, si)=>{
         const vs = by.get(n) || [], dx = (si - (names.length - 1)/2)*step;
         vs.forEach(q=> marks.push({ x: i + 1, v: q.v, e: q.e, color: colorOf(n), dx }));
@@ -629,11 +629,11 @@ function fitUsed(r, std){
 // curvesOf), one row per pattern and phase (stale: the card's staleOf), and the peak
 // widths. data, line: utils.js fmtData and csvLine; decimal: the export's decimal mark.
 function csvTables(pre, files, results, { curves, stale, std }, { data: fmtData, line: csvLine, decimal }){
-  const out = [], fs = files.filter(f=> results[f.name] && results[f.name].params);
+  const out = [], fs = files.filter(f=> own(results, f.name) && own(results, f.name).params);
   if (!fs.length) return out;
   const cols = [];
   fs.forEach(f=>{
-    let c; try { c = curves(f, results[f.name]).c; } catch(e){ return; }
+    let c; try { c = curves(f, own(results, f.name)).c; } catch(e){ return; }
     cols.push({ h: '2Theta_' + f.label, v: Array.from(f.x, v=> fmtData(v, 5)) },
       { h: 'Observed_' + f.label, v: Array.from(f.y, v=> fmtData(v, 3)) },
       { h: 'Calculated_' + f.label, v: Array.from(c.yc, v=> fmtData(v, 3)) },
@@ -646,7 +646,7 @@ function csvTables(pre, files, results, { curves, stale, std }, { data: fmtData,
   out.push({ name: pre + 'rietveld_pattern.csv', text: t });
   let s = csvLine(['Pattern', 'Phase', 'Quantity', 'Value', 'Esd', 'Rwp', 'Rexp', 'chi2']);
   fs.forEach(f=>{
-    const r = results[f.name], st = r.stats || {};
+    const r = own(results, f.name), st = r.stats || {};
     // Number.isFinite: a NaN that went through JSON (undo, a saved project) comes back as
     // null, which the global isFinite takes for 0 and fmtData cannot format. fmtData: a
     // value too small for its fixed decimals keeps three significant digits or more (an
@@ -666,7 +666,7 @@ function csvTables(pre, files, results, { curves, stale, std }, { data: fmtData,
   let pk = csvLine(['Pattern', 'Phase', 'hkl', '2Theta_deg', 'Relative_intensity', 'FWHM_deg', 'FWHM_esd_deg', 'eta', 'FWHM_corr_deg', 'FWHM_corr_esd_deg', 'Size_corr_nm', 'Size_corr_esd_nm', 'Delta_dstar_invA', 'Delta_dstar_esd_invA', 'Model_isotropic_FWHM_corr_deg', 'Model_free_shape_FWHM_corr_deg', 'Used_by_tests', 'Note']);
   let anyPk = false;
   fs.forEach(f=>{
-    const wd = results[f.name].widths, refused = !!results[f.name].irfRefused;
+    const wd = own(results, f.name).widths, refused = !!own(results, f.name).irfRefused;
     if (!wd) return;
     wd.phases.forEach(ph=> ph.rows.forEach(w=>{
       anyPk = true;
@@ -759,7 +759,7 @@ function readState(s, std){
 // in the restore).
 function resultsOf(s){
   const results = {};
-  if (s.results && typeof s.results === 'object') Object.keys(s.results).forEach(k=>{ results[k] = frozen(s.results[k]); });
+  if (s.results && typeof s.results === 'object') Object.keys(s.results).forEach(k=>{ setOwn(results, k, frozen(s.results[k])); });
   return results;
 }
 
@@ -796,7 +796,7 @@ const curveKey = (f, r, list, std) => exactJson([idOf(f.x), idOf(f.varMul), inst
 // it starts locked).
 const allPhases = S => S.std ? [S.lab6, ...S.phases] : S.phases;
 const stdPhase = S => allPhases(S).find(q=> q.id === S.pick) || S.lab6;
-const phasesFor = (S, f) => S.std ? [stdPhase(S)] : S.phases.filter(q=> !(f && q.off[f.name]));
+const phasesFor = (S, f) => S.std ? [stdPhase(S)] : S.phases.filter(q=> !(f && own(q.off, f.name)));
 const locked = S => S.busy || !!S.waiting;
 /* A phase added from a CIF (addCifs), its id the next: the default settings, an isotropic
    size and strain, the rest off — the CIF's B held, also for a CIF that gives none (v428:
@@ -937,7 +937,7 @@ const rowLock = (k, lock, f) => ({ off: k === 'del' ? lock : k === 'on' && !f, t
 // The pattern's plot (xrd-rv.js drawPlot): the pattern, its instrument, its result, the phases
 // (each one's structure, colour and tick on it, the standard's chosen) and the plot's size.
 const plotKeyOf = (S, f, r, size) => [f.name, idOf(f.x), idOf(f.y), idOf(f.varMul), idOf(instrOf(f)), resKey(r), S.std ? S.pick : '',
-  allPhases(S).map(q=> [q.id, q.color, idOf(q.prep), q.off[f.name] ? 0 : 1].join(':')).join(), size].join('|');
+  allPhases(S).map(q=> [q.id, q.color, idOf(q.prep), own(q.off, f.name) ? 0 : 1].join(':')).join(), size].join('|');
 /* The pattern's plot's frame (drawPattern): from the pattern's lowest to its highest count,
    a row of ticks a phase (nRows) under it and, with a fit, the difference (diff) under them;
    range: the plot's [x0, x1, y0, y1] over the scan (xs); off: the difference's shift. */
@@ -1053,7 +1053,7 @@ function restoreInto(U, S, s, keep){
   }
   S.sel = Number.isInteger(s.sel) ? s.sel : null;
   S.results = resultsOf(s);
-  if (keep && S.wrote) Object.assign(S.results, S.wrote);
+  if (keep && S.wrote) S.results = { ...S.results, ...S.wrote };
   S.sizeBy = s.sizeBy === 'peak' ? 'peak' : 'sample'; S.resNorm = U.normOf(s.resNorm);
 }
 /* What the card shows beside its state (xrd.js shows): the peak picked in its table of

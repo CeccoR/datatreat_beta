@@ -180,18 +180,19 @@ test('30c: GC refuses an interval bound back to "all" that would end an interval
   } finally { await close(); }
 });
 
-test('30e: EPR refuses a .DSC of fewer than two points, saying why; flat spectra are drawn', async ()=>{
+test('30e: EPR does not plot a .DSC of fewer than two points, saying why (v581: its pair waits in the list; to v580 refused); flat spectra are drawn', async ()=>{
   const { page, errors, close } = await env.page();
   try {
     await openModule(page, 'epr');
     const e = eprPair({ title: 'x' }), dsc = e.dsc.toString('latin1');
     await page.setInputFiles('#eprFiles', [file('one.DSC', dsc.replace('XPTS 1024', 'XPTS 1')), file('one.DTA', e.dta),
       file('none.DSC', dsc.replace(/XPTS 1024\n/, '')), file('none.DTA', e.dta), file('ok.DSC', dsc), file('ok.DTA', e.dta)]);
-    await page.waitForFunction(()=> document.querySelectorAll('#eprFileTableWrap tr.file-row').length === 1); await settle(page);
+    await page.waitForFunction(()=> document.querySelectorAll('#eprFileTableWrap tr.file-row').length === 3); await settle(page);
     const alerts = await page.locator('#eprAlerts').textContent();
-    // (v567: the pair named by its files, R4's line: "{file}: {reason}.")
-    assert.match(alerts, /one\.DTA \+ one\.DSC: XPTS 1: a spectrum needs two points at least\./);
-    assert.match(alerts, /none\.DTA \+ none\.DSC: its \.DSC gives no XPTS, the number of points\./);
+    // (v567: the pair named by its files, R4's line: "{file}: {reason}."; v581: to check, not plotted)
+    assert.match(alerts, /one\.DTA \+ one\.DSC: XPTS 1: a spectrum needs two points at least: not plotted\./);
+    assert.match(alerts, /none\.DTA \+ none\.DSC: its \.DSC gives no XPTS, the number of points: not plotted\./);
+    assert.equal(await page.locator('#tab-epr .an-card svg.plot .plot-gdata path').count(), 1, 'ok alone plotted');
     // Two spectra all flat, global normalisation: each a line in its slot, no NaN.
     await openModule(page, 'epr');
     const flat = Buffer.alloc(1024*8);

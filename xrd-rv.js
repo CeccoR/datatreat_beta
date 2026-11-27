@@ -26,6 +26,7 @@ import { cellView } from './xrd-cell3d.js';
 import * as M from './xrd-rv-model.js';
 import * as H from './xrd-rv-html.js';
 import { lanes } from './xrd-rv-pool.js';
+import { own, setOwn } from './db.js';
 
 // The card's instructions and the standard's window's (xrd-rv-html.js; xrd.js takes them here).
 export { RV_INFO, RV_STD_INFO } from './xrd-rv-html.js';
@@ -355,8 +356,9 @@ function laneHooks(S, run, todo){
 function written(S, run, res, { f, ph }){
   // (a file taken away meanwhile: its result has no pattern to go with)
   if (!S.host.allFiles().some(g=> g.name === f.name)) return;
-  S.results[f.name] = M.resultRecord(res, ph, S.std, Date.now());
-  if (S.wrote) S.wrote[f.name] = S.results[f.name];
+  // (by the file's name, its own key: a file named constructor or __proto__ too, v581)
+  const rec = setOwn(S.results, f.name, M.resultRecord(res, ph, S.std, Date.now()));
+  if (S.wrote) setOwn(S.wrote, f.name, rec);
   run.done++;
   // (by name: a module read out and in again gives the same files as new objects)
   if (f.name === (curFile(S) || {}).name) draw(S);
@@ -476,7 +478,7 @@ function draw(S, preserve){
   syncButtons(S);
   renderPhases(S);
   if (!fs.length){ drawNone(S); return; }
-  const f = fs[curIdx(S)], r = S.results[f.name];
+  const f = fs[curIdx(S)], r = own(S.results, f.name);
   if (S.nav) S.nav.update();
   // (the Results show every pattern, the card folded or not)
   renderRes(S);
@@ -556,13 +558,13 @@ function netOf(S, f, r){
   let list; try { list = M.resultPhases(r, M.allPhases(S), M.phasesFor(S, f)); } catch(e){ return null; }
   return netKept(f.y, M.curveKey(f, r, list, S.std), ()=>{ try { const { c } = curvesOf(S, f, r); return Array.from(f.y, (y, i)=> y - c.bg[i]); } catch(e){ return null; } });
 }
-const refinedFiles = S => S.host.files().filter(f=> S.results[f.name] && S.results[f.name].params);
+const refinedFiles = S => S.host.files().filter(f=> own(S.results, f.name) && own(S.results, f.name).params);
 const phaseColor = (S, name) => (M.allPhases(S).find(q=> q.prep.name === name) || {}).color || '#888';
 // (up to v490 the section was drawn whole again on any change to it: a label, the
 // Results' charts both)
 function renderRes(S){
   if (!S.res) return;
-  const fs = refinedFiles(S), anyW = fs.some(f=> S.results[f.name].widths);
+  const fs = refinedFiles(S), anyW = fs.some(f=> own(S.results, f.name).widths);
   if (S.sizeBy === 'peak' && !anyW) S.sizeBy = 'sample';
   const row = S.res.querySelector('.res-row'), none = S.$('ResNone'), on = fs.length ? '' : 'none';
   if (row.style.display !== on) row.style.display = on;
@@ -577,7 +579,7 @@ function renderRes(S){
    normalisation and the plot's size. A label is no part of it: the legend's, written
    again alone, and the figure composer's name of its trace, set in place. */
 function drawStacked(S, fs){
-  const shown = fs.map(f=> ({ f, y: netOf(S, f, S.results[f.name]) })).filter(q=> q.y), svg = S.$('ResSvg');
+  const shown = fs.map(f=> ({ f, y: netOf(S, f, own(S.results, f.name)) })).filter(q=> q.y), svg = S.$('ResSvg');
   const leg = H.legendHtml(shown.map(({ f })=> [f.color, f.label]));
   if (leg !== S.stackLeg){ S.stackLeg = leg; S.$('ResLegend').innerHTML = leg; }
   const key = M.stackKeyOf(S.resNorm, sizeOf(svg), shown);
@@ -950,7 +952,7 @@ function syncButtons(S){
   b.disabled = !on && (!f || !!why);
   b.title = M.refineTitle(S.waiting, why);
   if (!S.std){ S.$('RefineAll').disabled = on || !fs.length || !!why; S.$('RefineAll').title = why; }
-  S.$('Clear').disabled = on || !(f && S.results[f.name]);
+  S.$('Clear').disabled = on || !(f && own(S.results, f.name));
   if (!S.std) S.$('ClearAll').disabled = on || !Object.keys(S.results).length;
   // (the phases are read when a run starts: one added meanwhile would not be in it) The
   // drop zones as + CIF was, a button disabled then; the box refuses a drop then (cifDragged).
@@ -1216,7 +1218,7 @@ function phaseChanged(S, e){
   if (t.dataset.on != null){
     const q = S.phases.find(x=> x.id === +t.dataset.on), f = curFile(S);
     if (!q || !f) return;
-    if (t.checked) delete q.off[f.name]; else q.off[f.name] = true;
+    if (t.checked) delete q.off[f.name]; else setOwn(q.off, f.name, true);
     draw(S, true); S.host.commit();
   }
 }
@@ -1230,7 +1232,7 @@ function wireButtons(S){
     if (M.locked(S)){ cancel(S); return; }
     press(S, false);
   };
-  S.$('Clear').onclick = ()=>{ const f = curFile(S); if (!f || M.locked(S) || !S.results[f.name]) return; delete S.results[f.name]; draw(S, true); S.host.commit(); if (S.std) S.host.changed(); };
+  S.$('Clear').onclick = ()=>{ const f = curFile(S); if (!f || M.locked(S) || !own(S.results, f.name)) return; delete S.results[f.name]; draw(S, true); S.host.commit(); if (S.std) S.host.changed(); };
   if (S.std) return;
   S.$('RefineAll').onclick = ()=>{ if (!quickPress(S) && !M.locked(S)) press(S, true); };
   S.$('ClearAll').onclick = ()=>{ if (M.locked(S) || !Object.keys(S.results).length) return; S.results = {}; draw(S, true); S.host.commit(); };
