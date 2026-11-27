@@ -192,11 +192,19 @@ I nomi nel box Windows hanno i pedici (`H₂-O₂ fit`, `H₂`, `O₂`; S310 com
 | Le note delle righe EPR | — | con la loro chiave (`alone`, `pair:{file}`): la × marca quel problema; una riga rifatta (file cambiati) riparte senza segni | — |
 | Riga rossa di una finestra GC troppo corta | `The H2O2 window must start at least 5 s before it ends.` | `The H₂-O₂ window must start at least 5 s before it ends.` | riga rossa |
 | Bordo di una finestra GC dentro un picco vicino | `The H2O2 window (…) reaches S264 (…), which its model has no peak for: the fit degrades there.` | `The H₂-O₂ window (…) reaches …` | warn compatto |
-| GC, rate non normalizzate (m o A nell'intestazione della colonna; un valore vuoto è nessuno) | — | info compatto sotto i parametri: `No {m\|A} for {campioni}: the rates are not normalised, in µmol h⁻¹ and µmol.` | info |
-| Regola del campo m o A rifiutato (0, sotto, non un numero) | `A number, at least 0.001.` | `A number, at least 0.001, or none (empty).` (vuoto è un valore) | riga rossa |
+| GC, rate non normalizzate (m o A nell'intestazione della colonna; un valore vuoto è nessuno) | — | info compatto sotto i parametri: `No {m\|A} for {campioni}: the rates are not normalised, in µmol h⁻¹ and µmol.` | info (tolto in v585, sotto) |
+| Regola del campo m o A rifiutato (0, sotto, non un numero) | `A number, at least 0.001.` | `A number, at least 0.001, or none (empty).` (vuoto è un valore; tornata com'era in v585, sotto) | riga rossa |
 
 ## Dopo (v584)
 
 | Cosa | Prima | Dopo (v584) | Tipo |
 |---|---|---|---|
 | Production Rate sotto un'integrazione GC fallita (R1–R4, come (iii) per la Calibration) | warn `The GC software's table used instead of the re-integration ({card}):` `{campione}: its integration is not done yet` fino alla fine (la card non era avvisata) | subito, error compatto in testa alla card: `The GC software's table used instead of the re-integration ({card}):` + `{campione}: the integration failed: {motivo}.` (il motivo del lavoro, come nello stato della card Integration); dopo uno Stop resta il warn `…: its integration was stopped before its end` | error compatto |
+
+## Dopo (v585)
+
+| Cosa | Prima (v584) | Dopo (v585) | Tipo |
+|---|---|---|---|
+| Da dove vengono i valori di una Production Rate GC (`gc-html.js` `srcAlertsHtml`): ri-integrati, tabella tenuta e perché | info e warn con la ×, come le box dei file sotto la drop zone; la × durava fino al disegno successivo | box compatti senza ×, come gli altri avvisi nelle card (R1–R3): parlano dell'analisi della card e sono ricalcolati con lei, non di un file letto, quindi restano in testa alla card (R2) e non vanno sotto la drop zone; testi uguali | info, warn compatti |
+| GC, m o A vuoto (decisione dell'utente: un campione incluso ha sempre il suo valore) | vuoto = nessuno, rate non normalizzate, info compatto `No {m\|A} for {campioni}: …` | vuoto, 0, sotto 0.001 o non un numero rifiutato: flash, `A number, at least 0.001.` in rosso sotto il campo, valore di prima, nessun passo; un campione senza valore prende 15 mg o 1 cm² (anche un progetto con null o senza il valore); l'info tolto | riga rossa |
+| Integrazione GC fallita senza motivo (promessa rifiutata con nulla o un errore senza messaggio) | `The integration failed: undefined.` | `The integration failed: its workers gave no reason.` (stato della card, finestra Calibration, Production Rate) | error compatto |

@@ -209,7 +209,13 @@ was proposed; nothing here is in the code yet.
   message (gc-integ.js runFailed, gc-html.js srcAlertsHtml); (8) a file a stopped card did not
   have at its Stop (taken out then, brought back by an undo or its box ticked again) showed the
   store's results, another card's run's as they came: now a Stop holds every result there is
-  then (heldOf), such a file as it was then, nothing applied until Integrate.
+  then (heldOf), such a file as it was then, nothing applied until Integrate. Seen then, done in
+  v585: (9) a run rejected with nothing (or an error with no message) said "the integration
+  failed: undefined": now "…: its workers gave no reason"; (10) where the Production Rate card's
+  values come from was said in the drop zone's boxes, with a × (ALERTS-REVIEW.md R1: a card's are
+  compact, with none): now compact boxes; (11) the Calibration window's levels were named "H2
+  concentration of …" for screen readers: now H₂, O₂, as the window shows them; (12)
+  valuesFor's `waiting`, read by none, gone.
 - **Other gases from the raw chromatograms.** The Integration card fits H₂ and O₂ only (one
   window, 268–326 s, with the system peak at 310 s and the baseline step); N₂ and the
   others need windows of their own, as the Python's N₂ window (321–346 s, with the system
@@ -221,6 +227,14 @@ was proposed; nothing here is in the code yet.
   of a negative E_g. Whether that is a real consumption or an artefact (a leak, a drift of
   the baseline) is the user's call: a warning like DRS's, the bar hidden, or as it is.
   Decided for v567: no new message; left as it is until the user says.
+- **A sample with no m or A (v581; the user's decision, done in v585).** v581 took an empty m or
+  A as none, the rates then not normalised (µmol h⁻¹, µmol), with an info under the parameters
+  naming the samples. The user: an included sample always has its value; an empty field, 0, a
+  value below 0.001 or no number is refused (the field shaken, *A number, at least 0.001.* in
+  red under it, the value before kept, no step of the history), a sample with none takes the
+  default, 15 mg (the masses' to v580) and 1 cm² (the areas' since v540), a project's value
+  none or missing too. The not-normalised path, its info and the empty value's handling
+  (utils.js guardNumericInput's `blank`) are gone.
 - **The parameter table's least width (v581, done in v582).** m's header a select of m or A
   (v581) took the table from 1000 px to 1060, the parameters scrolling sideways below it. From
   v582 its select is in a compact type (11 px) and the columns are shared again (m 132 px, the
@@ -942,7 +956,25 @@ was proposed; nothing here is in the code yet.
   characters', the alignment's, the fill's) and a card brought into view (cards.js revealBy)
   against the page's clientWidth and clientHeight (utils.js viewport). Left as they are, being no
   placing: the move's scroll at the window's edge (cards.js), SEM's pane at 70 % of the window's
-  height, the narrow layout's widths (as the media queries take them).
+  height, the narrow layout's widths (as the media queries take them). Seen then, done in v585:
+  with a window open over the page (its overflow hidden, its scrollbar's room kept,
+  scrollbar-gutter) Chromium gives clientWidth as innerWidth, the gutter in it, so a picker of
+  the composer at the page's right edge lay over the gutter: viewport takes the page's own box
+  (documentElement's getBoundingClientRect), the room left. Done in v585 too (the user's
+  decision): the same menu on the other lists whose rows have actions, made generic (utils.js
+  `wireRowMenu`: a list's box, its rows' selector and where their items come from; `ctlMenu`:
+  the items read off the row's own controls, their names, ticks and disabled states, the red
+  last; the trace list's still from `ROW_ACTS`): the Rietveld card's phases (the tick, or the
+  standard's choice, the download, the ×, disabled for LaB₆ and during a run), the standard's
+  file in XRPD's standard's windows (its ×), GC's Calibration window (a standard's Use, a file's
+  ×) and the Projects list (Export .csv, Export .datatreat, Delete, now marked `is-danger` as it
+  deletes). It closes as its row leaves the page (a MutationObserver while it is open; the trace
+  list's renderer closed it to v584), and a scroll closes it only where it moves its row: a
+  scroll event comes a frame after its scroll, so a row scrolled into view by the press closed
+  the menu as it opened. Each of the four lists asked for has actions on its rows, so each has
+  the menu. Left: other lists with a × on their rows have none yet, XRPD's peaks table (*Remove
+  peak*), Iodometry's calibration standards (*Remove this standard*), the composer's panels
+  (*Remove panel*): the same `wireRowMenu` and `ctlMenu` would give it them.
 - **A helper copied (v582's review, done in v584).** iodo-model.js had its own `width` (a line's
   fields up to its last not empty), textdata.js's to the character: it imports that one.
 - **A last cell empty read as a column missing (Custom; GC's alternative export; v582, done).**

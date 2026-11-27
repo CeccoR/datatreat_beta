@@ -15,7 +15,7 @@
    (xrd-rv-model.js: what a run takes and says, the keys the views are kept under, the state
    saved and put back) and its markup (xrd-rv-html.js) beside it.
 ========================================================= */
-import { fmtData, csvLine, X_SVG, DL_SVG as DL_ICON, downloadBytes, flashFieldInvalid, settings, fitCsvIcons, maxArr, barNames, barChipYmax, NORM_OPTIONS, normOf, confirmModal, keeper, boxHtml, quickPress, runProgress } from './utils.js';
+import { fmtData, csvLine, X_SVG, DL_SVG as DL_ICON, downloadBytes, flashFieldInvalid, settings, fitCsvIcons, maxArr, barNames, barChipYmax, NORM_OPTIONS, normOf, confirmModal, keeper, boxHtml, quickPress, runProgress, wireRowMenu, ctlMenu } from './utils.js';
 import { fileSafe } from './cards.js';
 import { Plot } from './plot.js';
 import { PLOT_DL_ICON, CSV_ICON } from './modcharts.js';
@@ -1186,10 +1186,15 @@ function cifDropped(S, box, e){
    extension. Nothing changes: no step of the history, a run going on or not; the row is
    not selected. */
 const cifFile = (S, q) => q === S.lab6 ? LAB6_FILE : q.file || fileSafe(q.prep.name || 'phase') + '.cif';
+/* A row's menu (v585, utils.js wireRowMenu): its tick (the standard's: its choice), its
+   download and its × in red, read off the row's own controls (locked while a run goes on, as
+   they are: lockRows), named by its phase. */
 function wirePhaseList(S){
   const sig = { signal: S.ac.signal }, el = S.$('PhaseList');
   el.addEventListener('click', e=> phaseClicked(S, e), sig);
   el.addEventListener('change', e=> phaseChanged(S, e), sig);
+  wireRowMenu(el, { rows: '.rv-cif', ...ctlMenu('input, button'), signal: S.ac.signal,
+    label: r =>{ const q = M.allPhases(S).find(x=> x.id === +r.dataset.sel); return q ? q.prep.name : ''; } });
 }
 function phaseClicked(S, e){
   const dl = e.target.closest('[data-dl]');

@@ -433,7 +433,8 @@ test('a failure told to the cards below, with its message, as the card\'s status
   const { S, card } = instance(all, cards), A = card(cards[0]);
   S.failed = 'out of <memory>'; A.halted = true; A.stopRes = M.heldOf(S);
   assert.equal(M.progressOf(U, S, A).state, 'failed');
-  assert.deepEqual(M.valuesFor(U, S, A, all[0]), { why: 'its integration failed', failed: 'out of <memory>', waiting: true });
+  // (v585: nothing more: v584's `waiting`, read by none, gone)
+  assert.deepEqual(M.valuesFor(U, S, A, all[0]), { why: 'its integration failed', failed: 'out of <memory>' });
   S.failed = ''; A.halted = false; A.stopRes = null; S.job = { total: 3, done: 0, name: 'mini_TCD.csv', works: new Map() };
   assert.deepEqual([M.progressOf(U, S, A).state, M.valuesFor(U, S, A, all[0]).why], ['running', 'its integration is not done yet']);
   S.job = null; A.halted = true; A.stopRes = M.heldOf(S);
@@ -530,7 +531,7 @@ test('the entries, their results and names; the concentrations; what Analysis ta
   assert.equal(M.valuesFor(U, S, C, all[8]), null);
   assert.deepEqual(M.valuesFor(U, S, C, all[1]), { why: '12 injections in the table, 11 chromatograms', integ: true });
   C.method = ALT_M;
-  assert.deepEqual(M.valuesFor(U, S, C, all[0]), res[M.keyOf(U, all[0].mate, ALT_M)] ? M.valuesFor(U, S, C, all[0]) : { why: 'its integration is not done yet', waiting: true });
+  assert.deepEqual(M.valuesFor(U, S, C, all[0]), res[M.keyOf(U, all[0].mate, ALT_M)] ? M.valuesFor(U, S, C, all[0]) : { why: 'its integration is not done yet' });
   C.halted = true; if (!res[M.keyOf(U, all[0].mate, ALT_M)]) assert.equal(M.valuesFor(U, S, C, all[0]).why, 'its integration was stopped before its end');
   C.halted = false; C.method = DEF;
   C.cal = M.calIn(U, null);
@@ -779,12 +780,16 @@ test('the markup: the instructions, the card\'s and the window\'s bodies, Window
     ['<span>Integrating… 2 / 5 chromatograms · a&lt;b&gt;</span>', '<div class="alert bad compact">✕ The integration failed: f&lt;x&gt;.</div>', '<span>The results shown come from H₂-O₂ fit 264–331 s, not from these windows.</span>',
       '<span>Stopped: 3 chromatograms of the standards not integrated.</span>', '<span>Stopped: 1 chromatogram of the standards not integrated.</span>', '<span>6 chromatograms integrated.</span>',
       '<span>Stopped: the results shown come from H₂-O₂ fit 264–331 s, not from these windows.</span>', '<span>3 chromatograms of the standards to integrate.</span>', '<span>1 chromatogram integrated.</span>', '<span>6 chromatograms integrated.</span>', '<span>6 chromatograms integrated.</span>']);
-  assert.equal(H.levelRowsHtml(HU, [], 0, 0, 1), '<tr><td colspan="8" class="txt-meta">Drop the standards\' GC table and its raw chromatograms above.</td></tr>');
+  assert.equal(H.levelRowsHtml(HU, gasOf, [], 0, 0, 1), '<tr><td colspan="8" class="txt-meta">Drop the standards\' GC table and its raw chromatograms above.</td></tr>');
   const d = { t: [0, 0.5, 1, 1.5, 2], cols: [[1, 2, 3, 2, 1]] };
   const row = { f: { name: 'f<', table: { name: 't>' } }, fi: 0, j: 0, d, lv: { h2: 0.05, o2: null, on: false }, r: { error: 'x' }, name: 'n<b>' };
-  const lh = H.levelRowsHtml(HU, [row], 0, 0, 2);
-  for (const s of ['class="peak-row selected is-excluded" data-row="0"', '<td class="gci-cal-src gci-bad" title="n&lt;b&gt; (t&gt;, f&lt;, column 1)"><span class="gci-cal-name">n&lt;b&gt;</span>', '<td class="gci-cal-a">…</td>',
-    'data-g="h2" value="0.05" aria-label="H2 concentration of n&lt;b&gt;"', 'data-g="o2" value="" aria-label', 'data-g="on" aria-label="Use n&lt;b&gt;"', '<polyline points="0.0,21.0 36.0,1.0 72.0,21.0"']) assert.ok(lh.includes(s), s);
+  const lh = H.levelRowsHtml(HU, gasOf, [row], 0, 0, 2);
+  // (v585: the levels named H₂ and O₂, as the window's display names them, to v584 "H2", "O2"; a
+  // row focusable, with a menu of its Use: gc-integ.js wireCalEdits)
+  for (const s of ['class="peak-row selected is-excluded" data-row="0" tabindex="-1" aria-haspopup="menu"', '<td class="gci-cal-src gci-bad" title="n&lt;b&gt; (t&gt;, f&lt;, column 1)"><span class="gci-cal-name">n&lt;b&gt;</span>', '<td class="gci-cal-a">…</td>',
+    'data-g="h2" value="0.05" aria-label="H₂ concentration of n&lt;b&gt;"', 'data-g="o2" value="" aria-label="O₂ concentration of n&lt;b&gt;"', 'data-g="on" aria-label="Use n&lt;b&gt;"', '<polyline points="0.0,21.0 36.0,1.0 72.0,21.0"']) assert.ok(lh.includes(s), s);
+  assert.ok(!/aria-label="[HO]2 /.test(lh), 'no H2 nor O2');
+  assert.ok(H.calFilesHtml(HU, files).startsWith('<div class="xrd-std-row" tabindex="-1" aria-haspopup="menu">'), 'a file row focusable, with a menu of its ×');
   assert.equal(H.thumbHtml(d, 0, 0, 2), '<svg class="gci-thumb" viewBox="0 0 72 22" width="72" height="22" aria-hidden="true"><polyline points="0.0,21.0 36.0,1.0 72.0,21.0" fill="none" stroke="currentColor" stroke-width="1"/></svg>');
   // (v571: what makes the standard suspicious, the card's compact warning under its line, G09)
   assert.equal(H.calFitHtml(HU, gasOf, ['h2', 'o2'], { r: { gases: { h2: { area: 1234.5, sd: 1.2, chi2r: 5 } }, windows: [{ key: 'A', chi2r: 5 }] } }), 'H<sub>2</sub>: area 1234.5 ± 1.2, χ²<sub>r</sub> 5.00<div class="alert warn compact gci-flag">⚠ Suspicious: χ²ᵣ 5.00, above 4</div>');
@@ -998,7 +1003,7 @@ function calOutputs(E){
   if (C.calSel >= rows.length) C.calSel = Math.max(0, rows.length - 1);
   o.status = H.calStatusHtml(HU, S.gasOf, M.progressOf(U, S, C), M.stdsLeft(U, S, C), rows.length);
   const [lo, hi] = M.range(C.method);
-  o.rows = H.levelRowsHtml(HU, rows, C.calSel, lo, hi);
+  o.rows = H.levelRowsHtml(HU, S.gasOf, rows, C.calSel, lo, hi);
   const x = rows[C.calSel] || null, pc = { d: x ? x.d : null, k: x ? x.j : 0, R: x ? M.resOf(U, S, C, x.f) : null, file: x ? x.f.name : '', what: x ? x.name : '' };
   const D = M.chromOf(U, pc, C.method);
   C.calDrawn = x && !D.fail ? { x, k: D.k, t: D.tt, y: D.yy, curves: D.curves, m: D.R.m } : null;

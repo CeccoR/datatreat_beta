@@ -277,8 +277,8 @@ export const calHtml = (u, p)=> `
       </div>`;
 // What a drop did not load, and why; what it held loaded already (utils.js FILE ALERTS).
 export const dropAlertHtml = (u, bad, dup = [])=> u.fileAlertHtml('bad', bad.map(u.esc)) + u.fileAlertHtml('dup', dup.map(u.esc));
-// The standards' files, each removable.
-export const calFilesHtml = (u, files)=> files.map((f, i)=> `<div class="xrd-std-row"><span class="txt-mini">Standards</span><span class="xrd-std-name">${f.table ? `${u.esc(f.table.name)} + ${u.esc(f.name)}` : `${u.esc(f.name)} <span class="txt-meta">(no table)</span>`}</span><button type="button" class="peak-del is-danger idle-dim" data-cal-del="${i}" title="Remove these standards and their levels">${u.X_SVG(13)}</button></div>`).join('');
+// The standards' files, each removable; a menu of that × (v585: utils.js STD_ROWS).
+export const calFilesHtml = (u, files)=> files.map((f, i)=> `<div class="xrd-std-row" tabindex="-1" aria-haspopup="menu"><span class="txt-mini">Standards</span><span class="xrd-std-name">${f.table ? `${u.esc(f.table.name)} + ${u.esc(f.name)}` : `${u.esc(f.name)} <span class="txt-meta">(no table)</span>`}</span><button type="button" class="peak-del is-danger idle-dim" data-cal-del="${i}" title="Remove these standards and their levels">${u.X_SVG(13)}</button></div>`).join('');
 /* A calibration of v544–v548's, its raw chromatograms alone (its files with no table): said,
    its standards named by column, until its table is dropped or the box's × marks the file
    seen (notes, alerts.js: its record's `seen`, in the card's state, kept by undo and redo
@@ -292,14 +292,15 @@ export function thumbHtml(d, j, lo, hi){
   return `<svg class="gci-thumb" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="1"/></svg>`;
 }
 /* The standards' rows (gc-integ-model.js calRows's): each its number, thumbnail, name (red
-   where its fit is suspicious, whole in its tooltip), areas, levels and Use; `sel` the
-   standard on show, [lo, hi] the thumbnails' range. */
-export function levelRowsHtml(u, rows, sel, lo, hi){
+   where its fit is suspicious, whole in its tooltip), areas, levels (named by gasOf's display
+   names, H₂ and O₂: v585, to v584 "H2", "O2") and Use; `sel` the standard on show, [lo, hi] the
+   thumbnails' range. A row takes the focus and has a menu of its Use (v585: gc-integ.js
+   wireCalEdits). */
+export function levelRowsHtml(u, gasOf, rows, sel, lo, hi){
   const area = (x, g)=> x.r && x.r.gases && x.r.gases[g] ? sig(x.r.gases[g].area, 5) : '…';
   const val = v => v == null ? '' : u.esc(String(v));
-  return rows.map((x, i)=> `<tr class="peak-row${i === sel ? ' selected' : ''}${x.lv.on ? '' : ' is-excluded'}" data-row="${i}"><td class="gci-cal-k">${i + 1}</td><td class="gci-cal-th">${thumbHtml(x.d, x.j, lo, hi)}</td><td class="gci-cal-src${fitMarks(x.r).length ? ' gci-bad' : ''}" title="${u.esc(fullName(x))}"><span class="gci-cal-name">${u.esc(x.name)}</span></td><td class="gci-cal-a">${area(x, 'h2')}</td><td class="gci-cal-a">${area(x, 'o2')}</td>`
-    + `<td><input type="text" inputmode="decimal" data-fi="${x.fi}" data-j="${x.j}" data-g="h2" value="${val(x.lv.h2)}" aria-label="H2 concentration of ${u.esc(x.name)}" placeholder="—"></td>`
-    + `<td><input type="text" inputmode="decimal" data-fi="${x.fi}" data-j="${x.j}" data-g="o2" value="${val(x.lv.o2)}" aria-label="O2 concentration of ${u.esc(x.name)}" placeholder="—"></td>`
+  return rows.map((x, i)=> `<tr class="peak-row${i === sel ? ' selected' : ''}${x.lv.on ? '' : ' is-excluded'}" data-row="${i}" tabindex="-1" aria-haspopup="menu"><td class="gci-cal-k">${i + 1}</td><td class="gci-cal-th">${thumbHtml(x.d, x.j, lo, hi)}</td><td class="gci-cal-src${fitMarks(x.r).length ? ' gci-bad' : ''}" title="${u.esc(fullName(x))}"><span class="gci-cal-name">${u.esc(x.name)}</span></td><td class="gci-cal-a">${area(x, 'h2')}</td><td class="gci-cal-a">${area(x, 'o2')}</td>`
+    + ['h2', 'o2'].map(g=> `<td><input type="text" inputmode="decimal" data-fi="${x.fi}" data-j="${x.j}" data-g="${g}" value="${val(x.lv[g])}" aria-label="${u.esc(gasOf(g).txt)} concentration of ${u.esc(x.name)}" placeholder="—"></td>`).join('')
     + `<td><input type="checkbox" data-fi="${x.fi}" data-j="${x.j}" data-g="on"${x.lv.on ? ' checked' : ''} aria-label="Use ${u.esc(x.name)}"></td></tr>`).join('')
     || `<tr><td colspan="8" class="txt-meta">Drop the standards' GC table and its raw chromatograms above.</td></tr>`;
 }

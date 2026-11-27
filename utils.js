@@ -4,7 +4,7 @@
 import { fixed, isFixed } from './db.js';
 import { ALERT_ICON, boxHtml, notesFor } from './alerts.js';
 import { listHtml, menuHtml } from './filelist-html.js';
-import { downloadOf, zipEntries, gapFor, landing, outside, halfAt, movedFrom, rowMenu, menuKey, LONG_PRESS_MS } from './filelist-model.js';
+import { downloadOf, zipEntries, gapFor, landing, outside, halfAt, movedFrom, rowMenu, menuOrder, menuKey, LONG_PRESS_MS } from './filelist-model.js';
 import { menuAt } from './cards-model.js';
 const COLORS = [
   '#3aa0ff','#ff7a59','#5fcf6a','#d050ff','#ffcc4d','#ff5050','#4dd0e1','#c0ca33','#9575cd','#f06292',
@@ -886,8 +886,8 @@ const DL_SVG = (size=15)=> `<svg class="dl-icon" viewBox="0 0 24 24" width="${si
 const LIST_U = { esc, X_SVG, DL_SVG, isIncluded, fileOf };
 /* The list drawn into its container, then wired (v564: no longer one closure): L the
    list's state (wrap, files, callbacks, nIn the traces included; drag a row dragged, fdrag
-   a file by its grip; press, held, eat: its rows' menu's), which the functions below take,
-   in the order they were added. A row's menu open on it closes (v579): its rows are new. */
+   a file by its grip), which the functions below take, in the order they were added; its
+   rows' menu (v579, wireRowMenu: a row's menu open on it closes, its rows new). */
 function renderUnifiedFileList(container, files, callbacks, note, noteHead){
   const wrap = container;
   if (!wrap) return;
@@ -905,7 +905,6 @@ function renderUnifiedFileList(container, files, callbacks, note, noteHead){
     if (callbacks.parts) wirePartDrag(L);
     wireListMenu(L);
   }
-  if (rowMenuOn && rowMenuOn.wrap === wrap) closeRowMenu();
 }
 
 // The header box: ticked with every trace in, empty with none, the dash with some.
@@ -1105,57 +1104,92 @@ function dropPart(L, e){
   else if (paired && cb.onPartDrop) cb.onPartDrop(from, null);
 }
 
-/* A row's menu (v579, BACKLOG 25): what its include box and its buttons at the right do,
-   made from the list they are made from (filelist-model.js ROW_ACTS, rowMenu; its markup
-   filelist-html.js menuHtml), an item pressing its control: it does what the control does,
-   through the control's own handler (a step of the history, a download, as ever). Opened by
-   a right-click anywhere on the row, by the ContextMenu key or Shift+F10 with the focus in
-   it, or by a finger held on it LONG_PRESS_MS (not on a grip, which drags; a finger moved
-   more than 4 px, the page scrolled or the finger lifted first: none). The browser's own menu
-   is held back on the rows alone: on the head, the rest of the page and in a name field
-   already being typed in (its cut and paste), it is the browser's. A right-click while a
-   row or a file is dragged by its grip does nothing. The look of the app's other menus
-   (`.an-menu`: the kinds', cards.js; the sample selector's, snav.js), at the pointer or, from
-   a key, under the row, inside the window (cards-model.js menuAt); its row lit meanwhile.
-   ↓ ↑ Home End move along it (menuKey), Enter or Space choose; Escape, Tab, a press
-   elsewhere, a scroll, a resize or the window left close it, the focus given back to the row
-   from inside it. It closes before an undo or a redo (Ctrl/⌘+Z, Y, Shift+Z) acts, and when
-   its list is drawn again, its rows gone, as the kinds' menu does through a step of the
-   history (xrdcards 22: cards.js load); an item of a row no longer in the page does nothing.
-   One open in the page at a time: rowMenuOn { el, row, wrap, i, ac }. */
+/* A row's menu (v579, BACKLOG 25; v585 every list whose rows have actions of their own:
+   wireRowMenu): what the row's controls do, made from what they are made from (the trace
+   list's: filelist-model.js ROW_ACTS, rowMenu; the others': the controls themselves, ctlMenu;
+   its markup filelist-html.js menuHtml), an item pressing its control: it does what the
+   control does, through the control's own handler (a step of the history, a download, as
+   ever). Opened by a right-click anywhere on the row, by the ContextMenu key or Shift+F10 with
+   the focus in it, or by a finger held on it LONG_PRESS_MS (not on a grip, which drags; a
+   finger moved more than 4 px, the page scrolled or the finger lifted first: none); on macOS a
+   Ctrl+click is the right button's, a grip's too (grips, v582). The browser's own menu is held
+   back on the rows alone: on the head, the rest of the page and in a text field already being
+   typed in (its cut and paste), it is the browser's. A right-click while a row or a file is
+   dragged by its grip does nothing. The look of the app's other menus (`.an-menu`: the kinds',
+   cards.js; the sample selector's, snav.js), at the pointer or, from a key, under the row,
+   inside the page (cards-model.js menuAt, viewport); its row lit meanwhile (menu-on,
+   aria-expanded). ↓ ↑ Home End move along it (menuKey), Enter or Space choose (an item
+   disabled does nothing); Escape, Tab, a press elsewhere, a scroll that moves its row, a
+   resize or the window left close it, the focus given back to the row from inside it. It
+   closes before an undo or a redo (Ctrl/⌘+Z, Y, Shift+Z) acts, and as its row leaves the
+   page, its list drawn again (a MutationObserver while it is open, v585: to v584 the trace
+   list's renderer closed it), as the kinds' menu does through a step of the history
+   (xrdcards 22: cards.js load); an item of a row no longer in the page does nothing. One
+   open in the page at a time: rowMenuOn { el, row, L, i, ac, mo }. */
 let rowMenuOn = null;
 const typingIn = t => t.matches('input[type="text"]') && t === document.activeElement;
-function wireListMenu(L){
-  const box = L.wrap.querySelector('.table-wrap-box');
-  // (a press: whether it began in a name field already typed in, the right button's menu then
-  // the field's; a finger's, held; the click a held finger ends with eaten: it opened the menu)
-  box.addEventListener('pointerdown', e=>{ const typing = typingIn(e.target); L.press = { typing }; L.eat = false; if (!typing) holdRow(L, e); }, true);
-  box.addEventListener('click', e=>{ if (L.eat && e.isTrusted){ e.preventDefault(); e.stopPropagation(); } L.eat = false; }, true);
-  box.addEventListener('contextmenu', e=> rowContext(L, e));
+const GRIPS = '.drag-handle, .fpart-grip';
+/* A list's rows given their menu (v585, out of v579's trace list's own): `box` the element
+   they are in (its listeners, delegated: wired once a box, off with o.signal), o.rows their
+   selector, o.items(row) a row's items (rowMenu's form, menuHtml's fields; none or empty: no
+   menu), o.press(row, ctl) the control an item presses (none: nothing), o.label(row) the
+   menu's name; o.home the element the rows are looked for in to give the focus back where its
+   row is gone (none: box), o.busy() a row or a file dragged by its grip. Its state L: press (a
+   press, and whether it began in a text field being typed in: the right button's menu then
+   the field's), held (a finger's), eat (the click a held finger ends with: it opened the menu). */
+export function wireRowMenu(box, o){
+  const L = { box, o, press: null, held: null, eat: false }, signal = o.signal;
+  box.addEventListener('pointerdown', e=>{ const typing = typingIn(e.target); L.press = { typing }; L.eat = false; if (!typing) holdRow(L, e); }, { capture: true, signal });
+  box.addEventListener('click', e=>{ if (L.eat && e.isTrusted){ e.preventDefault(); e.stopPropagation(); } L.eat = false; }, { capture: true, signal });
+  box.addEventListener('contextmenu', e=> rowContext(L, e), { signal });
   box.addEventListener('keydown', e=>{
     L.press = null;
     if (e.key !== 'ContextMenu' && !(e.key === 'F10' && e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey)) return;
-    const row = e.target.closest('.file-row');
+    const row = e.target.closest(o.rows);
     if (!row || typingIn(e.target)) return;
     e.preventDefault();
     openRowMenu(L, row, null);
-  });
+  }, { signal });
+}
+/* A row's menu read off its own controls (v585: every list's but the trace list's, whose
+   controls and menu are both made from ROW_ACTS): `sel` its controls, an item each in the
+   order they stand, in their name (aria-label, else their tooltip), their tooltip with it
+   where it says something else, a box or a round button ticked as it is, a button's icon its
+   own; one disabled or locked (aria-disabled), its item disabled; those red (is-danger) last
+   (menuOrder). An item presses its control (`ctl`: its place among them). */
+export const ctlMenu = sel => ({
+  items: row => menuOrder([...row.querySelectorAll(sel)].map((c, k)=>{
+    const label = c.getAttribute('aria-label') || c.title, box = c.type === 'checkbox' || c.type === 'radio';
+    return { ctl: String(k), label, ...(c.title && c.title !== label ? { title: c.title } : {}), ...(box ? { checked: c.checked, radio: c.type === 'radio' } : { ic: c.innerHTML }),
+      ...(c.disabled || c.getAttribute('aria-disabled') === 'true' ? { disabled: true } : {}), ...(c.classList.contains('is-danger') ? { danger: true } : {}) };
+  })),
+  press: (row, k)=> row.querySelectorAll(sel)[+k] || null,
+});
+// The standards' windows' file rows (.xrd-std-row: XRPD's standard's, GC's Calibration's
+// standards'), their × their one item, named by their file.
+export const STD_ROWS = { rows: '.xrd-std-row', ...ctlMenu('button'), label: r => r.querySelector('.xrd-std-name').textContent };
+// The trace list's rows' menu: each its trace's actions (rowMenu), named by its trace.
+function wireListMenu(L){
+  const fileAt = row => L.files[+row.dataset.i];
+  wireRowMenu(L.wrap.querySelector('.table-wrap-box'), { rows: '.file-row', home: L.wrap, busy: ()=> !!(L.drag || L.fdrag),
+    items: row => fileAt(row) ? rowMenu(LIST_U, fileAt(row)) : null, press: (row, ctl)=> row.querySelector('.' + ctl),
+    label: row => fileAt(row).label || fileOf(fileAt(row)) });
 }
 // The browser's menu asked for on the list: a pointer's (a press before it), or a key's.
 function rowContext(L, e){
-  const row = e.target.closest('.file-row'), press = L.press;
+  const row = e.target.closest(L.o.rows), press = L.press;
   L.press = null;
   if (!row || (press ? press.typing : typingIn(e.target))) return;
   e.preventDefault();
   // (a finger's: the hold opens it, held LONG_PRESS_MS; a key's, on the row open already: kept)
-  if (L.drag || L.fdrag || L.held || (!press && rowMenuOn && rowMenuOn.row === row)) return;
+  if ((L.o.busy && L.o.busy()) || L.held || (!press && rowMenuOn && rowMenuOn.row === row)) return;
   openRowMenu(L, row, press ? { x: e.clientX, y: e.clientY } : null);
 }
 // A finger on a row, off its grips: the menu at the finger once held LONG_PRESS_MS.
 function holdRow(L, e){
   if (e.pointerType !== 'touch') return;
-  const row = e.target.closest('.file-row');
-  if (!row || e.target.closest('.drag-handle, .fpart-grip')) return;
+  const row = e.target.closest(L.o.rows);
+  if (!row || e.target.closest(GRIPS)) return;
   letGo(L);
   const { pointerId: id, clientX: x, clientY: y } = e, ac = new AbortController(), o = { capture: true, signal: ac.signal };
   const H = L.held = { ac, timer: setTimeout(()=>{ H.timer = null; L.eat = true; openRowMenu(L, row, { x, y }); }, LONG_PRESS_MS) };
@@ -1168,43 +1202,52 @@ function letGo(L){ const H = L.held; if (!H) return; clearTimeout(H.timer); H.ac
 // The menu of a row, at a point (a pointer's) or, with none (a key's), under the row.
 function openRowMenu(L, row, at){
   closeRowMenu();
-  const i = +row.dataset.i, f = L.files[i];
-  if (!f || !row.isConnected) return;
+  const items = row.isConnected ? L.o.items(row) : null;
+  if (!items || !items.length) return;
   const el = document.createElement('div');
   el.className = 'an-menu row-menu';
   el.setAttribute('role', 'menu');
-  el.setAttribute('aria-label', f.label || fileOf(f));
-  el.innerHTML = menuHtml(rowMenu(LIST_U, f), LIST_U);
+  el.setAttribute('aria-label', L.o.label(row));
+  el.innerHTML = menuHtml(items, LIST_U);
   document.body.appendChild(el);
   const r = at ? { left: at.x, top: at.y, bottom: at.y, width: 0 } : row.getBoundingClientRect(), v = viewport();
   const p = menuAt(r, el.offsetWidth, el.offsetHeight, v.w, v.h, false, at ? 0 : 6);
   el.style.left = p.left + 'px';
   el.style.top = p.top + 'px';
-  rowMenuOn = { el, row, wrap: L.wrap, i, ac: new AbortController() };
+  const mo = new MutationObserver(()=>{ if (!row.isConnected) closeRowMenu(); });
+  rowMenuOn = { el, row, L, i: [...L.box.querySelectorAll(L.o.rows)].indexOf(row), ac: new AbortController(), mo };
+  mo.observe(document.body, { childList: true, subtree: true });
   row.classList.add('menu-on');
   row.setAttribute('aria-expanded', 'true');
-  wireRowMenu(rowMenuOn);
+  wireOpenMenu(rowMenuOn);
   el.querySelector('[data-ctl]').focus({ preventScroll: true });
 }
-// (its own listeners go with it; those on the document and the window come off with ac)
-function wireRowMenu({ el, ac }){
-  const signal = ac.signal;
-  el.addEventListener('click', e=>{ const b = e.target.closest('[data-ctl]'); if (b) pickRowItem(b.dataset.ctl); });
+/* (its own listeners go with it; those on the document and the window come off with ac. A
+   scroll closes it where it moves its row: a scroll event comes a frame after its scroll, one
+   from before the menu opened then, as a row scrolled into view by the press, v585) */
+function wireOpenMenu({ el, row, ac }){
+  const signal = ac.signal, was = row.getBoundingClientRect(), moved = ()=>{ const r = row.getBoundingClientRect(); return r.top !== was.top || r.left !== was.left; };
+  el.addEventListener('click', e=>{ const b = e.target.closest('[data-ctl]'); if (b && b.getAttribute('aria-disabled') !== 'true') pickRowItem(b.dataset.ctl); });
   el.addEventListener('contextmenu', e=> e.preventDefault());
   menuKeys(el, '[data-ctl]', closeRowMenu, signal);
   document.addEventListener('pointerdown', e=>{ if (!el.contains(e.target)) closeRowMenu(); }, { capture: true, signal });
   // (seen first, on the window's capture: the history's keys act once it is closed, utils.js)
   window.addEventListener('keydown', e=>{ if ((e.ctrlKey || e.metaKey) && /^[zy]$/i.test(e.key)) closeRowMenu(); }, { capture: true, signal });
-  for (const t of ['scroll', 'resize', 'blur']) window.addEventListener(t, closeRowMenu, { capture: t === 'scroll', signal });
+  window.addEventListener('scroll', ()=>{ if (moved()) closeRowMenu(); }, { capture: true, signal });
+  for (const t of ['resize', 'blur']) window.addEventListener(t, closeRowMenu, { signal });
 }
 /* The window's room short of its scrollbars ({ w, h }: the page's clientWidth and
    clientHeight), what a menu or a popup is placed inside and a card brought into view
    against: innerWidth and innerHeight take the scrollbars in, a popup at an edge then under
    them (v584 every one of them: the sample selector's list, the composer's pickers, a card
-   brought into view; v582 the kinds' menu, v579 the row menu). */
+   brought into view; v582 the kinds' menu, v579 the row menu). Short of the gutter a modal
+   keeps too (v585): while one is open the page does not scroll and keeps its scrollbar's room
+   (style.css, scrollbar-gutter), which Chromium leaves in clientWidth, then innerWidth, and
+   out of the page's own box, whose width is the room left (to v584 a picker at the right edge
+   then lay over the gutter). */
 export function viewport(){
   const p = document.documentElement;
-  return { w: p.clientWidth, h: p.clientHeight };
+  return { w: Math.min(p.clientWidth, p.getBoundingClientRect().width), h: p.clientHeight };
 }
 /* A menu's keys (the row menu's, v579; the kinds' menu's too, cards.js, v582): ↓ ↑ Home End
    move the focus along its items shown (`sel`; filelist-model.js menuKey), Enter and Space
@@ -1221,32 +1264,33 @@ export function menuKeys(el, sel, close, signal){
   document.addEventListener('keydown', e=>{ if (e.key === 'Escape' && !el.hidden){ e.preventDefault(); e.stopPropagation(); close(); } }, { capture: true, signal });
 }
 // The row at i in a list (its last, past its end), given the focus.
-function focusRowAt(wrap, i){
-  const rows = wrap.querySelectorAll('.file-row'), r = rows[Math.min(i, rows.length - 1)];
+function focusRowAt(L, i){
+  const rows = (L.o.home || L.box).querySelectorAll(L.o.rows), r = rows[Math.min(i, rows.length - 1)];
   if (r) r.focus({ preventScroll: true });
 }
 function closeRowMenu(){
   if (!rowMenuOn) return;
-  const { el, row, wrap, i, ac } = rowMenuOn, back = el.contains(document.activeElement);
+  const { el, row, L, i, ac, mo } = rowMenuOn, back = el.contains(document.activeElement);
   rowMenuOn = null;
   ac.abort();
+  mo.disconnect();
   el.remove();
   row.classList.remove('menu-on');
   row.removeAttribute('aria-expanded');
   if (!back) return;
   if (row.isConnected) row.focus({ preventScroll: true });
-  else focusRowAt(wrap, i);
+  else focusRowAt(L, i);
 }
 /* An item chosen: the menu closed, its row's control pressed (a row no longer in the page:
    nothing). The list drawn again by it, the focus goes to the row in its place (after a
    removal the next, or the last). */
 function pickRowItem(ctl){
-  const { row, wrap, i } = rowMenuOn;
+  const { row, L, i } = rowMenuOn;
   closeRowMenu();
-  const c = row.isConnected && row.querySelector('.' + ctl);
+  const c = row.isConnected && L.o.press(row, ctl);
   if (!c) return;
   c.click();
-  if (!row.isConnected && document.activeElement === document.body) focusRowAt(wrap, i);
+  if (!row.isConnected && document.activeElement === document.body) focusRowAt(L, i);
 }
 
 /* Where a row dragged in a list would land: the gap before rows[g], g = 0 … n (n:
@@ -2453,31 +2497,28 @@ function flashFieldInvalid(el, rule){
    refused: none where it has no bound (a number: obvious). A least bound under any number
    written (Number.MIN_VALUE: above 0) reads "above 0"; a greatest one past any typed
    (1e300), none. */
-function numRule({ min = null, max = null, integer = false, blank = false } = {}){
+function numRule({ min = null, max = null, integer = false } = {}){
   const lo = min == null ? '' : min > 0 && min < 1e-300 ? 'above 0' : `at least ${min}`;
   const hi = max == null || max >= 1e100 ? '' : `at most ${max}`;
   const b = [lo, hi].filter(Boolean);
-  return b.length || integer ? `${integer ? 'A whole number' : 'A number'}${b.length ? ', ' + b.join(' and ') : ''}${blank ? ', or none (empty)' : ''}.` : '';
+  return b.length || integer ? `${integer ? 'A whole number' : 'A number'}${b.length ? ', ' + b.join(' and ') : ''}.` : '';
 }
 // Guard one input so it only ever commits a valid value: views update on confirm
 // (blur / Enter), and any invalid entry (empty, non-numeric, out of range, or a
 // non-integer where one is required) shakes the field and snaps it back to the
 // last value that was successfully confirmed — never a live/partial update.
-// `blank`: empty is a value too, none (GC's m and A, v581), kept as ''.
 function guardNumericInput(el, opts){
   if (!el) return;
-  const { min=null, max=null, integer=false, def=null, blank=false } = opts || {};
+  const { min=null, max=null, integer=false, def=null } = opts || {};
   const parse = ()=>{ const v = parseFloat(String(el.value).trim().replace(',', '.')); return isFinite(v) ? v : NaN; };
-  const empty = ()=> blank && String(el.value).trim() === '';
   // Seed the "last confirmed" value from the field's initial (valid) content.
   const seed = parse();
-  el._lastValid = isFinite(seed) ? seed : empty() ? '' : (def!=null ? def : (min!=null ? min : 0));
+  el._lastValid = isFinite(seed) ? seed : (def!=null ? def : (min!=null ? min : 0));
   // Re-seed on focus so programmatic value changes (session restore, param sync)
   // become the new revert target without every setter having to notify us.
-  el.addEventListener('focus', ()=>{ const v = parse(); if (isFinite(v)) el._lastValid = v; else if (empty()) el._lastValid = ''; });
+  el.addEventListener('focus', ()=>{ const v = parse(); if (isFinite(v)) el._lastValid = v; });
   el.addEventListener('change', e=>{
     const raw = String(el.value).trim().replace(',', '.');
-    if (empty()){ el._lastValid = ''; el.value = ''; el.dispatchEvent(new Event('input', { bubbles:true })); return; }
     const v = parseFloat(raw);
     const bad = raw==='' || !isFinite(v)
       || (integer && !Number.isInteger(v))
@@ -2486,7 +2527,7 @@ function guardNumericInput(el, opts){
       // Reject: shake, restore the last confirmed value, and keep the invalid
       // entry from reaching the module's own listeners (so views stay untouched). Its
       // bounds said under it (v571: numRule).
-      flashFieldInvalid(el, numRule({ min, max, integer, blank }));
+      flashFieldInvalid(el, numRule({ min, max, integer }));
       el.value = String(el._lastValid);
       e.stopImmediatePropagation();
       return;

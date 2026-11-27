@@ -9,7 +9,7 @@
 ========================================================= */
 import { MODULES, MODULE_LABELS, esc, moduleStateKey, getModuleState,
          moduleHasData, runCsvExport, confirmBanner, normalizeProjIcons, refreshProjBar, onSectionChange,
-         moduleBusy, onAnyChange, withState, viewOnlyChange, saveBlob } from './utils.js';
+         moduleBusy, onAnyChange, withState, viewOnlyChange, saveBlob, wireRowMenu, ctlMenu } from './utils.js';
 import { allProjects, putProject, deleteProject, retitleProject, readProject, exportedProject, uid, encode, decode,
          hydrate, sweepSoon, dbBlocked, onDbBlocked, onDbClosing, onDbClosed } from './db.js';
 import { activeTab, tabById, tabByProject, openTab, closeTab, setTabTitle,
@@ -471,7 +471,7 @@ async function renderList(){
     + '<th class="sess-sort" data-key="updatedAt" style="cursor:pointer">SAVED'+arrow('updatedAt')+'</th>'
     + '<th></th></tr></thead><tbody>';
   rows.forEach(r=>{
-    html += '<tr class="sess-row" data-id="'+esc(r.id)+'" title="Click to open">'
+    html += '<tr class="sess-row" data-id="'+esc(r.id)+'" title="Click to open" tabindex="-1" aria-haspopup="menu">'
       + '<td><input type="checkbox" class="sess-check" style="width:auto"></td>'
       + '<td><input type="text" class="proj-rename" value="'+esc(r.title)+'"></td>'
       + '<td style="white-space:nowrap"><span class="pill">'+esc(MODULE_LABELS[r.module]||r.module)+'</span></td>'
@@ -479,7 +479,7 @@ async function renderList(){
       + '<td class="row-acts"><div class="row-acts-inner idle-dim">'
         + '<button class="row-ic pr-csv" title="Export .csv">'+ROW_CSV+'</button>'
         + '<button class="row-ic pr-json" title="Export .datatreat">'+ROW_JSON+'</button>'
-        + '<button class="row-ic pr-del" title="Delete">'+ROW_TRASH+'</button>'
+        + '<button class="row-ic pr-del is-danger" title="Delete">'+ROW_TRASH+'</button>'
       + '</div></td></tr>';
   });
   html += '</tbody></table></div>';
@@ -699,6 +699,9 @@ document.getElementById('sessListWrap').addEventListener('click', async e=>{
   if (e.target.closest('input, button, .row-acts')) return;
   openProjects([rec]);
 });
+// A row's menu (v585, utils.js wireRowMenu): its buttons at the right, Delete last and red,
+// each pressing its button (the handler above), named by its project.
+wireRowMenu(document.getElementById('sessListWrap'), { rows: 'tr.sess-row', ...ctlMenu('.row-acts button'), label: tr => tr.querySelector('.proj-rename').value });
 // Inline rename (commit on Enter or blur); typing here must not open the row
 document.getElementById('sessListWrap').addEventListener('keydown', e=>{
   if (e.target.classList.contains('proj-rename') && e.key==='Enter'){ e.preventDefault(); e.target.blur(); }

@@ -1,4 +1,4 @@
-import { esc, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, fileAlertHtml, notesHtml, fileLine, NOT_READ, bytesOf, nextColor, colorOf, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, registerBusy, busyChanged, registerModule, X_SVG } from './utils.js';
+import { esc, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, fileAlertHtml, notesHtml, fileLine, NOT_READ, bytesOf, nextColor, colorOf, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, registerBusy, busyChanged, registerModule, X_SVG, wireRowMenu, STD_ROWS } from './utils.js';
 import { createRietveld, RV_INFO, RV_STD_INFO } from './xrd-rv.js';
 import { createPeakAnalysis, PEAKS_INFO, STD_INFO } from './xrd-peaks.js';
 import { readXrdmlScans, decodeXml } from './xrd-instr.js';
@@ -341,6 +341,7 @@ function stdModal(S, id, title, info){
   m.addEventListener('click', e=>{ if (e.target === m) closeStd(S); });
   m.querySelector('.xrd-std-x').onclick = ()=> closeStd(S);
   m.querySelector('.xrd-std-file').addEventListener('click', e=>{ if (e.target.closest('[data-std-del]')) setStd(S, null); });
+  wireRowMenu(m.querySelector('.xrd-std-file'), STD_ROWS);
   m.querySelector('.xrd-std-alerts').addEventListener('click', e=> onStdDismiss(S, e));
   setupDropzone(m.querySelector('#' + id + 'Dz'), m.querySelector('#' + id + 'Files'), fl => onStdDrop(S, m, fl));
   return { el: m, box, body: m.querySelector('.xrd-std-body') };

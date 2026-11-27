@@ -1,4 +1,4 @@
-import { esc, csvLine, fmtNum, fileAlertHtml, fileLine, NOT_READ, bytesOf, setupDropzone, X_SVG, bytesKey, exactKey, objId, guardNumericInput, flashFieldInvalid, kept, quickPress, runProgress } from './utils.js';
+import { esc, csvLine, fmtNum, fileAlertHtml, fileLine, NOT_READ, bytesOf, setupDropzone, X_SVG, bytesKey, exactKey, objId, guardNumericInput, flashFieldInvalid, kept, quickPress, runProgress, wireRowMenu, ctlMenu, STD_ROWS } from './utils.js';
 import { Plot, svgEl, linkX, niceTicks } from './plot.js';
 import { plotWrap, chipRow, viewOf, setView, PLOT_DL_ICON } from './modcharts.js';
 import { cardInfo, fileSafe, nameDownloads } from './cards.js';
@@ -172,13 +172,16 @@ function keep(S, j){
 }
 // A job let go: its workers stopped, what it did kept.
 function drop(S, j){ S.job = null; j.ac.abort(); if (keep(S, j)) S.ctx.changed(); }
-// Failed (said, and halted: the runs end, everything as it was), what it did kept; the cards
-// below say so at once, with why (v584: to v583 told nothing, "not done yet" to the end).
+/* Failed (said, and halted: the runs end, everything as it was), what it did kept; the cards
+   below say so at once, with why (v584: to v583 told nothing, "not done yet" to the end): the
+   error's message, a string thrown as it is, else NO_REASON (v585: to v584 a rejection with
+   nothing, or with no message, said "undefined" or "[object Object]"). */
+const NO_REASON = 'its workers gave no reason';
 function runFailed(S, j, e){
   if (S.job !== j || S.dead) return;
   S.job = null;
   const shown = keep(S, j), failed = !e || e.name !== 'AbortError';
-  if (failed){ S.failed = String(e && e.message || e); M.integCards(S).forEach(c=>{ c.endRun(); c.halt(true); }); }
+  if (failed){ S.failed = (e && typeof e === 'object' ? e.message : e) || NO_REASON; M.integCards(S).forEach(c=>{ c.endRun(); c.halt(true); }); }
   if (shown || failed) S.ctx.changed();
   paint(S, true);
 }
@@ -759,7 +762,9 @@ async function onCalDrop(S, C, W, list){
   ensure(S, C);
   calChanged(S, C, W);
 }
-// Its files removed, its unit, the levels typed or ticked, a row picked, an intercept's chip.
+/* Its files removed, its unit, the levels typed or ticked, a row picked, an intercept's chip;
+   a file's row and a standard's have a menu of their controls (v585, utils.js wireRowMenu): the
+   file's ×, the standard's Use. */
 function wireCalEdits(S, C, W){
   const q = W.q;
   q('.gci-cal-files').addEventListener('click', e=>{
@@ -767,6 +772,8 @@ function wireCalEdits(S, C, W){
     if (!b) return;
     const c = M.calCopy(C.cal); c.files.splice(+b.dataset.calDel, 1); C.cal = c; calChanged(S, C, W);
   });
+  wireRowMenu(q('.gci-cal-files'), STD_ROWS);
+  wireRowMenu(q('.gci-cal-levels tbody'), { rows: 'tr[data-row]', ...ctlMenu('input[type="checkbox"]'), label: r => r.querySelector('.gci-cal-src').title });
   q('.gci-cal-unit-in').addEventListener('change', e=>{ const c = M.calCopy(C.cal); c.unit = oneOf(e.target.value, M.UNITS); C.cal = c; calChanged(S, C, W); });
   q('.gci-cal-levels').addEventListener('change', e=> onLevel(S, C, W, e));
   q('.gci-cal-levels').addEventListener('keydown', e=>{ if (e.key === 'Enter' && e.target.matches('input[type="text"]')) e.target.blur(); });
@@ -857,7 +864,7 @@ function paintWindow(S, C, W){
   if (C.calSel >= rows.length) C.calSel = Math.max(0, rows.length - 1);
   paintCalRun(S, C, W);
   const [lo, hi] = M.range(C.method);
-  W.q('.gci-cal-levels tbody').innerHTML = H.levelRowsHtml(HU, rows, C.calSel, lo, hi);
+  W.q('.gci-cal-levels tbody').innerHTML = H.levelRowsHtml(HU, S.gasOf, rows, C.calSel, lo, hi);
   box.scrollTop = top;
   if (was) refocus(W, was);
   W.stdNav.update();

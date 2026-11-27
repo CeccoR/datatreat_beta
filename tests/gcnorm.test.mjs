@@ -3,10 +3,12 @@
    - One choice a card, made in the m column's header (v581: to v580 "Normalize by: mass |
      area" on the injection delay's row, gone), a select named for screen readers, m (mg) by
      default, A (cm²); with A the column is A, with its own all/one and per-sample values, an
-     area above 0 as a mass is (0, below it, no number refused), or empty: none (v581).
-   - v581: the rates normalised where every included sample has a value of the one chosen;
-     with one lacking, not normalised (µmol h⁻¹ and µmol, the axis titles, the CSVs and
-     gc_info.csv's empty cell), a compact info under the parameters naming the samples.
+     area at least 0.001 as a mass is.
+   - v585 (the user's decision): every sample has its value. An empty field, 0, below it or no
+     number is refused, shared or a sample's, m or A: the field shaken, its rule in red under
+     it ("A number, at least 0.001."), its value kept, no step of the history; the rates always
+     normalised by the one chosen (v581–v584 took an empty field as none, the rates then not
+     normalised, an info under the parameters naming the samples: gone).
    - The rates by hand: a gas's flow in µmol/h over A in cm² (µmol cm⁻² h⁻¹), over m in g
      (µmol g⁻¹ h⁻¹, v541: to v540 mmol g⁻¹ h⁻¹, µmol/h over m in mg, the numbers 1000 times
      smaller); the mean rate of constant concentrations over an interval, with area and with
@@ -30,8 +32,9 @@
      the choice a step of the history (undo, redo) and a change unsaved ("*").
    - A project saved before v540 (no choice in its state) opens with mass and the same
      CSVs, byte for byte; v540–v580's choice, `norm`, a parameter no longer, ignored: opened
-     with m (v581, CLAUDE.md); one saved with A opens with A and its areas, an area none kept
-     so; a choice edited by hand to anything else opens with m. Its rates and production,
+     with m (v581, CLAUDE.md); one saved with A opens with A and its areas, an area or a mass
+     none (as v581–v584 saved one left empty) or missing taking the default, 1 cm², 15 mg (v585);
+     a choice edited by hand to anything else opens with m. Its rates and production,
      with mass, in µmol: 1000 times the numbers it gave to v540. */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -108,6 +111,21 @@ function x1000(mass, area){
     assert.ok(n > 0, k + ': its rates compared');
   }
 }
+/* A value of m or A refused (v585): an empty field, 0, below it, no number; each shaken, its
+   rule in red under it, the field given its value back (`shown`), the state's (`get`, a key of
+   the card or a function of it) as it was (`was`), no step of the history. */
+async function refused(page, sel, get, was, shown){
+  const h = (await history(page, 'gc')).index, of = c => typeof get === 'function' ? get(c) : c[get + 'Shared'];
+  // (the field in view first: its scroll's event, a frame later, would take the rule away, utils.js flashFieldInvalid)
+  await page.locator(sel).scrollIntoViewIfNeeded(); await settle(page);
+  for (const v of ['', '0', '-1', 'abc']){
+    await page.fill(sel, v); await page.press(sel, 'Enter');
+    assert.ok(await page.$eval(sel, e=> e.classList.contains('field-invalid')), `"${v}" shaken`);
+    assert.equal(await page.locator('.field-rule-float').textContent(), 'A number, at least 0.001.', `"${v}": its rule`);
+    await settle(page);
+    assert.deepEqual([of(await card(page)), await page.inputValue(sel), (await history(page, 'gc')).index], [was, shown, h], `"${v}" refused`);
+  }
+}
 const meanOf = (rows, lab, gas)=> parseFloat(rows.slice(1).find(r=> r[0] === lab)[rows[0].findIndex(h=> h.startsWith(`Mean ${gas} `))]);
 
 test('area: the rates per cm² by hand; every label and CSV header follows the choice; both sets of values kept; a step and a change', async ()=>{
@@ -129,6 +147,7 @@ test('area: the rates per cm² by hand; every label and CSV header follows the c
     await type(page, '#tab-gc .gcShared[data-f="start"]', '0.5');
     await type(page, '#tab-gc .gcShared[data-f="end"]', '1.2');
     await type(page, SH('m'), '20');
+    await refused(page, SH('m'), 'm', 20, '20');
     let z = await zip(page), m = csv(z['mean_rates.csv']);
     assert.equal(m[0][1], 'Mean H2 Production Rate (umol g^-1 h^-1)');
     assert.ok(!Object.values(z).some(t=> /mmol/.test(t)), 'no mmol in any CSV');
@@ -153,28 +172,11 @@ test('area: the rates per cm² by hand; every label and CSV header follows the c
     assert.equal(await page.evaluate(()=> document.activeElement && document.activeElement.classList.contains('gc-norm')), true, 'the focus kept on the select');
     assert.equal((await history(page, 'gc')).index, h0 + 1, 'a step of the history');
     assert.equal((await tabLabels(page))[0].endsWith('*'), true, 'a change unsaved');
-    // Refused as a mass is: 0, below it, no number; its rule says empty is none (v581).
-    for (const v of ['0', '-1', 'abc']){
-      await page.fill(SH('a'), v); await page.press(SH('a'), 'Enter');
-      assert.ok(await page.$eval(SH('a'), e=> e.classList.contains('field-invalid')), `"${v}" shaken`);
-      assert.equal(await page.locator('.field-rule-float').textContent(), 'A number, at least 0.001, or none (empty).');
-      await settle(page);
-      assert.equal((await card(page)).aShared, 1, `"${v}" refused`);
-    }
-    assert.equal(await page.locator('#tab-gc [id$="NormInfo"] .alert').count(), 0, 'every sample its A: nothing said');
-    /* Empty: none (v581). Not normalised, the rates as they flow (µmol h⁻¹, µmol), the
-       titles, the CSVs and gc_info.csv's cells so; an info under the parameters names the
-       samples. */
-    await type(page, SH('a'), '');
-    c = await card(page);
-    assert.deepEqual([c.aShared, await page.inputValue(SH('a'))], [null, '']);
-    assert.equal(await page.locator('#tab-gc [id$="NormInfo"] .alert.info.compact').innerText(), 'No A for film-a, film-b: the rates are not normalised, in µmol h⁻¹ and µmol.');
-    z = await zip(page); m = csv(z['mean_rates.csv']);
-    assert.equal(m[0][1], 'Mean H2 Production Rate (umol h^-1)');
-    assert.ok(Math.abs(meanOf(m, 'film-a', 'H2') - umolH(0.05)) <= 1e-6, `not normalised: ${meanOf(m, 'film-a', 'H2')} for ${umolH(0.05)}`);
-    assert.ok(csv(z['gc_raw.csv'])[0].includes('H2 Production (umol) [film-a]'));
-    assert.deepEqual(csv(z['gc_info.csv']).slice(0, 3).map(r=> r[1]), ['A (cm^2)', '', '']);
-    for (const y of await yTitles(page)) assert.equal(y.text, y.id === 'SvgCum' ? 'Production(µmol)' : 'ProductionRate(µmolh-1)', y.id);
+    /* Refused as a mass is (v585: empty too, the user's decision; v581–v584 took it as none, the
+       rates then not normalised): the field shaken, its rule in red under it, its value kept,
+       no step of the history; nothing said under the parameters. */
+    await refused(page, SH('a'), 'a', 1, '1');
+    assert.equal(await page.locator('#tab-gc .gc-norm-info, #tab-gc [id$="NormInfo"]').count(), 0, 'no info under the parameters');
     await type(page, SH('a'), '2.5');
     z = await zip(page); m = csv(z['mean_rates.csv']);
     assert.equal(m[0][1], 'Mean H2 Production Rate (umol cm^-2 h^-1)');
@@ -199,13 +201,11 @@ test('area: the rates per cm² by hand; every label and CSV header follows the c
       assert.equal(y.text, cum ? 'Production(µmolcm-2)' : 'ProductionRate(µmolcm-2h-1)', y.id);
       assert.deepEqual(y.sup, cum ? ['-2'] : ['-2', '-1'], y.id + ': superscripts');
     }
-    // Per sample: A one each, film-b's 4 cm²; its rate halves against 2 cm². One emptied: that
-    // one named, not normalised; given again, normalised.
+    // Per sample: A one each, film-b's 4 cm²; its rate halves against 2 cm². A sample's field
+    // refused as the shared one is (v585), its value kept.
     await page.click('#tab-gc .gc-toggle[data-pair="a"]'); await settle(page);
-    await type(page, CELL(1, 'a'), '');
-    assert.equal(await page.locator('#tab-gc [id$="NormInfo"]').innerText(), 'No A for film-b: the rates are not normalised, in µmol h⁻¹ and µmol.');
+    await refused(page, CELL(1, 'a'), c => c.As[1], 2.5, '2.5');
     await type(page, CELL(1, 'a'), '4');
-    assert.equal(await page.locator('#tab-gc [id$="NormInfo"] .alert').count(), 0);
     c = await card(page);
     assert.deepEqual([c.aMode, c.As], ['one', [2.5, 4]]);
     m = csv((await zip(page))['mean_rates.csv']);
@@ -308,7 +308,7 @@ test('the instructions: from the reading to the rates, numbered steps in a box o
       ['x={table(frac(c,100),|c in %mol;c⋅sup(10,−6),|c in ppm)'],
       ['sub(V,m)=frac(R(T+273.15),p/101325)', 'over(n,˙)=frac(Q,1000)⋅frac(60,sub(V,m))'],
       ['F=x⋅over(n,˙)⋅sup(10,6)'],
-      ['r={table(frac(F,m/1000),|by mass;frac(F,A),|by area;F,|not normalised)'],
+      ['r={table(frac(F,m/1000),|by mass;frac(F,A),|by area)'],
       ['t=frac(sub(t,inj)+Δsub(t,delay)−sub(t,on),3600)'],
       ['P(t)=subsup(∫,sub(t,s),t)r dsup(t,′)', 'P(t)=underover(∑,i=0,n−1)frac(sub(r,i)+sub(r,i+1),2)⋅(sub(t,i+1)−sub(t,i))'],
       ['over(r,¯)=frac(P(sub(t,e)),sub(t,e)−sub(t,s))'],
@@ -318,7 +318,7 @@ test('the instructions: from the reading to the rates, numbered steps in a box o
     assert.equal(S[1].lines[1], `At 1 atm, Vm is ${(R*273.15).toFixed(3)} L mol⁻¹ at 0 °C and ${(R*298.15).toFixed(3)} L mol⁻¹ at 25 °C.`);
     assert.match(S[1].lines[0], /Q: mL min⁻¹, at the controller's reference T and p/);
     assert.match(S[2].lines[1], /^Assumed: the carrier's flow n˙ is the total flow leaving the reactor.*\(ppm to a few %mol\)\.$/);
-    assert.match(S[3].lines[0], /^r: µmol g⁻¹ h⁻¹ with m in mg \(1000 mg g⁻¹\), µmol cm⁻² h⁻¹ with A in cm², or µmol h⁻¹ not normalised\.$/);
+    assert.match(S[3].lines[0], /^r: µmol g⁻¹ h⁻¹ with m in mg \(1000 mg g⁻¹\), or µmol cm⁻² h⁻¹ with A in cm²\.$/);
     assert.match(S[4].lines[1], /^At light-on, t=0: a point with the last reading before it \(r=0 if there is none\)\.$/);
     // The example, 0.05 %mol of 2 mL/min at 25 °C and 1 atm over 15 mg or 2.5 cm², step by step as worked out here.
     const vm = (R*298.15).toFixed(3), nd = (F*1e3).toFixed(4), fl = umolH(0.05).toFixed(4);
@@ -360,7 +360,7 @@ test('the instructions: from the reading to the rates, numbered steps in a box o
   } finally { await narrow.close(); }
 });
 
-test('projects: one saved before v540 opens with mass and the same CSVs; v540–v580\'s choice ignored (m); one with A, with A, an area none kept; a choice edited by hand, m', async ()=>{
+test('projects: one saved before v540 opens with mass and the same CSVs; v540–v580\'s choice ignored (m); one with A, with A, an area or a mass none or missing the default (v585); a choice edited by hand, m', async ()=>{
   const { page, errors, close } = await env.page();
   try {
     await openModule(page, 'gc');
@@ -396,13 +396,22 @@ test('projects: one saved before v540 opens with mass and the same CSVs; v540–
     await restore(page, v580);
     c = await card(page);
     assert.deepEqual([c.normBy, 'norm' in c, c.aShared, await page.inputValue(NORM)], ['m', false, 3, 'm']);
-    // An area none (left empty) saved so, opened so: not normalised, said.
-    const none = JSON.parse(JSON.stringify(withArea));
-    none.cards[0].aShared = null;
-    await restore(page, none);
-    c = await card(page);
-    assert.deepEqual([c.normBy, c.aShared, await page.inputValue(SH('a'))], ['A', null, '']);
-    assert.match(await page.locator('#tab-gc [id$="NormInfo"]').innerText(), /^No A for .*: the rates are not normalised, in µmol h⁻¹ and µmol\.$/);
+    /* An area or a mass none, as v581–v584 saved one left empty (null), or missing: the default
+       (v585, CLAUDE.md: a missing parameter takes its default), 1 cm², 15 mg; the rates
+       normalised by it, nothing said. */
+    for (const k of ['null', 'missing']){
+      const none = JSON.parse(JSON.stringify(withArea));
+      if (k === 'null'){ none.cards[0].aShared = null; none.cards[0].mShared = null; none.cards[0].ms = [null, null]; }
+      else for (const f of ['aShared', 'mShared', 'ms', 'As']) delete none.cards[0][f];
+      await restore(page, none);
+      c = await card(page);
+      assert.deepEqual([c.normBy, c.aShared, c.mShared, c.ms, await page.inputValue(SH('a'))], ['A', 1, 15, [15, 15], '1'], k);
+      const mr = csv((await zip(page))['mean_rates.csv']);
+      assert.equal(mr[0][1], 'Mean H2 Production Rate (umol cm^-2 h^-1)', k);
+      const at3 = +csv(areaCsv['mean_rates.csv'])[1][1];
+      assert.ok(Math.abs(+mr[1][1] - 3*at3) <= 1e-5*Math.abs(3*at3), `${k}: over 1 cm², 3 times its rate over 3 cm²: ${mr[1][1]}, ${at3}`);
+      assert.equal(await page.locator('#tab-gc .gc-norm-info, #tab-gc [id$="NormInfo"]').count(), 0, k + ': nothing said');
+    }
     // By hand: anything but 'A' is m; an area that is no number above 0, 1 cm².
     for (const v of ['a', 'area', 'mass', 1, null, true]){
       const ed = JSON.parse(JSON.stringify(withArea));
