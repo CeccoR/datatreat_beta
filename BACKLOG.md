@@ -489,8 +489,50 @@ was proposed; nothing here is in the code yet.
   of the six run in the browser session (not the standard after a drop: its drop is made with
   none loaded) and the standard after a drop by the golden cases run through that
   gc-integ.js. tests/integmodel.test.mjs keeps the calculations' and markup's tests and 60 cases and three
-  scenes as v559's gc-integ.js gave them (golden digests). Still long (v560):
-  `createPeakAnalysis` (xrd-peaks.js, 908), `createFig` (fig.js, 552), `createDeck`
+  scenes as v559's gc-integ.js gave them (golden digests). Done for `createPeakAnalysis`'s
+  wiring (xrd-peaks.js) in v561, which v552 had left one closure of 908 lines: what the card
+  works out goes to `xrd-peaks-model.js` with its calculations (the fields: a value typed, a
+  width as written kept exact, the store, a width's hint in points, the λ preset; the
+  processing's keys; what the plot draws, its curves, the peaks' marks and their colours,
+  the guide moved by a key; the Results' stack and the size chart's layout; a chip switched,
+  the removed peaks brought back, a peak's ×, the per-sample arrays the file list keeps
+  aligned, a state taken, what the card shows beside it), its markup to `xrd-peaks-html.js`
+  (the instructions, the card's and the standard's, the Results' section, the table with no
+  peak, the legends); the page left in `xrd-peaks.js`, no longer one closure: the instance a
+  state object (S), its add-peak mode one (S.A), which the functions at module level take
+  (`makeState`, `apiOf`, the fields' `guardFields`, `wireNotes`, `wireModes`, `wireFields`,
+  `wireNav` with their handlers, `readInputsToStore`, `writeStoreToInputs`, `syncHints`; the
+  processing; the plot's `drawAnalysisInto`, `highlightPanel`, `buildInteractiveMarks`; the
+  table's `renderTable`, `paintTable`, `wireRows`; the Results' `drawStackedResults`,
+  `renderSizeChart`, `drawSizeBarChart`, `drawBoxes`; the add-peak mode's `wireAdd`,
+  `drawGuide`, `setAddMode`, `confirmAdd`, `onAddKey`), the listeners in their order. The
+  file 1120 lines to 882 (createPeakAnalysis 908 to 10, the longest function now 33, apiOf);
+  the model 645 lines to 919, the markup 118 to 290. The same operations in the same order:
+  in the browser, a session of 184 steps (fields set with no file; four patterns, one at
+  another step; every field typed, with a comma, refused, emptied, below its least; the
+  baseline's box, every chip both ways, the normalisations, the λ presets and a custom λ;
+  the selector's arrows, keys and list; rows hovered and picked, the marks hovered and
+  clicked, a peak removed, placed by the pointer and by the keys, Escape, a key in a field
+  and on a button, ↺, undo; zoomed; every download; by peak and by sample; the standard
+  loaded, edited, its peaks removed down to two, one placed, closed while armed, two files
+  dropped; a second card armed while the first is folded, named, switched to Rietveld and back, closed,
+  undone; a file left out, removed, added; a resize; saved, exported, reloaded, a second
+  tab; 15 old and malformed states) gave v560's DOM, every plot's range, entries and marks,
+  field values (with each field's exact width and guard), state, history, kept counts,
+  banners, focus, downloads and CSVs at every step: 39133 fields, none different (v560
+  against itself, none either); in Node, v560's xrd-peaks.js and this one, each run from its
+  source on a page of stubs recording every markup, text, value, property, style, class,
+  attribute, dataset write, focus, listener, frame, Plot call (its numbers to the last bit),
+  svgEl, selector update and guard, through 1000 random sessions of 80 steps: 4.0 million
+  entries each, none different. Ten mutations of the new code (a hint's rounding, the
+  stack's offset, the hover's reach, the size label's spacing, a peak removed twice, the
+  words with no peak, the listeners' order, a chip's text after the fields, ↺ clearing the
+  hover, the guide's readout offset) were each caught: nine by the Node sessions (not the
+  peak removed twice: no removed peak has a × to click), six by the new tests, five by the
+  golden cases run through each tree's xrd-peaks.js, four by the browser session (the
+  others act on what it does not reach or record). tests/peaksmodel.test.mjs keeps the
+  calculations' tests, the wiring's and the markup's, and 40 cases as v560's xrd-peaks.js
+  gave them (golden digests). Still long (v561): `createFig` (fig.js, 552), `createDeck`
   (cards.js, 515), `createXrd` (xrd.js, 488), `createIodo` (iodo.js, 407), `wireControls`
   (figure.js, 372).
   The others when work takes us into them.

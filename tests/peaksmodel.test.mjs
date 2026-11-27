@@ -12,34 +12,47 @@
    the fixture's three samples and its standard, at their defaults, as the page analyses
    them: the CSVs, the peak tables, the Caglioti box, the size chart's chips, each as HEAD
    v551's page wrote them (xrd-peaks.js before the split). And the words: the warnings, the
-   step note, the chips, the note by peak, every label escaped. utils.js's helpers, which
-   need a page to load, are taken from its source as they stand there. */
+   step note, the chips, the note by peak, every label escaped. Then (v561) what the card's
+   wiring works out (xrd-peaks-model.js, below THE CARD'S WIRING): a field read and written,
+   a width's hint, the λ preset, the processing's keys, the plot's curves, marks and their
+   colours, the Results' stack, the size chart's layout, the chips switched, peaks removed
+   and placed, the per-sample arrays, a state taken; the card's markup (xrd-peaks-html.js);
+   and 40 cases of a card (a sample's, with a standard or none; the standard's), each a
+   state of any version or malformed and eight steps done as xrd-peaks.js does them (its
+   wiring, in short, below), what the card shows after each step as v560's xrd-peaks.js
+   gave it: their digests in tests/golden/peaksmodel.json (npm run test:update writes them
+   anew), checked against v560's xrd-peaks.js run from its source on a page of stubs.
+   utils.js's, snav.js's and modcharts.js's helpers, which need a page to load, are taken
+   from their source as they stand there. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import { xrdml, rng } from './fixtures.mjs';
 import { readXrdmlScanText } from '../xrd-instr.js';
-import { boxSmooth } from '../smooth.js';
+import { boxSmooth, meanStep, widthText, ptsText } from '../smooth.js';
 import * as M from '../xrd-peaks-model.js';
 import * as H from '../xrd-peaks-html.js';
 
-// utils.js's declarations as they stand there (it needs a page to load): a function to its
-// closing brace, a const to its line's end; the CSVs' settings as a fresh page has them.
-const UTILS = fs.readFileSync(new URL('../utils.js', import.meta.url), 'utf8');
-function decl(name){
-  let i = UTILS.search(new RegExp(`^function ${name}\\(`, 'm'));
+// The page's declarations as they stand there (utils.js, snav.js, modcharts.js need a page to
+// load): a function to its closing brace, a const to its line's end; the CSVs' settings as a
+// fresh page has them.
+function decl(name, file = 'utils.js'){
+  const src = fs.readFileSync(new URL('../' + file, import.meta.url), 'utf8');
+  let i = src.search(new RegExp(`^(export )?function ${name}\\(`, 'm'));
   if (i >= 0){
-    let k = UTILS.indexOf('{', i), d = 0;
-    for (; k < UTILS.length; k++){ if (UTILS[k] === '{') d++; else if (UTILS[k] === '}' && !--d) break; }
-    return UTILS.slice(i, k + 1);
+    let k = src.indexOf('{', src.indexOf(')', i)), d = 0;
+    for (; k < src.length; k++){ if (src[k] === '{') d++; else if (src[k] === '}' && !--d) break; }
+    return src.slice(i, k + 1).replace(/^export /, '');
   }
-  i = UTILS.search(new RegExp(`^const ${name} = `, 'm'));
-  assert.ok(i >= 0, name + ' in utils.js');
-  return UTILS.slice(i, UTILS.indexOf('\n', i));
+  i = src.search(new RegExp(`^(export )?const ${name} = `, 'm'));
+  assert.ok(i >= 0, name + ' in ' + file);
+  return src.slice(i, src.indexOf('\n', i)).replace(/^export /, '');
 }
-const NAMES = ['maxArr', 'meanArr', 'stdArr', 'boxStats', 'fmtNum', 'csvField', 'csvJoin', 'csvLine', 'esc', 'X_SVG'];
-const U = new Function('settings', NAMES.map(decl).join('\n') + '\nreturn { maxArr, meanArr, stdArr, boxStats, fmtNum, csvLine, esc, X_SVG };')({ decimal: '.', field: ';' });
+const NAMES = ['maxArr', 'minArr', 'meanArr', 'stdArr', 'boxStats', 'fmtNum', 'csvField', 'csvJoin', 'csvLine', 'esc', 'X_SVG', 'linspace', 'interpLinear', 'NORM_OPTIONS',
+  'BAR_NAME_MAX', 'TILT_MIN', 'cutToWidth', 'tiltFits', 'tiltFor', 'barNames'];
+const U = new Function('settings', NAMES.map(n=> decl(n)).join('\n') + '\n' + decl('snavHtml', 'snav.js') + '\n' + decl('PLOT_DL_ICON', 'modcharts.js') + '\n' + decl('CSV_ICON', 'modcharts.js')
+  + '\nreturn { maxArr, minArr, meanArr, stdArr, boxStats, fmtNum, csvLine, esc, X_SVG, linspace, interpLinear, NORM_OPTIONS, barNames, snavHtml, PLOT_DL_ICON, CSV_ICON };')({ decimal: '.', field: ';' });
 const sha = s => createHash('sha1').update(s).digest('hex');
 const near = (a, b, tol, what)=> assert.ok(Math.abs(a - b) <= tol, `${what}: ${a} against ${b}`);
 // A Gaussian peak of height h and full width w at c.
@@ -387,4 +400,404 @@ test('the words: the warnings under the table, the step note, the chips, the not
   const drop = { pts: [20, 40, 60].map(tt=> ({ x: tt, th: th(tt), b: 0.1 })), fit: { uvw: [0.01, -0.01, 0.001], se: [0, 0, 0], dof: 1, weighted: false, s: 0.001, r2: 0.9, rms: 0.001, maxRes: 0.002 } };
   assert.equal(H.cagliotiHtml(drop, 1).alert, '<div class="alert warn">⚠ The fitted FWHM² drops to zero inside the standard\'s range: there the curve is not physical, and no correction is made.</div>');
   assert.match(H.cagliotiHtml(drop, 1).box, /title="Unweighted: no counting uncertainty for the widths\. Residual standard error on FWHM²: 0\.0010 °² \(1 degree of freedom\)"/);
+});
+
+/* =========================================================
+   THE CARD'S WIRING, WORKED OUT (v561)
+========================================================= */
+const UPDATE = !!process.env.UPDATE_GOLDEN || process.env.npm_lifecycle_event === 'test:update';
+const GOLDEN = new URL('./golden/peaksmodel.json', import.meta.url);
+const show = v => typeof v === 'number' ? (Object.is(v, -0) ? '-0' : String(v)) : v;
+export const canon = v => JSON.stringify(v, function(k, x){ const o = this[k];
+  if (typeof o === 'number') return '#' + show(o);
+  if (typeof o === 'function') return 'fn';
+  if (ArrayBuffer.isView(o)) return Array.from(o, show);
+  return x; });
+// An array by a digest of its numbers, as a page of stubs records a plot's.
+export const dg = a => a == null ? String(a) : sha(canon(Array.from(a))).slice(0, 16);
+const normOf = v => v === 'local' || v === 'none' ? v : 'global';
+
+test('the fields: a value typed and a width as written, the store, a width\'s hint, the λ preset', ()=>{
+  assert.deepEqual(Object.values(M.fieldInputs(true)), ['Smooth', 'BlWin', 'PkHeight', 'PkProm', 'PkDist']);
+  assert.deepEqual(Object.keys(M.fieldInputs(false)), ['smoothW', 'snipW', 'pkHeight', 'pkProm', 'pkDist', 'K', 'lambda']);
+  assert.deepEqual(M.guardsOf(true), [['Smooth', 0, 0], ['BlWin', 1e-6, 5], ['PkHeight', 0, 5], ['PkProm', 0, 3], ['PkDist', 0, 0.3]]);
+  assert.deepEqual(M.guardsOf(false).slice(-3), [['PkDist', 0, 0.3], ['K', 1e-6, 0.9], ['Lambda', 1e-6, 1.540598]]);
+  assert.deepEqual([M.numIn(' 0,5 ', 9), M.numIn('', 9), M.numIn('x', 9), M.numIn('2abc', 9), M.numIn(-1, 9)], [0.5, 9, 9, 2, -1]);
+  // A width as its field shows it (4 digits) is the value stored, exact; typed, the field's
+  // value (the SNIP's shown whole: half stored), at its least; a field emptied: the default.
+  assert.equal(M.fieldIn('snipW', '5', '5', 2.50004), 2.50004);
+  assert.deepEqual([M.fieldIn('snipW', '6', '5', 2.5), M.fieldIn('snipW', '0', undefined, 2.5), M.fieldIn('snipW', '', '5', 2.5)], [3, 1e-6, 2.5]);
+  assert.deepEqual([M.fieldIn('smoothW', '0,1', '0.25', 0.25), M.fieldIn('pkHeight', '-3', '-3', 7), M.fieldIn('K', 'x', undefined, undefined)], [0.1, 0, 0.9]);
+  // Into the store: the shared value under all, the sample's own under one; with no file,
+  // every value shared (those a file loaded takes); the box with its width.
+  const S = { paramMode: M.modeDef(false), shared: { ...M.FIELD_DEF }, perParams: [] };
+  const vals = { smoothW: 0.1, snipW: 2, pkHeight: 4, pkProm: 2, pkDist: 0.2, K: 1, lambda: 1.5 };
+  M.takeInputs(S, 1, vals, false, 2);
+  assert.deepEqual([0 in S.perParams, S.perParams[1]], [false, { pkHeight: 4, pkProm: 2, pkDist: 0.2 }]);
+  assert.deepEqual([S.shared.smoothW, S.shared.snipW, S.shared.K, S.shared.blOn, S.shared.pkHeight], [0.1, 2, 1, false, 5]);
+  S.paramMode.blWin = 'per'; M.takeInputs(S, 0, vals, true, 2);
+  assert.deepEqual(S.perParams[0], { snipW: 2, pkHeight: 4, pkProm: 2, pkDist: 0.2, blOn: true });
+  M.takeInputs(S, 0, { ...vals, pkHeight: 9 }, false, 0);
+  assert.deepEqual([S.shared.pkHeight, S.shared.blOn, S.perParams[0].pkHeight], [9, false, 4], 'no file: the shared values');
+  // The hints: the points a width spans at the step on show; the stored width while the field
+  // shows it; off, none, nothing with no step.
+  assert.deepEqual(M.widthHint('Smooth', '0.1', '0.1', 0.1, 0.01, 'a<b'), { t: ptsText(10), tip: '10 steps at the step of a<b, 0.01°' });
+  assert.deepEqual(M.widthHint('Smooth', '0', '0', 0, 0.01, 'a'), { t: 'off', tip: 'No smoothing' });
+  assert.deepEqual(M.widthHint('BlWin', '5', '5', 2.5, 0.02, 'a'), { t: ptsText(250), tip: '250 steps across, 125 points on each side at the step of a, 0.02°' });
+  assert.deepEqual(M.widthHint('BlWin', '0,03', '5', 2.5, 0.02, 'a'), { t: ptsText(1.5), tip: '1.5 steps across, 1 point on each side at the step of a, 0.02°' });
+  assert.deepEqual([M.widthHint('BlWin', '0', '5', 2.5, 0.02, 'a'), M.widthHint('Smooth', 'x', '', NaN, 0.02, 'a'), M.widthHint('Smooth', '1', '1', 1, NaN, undefined)],
+    [{ t: '', tip: '' }, { t: '', tip: '' }, { t: '', tip: '' }]);
+  const OPTS = ['1.540598', '1.541838', '1.544426', '0.709317', '1.789010', '2.289760', 'custom'];
+  assert.deepEqual(['1.540598', '1,5406', '1.78901', '1.6', '', 'x'].map(t=> M.presetOf(t, OPTS)), ['1.540598', '1.540598', '1.789010', 'custom', 'custom', 'custom']);
+  // The processing's keys: by the arrays' own numbers, the widths (the SNIP's none when off),
+  // the peak search and the peaks by hand.
+  const ids = new Map(), idOf = o => o == null ? '-' : ids.get(o) || (ids.set(o, ids.size + 1), ids.size);
+  const f = { x: [1, 2], y: [3, 4] }, pr = { ...DEF, blOn: false };
+  assert.deepEqual(M.procKeys(f, pr, [30.5], null, idOf), { k1: '1|2|0.25|off', k2: '1|2|0.25|off|-|5|3|0.3|30.5|' });
+  assert.equal(M.procKeys({ ...f, varMul: [1] }, DEF, [], [20, 21], idOf).k2, '1|2|0.25|2.5|3|5|3|0.3||20,21');
+});
+
+test('the plot: its curves and marks and their colours; the Results\' stack, the size chart\'s layout', ()=>{
+  const x = axis(20, 0.02, 1001), y = x.map(t=> gauss(t, 30, 800, 0.4) + gauss(t, 30.005, 1, 0.4) + gauss(t, 35, 400, 0.6) + 100);
+  const f = { x, y }, pr = { ...DEF, smoothW: 0.06 };
+  const proc = M.processingOf(f, M.smoothingOf(x, y, pr), pr, [30, 33], [35], U);
+  const D = M.anaOf(f, proc, true, U), mx = U.maxArr(proc.smoothed);
+  assert.equal(D.mx, mx);
+  assert.deepEqual([D.raw, D.smoothed], [y.map(v=> v/mx), proc.smoothed.map(v=> v/mx)]);
+  assert.deepEqual([D.dense.length, D.dense[0], D.dense[D.dense.length - 1]], [10010, 20, x[1000]]);
+  assert.deepEqual(D.base, U.interpLinear(x, proc.baseline, D.dense).map(v=> v/mx));
+  assert.equal(M.anaOf(f, proc, false, U).base, null, 'no baseline drawn with its box off');
+  // Each kept peak once (the manual one at the detected 30 drawn once), the removed one none;
+  // its FWHM's marker at half its height over the baseline.
+  assert.deepEqual(D.peakMarks, [{ pos: 30 }, { pos: 33 }]);
+  const gm = M.fwhmGeom(x, proc.subtracted, proc.peaks[0].idx);
+  assert.deepEqual(D.fwhmMarks[0], { pos: 30, x0: gm.xl, x1: gm.xr, y: (proc.baseline[gm.idx] + gm.half)/mx });
+  // The colours: the peak picked white, hovered bright, the others green; their FWHM markers red alike.
+  assert.deepEqual([M.nearestOf([30, 33], 30.5), M.nearestOf([30, 33], 31.6), M.nearestOf([30, 33], null), M.nearestOf([], 3), M.nearestOf([30, NaN, 30.2], 30.15)], [0, -1, -1, -1, 2]);
+  assert.deepEqual(M.markStyles([30, 33, 36], [30, 36], 33.1, 36), { peaks: [[M.PEAK_BASE, 1], [M.PEAK_SEL, 1.8], [M.PEAK_HOVER, 1.8]], fwhm: [[M.FWHM_BASE, 2.2], [M.FWHM_HOVER, 4]] });
+  assert.deepEqual(M.markStyles([30], [30], 30, 30), { peaks: [[M.PEAK_SEL, 1.8]], fwhm: [[M.FWHM_SEL, 4]] });
+  assert.deepEqual([M.toggled(null, 30), M.toggled(30, 30), M.toggled(30, 31)], [30, null, 31]);
+  // The guide of a peak being placed: from the middle, a point a key, within the plot's range.
+  assert.deepEqual([M.nudge(x, 20, 40, null, 1), M.nudge(x, 20, 40, 1000, 1), M.nudge(x, 25, 30, 0, -1), M.nudge(x, 30, 25, 400, 1), M.nudge(x, 30, 25, 600, -1)], [501, 1000, 250, 401, 500]);
+  // The stack: each pattern over the largest (global), its own (local), none; offset down.
+  const fs = [{ x: [1, 2, 3] }, { x: [2, 3, 4, 5] }, { x: [0, 9] }], curves = [[1, 4, 2], [2, 8, 1, 0], null];
+  assert.deepEqual(M.stackShown(fs, curves), [0, 1]);
+  const g = M.stackOf(fs, curves, [0, 1], 'global', U);
+  assert.deepEqual(g.range, [1, 5, -1.1, 1.1]);
+  assert.deepEqual(g.traces.map(t=> [t.k, t.norm1, t.y]), [[0, [0.125, 0.5, 0.25], [0.125 + 0 + 0.05, 0.5 + 0.05, 0.25 + 0.05]], [1, [0.25, 1, 0.125, 0], [0.25 - 1.1 + 0.05, 1 - 1.1 + 0.05, 0.125 - 1.1 + 0.05, 0 - 1.1 + 0.05]]]);
+  assert.deepEqual(M.stackOf(fs, curves, [0, 1], 'local', U).traces[0].norm1, [0.25, 1, 0.5]);
+  const none = M.stackOf(fs, curves, [0, 1], 'none', U);
+  assert.deepEqual([none.range, none.traces[1].y[1]], [[1, 5, -8.8, 8.8], 8 - 8.8 + 0.4]);
+  assert.deepEqual(M.stackOf(fs, curves, [], 'global', U).range, [0, 1, -0, 1.1]);
+  // The size chart: its labels, the room over the boxes, the pair's offsets, those under the chips.
+  assert.deepEqual([M.sizeLab(12.345, 1.26), M.sizeLab(12.345, NaN)], ['12.3±1.3', '12.3']);
+  const box = { q1: 10, med: 11, q3: 12, lo: 9, hi: 13, out: [20] };
+  const rows = [{ label: 'a', rawBox: box, rawMean: 11, rawStd: 1, corrBox: box, corrMean: 15, corrStd: NaN }, { label: 'bb', rawBox: null }];
+  const SER = M.sizeSeries(rows), measure = t => t.length*6;
+  const L = M.barLayout(rows, SER, { labels: ['a', 'bb'], sin: 0.5 }, measure, 520, 340);
+  assert.deepEqual([L.n, L.bottom, L.mTop, L.gap, L.plotH, L.hw, L.offOf(0), L.offOf(1)], [2, 32, 15, 6, 293, 16, -17, 17]);
+  assert.equal(L.frac, 1 - (6 + 48 + 6)/293);
+  assert.deepEqual(L.under, [{ x: 1, dx: -17, top: 20, w: 48 }, { x: 1, dx: 17, top: 20, w: 24 }]);
+  const one = M.barLayout(rows.slice(0, 1).map(r=> ({ ...r, corrBox: null })), M.sizeSeries([{ rawBox: box }]), { labels: ['a'], sin: 0 }, measure, 120, 100);
+  assert.deepEqual([one.hw, one.offOf(0), one.frac], [Math.min(16, (120 - 75)/2*0.3), 0, 0.5]);
+  assert.deepEqual([M.barYmax([20, 10], 0.8, 0), M.barYmax([20], 0.5, 0), M.barYmax([20], 0.9, 99)], [25, 40, 99]);
+  assert.deepEqual(M.sizeDlNames('C - ', 'peak'), { csv: 'C - crystallite_size.csv,C - crystallite_size_by_peak.csv', svg: 'C - XRPD_crystallite_size_by_peak.svg' });
+  assert.equal(M.sizeDlNames('', 'sample').svg, 'XRPD_crystallite_size.svg');
+});
+
+test('the state changed: a chip switched, peaks removed and placed, the per-sample arrays, a state taken', ()=>{
+  const mk = ()=> ({ std: false, paramMode: M.modeDef(false), shared: { ...M.FIELD_DEF }, perParams: [{ snipW: 1 }, undefined, {}], stepNote: ['N', 'blWin'], heldPts: { N: 9, blWin: 100, blOn: false },
+    manualPeaks: [[30], [], [40, 41]], removedPeaks: [[], [33], []], panel: { sel: 3, hov: 4 }, processed: [1] });
+  // To one: every sample from the value on show; to all, theirs the one on show's, the note
+  // and the points held for that chip gone (the baseline's box with its width).
+  const S = mk(), cur = { ...DEF, snipW: 3, blOn: false };
+  assert.equal(M.switchMode(S, 'blWin', cur, 3), 'per');
+  assert.deepEqual(S.perParams, [{ snipW: 3, blOn: false }, { snipW: 3, blOn: false }, { snipW: 3, blOn: false }]);
+  assert.deepEqual([S.stepNote, S.heldPts], [['N', 'blWin'], { N: 9, blWin: 100, blOn: false }], 'to one: the note kept');
+  assert.equal(M.switchMode(S, 'blWin', { ...cur, snipW: 4 }, 3), 'shared');
+  assert.deepEqual([S.shared.snipW, S.shared.blOn, S.stepNote, S.heldPts], [4, false, ['N'], { N: 9 }]);
+  M.switchMode(S, 'pkHeight', { ...cur, pkHeight: 7 }, 3);
+  assert.deepEqual([S.paramMode.pkHeight, S.shared.pkHeight, S.stepNote], ['shared', 7, ['N']]);
+  M.switchMode(S, 'N', { ...cur, smoothW: 0.5 }, 2);
+  assert.deepEqual([S.perParams[0].smoothW, S.perParams[1].smoothW, S.perParams[2].smoothW], [0.5, 0.5, undefined], 'one per file (n)');
+  // The peak search's fields bring back the removed peaks: the sample's, or every one's under all.
+  const T = mk(); M.clearRemoved(T, 'pkHeight', 1);
+  assert.deepEqual(T.removedPeaks, [[], [], []]);
+  const V = mk(); V.paramMode.pkProm = 'shared'; V.removedPeaks = [[1]]; V.removedPeaks[2] = [2]; M.clearRemoved(V, 'pkProm', 0);
+  assert.deepEqual([V.removedPeaks.length, 1 in V.removedPeaks, V.removedPeaks[2]], [3, false, []], 'every one (a hole kept)');
+  // A peak's ×: one by hand gone for good (by its 2θ, to 10⁻⁶), a detected one removed once.
+  const W = mk();
+  M.dropPeak(W, 2, 40.0000001, true); M.dropPeak(W, 0, 33, false); M.dropPeak(W, 1, 33.0000005, false); M.dropPeak(W, 5, 20, false); M.dropPeak(W, 6, 20, true);
+  assert.deepEqual([W.manualPeaks[2], W.removedPeaks[0], W.removedPeaks[1], W.removedPeaks[5], W.manualPeaks[6]], [[41], [33], [33], [20], undefined]);
+  // The per-sample arrays the file list keeps aligned: a file taken back in takes its entry,
+  // one of v510 in points at its step (the points held), or the shared values; none for the standard.
+  const X = mk(), sl = M.slotsOf(X, 'A3');
+  assert.deepEqual(sl.map(q=> q.key), ['A3:params', 'A3:manual', 'A3:removed']);
+  assert.ok(sl[0].arr === X.perParams && sl[1].arr === X.manualPeaks && sl[2].arr === X.removedPeaks);
+  assert.deepEqual(sl[0].make(undefined), X.shared); assert.notEqual(sl[0].make(undefined), X.shared);
+  const st = meanStep([10, 10.02, 10.04]);
+  assert.deepEqual(sl[0].make({ N: 5 }, { x: [10, 10.02, 10.04] }), { smoothW: 9*st, snipW: 100*st, blOn: false }, 'the N held (9 points at its step), the SNIP v510 shared');
+  assert.deepEqual([sl[1].make([3]), sl[2].make(null)], [[3], []]);
+  assert.deepEqual(M.slotsOf({ ...X, std: true }, 'S'), []);
+  const Y = mk(); M.addEntry(Y);
+  assert.deepEqual([Y.perParams[3], Y.manualPeaks[3], Y.removedPeaks[3]], [M.FIELD_DEF, [], []]);
+  M.freshEntries(Y, [{}, {}]);
+  assert.deepEqual([Y.perParams, Y.manualPeaks, Y.removedPeaks, Y.panel], [[M.FIELD_DEF, M.FIELD_DEF], [[], []], [[], []], { sel: null, hov: null }]);
+  M.clearEntries(Y);
+  assert.deepEqual([Y.processed, Y.perParams, Y.manualPeaks, Y.removedPeaks, Y.panel], [[], [], [], [], { sel: null, hov: null }]);
+  // A state read, taken: the objects of S kept (its shared and modes), the rest replaced; nothing picked.
+  const Z = mk(), sh = Z.shared, t = M.readState({ shared: { pkHeight: 2 }, sizeBy: 'peak', manualPeaks: [[30.5]] }, false, [0.02], [0.02]);
+  M.takeState(Z, t, 'none');
+  assert.ok(Z.shared === sh && Z.perParams === t.perParams && Z.manualPeaks === t.manualPeaks);
+  assert.deepEqual([Z.shared.pkHeight, Z.sizeBy, Z.norm, Z.stepNote, Z.heldPts, Z.manualPeaks, Z.panel], [2, 'peak', 'none', [], {}, [[30.5]], { sel: null, hov: null }]);
+  assert.deepEqual(M.stateOf(Z), { perParams: [{ blOn: true }], manualPeaks: [[30.5]], removedPeaks: [[]], shared: Z.shared, paramMode: M.modeDef(false), sizeBy: 'peak', norm: 'none' });
+  const P = { sel: null };
+  assert.equal(M.showsOf(P), null);
+  M.showNext(P, { sel: 'x' }); M.showNext(P, null); assert.equal(P.sel, null);
+  M.showNext(P, { sel: 32.4 }); assert.deepEqual(M.showsOf(P), { sel: 32.4 });
+});
+
+test('the card\'s markup: the samples\' and the standard\'s, the Results\' section, the legends, every name escaped', ()=>{
+  const ids = h => [...h.matchAll(/ id="([^"]+)"/g)].map(m=> m[1]);
+  const card = H.cardHtml('xrdA4', false, U), std = H.cardHtml('xrdStdA', true, U), res = H.resHtml('xrdA4', U);
+  // Every element the wiring looks up, once each.
+  for (const id of ['Svg', 'Prev', 'Next', 'CurrentLabel', 'Norm', 'Smooth', 'SmoothPts', 'BlOn', 'BlWin', 'BlWinPts', 'PkHeight', 'PkProm', 'PkDist', 'K', 'LambdaSel', 'Lambda',
+    'StepNote', 'AddPeak', 'Std', 'PeakBox', 'PkReset', 'PeakTableWrap', ...Object.keys(M.TOGGLES).map(k=> 'Mode' + k)]) assert.equal(ids(card).filter(x=> x === 'xrdA4' + id).length, 1, id);
+  for (const id of ['Svg', 'Smooth', 'BlOn', 'BlWin', 'PkHeight', 'PkProm', 'PkDist', 'Cag', 'CagAlert', 'AddPeak', 'PeakBox', 'PkReset', 'PeakTableWrap']) assert.ok(ids(std).includes('xrdStdA' + id), id);
+  assert.ok(!/Norm|Lambda|Mode|StepNote|Prev/.test(ids(std).join()), 'the standard: no normalisation, no λ, no chips, no selector');
+  assert.deepEqual(ids(res), ['xrdA4ResSvg', 'xrdA4ResLegend', 'xrdA4SizeBarSvg', 'xrdA4SizeBy', 'xrdA4SizeBarLegend', 'xrdA4SizeByNote']);
+  // The fields' values as the store's defaults write them; the chips as modeDef sets them.
+  assert.match(card, /id="xrdA4Smooth" value="0\.25"/); assert.match(std, /id="xrdStdASmooth" value="0"/);
+  assert.match(card, /id="xrdA4BlWin" value="5"/);
+  assert.deepEqual([...card.matchAll(/id="xrdA4Mode(\w+)"[^>]*>(\w+)</g)].map(m=> m[1] + ':' + m[2]), Object.entries(M.TOGGLES).map(([k, m])=> k + ':' + (M.modeDef(false)[m] === 'shared' ? 'all' : 'one')));
+  assert.ok(card.includes('data-csv-base="peaks.csv" data-csv-names="peaks.csv"') && std.includes('data-csv-names="standard.csv" title="Download CSV"'));
+  assert.equal(H.NO_PEAKS, '<p style="color:var(--muted);margin:6px 0">No peaks found with current parameters.</p>');
+  const evil = `"'><i data-x=1></i>`;
+  assert.equal(H.stackLegendHtml([{ color: evil, label: evil }, { color: 'red', label: 'b' }], [1, 0], U),
+    '<span><i style="background:red"></i>b</span><span><i style="background:&quot;&#39;&gt;&lt;i data-x=1&gt;&lt;/i&gt;"></i>&quot;&#39;&gt;&lt;i data-x=1&gt;&lt;/i&gt;</span>');
+  assert.equal(H.sizeLegendHtml(M.sizeSeries([{ corrBox: {} }])), '<span><i class="mk-box" style="background:#3aa0ff"></i>size</span><span><i class="mk-box" style="background:#ff7a59"></i>size corr.</span>');
+  assert.ok(H.PEAKS_INFO.startsWith('Per-sample view.') && H.STD_INFO.startsWith('A measured standard'));
+});
+
+/* ---- Cases as v560's xrd-peaks.js gave them ----
+   A card (a sample's, its patterns 0 to 4, with the standard's correction or none; or the
+   standard's, its file or none) with a state of any version or malformed, then eight steps
+   each, done as xrd-peaks.js does them (its wiring, in short, below: the fields and their
+   guards, the chips, the λ preset, the selector, peaks removed, placed by the keys and
+   reset, picked and hovered, the size chart's chips, the step note's ×, a state put back,
+   showNext), after the state and each step what the card shows (outputs). Their digests:
+   tests/golden/peaksmodel.json. */
+// The patterns: the fixture's, shorter (one at another step, one labelled with markup), and a standard.
+const casePat = (k, n, label, color)=>{ const sc = readXrdmlScanText(new Uint8Array(xrdml(k, { n }))); return { name: 's' + k + '.xrdml', label, color, x: sc.x, y: sc.y, ...(sc.varMul ? { varMul: sc.varMul } : {}) }; };
+export const CASE_PATS = [casePat(0, 900, 's0', '#3aa0ff'), casePat(1, 900, 's1', '#ff7a59'), casePat(2, 700, 'S<2> & "b"', 'red<"'), casePat(5, 900, 's5', '#5fcf6a'), casePat(11, 900, 's11', '#d4a72c')];
+export const STD_PAT = 4;
+const STATES = [{}, null, 'x', [], { perParams: 5, manualPeaks: 'x', removedPeaks: [5, 'x'] }, { shared: { N: 10, blWin: 150 } }, { shared: { N: 1, blWin: 40, blOn: false } },
+  { shared: { N: 7, blWin: 100 }, paramMode: { N: 'per' }, perParams: [{ N: 5, blWin: 80 }, {}] }, { manualPeaks: [[30.3, 'x', null], [46.5]], removedPeaks: [[32.4]], sizeBy: 'peak', norm: 'zz' },
+  { stepNote: ['N', 'q', 'blWin'], heldPts: { N: 9, blWin: 120, blOn: false }, paramMode: { N: 'per', blWin: 'per' } },
+  { shared: { smoothW: -1, snipW: 0, pkHeight: 'x', pkProm: -3, pkDist: 0, K: 0, lambda: null }, sizeBy: 'x', norm: 'local' },
+  { paramMode: { N: 'per', blWin: 'x', K: 'per', lambda: 'per', pkDist: 'shared' }, perParams: [{ K: 1.1, lambda: 0.709317 }, { blOn: false, snipW: 0.8 }, 7] },
+  { shared: { smoothW: 0.05, snipW: 1.2, blOn: true, pkHeight: 2, pkProm: 1, pkDist: 0.1 }, norm: 'none', sizeBy: 'peak', paramMode: { pkHeight: 'shared' } }];
+const TEXTS = ['0', '0.1', '0,2', '0.05', '1', '2.5', '5', '', 'abc', '-1', '1e-7', '0.3', '3', ' 0.5 ', '0.9', '1.1', '1.540598', '2,28976', '1.5406'];
+const OPS = ['field', 'field', 'field', 'blon', 'chip', 'chip', 'norm', 'preset', 'step', 'del', 'del', 'add', 'add', 'reset', 'pick', 'hover', 'sizeBy', 'stepX', 'restore', 'showNext'];
+export function caseOf(n){
+  const R = rng(5610 + n), u = R.u, pick = a => a[Math.floor(u()*a.length)], int = (a, b)=> a + Math.floor(u()*(b - a + 1));
+  const std = u() < 0.2;
+  const files = std ? (u() < 0.85 ? [STD_PAT] : []) : [0, 1, 2, 3].filter(()=> u() < 0.6).sort(()=> u() - 0.5);
+  const ids = std ? ['Smooth', 'BlWin', 'PkHeight', 'PkProm', 'PkDist'] : ['Smooth', 'BlWin', 'PkHeight', 'PkProm', 'PkDist', 'K', 'Lambda'];
+  const steps = Array.from({ length: 8 }, ()=>{
+    const op = pick(OPS);
+    if (op === 'field') return [op, pick(ids), pick(TEXTS)];
+    if (op === 'chip') return [op, pick(Object.keys(M.TOGGLES))];
+    if (op === 'norm') return [op, pick(['global', 'local', 'none'])];
+    if (op === 'preset') return [op, pick(['1.540598', '0.709317', 'custom', '1.789010'])];
+    if (op === 'step') return [op, pick([-1, 1])];
+    if (op === 'del' || op === 'pick') return [op, int(0, 9)];
+    if (op === 'add') return [op, int(0, 40)];
+    if (op === 'hover') return [op, int(0, 9), u() < 0.7];
+    if (op === 'sizeBy') return [op, pick(['peak', 'sample'])];
+    if (op === 'restore') return [op, pick(STATES)];
+    if (op === 'showNext') return [op, pick([{ sel: 32.4 }, { sel: 'x' }, null])];
+    return [op];
+  });
+  return { std, files, instr: !std && u() < 0.5, state: pick(STATES), steps };
+}
+export const allCases = ()=> Array.from({ length: 40 }, (_, n)=> caseOf(n));
+
+/* xrd-peaks.js's wiring of a case, in short: the instance's S, the fields' texts (T, with a
+   width's text as written and its value, shown and exact, and each guard's last value),
+   the box, the selects, the add-peak mode, the sample on show; the standard's model. */
+const LAMBDA_OPTS = ['1.540598', '1.541838', '1.544426', '0.709317', '1.789010', '2.289760', 'custom'];
+let caseIds = new WeakMap(), caseN = 0;
+const caseId = o => o == null ? '-' : typeof o !== 'object' && typeof o !== 'function' ? typeof o + ':' + String(o) : caseIds.get(o) || (caseIds.set(o, ++caseN), caseN);
+const kept = new Map();
+function stdModel(){
+  const f = CASE_PATS[STD_PAT], pr = M.fileParams({}, M.modeDef(true), M.sharedDef(true));
+  return M.instrModelOf(M.processingOf(f, M.smoothingOf(f.x, f.y, pr), pr, [], [], U).peaks);
+}
+export function caseEnv(c){
+  const std = c.std, fs = c.files.map(i=> CASE_PATS[i]);
+  const S = { std, fields: M.fieldInputs(std), processed: [], manualPeaks: [], removedPeaks: [], perParams: [], paramMode: { ...M.modeDef(std) }, shared: { ...M.sharedDef(std) },
+    sizeBy: 'sample', stepNote: [], heldPts: {}, norm: 'global', panel: { sel: null, hov: null } };
+  const T = { Smooth: std ? '0' : '0.25', BlWin: '5', PkHeight: '5', PkProm: '3', PkDist: '0.3', ...(std ? {} : { K: '0.9', Lambda: '1.540598' }) };
+  const E = { std, fs, S, idx: 0, T, shown: {}, exact: {}, last: Object.fromEntries(Object.entries(T).map(([k, v])=> [k, parseFloat(v)])),
+    blOn: true, blWinOff: false, norm: 'global', preset: '1.540598', ro: true, on: false, at: null, instr: c.instr ? stdModel() : null };
+  if (!std) lambdaSync(E);
+  return E;
+}
+const cur = E => E.std ? 0 : E.idx;
+const fpOf = (E, i)=> M.fileParams(E.S.perParams[i] || {}, E.S.paramMode, E.S.shared);
+function lambdaSync(E){ E.preset = M.presetOf(E.T.Lambda, LAMBDA_OPTS); E.ro = E.preset !== 'custom'; }
+function writeStore(E){
+  const pr = fpOf(E, cur(E));
+  for (const key in E.S.fields){
+    const id = E.S.fields[key];
+    if (key in M.LEGACY){ E.T[id] = E.shown[id] = widthText(pr[key]*M.SHOWN[key]); E.exact[id] = pr[key]; } else E.T[id] = String(pr[key]);
+  }
+  E.blOn = pr.blOn; E.blWinOff = !pr.blOn;
+  if (!E.std){ E.norm = E.S.norm; lambdaSync(E); }
+}
+function readInputs(E){
+  const vals = {};
+  for (const key in E.S.fields){ const id = E.S.fields[key]; vals[key] = M.fieldIn(key, E.T[id], E.shown[id], E.exact[id]); }
+  M.takeInputs(E.S, cur(E), vals, E.blOn, E.fs.length);
+}
+// A pattern processed (kept by its keys, as the card keeps it).
+function reprocessOne(E, i){
+  const f = E.fs[i], { k1, k2 } = M.procKeys(f, fpOf(E, i), E.S.manualPeaks[i], E.S.removedPeaks[i], caseId), k = caseId(f.y) + '#' + k2;
+  if (!kept.has(k)){ const pr = fpOf(E, i); kept.set(k, { ...M.processingOf(f, M.smoothingOf(f.x, f.y, pr), pr, E.S.manualPeaks[i], E.S.removedPeaks[i], U), k1, k2 }); }
+  E.S.processed[i] = kept.get(k);
+}
+function reprocessAll(E){ E.S.processed = []; for (let i = 0; i < E.fs.length; i++) reprocessOne(E, i); }
+function refresh(E){
+  E.on = false; E.at = null;
+  if (!E.fs.length){ E.S.processed = []; E.S.panel.sel = E.S.panel.hov = null; writeStore(E); return; }
+  reprocessAll(E); writeStore(E);
+}
+function rerun(E, m){ if (E.S.paramMode[m] === 'shared') reprocessAll(E); else reprocessOne(E, cur(E)); }
+function restore(E, s){
+  const st = E.fs.map(f=> meanStep(f.x));
+  M.takeState(E.S, M.readState(s, E.std, st, st), normOf(M.objOf(s).norm));
+  writeStore(E);
+}
+// The kept peaks of the table on show (none: no table).
+function rowsOf(E){ const n = E.fs.length, i = Math.min(cur(E), n - 1), pr = E.S.processed[i]; return n && pr ? pr.peaks.filter(pk=> !pk.removed) : []; }
+const GUARD = { Smooth: 0, BlWin: 1e-6, PkHeight: 0, PkProm: 0, PkDist: 0, K: 1e-6, Lambda: 1e-6 };
+// A field focused (its guard takes its value), typed and applied: refused by the guard (set
+// back), or stored (its text the number), then processed as the field's change does.
+function typeIn(E, id, text){
+  const v0 = parseFloat(String(E.T[id]).trim().replace(',', '.'));
+  if (isFinite(v0)) E.last[id] = v0;
+  const raw = String(text).trim().replace(',', '.'), v = parseFloat(raw);
+  if (raw === '' || !isFinite(v) || v < GUARD[id]){ E.T[id] = String(E.last[id]); return; }
+  E.last[id] = v; E.T[id] = String(v);
+  const key = Object.keys(E.S.fields).find(k=> E.S.fields[k] === id);
+  readInputs(E); writeStore(E);
+  if (!E.fs.length || M.SIZE_ONLY.has(key)) return;
+  if (M.PEAK_SEARCH.has(key)) M.clearRemoved(E.S, key, cur(E));
+  rerun(E, M.modeOf(key));
+}
+export function step(E, [op, a, b]){
+  const S = E.S, n = E.fs.length;
+  const edited = i =>{ reprocessOne(E, i); };
+  if (op === 'field') typeIn(E, a, b);
+  else if (op === 'blon'){ E.blOn = !E.blOn; readInputs(E); writeStore(E); if (n) rerun(E, 'blWin'); }
+  else if (op === 'chip' && !E.std){
+    const key = M.TOGGLES[a], mode = M.switchMode(S, key, fpOf(E, cur(E)), n);
+    writeStore(E);
+    if (n && !M.SIZE_ONLY.has(key)){ if (mode === 'shared') reprocessAll(E); else reprocessOne(E, cur(E)); }
+  }
+  else if (op === 'norm' && !E.std){ E.norm = a; S.norm = normOf(a); }
+  else if (op === 'preset' && !E.std){
+    if (a === 'custom'){ E.preset = 'custom'; E.ro = false; }
+    else { E.preset = a; E.ro = true; E.T.Lambda = String(parseFloat(a)); typeIn(E, 'Lambda', E.T.Lambda); }
+  }
+  else if (op === 'step' && !E.std && n){ E.idx = (E.idx + a + n) % n; E.on = false; E.at = null; S.panel.sel = S.panel.hov = null; writeStore(E); }
+  else if (op === 'del'){ const pks = rowsOf(E); if (pks.length){ const pk = pks[a % pks.length], i = Math.min(cur(E), n - 1); M.dropPeak(S, i, pk.detPos, !!pk.manual); edited(i); } }
+  else if (op === 'add'){
+    // + Add peak (armed or left), a arrows from the middle of the plot's range, Enter.
+    if (n && cur(E) >= 0){ E.on = !E.on; if (!E.on) E.at = null; }
+    const i = cur(E), f = E.fs[i];
+    if (!E.on || !f || !S.processed.length) return;
+    for (let k = 0; k < a; k++) E.at = M.nudge(f.x, U.minArr(f.x), U.maxArr(f.x), E.at, 1);
+    if (E.at == null) return;
+    (S.manualPeaks[i] = S.manualPeaks[i] || []).push(f.x[E.at]);
+    E.on = false; E.at = null; edited(i);
+  }
+  // (↺ is in the table's box: the click goes on to it, and the peak picked is left)
+  else if (op === 'reset'){ const i = cur(E); if (E.fs[i]){ S.manualPeaks[i] = []; S.removedPeaks[i] = []; edited(i); } S.panel.sel = null; }
+  else if (op === 'pick'){ const pks = rowsOf(E); if (pks.length) S.panel.sel = M.toggled(S.panel.sel, pks[a % pks.length].pos); }
+  else if (op === 'hover'){ const pks = rowsOf(E); if (pks.length){ const pos = b ? pks[a % pks.length].pos : null; if (pos !== S.panel.hov) S.panel.hov = pos; } }
+  else if (op === 'sizeBy' && !E.std && n && S.processed.length){
+    const R = M.sizeReflections(S.processed, E.fs.map((_, k)=> fpOf(E, k)), E.instr);
+    if (R.idxs.length >= 2 && (a === 'sample' || M.byPeakOk(R)) && a !== S.sizeBy) S.sizeBy = a;
+  }
+  else if (op === 'stepX' && !E.std){ if (S.stepNote.some(m=> S.paramMode[m] === 'per')) S.stepNote = []; }
+  else if (op === 'restore'){ restore(E, a && typeof a === 'object' ? JSON.parse(JSON.stringify(a)) : a); refresh(E); }
+  else if (op === 'showNext'){ M.showNext(S.panel, a); refresh(E); }
+}
+/* What the card shows: its fields, their hints, the chips, the step note; the plot (its range,
+   curves, marks, their colours), the table, the Caglioti box (the standard's); the Results'
+   stack and its legend, the size chart (its chips, note, range, boxes, labels, names,
+   legend); its CSVs, state, what it shows beside it, the add-peak mode. */
+const CHART = { W: 520, H: 340, measure: t => String(t).length*5.7 + (/[iIl1]/.test(t) ? 0.3 : 0) };
+export function outputs(E){
+  const S = E.S, fs = E.fs, n = fs.length, ci = Math.min(cur(E), n - 1), f = fs[ci], o = {};
+  o.fields = [{ ...E.T }, E.blOn, E.blWinOff, ...(E.std ? [] : [E.norm, E.preset, E.ro])];
+  o.hints = ['Smooth', 'BlWin'].map(id=> M.widthHint(id, E.T[id], E.shown[id], E.exact[id], f ? meanStep(f.x) : NaN, f && f.label));
+  o.chips = E.std ? null : Object.values(M.TOGGLES).map(k=> S.paramMode[k] === 'shared' ? 'all' : 'one');
+  o.step = E.std ? null : H.stepNoteHtml(S.stepNote.filter(m=> S.paramMode[m] === 'per'), U);
+  const pr = n ? S.processed[ci] : null, instr = E.std ? null : E.instr;
+  if (pr){
+    const D = M.anaOf(f, pr, fpOf(E, ci).blOn, U), pos = D.peakMarks.map(m=> m.pos);
+    o.plot = [[U.minArr(f.x), U.maxArr(f.x)], dg(f.x), dg(D.raw), dg(D.smoothed), D.base ? [dg(D.dense), dg(D.base)] : null, pos, D.fwhmMarks, M.markStyles(pos, D.fwhmMarks.map(m=> m.pos), S.panel.sel, S.panel.hov)];
+    const pks = pr.peaks.filter(pk=> !pk.removed);
+    o.table = [(S.manualPeaks[ci] || []).length > 0 || (S.removedPeaks[ci] || []).length > 0,
+      pks.length ? H.peakTableHtml(pks, { std: E.std, m: instr, fp: fpOf(E, ci), picked: S.panel.sel, st: E.std ? null : M.sampleSizes(pr, fpOf(E, ci), instr, false, U) }, U) : H.NO_PEAKS];
+  } else { o.plot = null; o.table = [false, '']; }
+  if (E.std){ const m = n && S.processed[0] ? M.instrModelOf(S.processed[0].peaks) : null, c = H.cagliotiHtml(m, n); o.cag = [c.box, c.alert]; }
+  else o.res = n && S.processed.length ? results(E, instr) : null;
+  o.csv = M.csvTables('C - ', { files: fs, procs: S.processed, fps: fs.map((_, k)=> fpOf(E, k)), m: instr, norm: S.norm, std: E.std }, U).map(e=> [e.name, sha(e.text)]);
+  o.state = M.stateOf(S);
+  o.shows = M.showsOf(S.panel);
+  o.adding = E.on;
+  return o;
+}
+// A card's Results: the stack (its legend, range and traces), the size chart.
+function results(E, instr){
+  const S = E.S, fs = E.fs, fps = fs.map((_, k)=> fpOf(E, k)), curves = S.processed.map(pr=> pr.subtracted), shown = M.stackShown(fs, curves);
+  const St = M.stackOf(fs, curves, shown, S.norm, U);
+  const stack = [H.stackLegendHtml(fs, shown, U), St.range, St.traces.map(t=> [dg(fs[t.k].x), dg(t.y), fs[t.k].color, fs[t.k].label, fs[t.k].name, dg(t.norm1)])];
+  const R = M.sizeReflections(S.processed, fps, instr), ok = M.byPeakOk(R), by = ok ? S.sizeBy : 'sample';
+  const rows = by === 'peak' ? M.reflectionRows(R, instr, U) : fs.map((f, k)=> ({ name: f.name, label: f.label, ...M.sampleSizes(S.processed[k], fps[k], instr, false, U) }));
+  const SER = M.sizeSeries(rows), tops = M.sizeTops(rows, SER);
+  let chart = null;
+  if (tops.length){
+    const fit = U.barNames({ measureText: t => ({ width: CHART.measure(t) }) }, rows.map(r=> r.label), Math.max(60, CHART.W - 75), 55);
+    const L = M.barLayout(rows, SER, fit, CHART.measure, CHART.W, CHART.H), ymax = M.barYmax(tops, L.frac, 0), calls = [];
+    for (let k = 0; k < L.n; k++){
+      const r = rows[k];
+      SER.forEach((m, mi)=>{ const b = r[m.k + 'Box']; if (!b) return; const off = L.offOf(mi);
+        calls.push(['box', k + 1, { ...b, mean: r[m.k + 'Mean'], err: r[m.k + 'Std'] }, m.color, L.hw, off, m.name], ['barLabel', k + 1, M.boxTop(b), M.sizeLab(r[m.k + 'Mean'], r[m.k + 'Std']), L.gap, off]); });
+      calls.push(['tickLabel', k + 1, fit.labels[k], fit.rot, r.label, r.name]);
+    }
+    chart = [[0, L.n + 1, 0, ymax || 1], [L.mTop, L.bottom], calls, H.sizeLegendHtml(SER)];
+  }
+  return { stack, size: [H.sizeChipsHtml(R.idxs.length, ok, by), H.sizeNoteHtml(R, by, fs.map(f=> f.label), U), chart] };
+}
+export function runCase(c){
+  const E = caseEnv(c), out = [];
+  restore(E, c.state && typeof c.state === 'object' ? JSON.parse(JSON.stringify(c.state)) : c.state);
+  refresh(E);
+  out.push(outputs(E));
+  for (const s of c.steps){ step(E, s); out.push(outputs(E)); }
+  return canon(out);
+}
+
+test('40 cases as v560\'s xrd-peaks.js gave them (golden digests)', ()=>{
+  const got = { cases: allCases().map(c=> sha(runCase(c))) };
+  if (UPDATE){ fs.writeFileSync(GOLDEN, JSON.stringify(got, null, 1) + '\n'); return; }
+  const want = JSON.parse(fs.readFileSync(GOLDEN, 'utf8'));
+  const off = got.cases.map((h, i)=> h === want.cases[i] ? null : i).filter(i=> i !== null);
+  assert.deepEqual(off, [], 'cases whose digest differs');
+  assert.equal(got.cases.length, want.cases.length);
 });

@@ -5,11 +5,13 @@
    pattern's processing from its settings; the standard's Caglioti fit and the
    instrumental width from it; the Scherrer sizes, a sample's and by reflection, and what
    the size chart draws; a sample's settings, the card's state saved and read back (a
-   project's to v510, in points, converted); the CSVs.
-   utils.js's helpers (maxArr, meanArr, stdArr, boxStats, fmtNum, csvLine), which need a
-   page to load, are handed in (u: xrd-peaks.js U).
+   project's to v510, in points, converted); the CSVs. And (v561) what the card's wiring
+   works out: its fields, the plot's curves and marks, the Results' stack and the size
+   chart's layout, the changes to its state (below: THE CARD'S WIRING, WORKED OUT).
+   utils.js's helpers (maxArr, meanArr, stdArr, boxStats, fmtNum, csvLine, linspace,
+   interpLinear), which need a page to load, are handed in (u: xrd-peaks.js U).
 ========================================================= */
-import { boxSmooth, boxWeights, meanStep, widthText } from './smooth.js';
+import { boxSmooth, boxWeights, meanStep, widthText, ptsText } from './smooth.js';
 
 // Index of the grid point nearest to a 2θ, by bisection: an axis need not be even (a scan
 // with points left out, xrd-instr.js, or listed positions). Up to v484 it was taken as
@@ -638,8 +640,280 @@ function csvTables(pre, { files: fs, procs: processed, fps, m, norm, std }, u){
   return entries;
 }
 
+/* =========================================================
+   THE CARD'S WIRING, WORKED OUT (v561; to v560 inside xrd-peaks.js's closure)
+   What xrd-peaks.js's functions decide, as plain functions of plain values or of the
+   instance's state S (its settings, peaks and choices: xrd-peaks.js makeState), with no
+   page: the fields read and written, a width's hint, the λ preset, the processing's keys,
+   what the plot draws (its curves, its marks and their colours), the Results' stacked
+   patterns and the size chart's layout, the chips switched, peaks removed and placed by
+   hand, the per-sample arrays the file list keeps aligned, the state taken back.
+========================================================= */
+// The decimal fields: a setting's key → its input's id's end (the standard has no K, λ).
+const fieldInputs = std => std ? { smoothW:'Smooth', snipW:'BlWin', pkHeight:'PkHeight', pkProm:'PkProm', pkDist:'PkDist' }
+  : { smoothW:'Smooth', snipW:'BlWin', pkHeight:'PkHeight', pkProm:'PkProm', pkDist:'PkDist', K:'K', lambda:'Lambda' };
+// Each one's guard (utils.js guardNumericInput: shake and set back): [its id's end, its least
+// value, its default].
+const guardsOf = std => [ ['Smooth',0,sharedDef(std).smoothW], ['BlWin',1e-6,FIELD_DEF.snipW*SHOWN.snipW], ['PkHeight',0,5], ['PkProm',0,3], ['PkDist',0,0.3], ...(std ? [] : [['K',1e-6,0.9], ['Lambda',1e-6,1.540598]]) ];
+// Per-field shared/per-sample toggles (one segmented control per editable field): a chip's
+// id's end → its mode's key; the fields that change the sizes alone (K, λ: no processing),
+// and those of the peak search (a change of one brings its removed peaks back).
+const TOGGLES = { N:'N', Bl:'blWin', H:'pkHeight', P:'pkProm', D:'pkDist', K:'K', L:'lambda' };
+const SIZE_ONLY = new Set(['K','lambda']);
+const PEAK_SEARCH = new Set(['pkHeight','pkProm','pkDist']);
+
+// A decimal field's text as a number, tolerant of comma separators; only a genuinely
+// empty or invalid value is def.
+function numIn(text, def){
+  const raw = String(text).trim().replace(',', '.');
+  if (raw === '') return def;
+  const v = parseFloat(raw);
+  return isNaN(v) ? def : v;
+}
+// A field's value as stored (key: its setting): a width's field as written (shown), to 4
+// significant digits, is the value stored, kept exact; else the value typed, at least
+// its least.
+function fieldIn(key, text, shown, exact){
+  const sh = SHOWN[key] || 1;
+  return key in LEGACY && text === shown ? exact : Math.max(FIELD_MIN[key], numIn(text, FIELD_DEF[key]*sh)/sh);
+}
+/* The fields read into the store (vals: each setting's value, in the fields' order; on: the
+   baseline's box): for the sample on show (k), its own where its chip is one, else the
+   shared; with no file (n: the files), every value into the shared ones, those a file
+   loaded starts from. */
+function takeInputs(S, k, vals, on, n){
+  const own = m => S.paramMode[m]!=='shared' && n > 0;
+  for (const key in vals){
+    if (!own(modeOf(key))) S.shared[key] = vals[key];
+    else { if (!S.perParams[k]) S.perParams[k] = {}; S.perParams[k][key] = vals[key]; }
+  }
+  if (!own('blWin')) S.shared.blOn = on;
+  else { if (!S.perParams[k]) S.perParams[k] = {}; S.perParams[k].blOn = on; }
+}
+/* What a width's field (id: Smooth, BlWin) spans in points of the pattern on show, at its
+   step st (label: the pattern's), from the value as it is typed (text; the width stored,
+   exact, while the field shows it unchanged: one converted from points is that many steps,
+   not its 4 digits' worth): the width over the step (the smoothing off at 0; the SNIP's
+   passes on each side, as computeBaseline rounds them, in its title; to v515 those, '±K
+   pts', in the field). Nothing with no file, or no value. → { t, tip } */
+function widthHint(id, text, shown, exact, st, label){
+  const sh = id === 'BlWin' ? SHOWN.snipW : 1;
+  const v = text === shown && Number.isFinite(exact) ? exact*sh : parseFloat(String(text).trim().replace(',', '.'));
+  let t = '', tip = '';
+  if (st > 0 && v >= 0 && isFinite(v)){
+    const at = ` at the step of ${label}, ${widthText(st)}°`;
+    if (id === 'Smooth'){ t = v ? ptsText(v/st) : 'off'; tip = v ? `${widthText(v/st)} steps${at}` : 'No smoothing'; }
+    else if (v > 0){ const K = Math.max(1, Math.round(v/sh/st) || 1); t = ptsText(v/st); tip = `${widthText(v/st)} steps across, ${K} point${K === 1 ? '' : 's'} on each side${at}`; }
+  }
+  return { t, tip };
+}
+// The wavelength preset the λ field's text matches (values: the selector's options'), else
+// "custom".
+function presetOf(text, values){
+  const v = parseFloat(String(text).replace(',','.'));
+  for (const o of values){ if (o!=='custom' && Math.abs(parseFloat(o)-v) < 5e-5) return o; }
+  return 'custom';
+}
+
+/* A pattern's processing's keys (xrd-peaks.js keeps it by them): the smoothing and the
+   baseline by the 2θ, the intensities and their widths (k1; to v510, in points, not the
+   2θ), the peaks by those, the variance factors, the peak search and the peaks added and
+   removed by hand (k2). pr: its settings (fileParams); idOf: an object's own number. */
+function procKeys(f, pr, manual, removed, idOf){
+  const k1 = [idOf(f.y), idOf(f.x), pr.smoothW, pr.blOn ? pr.snipW : 'off'].join('|');
+  return { k1, k2: [k1, idOf(f.varMul), pr.pkHeight, pr.pkProm, pr.pkDist, (manual||[]).join(), (removed||[]).join()].join('|') };
+}
+
+/* ---- The plot: raw, smoothed, SNIP baseline, peaks (no fit), each pattern normalised to
+   its own smoothed max (= 1) ---- */
+// Peak marker colours
+const PEAK_BASE = '#3f9d54';   // darker green, base
+const PEAK_HOVER = '#5fcf6a';  // brighter green, transient hover
+const PEAK_SEL  = '#ffffff';   // white, permanent selection
+const FWHM_BASE  = '#b5292c';  // dark red, base (contrasts with the dark background)
+const FWHM_HOVER = '#ff5a5a';  // brighter red, transient hover
+const FWHM_SEL   = '#ff0000';  // pure red, permanent selection
+/* What the plot draws of pattern f and its processing pr (blOn: its baseline subtracted):
+   the raw and smoothed curves and the baseline (on a dense grid; none, off) over the
+   smoothed max mx; and the marks: each kept peak's line once (peakMarks) and its FWHM's
+   horizontal marker at half-maximum height, on the smoothed, baseline-subtracted profile
+   (fwhmMarks). u: utils.js's maxArr, linspace, interpLinear. */
+function anaOf(f, pr, blOn, { maxArr, linspace, interpLinear }){
+  const mx = maxArr(pr.smoothed) || 1;
+  const ndense = Math.min(20000, Math.max(4000, f.x.length*10));
+  const dense  = linspace(f.x[0], f.x[f.x.length-1], ndense);
+  const baseD  = interpLinear(f.x, pr.baseline, dense);
+  const drawnPos = [], peakMarks = [], fwhmMarks = [];
+  for (const pk of pr.peaks){
+    if (pk.removed) continue;
+    if (drawnPos.some(v=>Math.abs(v-pk.pos)<1e-9)) continue;
+    drawnPos.push(pk.pos);
+    peakMarks.push({pos:pk.pos});
+    const gm = fwhmGeom(f.x, pr.subtracted, pk.idx);
+    if (gm){
+      const yDisp = (pr.baseline[gm.idx] + gm.half) / mx;
+      fwhmMarks.push({pos:pk.pos, x0:gm.xl, x1:gm.xr, y:yDisp});
+    }
+  }
+  return { mx, blOn, raw: f.y.map(v=>v/mx), smoothed: pr.smoothed.map(v=>v/mx), dense, base: blOn ? baseD.map(v=>v/mx) : null, peakMarks, fwhmMarks };
+}
+// The index of the value nearest pos within 0.6° (-1: none, or no pos).
+function nearestOf(vals, pos){
+  let best = -1, bd = Infinity;
+  if (pos != null) vals.forEach((v, i)=>{ const d = Math.abs(v-pos); if (d < bd){ bd = d; best = i; } });
+  return bd < 0.6 ? best : -1;
+}
+/* The marks' colours and widths ([stroke, width]) from the selection (sel) and the hover
+   (hov): the peaks' lines (peakVals: their 2θ) and their FWHM markers (fwhmVals), which
+   mirror the peak they share their 2θ with. */
+function markStyles(peakVals, fwhmVals, sel, hov){
+  const s = nearestOf(peakVals, sel), h = nearestOf(peakVals, hov);
+  const peaks = peakVals.map((_, i)=> i === s ? [PEAK_SEL, 1.8] : i === h ? [PEAK_HOVER, 1.8] : [PEAK_BASE, 1]);
+  const fwhm = fwhmVals.map(v=> s >= 0 && Math.abs(v - peakVals[s]) < 1e-9 ? [FWHM_SEL, 4]
+    : h >= 0 && Math.abs(v - peakVals[h]) < 1e-9 ? [FWHM_HOVER, 4] : [FWHM_BASE, 2.2]);
+  return { peaks, fwhm };
+}
+// The peak picked anew: the one picked again, none.
+const toggled = (sel, pos)=> (sel!=null && Math.abs(pos-sel)<1e-9) ? null : pos;
+// The guide of a peak being placed moved one point by an arrow (d: ±1) on the pattern's 2θ
+// x, within the plot's range (xmin, xmax); from the middle, where it was nowhere (idx null).
+function nudge(x, xmin, xmax, idx, d){
+  const a = nearestIdx(x, xmin), b = nearestIdx(x, xmax);
+  const lo = Math.min(a,b), hi = Math.max(a,b);
+  if (idx==null) idx = nearestIdx(x, (xmin+xmax)/2);
+  return Math.max(lo, Math.min(hi, idx + d));
+}
+
+/* ---- The Results: the patterns stacked, and the crystallite sizes ---- */
+// The patterns the stack draws: those with a curve (curves[k]: its baseline-subtracted
+// trace; null, none).
+function stackShown(fs, curves){
+  const shown = [];
+  fs.forEach((f,k)=>{ if (curves[k]) shown.push(k); });
+  return shown;
+}
+/* The stack: its range, and each pattern's trace (k: its file) normalised (norm1, exactly
+   the CSV's own column; norm: 'global' the largest of all, 'local' its own, 'none' the
+   curves as they are, spaced by the largest — the plot's unit) and offset (y). */
+function stackOf(fs, curves, shown, norm, { maxArr }){
+  const gmax = topOf(shown.map(k=>maxArr(curves[k])));
+  const unit = norm==='none' ? gmax : 1, n = shown.length, baseOf = j => -j * 1.1 * unit;
+  let lo=Infinity, hi=-Infinity;
+  shown.forEach(k=>{ lo=Math.min(lo, fs[k].x[0]); hi=Math.max(hi, fs[k].x[fs[k].x.length-1]); });
+  if (!isFinite(lo)){ lo = 0; hi = 1; }
+  const traces = shown.map((k, j)=>{
+    const raw = curves[k];
+    const mx = norm==='local' ? (maxArr(raw)||1) : norm==='none' ? 1 : gmax;
+    const norm1 = raw.map(v=> v/mx);
+    return { k, norm1, y: norm1.map(v=> v + baseOf(j) + 0.05*unit) };
+  });
+  return { range: [lo, hi, baseOf(Math.max(0,n-1)), baseOf(0)+1.1*unit], traces };
+}
+// A size box's label: its mean ± its standard deviation (the mean alone, with none).
+const sizeLab = (v,e)=> isFinite(e) ? `${v.toFixed(1)}±${e.toFixed(1)}` : v.toFixed(1);
+/* The size chart's layout, one box per row (rows: its samples or reflections; SER: its
+   series, size and corrected) in an svg W × H: the names (fit: utils.js barNames') under
+   it, the room the labels over the boxes need (measure(text): its width in px), the boxes'
+   half-width and offsets as the bars had them — capped at their sizes, shrinking to fit
+   the per-sample spacing so many samples don't overlap; a pair keeps its ±17 px offset
+   unless the slot is too narrow, then the two scale together — and the labels under the
+   chips in the corner (under: utils.js barChipYmax's bars). */
+function barLayout(rows, SER, fit, measure, W, H){
+  const n = rows.length, lab = (r, m)=> sizeLab(r[m.k+'Mean'], r[m.k+'Std']);
+  let maxLbl=0; fit.labels.map(measure).forEach(w=>maxLbl=Math.max(maxLbl, w));
+  const bottom = Math.round(26 + maxLbl*fit.sin);
+  let maxValW=0;
+  rows.forEach(r=> SER.forEach(m=>{ if (r[m.k+'Box']) maxValW = Math.max(maxValW, measure(lab(r, m))); }));
+  const mTop=15, gap=6, plotH=H-mTop-bottom, reserve=gap+maxValW+6;
+  const frac = plotH>reserve ? (1-reserve/plotH) : 0.5;
+  const pxSlot = (W - 75)/(n + 1), anyCorr = SER.length > 1;
+  const sc = Math.min(1, (pxSlot*0.8)/66);   // 66 = full paired span at hw16/dx17
+  const hw = anyCorr ? 16*sc : Math.min(16, pxSlot*0.3), dx = anyCorr ? 17*sc : 0;
+  const offOf = mi => SER.length > 1 ? (mi ? dx : -dx) : 0;
+  const under = [];
+  rows.forEach((r, k)=> SER.forEach((m, mi)=>{ const b = r[m.k+'Box']; if (b) under.push({ x:k+1, dx:offOf(mi), top:boxTop(b), w:measure(lab(r, m)) }); }));
+  return { n, bottom, mTop, gap, plotH, frac, hw, offOf, under };
+}
+// Its y range's top: over the tallest box, room for its label (frac: barLayout's), clear
+// of the chips (chipY: barChipYmax's).
+const barYmax = (tops, frac, chipY)=> Math.max(Math.max(...tops)*1.15, Math.max(...tops)/frac, chipY);
+/* Its downloads' names, after the card (pre: "<name> - "): its image by what it shows (by),
+   its CSVs never (v530), both, by sample and by peak (the second where there is one:
+   byPeakOk), whichever the chips show, a view alone (v528); to v529 the one on show. */
+const sizeDlNames = (pre, by)=> ({ csv: ['crystallite_size.csv', 'crystallite_size_by_peak.csv'].map(x=> pre + x).join(','),
+  svg: pre + (by === 'peak' ? 'XRPD_crystallite_size_by_peak.svg' : 'XRPD_crystallite_size.svg') });
+
+/* ---- The state S's changes ---- */
+/* A chip switched (key: its mode's) from the settings shown, cur (the sample on show's):
+   to "all", every sample takes the value of the sample on show; to "one", every sample (n:
+   the files) starts from the common value, then each is changed on its own. One chip for
+   the baseline's width and its box. A width shared again: its note, if a project's
+   conversion left one, goes, and the value in points it kept for the files left out.
+   → the mode. */
+function switchMode(S, key, cur, n){
+  const mode = S.paramMode[key]==='shared' ? 'per' : 'shared';
+  const keys = key==='blWin' ? ['snipW', 'blOn'] : key==='N' ? ['smoothW'] : [key];
+  S.paramMode[key] = mode;
+  if (mode==='shared') keys.forEach(k=>{ S.shared[k] = cur[k]; });
+  else for (let i = 0; i < n; i++){ if (!S.perParams[i]) S.perParams[i] = {}; keys.forEach(k=>{ S.perParams[i][k] = cur[k]; }); }
+  if (mode==='shared'){ S.stepNote = S.stepNote.filter(m=> m !== key); delete S.heldPts[key]; if (key === 'blWin') delete S.heldPts.blOn; }
+  return mode;
+}
+// A peak-search field changed (key) with the sample k on show: the peaks removed come back,
+// every sample's under "all".
+function clearRemoved(S, key, k){
+  if (S.paramMode[key]==='shared') S.removedPeaks = S.removedPeaks.map(()=>[]);
+  else S.removedPeaks[k] = [];
+}
+/* A peak's × on file idx (det: its detected 2θ). One added by hand is deleted for good:
+   dropped from manualPeaks, so the removal is independent of the peak-search params (which
+   reset removedPeaks); a detected one is removed (once). */
+function dropPeak(S, idx, det, manual){
+  if (manual){
+    if (S.manualPeaks[idx]) S.manualPeaks[idx] = S.manualPeaks[idx].filter(v=>Math.abs(v-det) >= 1e-6);
+  } else {
+    if (!S.removedPeaks[idx]) S.removedPeaks[idx] = [];
+    if (!S.removedPeaks[idx].some(v=>Math.abs(v-det)<1e-6)) S.removedPeaks[idx].push(det);
+  }
+}
+/* The per-sample arrays, for the file list to keep aligned with the included files (key:
+   the card's). A file left out keeps its entry as it was: one of a project to v510, in
+   points, takes its widths at the file's step as it comes back, those v510 shared where the
+   conversion turned the chip to one (heldPts). None: the standard's. */
+const slotsOf = (S, key)=> S.std ? [] : [
+  { key: key + ':params', arr:S.perParams, make: (v, f)=> v ? entryOf(objOf(v), f && f.x ? meanStep(f.x) : NaN, S.heldPts) : {...S.shared} },
+  { key: key + ':manual', arr:S.manualPeaks, make: v=> v ? v.slice() : [] },
+  { key: key + ':removed', arr:S.removedPeaks, make: v=> v ? v.slice() : [] },
+];
+// A file added: its entries, the shared settings and no peak by hand.
+function addEntry(S){ S.perParams.push({...S.shared}); S.manualPeaks.push([]); S.removedPeaks.push([]); }
+// The standard's file replaced or taken away (fs: its files now): its own peaks go with it.
+function freshEntries(S, fs){
+  S.perParams = fs.map(()=> ({...S.shared})); S.manualPeaks = fs.map(()=> []); S.removedPeaks = fs.map(()=> []);
+  S.panel.sel = S.panel.hov = null;
+}
+// Every file gone.
+function clearEntries(S){ S.processed=[]; S.perParams=[]; S.manualPeaks=[]; S.removedPeaks=[]; S.panel.sel=S.panel.hov=null; }
+/* A state read (readState's t) taken: every setting, the peaks by hand, the chart's choice,
+   the normalisation (norm, made valid by the card); nothing picked. */
+function takeState(S, t, norm){
+  Object.assign(S.shared, t.shared); Object.assign(S.paramMode, t.paramMode);
+  ({ heldPts: S.heldPts, perParams: S.perParams, stepNote: S.stepNote, manualPeaks: S.manualPeaks, removedPeaks: S.removedPeaks, sizeBy: S.sizeBy } = t);
+  S.norm = norm;
+  S.panel.sel = S.panel.hov = null;
+}
+/* What the card shows beside its state (xrd.js shows): the peak picked in its table (panel:
+   S's), given back as its tab wakes or the page is reloaded, the state restored (which
+   picks none). */
+const showsOf = panel => panel.sel != null ? { sel: panel.sel } : null;
+function showNext(panel, v){ if (v && Number.isFinite(v.sel)) panel.sel = v.sel; }
+
 export { nearestIdx, computeBaseline, findPeaks, computeFWHM, fwhmSigma, fwhmGeom, smoothingOf, processingOf,
   cagAt, fitCaglioti, instrModelOf, instrBetaOf, stdSpanOf, scherrerD, sizeCorr, belowInstr, sizeSummary, sampleSizes,
   sizeReflections, byPeakOk, reflectionRows, sizeSeries, boxTop, sizeTops, topOf,
   modeDef, FIELD_DEF, SHOWN, sharedDef, FIELD_MIN, LEGACY, modeOf, objOf, entryOf, fileParams, stateOf, readState,
-  csvTables };
+  csvTables,
+  fieldInputs, guardsOf, TOGGLES, SIZE_ONLY, PEAK_SEARCH, numIn, fieldIn, takeInputs, widthHint, presetOf, procKeys,
+  PEAK_BASE, PEAK_HOVER, PEAK_SEL, FWHM_BASE, FWHM_HOVER, FWHM_SEL, anaOf, nearestOf, markStyles, toggled, nudge,
+  stackShown, stackOf, sizeLab, barLayout, barYmax, sizeDlNames,
+  switchMode, clearRemoved, dropPeak, slotsOf, addEntry, freshEntries, clearEntries, takeState, showsOf, showNext };
