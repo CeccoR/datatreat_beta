@@ -825,6 +825,17 @@ was proposed; nothing here is in the code yet.
   `_build` (117); xrd-cryst.js's `checkComposition` (120); xrd-widths.js's `fitPeak` (109);
   xrd-rietveld.js's `wppmLineOf` (90), `shapeOf` (85), `phasePattern` (80), `solveLinear`
   (77). The others when work takes us into them.
+- **A trace's menu on its row (25; v579, done).** A right-click anywhere on a row of a module's
+  trace list, the ContextMenu key or Shift+F10 with the focus in it, or a finger held on it
+  half a second opens a menu of what the row's include box and buttons at the right do
+  (*Include in the analysis*, ticked while the trace is in; *Download its file*; after a line,
+  *Remove* in red), made from the one list the controls are made from (filelist-model.js
+  `ROW_ACTS`), each item pressing its control: the same handler, the same step of the history.
+  In every module on the shared list (DRS, XRPD, GC, EPR, SEM, Custom, Iodometry); the list has
+  no selection of several rows, so an item acts on its row. Not in it: a row's colour and name
+  (changed in place) and GC's Sample. Lists of files that are not the trace list have no menu:
+  XRPD's standard window (its one file), the Rietveld card's phases (its CIFs), GC's
+  Calibration window's standards, and, files of no module, the Projects list.
 - **The browser storage is shared with every page of the same origin.** On GitHub Pages
   the app lives at `ceccor.github.io/datatreat_beta/`, and every project published under
   `ceccor.github.io` is the same origin: any of them can read and write DataTreat's

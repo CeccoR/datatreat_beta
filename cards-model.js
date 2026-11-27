@@ -70,10 +70,11 @@ export const nameWidth = (w, room)=> Math.min(w + NAME_PAD, room * 0.75);
 /* ---- Places ---- */
 // The kinds' menu under its anchor (r, its box), or over it where the window ends first;
 // centred on it (the "+" bar's) or from its left; inside the window by 8 px. w, h: the
-// menu's size; W, H: the window's.
-export function menuAt(r, w, h, W, H, centred){
-  let top = r.bottom + 6;
-  if (top + h > H - 8) top = r.top - h - 6;
+// menu's size; W, H: the window's; gap, from its anchor (v579: a trace list's row menu, 0
+// from a point, the pointer's: utils.js).
+export function menuAt(r, w, h, W, H, centred, gap = 6){
+  let top = r.bottom + gap;
+  if (top + h > H - 8) top = r.top - h - gap;
   const left = centred ? r.left + r.width/2 - w/2 : r.left;
   return { left: Math.max(8, Math.min(W - w - 8, left)), top: Math.max(8, top) };
 }

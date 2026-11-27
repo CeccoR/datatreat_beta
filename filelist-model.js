@@ -1,9 +1,9 @@
 /* =========================================================
    The trace list's calculations (v564, out of utils.js renderUnifiedFileList): what a
    trace's download gives and the list's zip, where a row dragged lands, which file a file
-   dragged by its grip would land on. Plain functions with no page: utils.js's fileOf (the
-   name of the file a trace comes from) handed in as U. The list itself: utils.js; its
-   markup: filelist-html.js.
+   dragged by its grip would land on; a row's actions and its menu (v579). Plain functions
+   with no page: utils.js's fileOf (the name of the file a trace comes from) and isIncluded
+   handed in as U. The list itself: utils.js; its markup: filelist-html.js.
 ========================================================= */
 
 /* A trace's original files, byte for byte: its bytes in `rawBytes`, or a `rawFiles` list
@@ -55,3 +55,39 @@ export function halfAt(boxes, y){
 }
 // A press that has moved more than 4 px from where it began is a drag.
 export const movedFrom = (x0, y0, x, y)=> Math.hypot(x - x0, y - y0) > 4;
+
+/* ---- A row's actions and its menu (v579) ----
+   What a row's include box and the buttons at its right do, in the order they stand. The
+   row's controls (filelist-html.js rowHtml) and its menu (rowMenu: a right-click on the row,
+   the ContextMenu key or Shift+F10 in it, a finger held on it; utils.js) are made from this
+   one list, so the menu offers what the row does, in its words, and nothing else. `ctl` the
+   control's class (utils.js wires the control by it, and an item of the menu presses it),
+   `title` the control's tooltip and the item's words, `box` the include box (its item ticked
+   with the trace in), `danger` an action that takes the trace away. */
+export const ROW_ACTS = [
+  { ctl: 'file-incl', title: 'Include in the analysis', box: true },
+  { ctl: 'dl-file', title: 'Download its file' },
+  { ctl: 'row-del', title: 'Remove', danger: true },
+];
+/* The menu of a row's trace f: an item an action ({ ctl, label }; the box's `checked` as the
+   trace is included, `danger`), in the order of the actions; those that take the trace away
+   last, after a line ({ sep: true }) where others go before them. */
+export function rowMenu(U, f, acts = ROW_ACTS){
+  const item = a => ({ ctl: a.ctl, label: a.title, ...(a.box ? { checked: U.isIncluded(f) } : {}), ...(a.danger ? { danger: true } : {}) });
+  const keep = acts.filter(a=> !a.danger).map(item), take = acts.filter(a=> a.danger).map(item);
+  return keep.length && take.length ? [...keep, { sep: true }, ...take] : [...keep, ...take];
+}
+/* A key pressed in a menu of n items, the focus on item `at` (-1: none of them): the item the
+   focus goes to, or null for a key the menu leaves alone. ↓ and ↑ go round, Home and End to
+   the ends; ← and → keep it where it is (they would step the samples under the menu: utils.js
+   SAMPLE_NAV). */
+export function menuKey(key, at, n){
+  if (key === 'ArrowDown') return at < 0 ? 0 : (at + 1) % n;
+  if (key === 'ArrowUp') return at <= 0 ? n - 1 : at - 1;
+  if (key === 'Home') return 0;
+  if (key === 'End') return n - 1;
+  if (key === 'ArrowLeft' || key === 'ArrowRight') return Math.max(at, 0);
+  return null;
+}
+// How long a finger is held on a row for its menu, in ms (one moved first, movedFrom: none).
+export const LONG_PRESS_MS = 500;

@@ -14,8 +14,10 @@
    place to each gap lands, the include-all box's state and what a press on it asks, as v563's
    utils.js gave them, run from its source on a page of stubs: SHA-256 digests in
    tests/golden/filelistmodel.json (npm run test:update writes them anew after a change meant
-   to alter them). utils.js's esc and its icons, which need a page to load, are taken from
-   its source as they stand there. Under a second. */
+   to alter them; v579's rows take the focus and have a menu, tabindex and aria-haspopup, the
+   rest as it was). utils.js's esc and its icons, which need a page to load, are taken from
+   its source as they stand there. v579: a row's actions, the one list its controls and its
+   menu are made from, the menu's items, keys and markup. Under a second. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -91,7 +93,7 @@ test('the markup: the head, a row, its parts, the list', ()=>{
   const cb = { tip: (t, i) => { asked.push('tip' + i); return 'λ <450>'; }, parts: (t, i) => { asked.push('parts' + i); return null; } };
   const row = H.rowHtml(f, 3, cb, (t, i) => { asked.push('note' + i); return '<b>n</b>'; }, U);
   assert.deepEqual(asked, ['tip3', 'parts3', 'note3'], 'asked in that order');
-  assert.ok(row.startsWith('<tr class="file-row is-excluded" data-i="3">') && row.endsWith('</tr>'));
+  assert.ok(row.startsWith('<tr class="file-row is-excluded" data-i="3" tabindex="-1" aria-haspopup="menu">') && row.endsWith('</tr>'));
   assert.ok(row.includes('<input type="checkbox" class="file-incl" data-i="3" title="Include in the analysis">'));
   assert.ok(row.includes('<td class="trace-cell" title="λ &lt;450&gt;"><span class="trace-inner"><button class="color-swatch" data-i="3" data-color="#123456" style="background:#123456" title="Pick color"></button><input type="text" class="label-input file-label" data-i="3" value="x &quot;y&quot;" aria-label="Trace name"></span></td>'));
   assert.ok(row.includes('<td class="fname" title="a&lt;b&gt;.csv"><span class="fname-inner"><span class="fname-text">a&lt;b&gt;.csv</span></span></td><td class="note-cell"><b>n</b></td>'));
@@ -106,11 +108,49 @@ test('the markup: the head, a row, its parts, the list', ()=>{
   assert.ok(H.listHtml([{ ...f, included: true }], {}, null, '', 1, U).endsWith('</tbody></table></div>'));
 });
 
+/* v579: a row's actions, the one list its controls and its menu are made from (ROW_ACTS); its
+   menu (rowMenu: the box's item ticked as the trace is in, those that take it away last, after
+   a line), the keys in it (menuKey) and its markup (menuHtml). */
+test('a row\'s actions: its controls and its menu made from one list (v579)', ()=>{
+  assert.deepEqual(M.ROW_ACTS.map(a=> [a.ctl, a.title, !!a.box, !!a.danger]),
+    [['file-incl', 'Include in the analysis', true, false], ['dl-file', 'Download its file', false, false], ['row-del', 'Remove', false, true]]);
+  // the row's controls: an action's each, in their order, the action's title theirs
+  const row = H.rowHtml({ name: 'a.csv', label: 'a' }, 2, {}, null, U), own = c => M.ROW_ACTS.some(a=> a.ctl === c);
+  const ctls = [...row.matchAll(/<(?:input|button) [^>]*?class="([^"]*)"[^>]*?title="([^"]*)"/g)].map(m=> [m[1].split(' ').find(own), m[2]]).filter(c=> c[0]);
+  assert.deepEqual(ctls, M.ROW_ACTS.map(a=> [a.ctl, a.title]));
+  assert.ok(row.includes('<td class="incl-cell"><input type="checkbox" class="file-incl" data-i="2" checked title="Include in the analysis"></td>'));
+  assert.ok(row.includes(`<button class="dl-file del-bare dl-bare idle-dim" data-i="2" title="Download its file">${PAGE.DL_SVG(15)}</button><button class="del del-bare row-del is-danger idle-dim" data-i="2" title="Remove">${PAGE.X_SVG(15)}</button></td>`), 'the remove red');
+  // the menu: an item an action, the box's ticked as the trace is in, the remove last after a line
+  assert.deepEqual(M.rowMenu(U, { name: 'a' }), [{ ctl: 'file-incl', label: 'Include in the analysis', checked: true }, { ctl: 'dl-file', label: 'Download its file' }, { sep: true }, { ctl: 'row-del', label: 'Remove', danger: true }]);
+  assert.equal(M.rowMenu(U, { name: 'a', included: false })[0].checked, false);
+  const acts = [{ ctl: 'x', title: 'X', danger: true }, { ctl: 'a', title: 'A' }, { ctl: 'y', title: 'Y', danger: true }, { ctl: 'b', title: 'B', box: true }];
+  const seen = list => list.map(m=> m.sep ? '|' : m.ctl + (m.checked != null ? ':' + m.checked : '') + (m.danger ? '!' : ''));
+  assert.deepEqual(seen(M.rowMenu(U, { name: 'a', included: false }, acts)), ['a', 'b:false', '|', 'x!', 'y!'], 'those that take the trace away last, in their order, after a line');
+  assert.deepEqual([seen(M.rowMenu(U, {}, acts.filter(a=> a.danger))), seen(M.rowMenu(U, {}, acts.filter(a=> !a.danger)))], [['x!', 'y!'], ['a', 'b:true']], 'a line only between the two');
+  // the keys: ↓ ↑ round, Home End the ends, ← → where it is (none focused: the first), others none
+  assert.deepEqual(['ArrowDown', 'ArrowUp', 'Home', 'End', 'ArrowLeft', 'ArrowRight', 'Enter', ' ', 'Tab'].map(k=> [-1, 0, 1, 2].map(at=> M.menuKey(k, at, 3))),
+    [[0, 1, 2, 0], [2, 2, 0, 1], [0, 0, 0, 0], [2, 2, 2, 2], [0, 0, 1, 2], [0, 0, 1, 2], [null, null, null, null], [null, null, null, null], [null, null, null, null]]);
+  assert.equal(M.LONG_PRESS_MS, 500);
+  // its markup: a button an item pressing its control, its icon the control's (the box's: its tick, or its place)
+  const html = H.menuHtml(M.rowMenu(U, { name: 'a' }), U), off = H.menuHtml(M.rowMenu(U, { name: 'a', included: false }), U);
+  const parts = html.split(/(?=<button|<div)/);
+  assert.equal(parts.length, 4);
+  assert.ok(parts[0].startsWith('<button type="button" role="menuitemcheckbox" aria-checked="true" data-ctl="file-incl"><span class="rm-ic" aria-hidden="true"><svg ') && parts[0].includes('<polyline') && parts[0].endsWith('</svg></span>Include in the analysis</button>'), 'ticked');
+  assert.ok(off.startsWith('<button type="button" role="menuitemcheckbox" aria-checked="false" data-ctl="file-incl"><span class="rm-ic" aria-hidden="true"></span>Include in the analysis</button>'), 'not ticked: its place');
+  assert.equal(parts[1], `<button type="button" role="menuitem" data-ctl="dl-file"><span class="rm-ic" aria-hidden="true">${PAGE.DL_SVG(15)}</span>Download its file</button>`);
+  assert.equal(parts[2], '<div class="an-menu-sep" role="separator"></div>');
+  assert.equal(parts[3], `<button type="button" role="menuitem" class="is-danger" data-ctl="row-del"><span class="rm-ic" aria-hidden="true">${PAGE.X_SVG(15)}</span>Remove</button>`, 'red');
+  const classes = new Set([...row.matchAll(/class="([^"]*)"/g)].flatMap(m=> m[1].split(' ')));
+  assert.deepEqual([...html.matchAll(/data-ctl="([^"]*)"/g)].map(m=> classes.has(m[1])), [true, true, true], 'each item a control of the row');
+  assert.ok(H.menuHtml([{ ctl: 'dl-file', label: 'a <b> & "c"' }], U).includes('</span>a &lt;b&gt; &amp; &quot;c&quot;</button>'), 'its words escaped');
+});
+
 /* =========================================================
    40 CASES, as utils.js's list did them: the markup, each trace's download and the list's,
    every row dragged to every gap, the include-all box. Their digests are those of v563's
    utils.js, run from its source on a page of stubs, the downloads and the drops done
-   through its buttons and handles.
+   through its buttons and handles; v579's, its rows' tabindex and aria-haspopup beside them
+   (written anew with those alone: the same 40 matched v563's without them).
 ========================================================= */
 function rnd(seed){ let s = seed >>> 0 || 1; return ()=>{ s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; }; }
 export function caseOf(seed){

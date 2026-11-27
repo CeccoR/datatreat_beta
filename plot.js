@@ -229,8 +229,9 @@ function backgroundOf(el){
 // samples (utils.js); not from a field, nor under a window open over the plot.
 window.addEventListener('keydown', e=>{
   if (!_locked.size) return;
-  // (the keys of a selector's list are its own: snav.js)
-  if (e.target && e.target.closest && e.target.closest('.snav-menu')) return;
+  // (the keys of a menu holding the focus are its own: a selector's list, snav.js; a trace
+  // list's row menu, utils.js)
+  if (e.target && e.target.closest && e.target.closest('.an-menu')) return;
   if (e.key === 'Escape'){
     const list = [..._locked]; _locked.clear();
     for (const svg of list){ svg._pick = null; if (svg._plot) svg._plot._repaintPick(); }

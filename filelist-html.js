@@ -3,8 +3,9 @@
    module's list is, its head and a row a trace, plain functions with no page. utils.js's
    helpers are handed in as U (esc, X_SVG, DL_SVG, isIncluded, fileOf). What the list is, what its
    callbacks are and what it does: utils.js, UNIFIED TRACE LIST RENDERER; its calculations:
-   filelist-model.js.
+   filelist-model.js. A row's menu (v579): menuHtml.
 ========================================================= */
+import { ROW_ACTS } from './filelist-model.js';
 
 /* The columns, the same in every module: drag and include box fixed 26px each, side by
    side at the left edge; actions fixed 58px (a fixed width guarantees the download+remove
@@ -39,26 +40,46 @@ export function partsHtml(parts, i, U){
     `<span class="fpart${p.warn ? ' is-warn' : ''}" data-i="${i}" data-p="${k}"${p.warn ? ` title="${esc(p.name + ': ' + p.warn)}"` : ` title="${esc(p.name)}"`}><span class="fpart-grip" title="Drag onto another file to pair it with that one (onto a file already paired: the two swap)" aria-hidden="true">${FGRIP}</span><span class="fname-text">${esc(p.name)}</span></span>`).join('')}</span></td>`;
 }
 
+/* A row's controls, made from its actions (filelist-model.js ROW_ACTS): the include box, left
+   of the name, and each button at its right, its classes and its icon (utils.js's, in U) by
+   its control; one that takes the trace away red on hover (is-danger). */
+const BTN = { 'dl-file': ['dl-file del-bare dl-bare', 'DL_SVG'], 'row-del': ['del del-bare row-del', 'X_SVG'] };
+const ctlHtml = (a, i, on, U)=> a.box
+  ? `<input type="checkbox" class="${a.ctl}" data-i="${i}"${on ? ' checked' : ''} title="${U.esc(a.title)}">`
+  : `<button class="${BTN[a.ctl][0]}${a.danger ? ' is-danger' : ''} idle-dim" data-i="${i}" title="${U.esc(a.title)}">${U[BTN[a.ctl][1]](15)}</button>`;
+
 /* A trace's row (its i in the list): the handle, its box, its colour (none: its place,
    empty) and its name's field under the tooltip callbacks.tip gives, FILE (its parts, or its
    file), the note, its download and its ×. The callbacks are asked in that order: tip,
-   parts, note. */
+   parts, note. The row takes the focus (from a press on it, or given back by its menu) and
+   has a menu (v579: utils.js, the row's menu). */
 export function rowHtml(f, i, callbacks, note, U){
   const { esc } = U;
   const swatch = f.color ? `<button class="color-swatch" data-i="${i}" data-color="${esc(f.color)}" style="background:${esc(f.color)}" title="Pick color"></button>` : '<span class="color-swatch swatch-gap" aria-hidden="true"></span>';
-  const on = U.isIncluded(f), file = U.fileOf(f);
-  let html = `<tr class="file-row${on ? '' : ' is-excluded'}" data-i="${i}">`;
+  const on = U.isIncluded(f), file = U.fileOf(f), ctl = box => ROW_ACTS.filter(a=> !!a.box === box).map(a=> ctlHtml(a, i, on, U)).join('');
+  let html = `<tr class="file-row${on ? '' : ' is-excluded'}" data-i="${i}" tabindex="-1" aria-haspopup="menu">`;
   html += `<td class="drag-cell"><span class="drag-handle" title="Drag to reorder">${GRIP}</span></td>`;
-  html += `<td class="incl-cell"><input type="checkbox" class="file-incl" data-i="${i}"${on ? ' checked' : ''} title="Include in the analysis"></td>`;
+  html += `<td class="incl-cell">${ctl(true)}</td>`;
   const tip = callbacks.tip ? callbacks.tip(f, i) : '';
   html += `<td class="trace-cell"${tip ? ` title="${esc(tip)}"` : ''}><span class="trace-inner">${swatch}<input type="text" class="label-input file-label" data-i="${i}" value="${esc(f.label)}" aria-label="Trace name"></span></td>`;
   const parts = callbacks.parts ? callbacks.parts(f, i) : null;
   if (parts) html += partsHtml(parts, i, U);
   else html += `<td class="fname" title="${esc(file)}"><span class="fname-inner"><span class="fname-text">${esc(file)}</span></span></td>`;
   html += `<td class="note-cell">${note ? note(f, i) : ''}</td>`;
-  html += `<td class="row-acts" style="text-align:right;white-space:nowrap"><button class="dl-file del-bare dl-bare idle-dim" data-i="${i}" title="Download its file">${U.DL_SVG(15)}</button><button class="del del-bare row-del is-danger idle-dim" data-i="${i}" title="Remove">${U.X_SVG(15)}</button></td>`;
+  html += `<td class="row-acts" style="text-align:right;white-space:nowrap">${ctl(false)}</td>`;
   return html + `</tr>`;
 }
+
+// The include box's tick, in its item of a row's menu.
+const TICK = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5 12.5 10 17.5 19 6.5"/></svg>';
+/* A row's menu (filelist-model.js rowMenu): a button an item, pressing the row's control
+   (data-ctl), its words after its control's icon (the box's: its tick, ticked; else its
+   place, empty); a line before those that take the trace away, red as the row's × is. */
+export const menuHtml = (items, U)=> items.map(m=>{
+  if (m.sep) return '<div class="an-menu-sep" role="separator"></div>';
+  const box = m.checked != null, ic = box ? (m.checked ? TICK : '') : U[BTN[m.ctl][1]](15);
+  return `<button type="button" role="${box ? 'menuitemcheckbox' : 'menuitem'}"${box ? ` aria-checked="${m.checked}"` : ''}${m.danger ? ' class="is-danger"' : ''} data-ctl="${U.esc(m.ctl)}"><span class="rm-ic" aria-hidden="true">${ic}</span>${U.esc(m.label)}</button>`;
+}).join('');
 
 /* The whole list: its head, a row a trace, and, with every trace left out (nIn none), why
    no card follows it: nothing is analysed. */
