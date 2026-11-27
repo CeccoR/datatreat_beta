@@ -180,6 +180,15 @@ was proposed; nothing here is in the code yet.
 - The rest of what the module does not do yet (2D data, a non-linear field axis, spectra
   with and without a frequency on one axis, normalisation by the acquisition's gain,
   scans, power and modulation, the CSV's columns): [EPR-TODO.md](EPR-TODO.md).
+- **A pair named after an object's own property is lost (found in v563, as v562 has it).**
+  A drop's files are grouped by stem in a plain object (`epr-model.js` `groupsOf`): a pair
+  whose stem is a name every object has (`constructor`, `toString`, `valueOf`, …) finds
+  that property there instead of a group of its own, its files are written onto it, and
+  the pair is neither loaded nor said (no row, no alert); one whose stem is `__proto__`
+  writes its files onto every object's prototype (`({}).dsc` is that `.DSC` file from then
+  on, until the page is reloaded). Checked on v562 in the browser. Proposed: groups in a
+  `Map` (or an object with no prototype), so such a pair loads as any other. Left as it is
+  meanwhile (a visible change).
 
 ## General
 
@@ -591,9 +600,85 @@ was proposed; nothing here is in the code yet.
   plot's padding, the words for series left out, a name typed in place drawing the head
   anew; the others act on what they do not reach or record).
   tests/figmodel.test.mjs and tests/cardsmodel.test.mjs keep the calculations' and markup's
-  tests and 40 cases each as v561 gave them (golden digests). Still long (v562): `createXrd`
-  (xrd.js, 488), `createIodo` (iodo.js, 407), `wireControls` (figure.js, 372).
+  tests and 40 cases each as v561 gave them (golden digests). Done for `createXrd` (xrd.js),
+  `createIodo` (iodo.js) and `createEpr` (epr.js) in v563, closures of 488, 407 and 245
+  lines. What the XRPD host works out goes to `xrd-model.js` (a file's scans made patterns,
+  their arrays made once, a file of a project read again from its bytes and the note when its
+  data moved, a file and a project as a restore takes them, a project from before the cards
+  migrated, a kind's settings, the files read and lost, the sample on show, the cards'
+  records, the per-sample slots, a run's results and instruments patched into the history,
+  the cards' states, what the tab shows), its markup to `xrd-html.js` (the standard's
+  windows and file, the alerts of a drop there, on the samples' zone and of a restore);
+  Iodometry's to `iodo-model.js` (a kinetics file read in four steps and kept by its bytes,
+  the injection, the alignment and the reading, the calibration and its window's draft, a
+  trace's results and read-outs, the state, the plots' ranges, the readings' layout, the
+  CSVs) and `iodo-html.js` (the calibration's summary and window, its rows and fit, the
+  legend); EPR's to `epr-model.js` (a pair read: the .DSC, the axis, the .DTA's values, the
+  spectrum, why not; a drop's files by stem; a spectrum kept; a file and a card as a project
+  holds them; the width typed and its points; the stacking, the plot's options, the CSV's
+  columns) and `epr-html.js` (a card's instructions and body). The page left in each, no
+  longer one closure: the instance a state object (S) the functions at module level take
+  (xrd.js: `makeState`, `apiOf`, `destroy`, `shows`, `onDismiss`, `slots`, `fileCallbacks`,
+  `removeAll`, `onDrop`, `addPattern`, `afterFilesChange`, `step`, `makeStd`,
+  `stdPeaksHost`, `stdRvHost`, `stdModal`, `onStdDrop`, `setStd`, `openStd`, `closeStd`,
+  `syncRv`, `busyOf`, `holder`, `deckHooks`, `buildCard`, `cardHost`, `dropCard`,
+  `syncResults`, `named`, `snapshot`, `restore`, `restoreStd`, `redrawTab`, `exportXrdZip`;
+  iodo.js: `makeState`, `kitHooks`, `apiOf`, `restore`, `onDrop`, `wireNav`, `wireParams`,
+  `takeField`, `paintAnalysis`, `drawAnalysis`, `drawMarks`, `wirePlot`, `pointAt`,
+  `onGuide`, `onPlotClick`, `drawResults`, `drawReadings`, `drawAll`, `makeCal`, `openCal`,
+  `readDraft`, `sync`, `closeCal`, `onCalClick`; epr.js: `makeState`, `kitHooks`,
+  `deckHooks`, `apiOf`, `restore`, `redrawTab`, `onDrop`, `buildCard`, `onNorm`,
+  `onSmooth`, `showW`, `syncPts`, `updateEpr`, `drawCard`, `cardCsv`), the listeners in
+  their order, the sub-tools (xrd-peaks.js, xrd-rv.js) and the kit and deck given the same
+  hooks. xrd.js 700 lines to 550 (createXrd 488 to 18, the longest function now 24, onDrop),
+  its model 253 and markup 60; iodo.js 626 to 435 (createIodo 407 to 12, the longest 17),
+  its model 351 and markup 54; epr.js 398 to 257 (createEpr 245 to 10, the longest 22,
+  drawCard), its model 235 and markup 33. The same operations in the same order: in the
+  browser, each module end to end (XRPD 82 steps: patterns, a file of three scans (one not
+  of 2θ, one running down, the sample's name), refused files, one twice, a scan removed and
+  its file dropped again, the alerts dismissed; the cards' arrows and keys, a kind switched
+  and back, a card added, renamed, folded, moved, closed, undone and redone; the standard's
+  two windows: opened from each kind of card, instructions, a file dropped, two, one of
+  several scans, one refused, removed and undone, closed by ×, Escape and a click beside,
+  refined; a CIF, the samples refined, undone and redone; the file list's every step;
+  resized; the CSV export; saved, exported, reloaded, a second tab; 11 old and malformed
+  states. Iodometry 104 steps: three kinetics files (a ';' one with decimal commas and
+  minutes, one tab-separated with no names), two refused, one twice; the selector's arrows,
+  keys and list; the reading time and the prominence typed (a comma, refused, emptied, the
+  same), Suggest; the plot hovered, left and clicked; the calibration's window in each mode,
+  its fields refused and typed, standards added and removed, Enter, Apply, Cancel, ×, a click
+  beside, Escape; the file list; every download; saved, reloaded, a second tab; 11 old and
+  malformed states. EPR 80 steps: pairs of doubles, floats and shorts, both byte orders,
+  complex data, no frequency, refused ones, a lone half, a stem twice; the normalisations, the width typed (a comma, refused, emptied, an
+  exponent, Escape); a second card, renamed, folded, moved, closed, undone; the file list;
+  every download; saved, reloaded, a second tab; 11 old and malformed states) gave v562's
+  DOM, every plot's range and entries, canvases, field values, state, history, kept counts,
+  banners, focus, menus, downloads and CSV export at every step: 1722, 2184 and 1680 fields
+  (17590, 11421 and 7500 items), none different (v562 against itself, none either). In
+  Node, v562's modules and these, each run from its source on a page of stubs recording
+  every markup, text, value, property, style, class, attribute, listener, focus, element
+  made, Plot call (its arrays by digest), keeper's counts and the history's commits (the
+  XRPD host's panels recording stubs: every ask of their host and what it answered),
+  through 1000 random sessions of 80 steps each: 3.40, 2.02 and 1.69 million entries, none
+  different. Nineteen mutations of the new code were each caught by the Node sessions,
+  twelve by the new tests, ten by the golden cases run through each tree's page, twelve by
+  the browser sessions (the others act on what they do not reach or record: the order of
+  listeners or of writes within a step, a file whose stem is loaded, an instrument of
+  another file's bytes). tests/xrdmodel.test.mjs, tests/iodomodel.test.mjs and
+  tests/eprmodel.test.mjs keep the calculations' and markup's tests and 40 cases each as
+  v562 gave them (golden digests). Still long (v563): `wireControls` (figure.js, 372).
   The others when work takes us into them.
+- **Iodometry: a file whose bytes cannot be read ends the whole drop (found in v563, as
+  v562 has it).** The drop reads each file's bytes (`file.arrayBuffer()`, iodo.js `onDrop`)
+  outside the guard that refuses a file it cannot read: a file gone from the disk after it
+  was picked (or any other read error) rejects the drop's promise, an unhandled rejection
+  (a page error). The traces of the files read before it are in the module but nothing of
+  them is drawn (the list and the cards as they were before the drop), no alert says why,
+  no step is taken; the files after it are not read; the traces show at the next change (checked on v562 in the
+  browser: three files, the second's read failing: no row, one trace in the state, one
+  history entry; the next drop shows two rows). XRPD and EPR refuse such a file with the
+  reason and load the others. Proposed: the read inside the guard, the file refused with
+  why. Left as it is meanwhile (a visible change).
 - **A card's kinds' menu left open through an undo (found in v562, as v561 has it).** A
   card's title opens the kinds' menu; Ctrl+Z (or Ctrl+Y) while it is open loads the step
   without closing it, and a kind then picked in it switches the record the menu was opened

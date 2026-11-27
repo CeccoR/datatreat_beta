@@ -2,7 +2,11 @@
 
 What the EPR module does not do yet, found in the review of v471. Each says what happens
 now and what is proposed; nothing here is in the code yet. References are to `epr.js` as
-it was then (functions named, since lines move).
+it was then (functions named, since lines move). From v563 what they name is in
+`epr-model.js`: the reading (`parseDsc`, `buildBAxis`, `dscError`; `dtaValues` and
+`spectrumOf`, which `processPair` in `epr.js` hands a pair's bytes), the smoothed columns
+(`smoothedOut`), the plot's stacking (`stackOf`, where `gmax` is) and the CSV's columns
+(`csvCols`).
 
 ## Reading the files
 
