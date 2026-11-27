@@ -224,6 +224,31 @@ test('a card\'s parameters and lines: all and one, values that are no number, v5
   assert.equal(M.taucWindow({ bestIdx: [] }, [1]), null);
 });
 
+test('a project from before the suggestion\'s flag: lines saved, common or a sample\'s own, count as placed (v569)', ()=>{
+  const files = [loaded('drs1.csv', drsCsv({ Eg: 3.2 })), loaded('drs2.csv', drsCsv({ Eg: 2.9, A: 45, seed: 4 }))];
+  // An Urbach card keeps every sample's lines its own: none common, its own placed.
+  const W = panel('urbach', files);
+  W.restore({ mode: 'shared', shared: {}, per: [{ vlines: { v1: 2, v2: 2.8 } }, {}] });
+  assert.equal(W.suggested, true, 'an Urbach card\'s own lines');
+  // A Tauc card in one mode, its lines a sample's own.
+  const T = panel('tauc', files);
+  T.restore({ mode: 'per', per: [{}, { vlines: { v1: 2.5, v2: 3, v3: 1.5, v4: 2 } }] });
+  assert.equal(T.suggested, true, 'a Tauc card\'s own lines in one mode');
+  // As before: the common lines; none at all; a line that is no number; the flag as saved.
+  T.restore({ sharedVlines: { v1: 2, v2: 3, v3: 1.5, v4: 1.9 } });
+  assert.equal(T.suggested, true);
+  T.restore({ mode: 'per', per: [{}, {}] });
+  assert.equal(T.suggested, false);
+  W.restore({ per: [{ vlines: { v1: 'x', v2: 2 } }, null] });
+  assert.equal(W.suggested, false);
+  W.restore({ per: [{ vlines: { v1: 2, v2: 2.8 } }], suggested: false });
+  assert.equal(W.suggested, false, 'a newer one\'s flag as it was saved');
+  // Its lines then kept through a switch back to its kind (tauc.js switched: suggested only when not placed).
+  W.restore({ per: [{ vlines: { v1: 2, v2: 2.8 } }, {}] });
+  if (!W.suggested) W.autoSuggestAll();
+  assert.deepEqual(W.per[0].vlines, { v1: 2, v2: 2.8 });
+});
+
 test('the references, a project from before the cards, the Results\' words, series and ranges', ()=>{
   const recs = [{ id: 1, type: 'urbach', ref: 3, refAuto: false }, { id: 2, type: 'tauc' }, { id: 3, type: 'urbach', ref: null, refAuto: true },
     { id: 4, type: 'urbach', ref: 2, refAuto: false }, { id: 5, type: 'tauc' }, { id: 6, type: 'urbach', ref: 2, refAuto: true }];

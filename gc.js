@@ -256,6 +256,8 @@ function afterFilesChange(S){
   S.$('gcAnalyses').style.display = shownAny(S) ? 'block' : 'none';
   each(S, c=> c.renderTable());
   if (shownAny(S)) each(S, (c, a)=>{ if (!S.deck.isFolded(a)) c.compute(); else c.computeQuiet(); });
+  // (nothing to show: the cards hidden, a Production Rate card's tables let go all the same)
+  else each(S, (c, a)=>{ if (a.type === 'rate') c.computeQuiet(); });
   syncResults(S);
   if (S.shown()){ S.stale = false; S.drawnAt = String(S.root.clientWidth); }
   S.kit.commit();
@@ -493,8 +495,26 @@ function wireRows(S, C, wrap){
 /* ---- The card's tables and rates (gc-model.js) ---- */
 // (its tab not on show: the tables and the rates worked out, the CSVs' and the Results'
 // own, and nothing drawn: drawn whole as it is shown)
-// (no sample: nothing said of its rates either)
-const noSample = (S, C)=>{ if (S.files.length) return false; const w = C.$('NoRate'); if (w) w.style.display = 'none'; return true; };
+// (no sample: nothing said of its rates either, and nothing kept of the tables it had: blank)
+const noSample = (S, C)=>{ if (S.files.length) return false; blank(S, C); return true; };
+/* A card with no sample (every table left out or removed, raw chromatograms alone perhaps)
+   as one that never had any: no tables and no rates (no CSV of its), its plots, legends,
+   gas chips and sources' note empty, its Results hidden (v569: to v568 the last ones stayed,
+   in the project's CSVs and on show beside the raw chromatograms). */
+function blank(S, C){
+  C.dataTables = []; C.costResults = []; C.plot1 = null; C.prevView = null;
+  ['Svg1', 'SvgRate', 'SvgCum', 'SvgBar'].forEach(id=> unplot(C.$(id)));
+  ['Legend', 'ResLegend', 'BarLegend', 'Src'].forEach(id=>{ C.$(id).innerHTML = ''; });
+  gasEls(C).forEach(el=>{ el.innerHTML = ''; });
+  showRates(S, C);
+}
+// A plot's box as the page gave it: nothing drawn, no toolbar, its download button back in
+// its place (plot.js attachTools takes it into the toolbar it builds).
+function unplot(svg){
+  svg.innerHTML = ''; svg._plot = null; svg.removeAttribute('style');
+  const col = svg.closest('.plot-wrap').querySelector('.plot-btn-col'), dl = col && col.querySelector('.plot-dl-btn');
+  if (dl) col.replaceWith(dl);
+}
 function compute(S, C, preserveView){
   if (noSample(S, C)) return;
   // Snapshot the current zoom before renderPlots() builds fresh Plot instances.

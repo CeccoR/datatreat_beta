@@ -61,14 +61,21 @@ export const MIN_CROP = 64;
 export const ASPECTS = { '1:1': 1, '4:3': 4/3, '3:2': 3/2, free: null };
 // The ratio named by a crop of w × h, if it is one of the locks (within 1 %).
 export const aspectOf = (w, h) => Object.keys(ASPECTS).find(k=> ASPECTS[k] && Math.abs(w/h/ASPECTS[k] - 1) < 0.01) || 'free';
+/* The least width of a crop at ratio r on an image W × H: its sides at least MIN_CROP (or
+   the image's) where the image holds such a crop at r, else the widest it holds at r. The
+   ratio wins: the least sides give way where both cannot hold (v569: to v568 they won, and
+   1:1 on an image 60 px high gave 64 × 60). */
+export const leastAt = (W, H, r)=> Math.min(Math.max(Math.min(MIN_CROP, W), Math.min(MIN_CROP, H)*r), W, H*r);
 // A rectangle made to fit an image W × H: whole pixels, sides at least MIN_CROP (or
-// the image's), inside it, and at ratio r when locked (the longer side shortened).
+// the image's), inside it, and at ratio r when locked (the longer side shortened; its
+// least sides leastAt's).
 export function fitCrop(c, W, H, r){
-  let w = Math.round(Math.min(Math.max(c.w, Math.min(MIN_CROP, W)), W));
-  let h = Math.round(Math.min(Math.max(c.h, Math.min(MIN_CROP, H)), H));
+  const minW = r ? leastAt(W, H, r) : Math.min(MIN_CROP, W), minH = r ? minW/r : Math.min(MIN_CROP, H);
+  let w = Math.round(Math.min(Math.max(c.w, minW), W));
+  let h = Math.round(Math.min(Math.max(c.h, minH), H));
   if (r){
-    if (w/h > r) w = Math.max(Math.min(MIN_CROP, W), Math.round(h*r));
-    else h = Math.max(Math.min(MIN_CROP, H), Math.round(w/r));
+    if (w/h > r) w = Math.max(Math.round(minW), Math.round(h*r));
+    else h = Math.max(Math.round(minH), Math.round(w/r));
     w = Math.min(w, W); h = Math.min(h, H);
   }
   const x = Math.round(Math.min(Math.max(0, c.x), W - w)), y = Math.round(Math.min(Math.max(0, c.y), H - h));
@@ -78,9 +85,11 @@ export const sameCrop = (a, b) => ['x', 'y', 'w', 'h'].every(k=> a[k] === b[k]);
 export const defaultCrop = r => ({ x: 0, y: 0, w: r.width, h: r.imageH });
 export const isDefaultCrop = (U, f) =>{ const r = U.info(f), d = r && defaultCrop(r); return !!d && ['x', 'y', 'w', 'h'].every(k=> f.crop[k] === d[k]); };
 // A crop as the rules make it: whole pixels, inside the image, its sides at least
-// MIN_CROP (or the image's).
-export const validCrop = (c, r) => ['x', 'y', 'w', 'h'].every(k=> Number.isInteger(c[k])) && c.x >= 0 && c.y >= 0
-  && c.w >= Math.min(MIN_CROP, r.width) && c.h >= Math.min(MIN_CROP, r.imageH) && c.x + c.w <= r.width && c.y + c.h <= r.imageH;
+// MIN_CROP (or the image's), or, locked at ratio ar, as fitCrop makes it at that ratio (its
+// sides under MIN_CROP where the image cannot hold both, leastAt).
+export const validCrop = (c, r, ar) => ['x', 'y', 'w', 'h'].every(k=> Number.isInteger(c[k])) && c.x >= 0 && c.y >= 0
+  && c.x + c.w <= r.width && c.y + c.h <= r.imageH
+  && (c.w >= Math.min(MIN_CROP, r.width) && c.h >= Math.min(MIN_CROP, r.imageH) || !!ar && sameCrop(fitCrop(c, r.width, r.imageH, ar), c));
 // Set a file's crop from another's (a copy, the linked crop): narrowed to fit where
 // its image is smaller, and marked so.
 export function takeCrop(U, f, c, aspect){
@@ -96,7 +105,7 @@ export function takeCrop(U, f, c, aspect){
 export function resized(c0, hd, dx, dy, W, H, r){
   const L = hd.includes('w'), R = hd.includes('e'), T = hd.includes('n'), B = hd.includes('s');
   let x0 = c0.x, x1 = c0.x + c0.w, y0 = c0.y, y1 = c0.y + c0.h;
-  const minW = Math.min(MIN_CROP, W), minH = Math.min(MIN_CROP, H);
+  const minW = Math.min(MIN_CROP, W), minH = Math.min(MIN_CROP, H), least = r ? leastAt(W, H, r) : 0;
   if (!r){
     if (L) x0 = Math.min(Math.max(0, x0 + dx), x1 - minW);
     if (R) x1 = Math.max(Math.min(W, x1 + dx), x0 + minW);
@@ -110,19 +119,19 @@ export function resized(c0, hd, dx, dy, W, H, r){
     w = c0.w*k;
     // room from the corner that stays
     const roomW = R ? W - x0 : x1, roomH = B ? H - y0 : y1;
-    w = Math.max(Math.max(minW, minH*r), Math.min(w, roomW, roomH*r)); h = w/r;
+    w = Math.max(least, Math.min(w, roomW, roomH*r)); h = w/r;
     return fitCrop({ x: R ? x0 : x1 - w, y: B ? y0 : y1 - h, w, h }, W, H, r);
   }
   const cx = c0.x + c0.w/2, cy = c0.y + c0.h/2;
   if (L || R){
     w = c0.w + (R ? dx : -dx);
     const room = R ? W - x0 : x1;
-    w = Math.max(Math.max(minW, minH*r), Math.min(w, room, H*r)); h = w/r;
+    w = Math.max(least, Math.min(w, room, H*r)); h = w/r;
     return fitCrop({ x: R ? x0 : x1 - w, y: cy - h/2, w, h }, W, H, r);
   }
   h = c0.h + (B ? dy : -dy);
   const room = B ? H - y0 : y1;
-  h = Math.max(Math.max(minH, minW/r), Math.min(h, room, W/r)); w = h*r;
+  h = Math.max(least/r, Math.min(h, room, W/r)); w = h*r;
   return fitCrop({ x: cx - w/2, y: B ? y0 : y1 - h, w, h }, W, H, r);
 }
 // The handles, in image pixels: corners and the middle of each side.
@@ -163,11 +172,14 @@ export function setCropDef(U, f, on){
   f.cropDef = on;
   if (f.cropDef){ const r = U.info(f); f.crop = defaultCrop(r); f.aspect = aspectOf(f.crop.w, f.crop.h); f.clamped = false; }
 }
+// A crop moved by (dx, dy), whole pixels inside the image, its size kept (one at its ratio
+// under MIN_CROP too: fitCrop with no ratio would widen it).
+const moved = (c, dx, dy, W, H)=> ({ x: Math.round(Math.min(Math.max(0, c.x + dx), W - c.w)), y: Math.round(Math.min(Math.max(0, c.y + dy), H - c.h)), w: c.w, h: c.h });
 /* The crop as a drag (sem.js: { mode, c0, clamped, def }) by (dx, dy) image pixels leaves
    it: back where it started, it is the crop it was, with its flags; moved by hand, no longer
    the default. */
 export function dragCrop(f, d, dx, dy, W, H){
-  const c = !dx && !dy ? d.c0 : d.mode === 'move' ? fitCrop({ ...d.c0, x: d.c0.x + dx, y: d.c0.y + dy }, W, H, null)
+  const c = !dx && !dy ? d.c0 : d.mode === 'move' ? moved(d.c0, dx, dy, W, H)
     : resized(d.c0, d.mode, dx, dy, W, H, ASPECTS[f.aspect]);
   const same = sameCrop(c, d.c0);
   f.crop = { ...c };
@@ -647,7 +659,7 @@ function fileIn(U, f, f0, r){
     f.aspect = null;
   }
   if (r.squared) f.sq = true; else delete f.sq;
-  f.crop = validCrop(crop, r) ? crop : fitCrop(crop, r.width, r.imageH, null);
+  f.crop = validCrop(crop, r, Object.keys(ASPECTS).includes(f.aspect) ? ASPECTS[f.aspect] : null) ? crop : fitCrop(crop, r.width, r.imageH, null);
   if (!Object.keys(ASPECTS).includes(f.aspect)) f.aspect = aspectOf(f.crop.w, f.crop.h);
   const a0 = U.isObj(f0.adj) ? f0.adj : {};
   f.adj = { b: inRange(a0.b, -100, 100, 0), c: inRange(a0.c, 0.05, 20, 1), g: inRange(a0.g, 0.05, 20, 1) };

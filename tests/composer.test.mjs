@@ -103,6 +103,46 @@ test('plots composer: a tick step too fine for its values leaves the page respon
   } finally { await close(); }
 });
 
+/* The width for every series (v569): with bars among the series it takes a bar's range, at
+   most 1 (a fraction of the category slot), as each bar's own field does; to v568 a line's,
+   up to 6: 3 set every bar three slots wide, and each bar's field then showed a value it would
+   refuse. With lines alone, up to 6 as before. GC's mean-rate bars and its rates over time. */
+test('plots composer: the width for every series, at most a bar\'s 1 where there are bars; a line\'s 6 with lines alone (v569)', async ()=>{
+  const { page, errors, csp, close } = await env.page();
+  try {
+    await openModule(page, 'gc');
+    await loadFiles(page, 'gc', env.fx.files.gc);
+    const compose = async svg =>{
+      await page.locator(`#tab-gc svg[id$="${svg}"]`).first().scrollIntoViewIfNeeded();
+      await page.locator(`#tab-gc svg[id$="${svg}"]`).first().locator('xpath=ancestor::div[contains(@class,"plot-wrap")]').locator('button[title="Figure composer (advanced export)"]').click();
+      await page.waitForSelector('.fig-backdrop input[data-all="width"]');
+    };
+    const all = ()=> page.locator('.fig-backdrop input[data-all="width"]');
+    const own = ()=> page.locator('.fig-backdrop input[data-sk="width"]').evaluateAll(xs=> xs.map(x=> x.value));
+    const type = async v =>{ await all().fill(v); await all().press('Enter'); await settle(page); };
+    await compose('SvgBar');
+    assert.equal(await all().getAttribute('data-max'), '1');
+    const was = await own();
+    assert.ok(was.length >= 2, String(was));
+    await type('3');
+    assert.deepEqual(await own(), was, '3 refused: every bar as it was');
+    await type('0.5');
+    assert.deepEqual(await own(), was.map(()=> '0.5'), 'within a bar\'s range: every bar\'s');
+    await type('1');
+    assert.deepEqual(await own(), was.map(()=> '1'));
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(()=> !document.querySelector('.fig-backdrop'));
+    // Lines alone: up to 6, as each line's own field.
+    await compose('Svg1');
+    assert.equal(await all().getAttribute('data-max'), '6');
+    await type('3');
+    assert.ok((await own()).every(v=> v === '3'), 'lines: 3 taken');
+    await page.keyboard.press('Escape');
+    assert.deepEqual(errors, []);
+    assert.deepEqual(await csp(), []);
+  } finally { await close(); }
+});
+
 test('SEM composer: opens on a group, exports SVG and PNG, refuses a second, closes on Escape', async ()=>{
   const { page, errors, csp, close } = await env.page();
   try {

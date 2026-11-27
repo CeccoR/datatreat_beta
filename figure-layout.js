@@ -803,11 +803,17 @@ export function tickMarks(C, fr, side){
 /* Where another panel actually puts its numbers on the same side. A number at a
    shared edge only has to give way when the neighbour draws one within a line of
    it — checking merely "is the edge shared" dropped perfectly clear numbers, e.g.
-   the 0 at the foot of every stacked panel but the last. Vertical: the y of each;
-   else the x of each and its half width. */
+   the 0 at the foot of every stacked panel but the last. Of two that clash there,
+   the upper (left) panel's gives way and the lower (right) one keeps its own: past
+   its top (left) edge a panel's neighbour draws none of the numbers at its own
+   bottom (right) edge that clash with this one's (v569; to v568 both gave way, as
+   each counted the other's). Vertical: the y of each; else the x of each and its
+   half width. */
 export function neighbourMarks(C, fr, side, edge, vert){
   const F = C.F;
   const { p, pi, lay: { oX, oY, cw, ch }, ranges: { xOf, yOf }, fonts: { fTick } } = fr;
+  // The neighbour gives up its numbers at the edge it shares with this panel.
+  const yields = edge === 'top' || edge === 'left';
   const marks = [];
   F.panels.forEach((q, k)=>{
     if (k === pi) return;
@@ -823,11 +829,17 @@ export function neighbourMarks(C, fr, side, edge, vert){
     const qw = Math.max(4, q.cs * cw), qh = Math.max(4, q.rs * ch);
     if (vert){
       const [a, z] = yOf[k] || [0, 1];
-      for (const t of axisTicks(C, 'y', a, z)) marks.push(qy0 + qh - (t - a) / (z - a || 1) * qh);
+      for (const t of axisTicks(C, 'y', a, z)){
+        const e = qy0 + qh - (t - a) / (z - a || 1) * qh;
+        if (!(yields && e + fTick * 0.55 > qy0 + qh - 1)) marks.push(e);
+      }
     } else {
       const [a, z] = xOf[k] || [0, 1];
       const ts = axisTicks(C, 'x', a, z);
-      for (const t of ts) marks.push({ q: qx0 + (t - a) / (z - a || 1) * qw, w: tickW(C, 'x', t, ts, fTick) / 2 });
+      for (const t of ts){
+        const m = { q: qx0 + (t - a) / (z - a || 1) * qw, w: tickW(C, 'x', t, ts, fTick) / 2 };
+        if (!(yields && m.q + m.w > qx0 + qw - 1)) marks.push(m);
+      }
     }
   });
   return marks;
@@ -848,7 +860,8 @@ export function catNames(fr, side){
 
 /* The numbers along a side, { at, parts, rot } each (parts: tickParts'; rot: numbers
    tilt with the category names, around the point they label). One at a panel's
-   corner gives way where the neighbour past it draws one close by. */
+   corner gives way where the neighbour past it draws one close by (neighbourMarks: of
+   two, the upper or left panel's). */
 export function tickNumbers(C, fr, side){
   const { px0, py0, pw, ph, free, fonts: { fTick } } = fr;
   const g0 = fr.geo[side], out = [];

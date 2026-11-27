@@ -566,7 +566,9 @@ function calChanged(S, C, W, levels){ C.valuesKept.clear(); draw(S, C, true); if
    a table whose partner is a calibration file of v544–v548's names its standards. A file
    whose bytes cannot be read (gone from the disk: utils.js NOT_READ) is said and left out,
    not the rest of the drop (to v566 it ended the drop with no word). Each drop's alerts
-   replace the last's. */
+   replace the last's. Standards taken in are integrated, a Stop before not holding them, as
+   files dropped on the module are (gc.js: v569; to v568 they waited for Re-integrate, the
+   window saying they were being integrated). */
 async function onCalDrop(S, C, W, list){
   const bad = [], got = [];
   for (const f of list){
@@ -581,8 +583,8 @@ async function onCalDrop(S, C, W, list){
   if (!P.add.length && !P.named.length) return;
   if (P.add.length) C.calSel = M.calRows(U, S, C).length;
   C.cal = M.calWith(C.cal, P.add, P.named);
+  ensure(S, true);
   calChanged(S, C, W);
-  ensure(S);
 }
 // Its files removed, its unit, the levels typed or ticked, a row picked, an intercept's chip.
 function wireCalEdits(S, C, W){
@@ -676,7 +678,7 @@ function paintWindow(S, C, W){
   W.m.querySelectorAll('.gci-u').forEach(s=>{ s.textContent = `(${C.cal.unit})`; });
   const rows = W.rowsNow = M.calRows(U, S, C), left = M.stdsLeft(U, S, C);
   if (C.calSel >= rows.length) C.calSel = Math.max(0, rows.length - 1);
-  W.q('.gci-cal-status').textContent = H.calStatusText(C.cal.files, left, rows.length);
+  W.q('.gci-cal-status').textContent = H.calStatusText(C.cal.files, left, rows.length, S.halted && !S.job);
   const [lo, hi] = M.range(C.method);
   W.q('.gci-cal-levels tbody').innerHTML = H.levelRowsHtml(HU, rows, C.calSel, lo, hi);
   box.scrollTop = top;

@@ -42,12 +42,17 @@
      in an info alert in Integration (its message alone) and in the rate card, the file's k
      under its Peaks, the units said plainly, no superscript.
    - The rates from the re-integrated values against a hand calculation from the known areas.
+   - No sample (v569): every table left out, or removed with raw chromatograms left: the
+     Production Rate card as one that never had any, no CSV of its. After a Stop (v569):
+     standards dropped in the Calibration window integrated; stopped with standards left, the
+     window says so.
    - The project saved and reloaded: pairs, method, calibration and results, nothing fitted
      again; a method changed (a step) and undone, nothing fitted again; results coming in no
      step. A project as v544 saved it (its method's trapezoids, its results' keys and their
      trapezoid areas) opens with nothing fitted again. */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { start, openModule, settle, moduleState, history, undo, download, readZip, parseCsv, tabLabels, saveAs, ready, ROOT, exportProject, projectFile, importProject, openProject, firstTop } from './helpers.mjs';
@@ -354,6 +359,61 @@ test('raw chromatograms alone: an Integration card, no sample, said; its overvie
     assert.equal(await card.locator('svg.plot[id$="Over"] .plot-label').first().textContent(), 'Injection');
     // No table, no standards: areas only.
     assert.equal(await card.locator('.gci-ovy-chip[data-y="conc"]').isDisabled(), true);
+    assert.equal(await page.locator('#gcResultsBar').isVisible(), false);
+    assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
+  } finally { await close(); }
+});
+
+/* A Production Rate card with no sample (v569): every table left out, or removed with raw
+   chromatograms left, lets go of the tables it had, as a card that never had any: its
+   plots, legends and chips empty, its Results hidden, no CSV of its in the project's (to
+   v568 the last tables stayed: in the project's CSVs, and on show beside the raw
+   chromatograms). */
+const rateCard = page => page.locator('#tab-gc .an-card').filter({ has: page.locator('svg[id$="Svg1"]') });
+const blankCard = page => rateCard(page).evaluate((card)=>{
+  const res = document.querySelector(`#gcResList [data-an="${card.dataset.an}"]`);
+  const svgs = [...card.querySelectorAll('svg.plot'), ...(res ? res.querySelectorAll('svg.plot') : [])];
+  const legends = [...card.querySelectorAll('.legend'), ...(res ? res.querySelectorAll('.legend') : [])];
+  return { drawn: svgs.filter(s=> s.childElementCount).length, tools: card.querySelectorAll('.plot-tool-btns').length, dl: card.querySelectorAll('.plot-wrap > .plot-dl-btn').length,
+    legends: legends.map(l=> l.textContent).join(''), chips: card.querySelectorAll('.gc-gas-chip').length, src: card.querySelector('.gc-src').textContent };
+});
+const BLANK = { drawn: 0, tools: 0, dl: 1, legends: '', chips: 0, src: '' };
+async function csvNames(page){
+  const [d] = await Promise.all([page.waitForEvent('download', { timeout: 2500 }).catch(()=> null), page.click('.proj-csv')]);
+  return d ? readZip(fs.readFileSync(await d.path())).map(e=> e.name.replace(/^.* - /, '')).sort() : null;
+}
+
+test('no sample (v569): every table left out, or the table removed with raw chromatograms left, the Production Rate card lets go of its tables: no plot, no legend, no CSV', async ()=>{
+  const { page, errors, csp, close } = await env.page();
+  try {
+    await openModule(page, 'gc');
+    await load(page, [table('one.csv', tableRows()), table('two.csv', tableRows(2))], 2);
+    assert.ok((await blankCard(page)).drawn > 0, 'drawn');
+    assert.deepEqual(await csvNames(page), ['gc_info.csv', 'gc_raw.csv', 'gc_results.csv', 'mean_rates.csv']);
+    // Every table left out: the card as one that never had any, no CSV.
+    await page.locator('#gcFileTableWrap .incl-all').click(); await settle(page);
+    assert.equal(await page.locator('#gcFileTableWrap tr.file-row.is-excluded').count(), 2);
+    assert.equal(await csvNames(page), null, 'no CSV of the tables left out');
+    assert.deepEqual(await blankCard(page), BLANK);
+    // Taken back in (an undo, then the box again): drawn and written again.
+    await undo(page);
+    assert.deepEqual(await csvNames(page), ['gc_info.csv', 'gc_raw.csv', 'gc_results.csv', 'mean_rates.csv']);
+    assert.ok((await blankCard(page)).drawn > 0, 'drawn again');
+    await undo(page, true);
+    assert.deepEqual(await blankCard(page), BLANK);
+    await page.locator('#gcFileTableWrap .incl-all').click(); await settle(page);
+    assert.equal((await blankCard(page)).tools, 1, 'its toolbar back');
+    assert.deepEqual(await csvNames(page), ['gc_info.csv', 'gc_raw.csv', 'gc_results.csv', 'mean_rates.csv']);
+    // A table and raw chromatograms of another run; the tables removed, the raw chromatograms left.
+    await load(page, [tcd('zz_TCD.csv', areas())], 3);
+    await integrated(page);
+    for (let k = 0; k < 2; k++){ await page.locator('#gcFileTableWrap .row-del').first().click(); await settle(page); }
+    assert.deepEqual((await rowsOf(page)).map(r=> r.files), [['zz_TCD.csv']]);
+    assert.ok(await page.locator('#gcAnalyses').isVisible(), 'the cards shown (Integration\'s)');
+    assert.deepEqual(await blankCard(page), BLANK);
+    assert.equal(await rateCard(page).locator('[id$="Legend"]').first().textContent(), '', 'no "one H₂ / one O₂" left');
+    const left = await csvNames(page);
+    assert.ok(!left || !left.some(n=> /^(gc_raw|gc_results|mean_rates|gc_info)\.csv$/.test(n)), String(left));
     assert.equal(await page.locator('#gcResultsBar').isVisible(), false);
     assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
   } finally { await close(); }
@@ -673,7 +733,7 @@ test('calibration: standards typed by hand, free and zero intercept, %mol and pp
   } finally { await close(); }
 });
 
-const calDone = page => page.waitForFunction(()=> /integrated/.test(document.querySelector('.gci-cal-modal .gci-cal-status').textContent), null, { timeout: 60000 });
+const calDone = page => page.waitForFunction(()=> /^\d+ chromatograms? integrated\.$/.test(document.querySelector('.gci-cal-modal .gci-cal-status').textContent), null, { timeout: 60000 });
 test('the calibration window (v549): a GC table and its raw chromatograms, both needed, as many; each standard named by the table, drawn as the card\'s chromatogram, chosen by its row, the selector, the arrows and ← →; its title aligned; 375 px', async ()=>{
   const { page, errors, csp, close } = await env.page();
   try {
@@ -792,6 +852,44 @@ test('the calibration window (v549): a GC table and its raw chromatograms, both 
     assert.deepEqual(await said(), []);
     await m.locator('.gci-cal-in').setInputFiles([stdTcd('other_TCD.csv')]); await settle(page);
     assert.match((await said())[0], /other_TCD\.csv: raw chromatograms without their GC table/, 'other.csv no longer waits');
+    assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
+  } finally { await close(); }
+});
+
+test('after a Stop (v569): standards dropped in the Calibration window are integrated, as files dropped on the module are; the window never says "Integrating" while nothing runs', async ()=>{
+  const { page, errors, csp, close } = await env.page();
+  try {
+    await openModule(page, 'gc');
+    await load(page, [table('run.csv', tableRows()), tcd('run_TCD.csv', areas())], 1);
+    await integrated(page);
+    const card = page.locator('#tab-gc .an-card').nth(0), m = page.locator('.gci-cal-modal');
+    // Stopped (nothing left, nothing said on the card); the window opened, standards dropped.
+    await card.locator('.gci-stop').evaluate(b=> b.click());
+    await card.locator('.gci-cal').click(); await m.waitFor({ state: 'visible' });
+    const n0 = await fitted(page);
+    await m.locator('.gci-cal-in').setInputFiles([calTable('std.csv'), stdTcd('std_TCD.csv')]);
+    await calDone(page); await settle(page);
+    assert.equal(await fitted(page), n0 + 6, 'its six chromatograms integrated');
+    assert.equal(await m.locator('.gci-cal-status').textContent(), '6 chromatograms integrated.');
+    assert.equal(await card.locator('.gci-status').getAttribute('data-state'), 'done');
+    // Stopped with standards left (the method changed, the window closed, Stop before its
+    // run): the window says so, not "Integrating"; Re-integrate integrates them.
+    await m.locator('[aria-label="Close"]').first().click();
+    await m.waitFor({ state: 'hidden' });
+    const from = card.locator('.gci-method input[data-k="w0:from"]');
+    await from.fill(String(+(await from.inputValue()) + 1)); await from.press('Enter');
+    await card.locator('.gci-stop').evaluate(b=> b.click()); await settle(page);
+    assert.equal(await card.locator('.gci-status').getAttribute('data-state'), 'stopped');
+    const n1 = await fitted(page);
+    await card.locator('.gci-cal').click(); await m.waitFor({ state: 'visible' }); await settle(page);
+    assert.equal(await m.locator('.gci-cal-status').textContent(), 'Stopped: 6 chromatograms of the standards not integrated (↻ Re-integrate on the card).');
+    assert.equal(await fitted(page), n1, 'nothing runs');
+    await m.locator('[aria-label="Close"]').first().click(); await m.waitFor({ state: 'hidden' });
+    await card.locator('.gci-run').click();
+    await integrated(page);
+    await card.locator('.gci-cal').click(); await m.waitFor({ state: 'visible' }); await settle(page);
+    assert.equal(await m.locator('.gci-cal-status').textContent(), '6 chromatograms integrated.');
+    assert.equal(await fitted(page), n1 + 6 + N, 'the standards and the run integrated with the new method');
     assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
   } finally { await close(); }
 });

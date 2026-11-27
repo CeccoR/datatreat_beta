@@ -379,14 +379,18 @@ function faultLines(S, q, nm, lines){
 
 /* ---- the free shape's lines (shapeOf's sh; info, the result's record of it) ---- */
 // An axis's angle from its lattice direction, and its angular esd by profile (xrd-rietveld
-// turnEsds): none beyond 60°, else as the 3D view's labels give it (xrd-math fmtDeg).
+// turnEsds): none beyond 60°, else as the 3D view's labels give it (xrd-math fmtDeg), and as
+// they do no ± for an esd of 0, which has no cone (v569: to v568 "±0°", as the view to v567).
 const offTxt = a => `${fmtOff(a.angle)}° off`;
-const pmTxt = a => Number.isFinite(a.esdAngle) && a.esdAngle <= 60 ? ` ±${fmtDeg(a.esdAngle)}°` : '';
+const esdIn = a => Number.isFinite(a.esdAngle) && a.esdAngle <= 60;
+export const pmTxt = a => esdIn(a) && a.esdAngle > 0 ? ` ±${fmtDeg(a.esdAngle)}°` : '';
+// A held axis's turn that costs χ²_ν (none for an esd of 0).
+export const turnCost = a => esdIn(a) && a.esdAngle > 0 ? `, which a turn of ±${fmtDeg(a.esdAngle)}° (1σ, every other parameter refined again) would cost χ²_ν` : '';
 // (the v420 ellipsoid's esds are linear: from the covariance of its L)
 // A profile sees only the valley of χ² the fit ends in: 2 of 7 free fits of
 // synthetic boxes ended 3–4 esd off, in another valley nearly as deep.
 const shapeHow = sh => sh.type === 'ellipsoidL' ? '1σ, from the covariance of the refined parameters' : '1σ: the turn of the solid that raises χ² by χ²_ν (the linear esds\' convention too: their covariance is scaled by χ²_ν), with every other parameter, its turns about the other axes too, refined again. It measures the valley of χ² the fit ends in, not a second orientation nearly as good, which noise can make the best';
-const angTitle = (sh, a) => `the axis is ${a.angle.toFixed(1)}° from ${a.uvw}${a.label !== a.uvw ? ` (of ${a.label})` : ''}, the simplest lattice direction within 10°${Number.isFinite(a.esdAngle) && a.esdAngle <= 60 ? `; it is fixed to ±${fmtDeg(a.esdAngle)}° (${shapeHow(sh)})` : '; its direction is not fixed by the data within 60°'}; the axes' directions are given in one frame`;
+export const angTitle = (sh, a) => `the axis is ${a.angle.toFixed(1)}° from ${a.uvw}${a.label !== a.uvw ? ` (of ${a.label})` : ''}, the simplest lattice direction within 10°${esdIn(a) ? `; it is fixed${a.esdAngle > 0 ? ` to ±${fmtDeg(a.esdAngle)}°` : ''} (${shapeHow(sh)})` : '; its direction is not fixed by the data within 60°'}; the axes' directions are given in one frame`;
 const LONG_AXIS = ' The longest size is the least bounded: noise spreads the axes apart, and it comes out long.';
 // The shape's lines, its solid for the 3D view, its comparison with the isotropic size, σ
 // of a log-normal distribution, the strain.
@@ -476,7 +480,7 @@ function bodyAxisLines(S, nm, lines, { sh, a, held, at, shown }){
     : 'Within 2 esd its dimensions are equal: a sphere has no axis';
   const val = grouped ? (Number.isFinite(a.D) ? `${a.D.toPrecision(3)} nm` : dimTxt(a)) : dimTxt(a);
   const heldOn = `held ${a.angle >= 0.05 ? `${a.angle.toFixed(1)}° off ` : 'on '}${a.uvw}`;
-  if (a.resolved) lines.push({ label: `${lab} ∥ ${a.uvw}`, value: `${val} · ${at(a)}`, title: `${lab[0].toUpperCase() + lab.slice(1)} of the ${NAME}${grouped ? ' (its own value: only the mean above is measured)' : ''}; ${held ? `${heldOn}${Number.isFinite(a.esdAngle) && a.esdAngle <= 60 ? `, which a turn of ±${fmtDeg(a.esdAngle)}° (1σ, every other parameter refined again) would cost χ²_ν` : ''}` : angTitle(sh, a)}` });
+  if (a.resolved) lines.push({ label: `${lab} ∥ ${a.uvw}`, value: `${val} · ${at(a)}`, title: `${lab[0].toUpperCase() + lab.slice(1)} of the ${NAME}${grouped ? ' (its own value: only the mean above is measured)' : ''}; ${held ? `${heldOn}${turnCost(a)}` : angTitle(sh, a)}` });
   else if (!grouped) lines.push({ label: lab, value: val, title: `${lab[0].toUpperCase() + lab.slice(1)} of the ${NAME}. ${why}: no direction of its own` });
   row(S, nm, `shape_${lab.replace(/[ -]/g, '_')}_${a.role}_nm`, a.D, a.Desd);
   // An unbounded dimension's lower limit (the card's "over N nm").
@@ -522,15 +526,21 @@ function solidFrame(sh){
    the search's, the keep test's (info.keep.dBIC), which the title's "under −10" is about
    (v568; to v567 the fit's after the search, refined again by central differences or a
    free minimum taking the held frame's place, which could stand above −10 beside it). A
-   result kept by ΔBIC before v523's keep test has none: its fit's. */
+   result kept by ΔBIC before v523's keep test has none: its fit's. The title's χ² and
+   parameters are those the ΔBIC comes from: the search's best fit's (from its ΔBIC and the
+   parameters it added: v569; to v568 the fit's after the search, which do not give it), and
+   the fit's after it beside them where they differ. */
 export function isoCompareLine(S, nm, lines, info){
-  const kp = info.keep;
-  const dBIC = kp && Number.isFinite(kp.dBIC) ? kp.dBIC : (info.chi2 - info.chi2Iso)/Math.max(1, info.chi2redIso) + (info.P - info.Piso)*Math.log(info.N);
+  const kp = info.keep, nu = Math.max(1, info.chi2redIso), dPfit = info.P - info.Piso;
+  const search = !!kp && Number.isFinite(kp.dBIC);
+  const dBIC = search ? kp.dBIC : (info.chi2 - info.chi2Iso)/nu + dPfit*Math.log(info.N);
+  const dP = search && Number.isFinite(kp.dP) ? kp.dP : dPfit, chi2 = search ? info.chi2Iso + (dBIC - dP*Math.log(info.N))*nu : info.chi2;
+  const after = search && (chi2.toFixed(0) !== info.chi2.toFixed(0) || dP !== dPfit) ? ` (the search's best fit; refined again after it, χ² ${info.chi2.toFixed(0)} with ${dPfit})` : '';
   // (A shape is reported only when kept: by v523's keep test, info.keep, its gain over
   // the threshold of its Laue class, or before by ΔBIC under −10; one rejected is in the
   // warnings.)
   lines.push({ label: 'vs isotropic', value: kp ? `ΔBIC ${dBIC.toFixed(0)}` : `ΔBIC ${dBIC.toFixed(0)} (shape supported: under −10)`,
-    title: `${info.carried ? 'The last result’s search (this refinement started from it, the shape not searched again): ' : ''}${kp ? `Kept: its gain over the isotropic size, ${kp.G.toFixed(1)} χ²_ν, is over the ${kp.need.toFixed(1)} its Laue class needs (χ² of ${kp.k + 1} degrees of freedom at 99.9 % + 2: the deformations of a sphere the class lets the pattern see)${kp.flagged ? ', and as the fit misses some lines (the per-line check) its ΔBIC is under −10 too' : ''}. ` : ''}χ² ${info.chi2Iso.toFixed(0)} → ${info.chi2.toFixed(0)} with ${info.P - info.Piso} more parameters; BIC with χ² divided by the isotropic fit's χ²_ν (${info.chi2redIso.toFixed(2)}), so that a misfit of the model is not counted as evidence.${Number.isFinite(info.dBICheld) ? ` Orientation free: ΔBIC ${info.dBICfree.toFixed(0)}; held on the lattice: ${info.dBICheld.toFixed(0)}.` : ''} Between solids of as many parameters a difference under 14 is within what noise gives (35 where the fit misses some lines: the bootstrap of the free-shape research's family comparison). The sizes depend on the solid (a spheroid's polar axis reads 4/3 as much as a disc's thickness: the column length along the axis is ¾ of the one, all of the other)` });
+    title: `${info.carried ? 'The last result’s search (this refinement started from it, the shape not searched again): ' : ''}${kp ? `Kept: its gain over the isotropic size, ${kp.G.toFixed(1)} χ²_ν, is over the ${kp.need.toFixed(1)} its Laue class needs (χ² of ${kp.k + 1} degrees of freedom at 99.9 % + 2: the deformations of a sphere the class lets the pattern see)${kp.flagged ? ', and as the fit misses some lines (the per-line check) its ΔBIC is under −10 too' : ''}. ` : ''}χ² ${info.chi2Iso.toFixed(0)} → ${chi2.toFixed(0)} with ${dP} more parameters${after}; BIC with χ² divided by the isotropic fit's χ²_ν (${info.chi2redIso.toFixed(2)}${info.chi2redIso < 1 ? ', taken as 1' : ''}), so that a misfit of the model is not counted as evidence.${Number.isFinite(info.dBICheld) ? ` Orientation free: ΔBIC ${info.dBICfree.toFixed(0)}; held on the lattice: ${info.dBICheld.toFixed(0)}.` : ''} Between solids of as many parameters a difference under 14 is within what noise gives (35 where the fit misses some lines: the bootstrap of the free-shape research's family comparison). The sizes depend on the solid (a spheroid's polar axis reads 4/3 as much as a disc's thickness: the column length along the axis is ¾ of the one, all of the other)` });
   row(S, nm, 'shape_dBIC', dBIC, NaN);
 }
 

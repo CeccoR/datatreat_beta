@@ -18,7 +18,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { start, openModule, loadFiles, settle, download, readZip, moduleState, MODS } from './helpers.mjs';
+import { start, openModule, loadFiles, settle, download, readZip, moduleState, history, MODS } from './helpers.mjs';
 import { ROWS, caryCsv, drsCsv, xrdml } from './fixtures.mjs';
 
 let env;
@@ -225,6 +225,43 @@ test('a project of v531 opens as it was: labels, inclusion, order; Custom\'s fil
     assert.deepEqual(await rows(page, 'fig'), [['Mine', 'a.csv', true], ['err', 'a.csv', true], ['Ref', 'a.csv', true], ['Series 1', 'b.csv', false], ['Series 2', 'b.csv', false]]);
     assert.deepEqual(await page.$$eval('#figFileTableWrap thead th', ts=> ts.map(t=> t.textContent.trim())), ['', '', 'LABEL', 'FILE', '', ''], 'Custom: LABEL');
     assert.deepEqual([await page.locator('#figFileTableWrap button.color-swatch').count(), await page.locator('#figFileTableWrap button.palette-pick-btn').count()], [5, 1], 'Custom: a colour a series, the palette');
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+/* v569: a row's ≡ grip takes a mouse's primary button alone, as a file's own grip (GC's pairs)
+   does: pressed with the right button (or the middle one) and let go over another gap, the
+   row stays where it is, no step (to v568 it moved, a step of the history); the left button
+   moves it. In every module's list (the one utils.js wireListDrag): DRS's and XRPD's here. */
+test('a row\'s grip: the left button drags it, the right and the middle ones do nothing (v569)', async ()=>{
+  const { page, errors, close } = await env.page();
+  try {
+    for (const mod of ['tauc', 'xrd']){
+      await openModule(page, mod);
+      await loadFiles(page, mod, env.fx.files[mod]);
+      const names = async ()=> (await rows(page, mod)).map(r=> r[1]);
+      const n0 = await names(), s0 = (await history(page, mod)).index;
+      const drag = async button =>{
+        const h = await page.locator(`#${mod}FileTableWrap tr.file-row`).nth(0).locator('.drag-handle').boundingBox();
+        const r = await page.locator(`#${mod}FileTableWrap tr.file-row`).last().boundingBox();
+        await page.mouse.move(h.x + h.width/2, h.y + h.height/2);
+        await page.mouse.down({ button });
+        await page.mouse.move(h.x + h.width/2, r.y + r.height*0.8, { steps: 8 });
+        const lit = await page.locator(`#${mod}FileTableWrap tr.file-row.dragging, #${mod}FileTableWrap tr.drop-before, #${mod}FileTableWrap tr.drop-after`).count();
+        await page.mouse.up({ button });
+        await page.keyboard.press('Escape');
+        await settle(page);
+        return lit;
+      };
+      for (const b of ['right', 'middle']){
+        assert.equal(await drag(b), 0, `${mod}: the ${b} button: nothing lit`);
+        assert.deepEqual(await names(), n0, `${mod}: the ${b} button: the order as it was`);
+        assert.equal((await history(page, mod)).index, s0, `${mod}: the ${b} button: no step`);
+      }
+      assert.ok(await drag('left') > 0);
+      assert.deepEqual(await names(), [...n0.slice(1), n0[0]], `${mod}: the left button: the first row last`);
+      assert.equal((await history(page, mod)).index, s0 + 1);
+    }
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });

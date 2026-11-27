@@ -11,7 +11,10 @@
      (N1);
    - a Scherrer card zoomed and folded, unfolded after another card's arrow stepped the
      sample: the new sample at its full range, as when stepped unfolded (21, v568; to v567 at
-     the zoom the card had on the other); with nothing stepped, the zoom kept. */
+     the zoom the card had on the other); with nothing stepped, the zoom kept; a file left out,
+     taken in or removed, or an undo, while it is folded, the same (21b, v569);
+   - a card's kinds' menu closed by an undo or a redo; a kind picked for a card gone does
+     nothing (22, v569). */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { start, openModule, loadFiles, settle, moduleState, history, undo, switchTab } from './helpers.mjs';
@@ -144,6 +147,36 @@ test('21: a Scherrer card folded while zoomed, the sample stepped by another car
     await zoomTo(page, 'xrdA1Svg', 40, 45);
     await foldBtn(page, 'xrd', 1); await foldBtn(page, 'xrd', 1);
     assert.deepEqual((await viewOf(page, 'xrdA1Svg')).x, [40, 45]);
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+/* 21b (v569): a file left out or removed, or an undo, while the Scherrer card is folded: unfolded
+   at the full range, as the card unfolded is drawn on these and as DRS's, GC's and EPR's cards
+   are (to v568 it unfolded at the zoom it had, on the pattern now on show). */
+test('21b: a Scherrer card folded while zoomed, a file left out or removed, or an undo: unfolded at the full range, as unfolded', async ()=>{
+  const { page, errors, close } = await env.page();
+  try {
+    await openModule(page, 'xrd');
+    await loadFiles(page, 'xrd', env.fx.files.xrd);
+    const full = async what =>{ const v = await viewOf(page, 'xrdA1Svg'); assert.deepEqual(v.x, v.home, what); };
+    const folded = async act =>{ await zoomTo(page, 'xrdA1Svg', 30, 35); await foldBtn(page, 'xrd', 1); await act(); await settle(page); await foldBtn(page, 'xrd', 1); };
+    // Unfolded, each draws the full range (as v568 did).
+    await zoomTo(page, 'xrdA1Svg', 30, 35);
+    await page.locator('#xrdFileTableWrap .file-incl').nth(2).click(); await settle(page);
+    await full('left out, unfolded');
+    // Folded: the same.
+    await folded(()=> page.locator('#xrdFileTableWrap .file-incl').nth(2).click());
+    await full('taken back in while folded');
+    await folded(()=> page.locator('#xrdFileTableWrap .file-incl').nth(0).click());
+    await full('the sample on show left out while folded');
+    await folded(()=> key(page));
+    await full('an undo while folded');
+    await folded(()=> page.locator('#xrdFileTableWrap .row-del').nth(2).click());
+    await full('a file removed while folded');
+    // Nothing changed: the zoom kept.
+    await folded(async ()=>{});
+    assert.deepEqual((await viewOf(page, 'xrdA1Svg')).x, [30, 35], 'nothing changed: the zoom kept');
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });
@@ -315,6 +348,51 @@ test('N1: a tab switched to, or a project opened, that has a card more brings no
     assert.deepEqual(await ids(page, 'xrd'), [1, 2]);
     assert.equal(await headInView(page, 'xrd', 1), false, 'project opened: the card not brought into view');
     assert.ok(y2 >= y0, `project opened: not scrolled up to the card (${y0} → ${y2})`);
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+/* ---- 22 (v569): a card's kinds' menu through an undo or a redo ----
+   Open on a card's title, Ctrl+Z or Ctrl+Y closes it: the step may take its card away or
+   bring its id back as another kind (to v568 it stayed open: a kind picked then threw where
+   the card was gone, or rebuilt the card for a record no longer in the deck, what was typed
+   in it after lost). A pick on a card gone otherwise (closed from the keyboard) does nothing. */
+test('22: a card\'s kinds\' menu closed by an undo or a redo; a kind picked for a card gone does nothing', async ()=>{
+  const { page, errors, close } = await env.page();
+  try {
+    await openModule(page, 'tauc');
+    await loadFiles(page, 'tauc', env.fx.files.tauc);
+    const open = ()=> page.locator('.an-menu:not([hidden])').count();
+    const menuOn = async id =>{ await page.click(card('tauc', id) + ' .an-type'); assert.equal(await open(), 1, 'the menu open'); };
+    // An Urbach card added; its menu open; the add undone: the menu closed, no error.
+    await page.click('#taucAddAn'); await page.click('.an-menu:not([hidden]) [data-kind="urbach"]'); await page.waitForTimeout(500); await settle(page);
+    assert.deepEqual(await ids(page, 'tauc'), [1, 2]);
+    await menuOn(2);
+    await key(page);
+    assert.deepEqual([await ids(page, 'tauc'), await open()], [[1], 0], 'the card gone, its menu closed');
+    // Redone, its menu open again; the redo undone again: closed.
+    await key(page, true);
+    await menuOn(2);
+    await key(page);
+    assert.equal(await open(), 0, 'closed by the undo');
+    await key(page, true);
+    // The first card turned into an Urbach one, its menu open, the switch undone: closed; the
+    // card's name typed after reaches the state.
+    await page.click(card('tauc', 1) + ' .an-type'); await page.click('.an-menu:not([hidden]) [data-kind="urbach"]'); await settle(page);
+    await menuOn(1);
+    await key(page);
+    assert.equal(await open(), 0, 'closed by the undo of the switch');
+    assert.equal(await page.textContent(card('tauc', 1) + ' .an-type'), 'Tauc Plot');
+    await page.fill(card('tauc', 1) + ' .an-name', 'mine'); await page.press(card('tauc', 1) + ' .an-name', 'Enter'); await settle(page);
+    assert.deepEqual((await moduleState(page, 'tauc')).analyses.map(a=> [a.id, a.type, a.base, a.nameAuto]), [[1, 'tauc', 'mine', false], [2, 'urbach', (await moduleState(page, 'tauc')).analyses[1].base, true]]);
+    // The second card closed from the keyboard, its menu open: a kind picked does nothing.
+    await menuOn(2);
+    const s0 = (await history(page, 'tauc')).index;
+    await page.focus(card('tauc', 2) + ' .an-close'); await page.keyboard.press('Enter'); await settle(page);
+    assert.deepEqual(await ids(page, 'tauc'), [1]);
+    if (await open()) await page.click('.an-menu:not([hidden]) [data-kind="tauc"]');
+    await settle(page);
+    assert.deepEqual([await ids(page, 'tauc'), (await history(page, 'tauc')).index], [[1], s0 + 1], 'nothing switched, no step but the close');
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });

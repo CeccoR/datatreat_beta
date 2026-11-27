@@ -633,9 +633,10 @@ function revealBy(card){
   return M.revealOf(top, r, h, bot);
 }
 // The card is rebuilt for the other kind in place; the module keeps what the kind left
-// had (build's prev) and gives it back if the card turns into it again.
+// had (build's prev) and gives it back if the card turns into it again. Only a record still
+// in the deck (a menu opened on one a step took away picks nothing: v569).
 function switchKind(D, a, type){
-  if (type === a.type || !D.kinds[type]) return;
+  if (type === a.type || !D.kinds[type] || !D.recs.includes(a) || !D.live.has(a.id)) return;
   const card = D.live.get(a.id), from = a.type;
   a.type = type;
   buildCard(D, a, c=> card.replaceWith(c), from);
@@ -654,6 +655,9 @@ function switchKind(D, a, type){
    into another kind is rebuilt in place, as a switch is, and a move only puts the cards in
    order); the motion reduced, nothing. Up to v503 a step put each as it was at once. */
 function load(D, list, read, keep){
+  // (the kinds' menu closed: what it was opened on may be gone, or another record, v569; to
+  // v568 it stayed open, and a pick then threw or rebuilt a card for a record gone)
+  if (D.menu) D.menu.close();
   list = list.filter(s=> s && (s.type == null || M.isKind(D.kinds, s.type)));
   // (the cards in the page before: one not among them that an undo or a redo brings is
   // brought into view, the first of them)

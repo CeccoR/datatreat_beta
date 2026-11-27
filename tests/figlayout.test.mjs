@@ -379,16 +379,25 @@ test('the axes: lines, tick marks each way, numbers that give way to a neighbour
   near(inn[inn.length - 1].x2 - inn[inn.length - 1].x1, 2.2, 1e-12, 'a minor');
   A.dir = 'both';
   assert.deepEqual([L.tickMarks(C, top, 'left')[0].x1, L.tickMarks(C, top, 'left')[0].x2], [top.px0 + 4, top.px0 - 4]);
-  // stacked, one range 0–20: the numbers at the edge they share (the upper panel's 0, the
-  // lower one's 20) each give way to the other's; with the lower one's off, the upper keeps its 0
+  // stacked, one range 0–20: of the numbers at the edge they share (the upper panel's 0, the
+  // lower one's 20) the upper one's gives way and the lower one keeps its 20 (v569: to v568
+  // both went); with the lower one's off, the upper keeps its 0
   assert.equal(top.free.bottom, false);
   assert.deepEqual(top.gy.map(t => t + 0), [0, 5, 10, 15, 20]);
   const nums = fr => L.tickNumbers(C, fr, 'left').map(n => n.parts.base);
-  assert.deepEqual([nums(top), nums(low)], [['5', '10', '15', '20'], ['0', '5', '10', '15']]);
+  assert.deepEqual([nums(top), nums(low)], [['5', '10', '15', '20'], ['0', '5', '10', '15', '20']]);
   assert.equal(L.neighbourMarks(C, top, 'left', 'bottom', true).length, low.gy.length);
+  assert.equal(L.neighbourMarks(C, low, 'left', 'top', true).length, top.gy.length - 1, 'less the 0 the upper one gives up');
   low.p.axes.left.labels = false;
   assert.deepEqual(nums(top), ['0', '5', '10', '15', '20']);
   assert.deepEqual(L.neighbourMarks(C, top, 'left', 'bottom', true), []);
+  low.p.axes.left.labels = true;
+  // side by side, one range 0–50: the left panel's 50 gives way, the right one keeps its 0
+  const S = ctx(model({ series: LINES(), cols: 2, panels: [panel(0, 0), panel(0, 1)] }));
+  const lf = frame(S, 0), rt = frame(S, 1);
+  const xs = fr => L.tickNumbers(S, fr, 'bottom').map(n => n.parts.base);
+  assert.deepEqual(lf.gx.map(t => t + 0), [0, 10, 20, 30, 40, 50]);
+  assert.deepEqual([xs(lf), xs(rt)], [['0', '10', '20', '30', '40'], ['0', '10', '20', '30', '40', '50']]);
   // numbers below, centred, tilted with the names; above, raised
   const nb = L.tickNumbers(C, low, 'bottom');
   assert.deepEqual(nb[0].at, { x: low.XT(low.gx[0]), y: low.py0 + low.ph + low.fonts.fTick * 1.25, 'text-anchor': 'middle' });

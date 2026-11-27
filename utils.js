@@ -995,12 +995,14 @@ function wireListDownloads({ wrap, files }){
    and a drop there does nothing (filelist-model.js gapFor). (The line used to be the top
    of the row under the pointer while the row went in that row's place: dragged down, it
    landed under the row the line was over, the gap under the dragged row itself lit, and
-   the one under the last row could not be reached.) */
+   the one under the last row could not be reached.) A mouse's primary button alone, as a
+   file's own grip (v569: to v568 any button, the right one too, moved the row). */
 function wireListDrag(L){
   L.rows = [...L.wrap.querySelectorAll('.file-row')];
   L.rows.forEach(row=>{
     const handle = row.querySelector('.drag-handle');
     handle.addEventListener('pointerdown', e=>{
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
       e.preventDefault();
       L.drag = { from: +row.dataset.i };
       row.classList.add('dragging');

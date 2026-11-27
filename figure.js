@@ -1764,7 +1764,10 @@ function allSeriesHtml(){
   const dash = commonOf(s=> s.dash);
   const marker = commonOf(s=> s.marker);
   const DASH_MIX = dash === null, MARK_MIX = marker === null;
-  const bars = barMode();
+  // (a bar's width at most its category's slot, as its own field takes it: with a bar among
+  // the series the field takes no more, v569; to v568 up to a line's 6, every bar then wider
+  // than its slot)
+  const bars = barMode(), anyBar = F.series.some(s=> s.kind === 'bar');
   return `
     <div class="fig-serie fig-serie-caps">
       <span class="fig-grip fig-grip-off"></span>
@@ -1785,8 +1788,8 @@ function allSeriesHtml(){
                         title="Apply a texture palette to every series">${texPalIcon()}</button>` : ''}
       <button type="button" class="btn btn-sm primary fig-restore" data-restore
               title="Drop the names typed here and take the project's own again">Restore</button>
-      <input type="text" inputmode="decimal" data-num="1" data-all="width" data-min="0.1" data-max="6"
-             value="${w === null ? '' : esc(w)}" placeholder="—" title="Line / bar width for every series">
+      <input type="text" inputmode="decimal" data-num="1" data-all="width" data-min="0.1" data-max="${anyBar ? 1 : 6}"
+             value="${w === null ? '' : esc(w)}" placeholder="—" title="Line / bar width for every series${anyBar ? ' (a bar\'s: a fraction of the category slot, at most 1)' : ''}">
       ${bars ? '' : `
         <select data-all="dash" title="Line style for every series">
           ${DASH_MIX ? '<option value="" selected>—</option>' : ''}

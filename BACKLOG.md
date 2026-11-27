@@ -780,34 +780,6 @@ was proposed; nothing here is in the code yet.
   `_build` (117); xrd-cryst.js's `checkComposition` (120); xrd-widths.js's `fitPeak` (109);
   xrd-rietveld.js's `wppmLineOf` (90), `shapeOf` (85), `phasePattern` (80), `solveLinear`
   (77). The others when work takes us into them.
-- **The trace list: a row's grip takes the mouse's right button (found in v564, as v563 has
-  it).** The ≡ that drags a row to another place in every module's trace list (utils.js
-  `wireListDrag`) starts a drag on any button's press: pressed with the right button and let
-  go over another gap, the row moves there, a step of the history (checked on v563 in the
-  browser: DRS's three spectra, the first one's grip pressed with the right button and let
-  go over the third: the first now last). A file's own grip in the same list (GC's pairs)
-  takes the left button only, as the 3D views and the figure's preview do. Proposed: the
-  row's grip as the file's (a mouse's other buttons refused). Left as it is meanwhile (a
-  visible change).
-- **The figure composer: the width for every series lets a bar be wider than its slot (found
-  in v564, as v563 has it).** In the all-series row the width field (figure.js
-  `allSeriesHtml`, data-max 6, "Line / bar width for every series") takes a line's range,
-  0.1–6, where a bar's own field takes 0.1–1 (a fraction of its category's slot): in a bar
-  chart 3 typed there sets every bar three slots wide, the bars over each other and their
-  neighbours, and each bar's own field then shows the 3 it would refuse (checked on v563 in
-  the browser: GC's mean-rate bars, a bar 89 px wide drawn 334 px; 3 typed in a bar's own
-  field refused, set back to 3). Proposed: the field's range a bar's where every series is a
-  bar (and, with lines and bars together, the value cut to each one's range, or the field
-  for the lines alone). Left as it is meanwhile (a visible change).
-- **A card's kinds' menu left open through an undo (found in v562, as v561 has it).** A
-  card's title opens the kinds' menu; Ctrl+Z (or Ctrl+Y) while it is open loads the step
-  without closing it, and a kind then picked in it switches the record the menu was opened
-  for, which the step may have taken away: where its card is gone (an added card undone), the
-  pick throws (TypeError on `replaceWith`) and nothing else happens; where its id is back
-  as another kind (a switch undone), the card on show is rebuilt for the record no longer in
-  the deck, and what is done in it after (a name typed, its panel's fields) no longer reaches
-  the state. Proposed: a load closes the menu (or a pick acts only on a record still in the
-  deck). Left as it is meanwhile (a visible change).
 - **The browser storage is shared with every page of the same origin.** On GitHub Pages
   the app lives at `ceccor.github.io/datatreat_beta/`, and every project published under
   `ceccor.github.io` is the same origin: any of them can read and write DataTreat's

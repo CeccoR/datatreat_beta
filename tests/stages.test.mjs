@@ -274,6 +274,33 @@ test('the free shape against the isotropic size: the search\'s ΔBIC, which its 
   assert.match(title, /as the fit misses some lines \(the per-line check\) its ΔBIC is under −10 too/);
   assert.deepEqual(line({ ...info, keep: { ...info.keep, flagged: false } }).slice(0, 2), ['ΔBIC -12', -12.4]);
   assert.deepEqual(line({ ...info, keep: undefined }).slice(0, 2), [`ΔBIC ${own.toFixed(0)} (shape supported: under −10)`, own]);
+  // v569: the title's χ² and parameters those the ΔBIC comes from, the search's best fit's
+  // (5000 + (−12.4 − 6·ln 2001)·2.5 = 4855), the fit's after it beside them (to v568 the
+  // fit's alone: 5000 → 4900, which give −40 + 45.6, not −12).
+  const dP = 6, cs = info.chi2Iso + (info.keep.dBIC - dP*Math.log(info.N))*info.chi2redIso;
+  assert.equal(cs.toFixed(0), '4855');
+  const t2 = line({ ...info, keep: { ...info.keep, dP } })[2];
+  assert.match(t2, /χ² 5000 → 4855 with 6 more parameters \(the search's best fit; refined again after it, χ² 4900 with 6\); BIC with χ² divided by the isotropic fit's χ²_ν \(2\.50\)/);
+  assert.ok(Math.abs((cs - info.chi2Iso)/info.chi2redIso + dP*Math.log(info.N) - info.keep.dBIC) < 1e-9, 'they give the ΔBIC shown');
+  // the search's own fit the last: no aside; a χ²_ν under 1 said taken as 1; none kept: the fit's, as before
+  const same = { ...info, chi2: Math.round(cs), keep: { ...info.keep, dP } };
+  assert.match(line(same)[2], /χ² 5000 → 4855 with 6 more parameters; BIC/);
+  assert.match(line({ ...same, chi2redIso: 0.8 })[2], /χ²_ν \(0\.80, taken as 1\)/);
+  assert.match(line({ ...info, keep: undefined })[2], /χ² 5000 → 4900 with 6 more parameters; BIC/);
+});
+
+/* v569: an axis's angular esd of 0 (reachable: sdOf clamps a variance ≤ 0 to 0, an axis fixed
+   by the symmetry's constraints) is given with no ± in the results' lines and titles, as the
+   3D view's labels give it since v568 (to v568 "±0°"). */
+test('the shape\'s lines: an angular esd of 0 with no ±, as the 3D view\'s labels', ()=>{
+  const a = (esdAngle)=> ({ angle: 2.34, uvw: '[001]', label: '[001]', esdAngle });
+  const sh = { type: 'ellipsoidL' };
+  assert.deepEqual([1.5, 0, NaN, 70].map(e=> W.pmTxt(a(e))), [' ±1.5°', '', '', '']);
+  assert.deepEqual([1.5, 0, 70].map(e=> W.turnCost(a(e))), [', which a turn of ±1.5° (1σ, every other parameter refined again) would cost χ²_ν', '', '']);
+  assert.match(W.angTitle(sh, a(1.5)), /; it is fixed to ±1\.5° \(1σ, from the covariance/);
+  assert.match(W.angTitle(sh, a(0)), /; it is fixed \(1σ, from the covariance/);
+  assert.doesNotMatch(W.angTitle(sh, a(0)), /±/);
+  assert.match(W.angTitle(sh, a(70)), /not fixed by the data within 60°/);
 });
 
 // Every digest of the cases named so far against the golden file (written by npm run test:update).

@@ -111,7 +111,8 @@ export function createPeakAnalysis(host, root, o){
      fullView             the plot's next drawing at its full range: the sample on show
                           changed while the card was folded (show), as it is drawn when
                           that happens unfolded (v568; to v567 the card unfolded drew the
-                          new sample at the zoom it had on the other)
+                          new sample at the zoom it had on the other); so too a file left
+                          out, taken in or removed, or a state loaded (refresh: v569)
      K                    each view's key or markup as last drawn (ana: the plot's, step:
                           the step note's, table, cag: the Caglioti box's, stack, stackLeg:
                           its legend's, size: the size chart's, chips, note: its note's)
@@ -154,7 +155,7 @@ function apiOf(S){
     clear(){ M.clearEntries(S); },
     refresh: preserveView => refresh(S, preserveView),
     // Another sample on show (the cards share it).
-    show(){ setAddMode(S, false); S.panel.sel = S.panel.hov = null; writeStoreToInputs(S); if (S.host.hidden()) S.fullView = true; updateView(S); renderTable(S); },
+    show(){ setAddMode(S, false); S.panel.sel = S.panel.hov = null; writeStoreToInputs(S); updateView(S); renderTable(S); },
     /* The card folded by its arrow, the standard's window closed: a peak being placed is
        left, as by + Add peak again (its button off, the guide gone). Up to v499 it stayed
        on, unseen, until the next key dropped it: a card unfolded again had it still on. */
@@ -446,11 +447,14 @@ function drawAnalysisInto(S, idx, preserveView){
   highlightPanel(S);
   S.K.ana = key;
 }
-// The sample on show (the standard's file), its plot and its label.
+// The sample on show (the standard's file), its plot and its label. Folded, not drawn: a
+// drawing that keeps no zoom (another sample, the files changed, a state loaded) is owed at
+// the full range when it unfolds (fullView).
 function updateView(S, preserveView){
   const fs = files(S);
   // (the selector: none on the standard's, its window names it)
   if (S.nav) S.nav.update();
+  if (!preserveView && S.host.hidden()) S.fullView = true;
   if (!fs.length || !S.processed.length) return;
   const k = Math.min(curIdx(S), fs.length - 1);
   if (S.host.hidden()) return;

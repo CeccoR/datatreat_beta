@@ -167,7 +167,10 @@ The crop is a rectangle in the original's pixels:
 
 - whole pixels;
 - inside the image, never in the bar;
-- at least 64 px a side (an image smaller than that is taken whole).
+- at least 64 px a side (an image smaller than that is taken whole); at a locked ratio the
+  ratio wins: where the image cannot hold a crop at it with such sides, the crop is the
+  widest at the ratio it holds, a side under 64 px (v569: to v568 the sides won, 1:1 on an
+  image 60 px high giving 64 × 60).
 
 The image itself is never changed. The default crop is the whole image, with the bar
 left out. While **Default** is ticked (as a new image starts), the crop is the default
@@ -502,7 +505,7 @@ A project keeps each file's own bytes: in the module's state as they are, a `Uin
 - **The id.** It is a hash of the bytes. A second copy of a file already loaded, whatever its name, is reported as already loaded.
 - **Restoring.** Opened again, a project's images are read again from their bytes. One that no longer reads is left out, with a note. Which still read, and their sizes, are learnt from the headers alone; the pixels are decoded when drawn (§6.3).
 - **A malformed project** (a project file edited by hand or damaged) is taken as the module would have made it. To v487 what it held went in as it was: a crop that was not a number threw in the canvas (*Value is not of type 'long'*) and the views drew NaN; a `files` that was not a list, a null entry or a null group threw and left the module empty; a correction of 1e9, a normalisation *evil*, an index of −3, `__proto__` among the groups' settings went in. Now:
-  - an image: its bytes, and an id of the form the hash gives (else made from the bytes), once (a second entry of one id is dropped); strings for its name and label; its crop whole pixels inside the image, at least 64 px a side, else the default crop; its ratio one of the four; its correction within the fields' ranges; its *Default* boxes ticked only where the crop and the correction are the defaults;
+  - an image: its bytes, and an id of the form the hash gives (else made from the bytes), once (a second entry of one id is dropped); strings for its name and label; its crop whole pixels inside the image, at least 64 px a side or, at its ratio, the widest the image holds at it (v569), else the default crop; its ratio one of the four; its correction within the fields' ranges; its *Default* boxes ticked only where the crop and the correction are the defaults;
   - the settings, all groups' and each group's: a normalisation of the four, every number within its field's range, else its default;
   - the groups: ids that are names (no key of a plain object's own, as `__proto__` or `toString`), once each; each image in one group; the scale common or own; the image shown at index 0 or more;
   - a group's figure: each number within its field's range (wider for the grid's counts, the height and the plot, which the layout also sets), each choice one of its options, each box true or false, the ink a colour, else the default; the order, names and bar lengths as the controls write them. To v487 a width that was not a number drew the figure as NaN.

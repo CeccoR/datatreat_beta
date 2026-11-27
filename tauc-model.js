@@ -750,8 +750,10 @@ export function restorePanel(U, spec, P, s0, files){
   P.shared = { ...spec.defaults, ...paramsIn(U, spec, s.shared) };
   P.sharedVlines = linesIn(U, spec, s.sharedVlines || s.vlines);
   P.per = Array.isArray(s.per) ? s.per.map((q, i)=> perIn(U, spec, P, files, q, i, evSh)) : files.map(()=>({}));
-  // Snapshots from before the flag had their lines suggested whenever they had any.
-  P.suggested = s.suggested != null ? !!s.suggested : isFinite(P.sharedVlines.v1);
+  // Snapshots from before the flag had their lines suggested whenever they had any: the
+  // common ones, or a sample's own (an Urbach card's always, a card in one mode's; up to
+  // v568 the common ones alone counted, and the samples' own were placed anew).
+  P.suggested = s.suggested != null ? !!s.suggested : isFinite(P.sharedVlines.v1) || P.per.some(q=> U.isObj(q) && U.isObj(q.vlines));
   // Backward compatibility with pre-all/one snapshots (params stored by input id,
   // passed on keyed by the field's suffix: the cards' ids are not the ones they had).
   if (U.isObj(s.params)){

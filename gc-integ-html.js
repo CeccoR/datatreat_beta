@@ -230,8 +230,12 @@ export const calFilesHtml = (u, files)=> files.map((f, i)=> `<div class="xrd-std
    (utils.js alertHtml's: the box removed, gc-integ.js paintCalWarn draws it again only
    when those files change). */
 export const calWarnHtml = (u, old)=> u.fileAlertHtml('opened', old.map(f=> `${u.esc(f.name)}: saved by an older version without its GC table: its standards are named by column. Drop the table (the same name without _TCD) to name them.`));
-// (what the unit's line says: no standards, the standards being integrated, all integrated)
-export const calStatusText = (files, left, rows)=> !files.length ? 'No standards: each pair takes the GC software\'s scale (k).' : left ? `Integrating the standards… (${left} left)` : `${plural(rows, 'chromatogram')} integrated.`;
+/* (what the unit's line says: no standards, the standards being integrated, or not, the
+   integration stopped (`stopped`: nothing runs till Re-integrate, as the card's line says;
+   v569: to v568 "Integrating…" all the same), all integrated) */
+export const calStatusText = (files, left, rows, stopped)=> !files.length ? 'No standards: each pair takes the GC software\'s scale (k).'
+  : left && stopped ? `Stopped: ${plural(left, 'chromatogram')} of the standards not integrated (↻ Re-integrate on the card).`
+  : left ? `Integrating the standards… (${left} left)` : `${plural(rows, 'chromatogram')} integrated.`;
 // A thumbnail of a standard's chromatogram over the windows (lo–hi): a polyline, no plot.
 export function thumbHtml(d, j, lo, hi){
   const W = 72, H = 22, pts = thumbPoints(d, j, lo, hi, W, H);

@@ -128,11 +128,15 @@ test('the crop: fitted, resized by every handle, typed, re-ratioed, reset and dr
     const W = int(20, 600), H = int(20, 600), r = [null, 1, 4/3, 3/2][k % 4];
     const c = M.fitCrop({ x: int(-300, 700) + R.u(), y: int(-300, 700), w: int(-10, 900) + R.u(), h: int(-10, 900) }, W, H, r);
     const rr = { width: W, imageH: H };
-    assert.ok(M.validCrop(c, rr), JSON.stringify([c, W, H, r]));
-    if (r && c.w > Math.min(64, W) && c.h > Math.min(64, H) && c.w < W && c.h < H) assert.ok(Math.abs(c.w/c.h - r) <= 1/Math.min(c.w, c.h) + 1e-9, JSON.stringify([c, r]));
+    assert.ok(M.validCrop(c, rr, r), JSON.stringify([c, W, H, r]));
+    // At its ratio whatever the image (v569: to v568 not where its sides under 64 px could
+    // not hold it), to a pixel.
+    if (r) assert.ok(Math.abs(c.w/c.h - r) <= 1/Math.min(c.w, c.h) + 1e-9, JSON.stringify([c, W, H, r]));
+    if (r && (c.w < Math.min(64, W) || c.h < Math.min(64, H))) assert.ok(!M.validCrop(c, rr) && (c.w === W || c.h === H || Math.abs(c.w - Math.min(W, H*r)) <= 1), 'under 64 px only where the image is too narrow: ' + JSON.stringify([c, W, H, r]));
     // A resize from it keeps it whole and inside, the side or corner opposite the handle where it stays.
     const hd = M.HANDLES[k % 8], dx = int(-400, 400), dy = int(-400, 400), z = M.resized(c, hd, dx, dy, W, H, r);
-    assert.ok(M.validCrop(z, rr), JSON.stringify([c, hd, dx, dy, W, H, r, z]));
+    assert.ok(M.validCrop(z, rr, r), JSON.stringify([c, hd, dx, dy, W, H, r, z]));
+    if (r) assert.ok(Math.abs(z.w/z.h - r) <= 1/Math.min(z.w, z.h) + 1e-9, JSON.stringify([c, hd, W, H, r, z]));
     if (!r && hd === 'se') assert.deepEqual([z.x, z.y], [c.x, c.y]);
     if (!r && hd === 'nw') assert.deepEqual([z.x + z.w, z.y + z.h], [c.x + c.w, c.y + c.h]);
   }
@@ -166,8 +170,23 @@ test('the crop: fitted, resized by every handle, typed, re-ratioed, reset and dr
   f = { crop: { x: 0, y: 0, w: 120, h: 120 }, aspect: 'free' };
   M.setAspect(f, r, '3:2');
   assert.deepEqual([f.crop, f.aspect], [{ x: 0, y: 20, w: 120, h: 80 }, '3:2']);
+  // The ratio wins (v569): where the image cannot hold a crop at it with sides of 64 px, the
+  // widest it holds (to v568 the sides won: 64 × 60 at 1:1, 64 × 50 at 4:3 typed).
   M.setAspect(f, { width: 256, imageH: 60 }, '1:1');
-  assert.deepEqual(f.crop, { x: 30, y: 0, w: 64, h: 60 }, 'its sides 64 px at least: the ratio gives way');
+  assert.deepEqual(f.crop, { x: 30, y: 0, w: 60, h: 60 }, 'its sides under 64 px: the least sides give way');
+  for (const [W, H, a, want] of [[256, 60, '1:1', [60, 60]], [300, 50, '4:3', [67, 50]], [300, 50, '3:2', [75, 50]], [60, 256, '1:1', [60, 60]], [50, 300, '4:3', [50, 38]],
+    [70, 100, '3:2', [70, 47]], [100, 70, '4:3', [85, 64]], [1000, 800, '4:3', [85, 64]], [1000, 800, '3:2', [96, 64]]]){
+    const g = { crop: { x: 0, y: 0, w: W, h: H }, aspect: 'free' }, im = { width: W, imageH: H };
+    M.setAspect(g, im, a);
+    // typed small, the least at the ratio (to v568, on any image, 64 × 64 at 4:3)
+    M.typeCrop(g, im, 'w', 10);
+    assert.deepEqual([g.crop.w, g.crop.h, g.aspect], [...want, a], `${W}×${H} at ${a}`);
+    assert.ok(M.validCrop(g.crop, im, M.ASPECTS[a]));
+    // a corner dragged to nothing, the same; moved, its size kept
+    assert.deepEqual([M.resized(g.crop, 'nw', 500, 500, W, H, M.ASPECTS[a])].map(z=> [z.w, z.h])[0], want);
+    M.dragCrop(g, { mode: 'move', c0: { ...g.crop, x: 0, y: 0 }, clamped: false, def: false }, 3, 2, W, H);
+    assert.deepEqual([g.crop.w, g.crop.h], want, 'moved');
+  }
   // Reset to the default: the whole image less its bar, its ratio from it.
   const S = loaded('a', 'b');
   f = S.allFiles[1]; f.crop = { x: 3, y: 3, w: 70, h: 70 }; f.aspect = '1:1'; f.clamped = true;
@@ -360,6 +379,17 @@ test('the state: saved and read back, a v517 project, ids made again, files twic
   assert.deepEqual([X.allFiles[0].crop, X.allFiles[0].sq, X.allFiles[0].aspect], [{ x: 10, y: Math.round(10*101/84), w: 80, h: Math.round(60*101/84) }, true, 'free']);
   restore(X, { files: [{ ...s.files[1], sq: undefined, cropDef: true, crop: { x: 10, y: 10, w: 80, h: 60 } }] });
   assert.deepEqual([X.allFiles[0].crop, X.allFiles[0].cropDef], [{ x: 0, y: 0, w: 110, h: 101 }, true]);
+  // A crop at its ratio under 64 px, where the image cannot hold both (v569), read back as it
+  // was; with no ratio, or another, widened to 64 px as before.
+  const hf = fileOf('h'), hr = info(hf);
+  assert.ok(hr.imageH < 64 && hr.width > 64, JSON.stringify([hr.width, hr.imageH]));
+  const sq = { x: 20, y: 0, w: hr.imageH, h: hr.imageH };
+  const Q = newS(); restore(Q, { files: [{ ...M.snapshotOf(loaded('h')).files[0], raw: hf.raw, cropDef: false, crop: sq, aspect: '1:1' }] });
+  assert.deepEqual([Q.allFiles[0].crop, Q.allFiles[0].aspect], [sq, '1:1']);
+  for (const aspect of ['free', '4:3', 'toString']){
+    restore(Q, { files: [{ ...M.snapshotOf(loaded('h')).files[0], raw: hf.raw, cropDef: false, crop: sq, aspect }] });
+    assert.deepEqual(Q.allFiles[0].crop, { ...sq, w: 64 }, aspect);
+  }
   // Malformed: crops, ratios, corrections, flags, names, settings, groups, figures, the index.
   const Y = newS();
   restore(Y, { files: [{ ...s.files[0], name: 7, label: null, crop: { x: '1', y: 2, w: 3, h: 4 }, aspect: 'toString', adj: { b: 500, c: 0, g: 'x' }, adjDef: true, cropDef: true, linked: 'yes', clamped: 1, included: 0, held: 5 },

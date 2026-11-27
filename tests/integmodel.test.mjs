@@ -563,6 +563,9 @@ test('the markup: the instructions, the card\'s and the window\'s bodies, Window
   assert.equal(H.calWarnHtml(HU, [files[1]]), PAGE.alertHtml('warn', 'Opened, to check:', ['g&quot;: saved by an older version without its GC table: its standards are named by column. Drop the table (the same name without _TCD) to name them.']));
   assert.equal(H.calWarnHtml(HU, []), '');
   assert.deepEqual([H.calStatusText([], 0, 0), H.calStatusText([1], 3, 6), H.calStatusText([1], 0, 1)], ['No standards: each pair takes the GC software\'s scale (k).', 'Integrating the standards… (3 left)', '1 chromatogram integrated.']);
+  // Stopped, nothing running (v569: to v568 "Integrating…" all the same).
+  assert.deepEqual([H.calStatusText([1], 3, 6, true), H.calStatusText([1], 1, 6, true), H.calStatusText([1], 0, 6, true), H.calStatusText([], 0, 0, true)],
+    ['Stopped: 3 chromatograms of the standards not integrated (↻ Re-integrate on the card).', 'Stopped: 1 chromatogram of the standards not integrated (↻ Re-integrate on the card).', '6 chromatograms integrated.', 'No standards: each pair takes the GC software\'s scale (k).']);
   assert.equal(H.levelRowsHtml(HU, [], 0, 0, 1), '<tr><td colspan="8" class="txt-meta">Drop the standards\' GC table and its raw chromatograms above.</td></tr>');
   const d = { t: [0, 0.5, 1, 1.5, 2], cols: [[1, 2, 3, 2, 1]] };
   const row = { f: { name: 'f<', table: { name: 't>' } }, fi: 0, j: 0, d, lv: { h2: 0.05, o2: null, on: false }, r: { error: 'x' }, name: 'n<b>' };
