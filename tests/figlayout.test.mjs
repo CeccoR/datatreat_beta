@@ -353,6 +353,11 @@ test('a panel: its scales, bars, boxes, error bars, curves, value labels and the
   assert.equal(k.whiskers.length, 4); assert.equal(k.mean.length, 2); assert.equal(k.outliers.length, 2);
   assert.deepEqual([k.rect.width, k.whiskers[2].x2 - k.whiskers[2].x1, k.outliers[0].r], ['20.00', 8, 2]);
   assert.equal(L.boxMarks(xf, bx, 3, bx.boxes[3], 200, 20).mean.length, 0, 'no mean, no cross');
+  // (v576) a box of one value: its quartiles one, no height; marked minBox (XRPD's sizes, as
+  // plot.js drew it), the cross's height about it; a box taller, as it is
+  const one = { q1: 3, med: 3, q3: 3, lo: 3, hi: 3, mean: 3, out: [] }, y3 = xf.Yc(3);
+  assert.deepEqual([L.boxMarks(xf, bx, 1, one, 200, 20).rect.height, L.boxMarks(xf, bx, 1, { ...one, minBox: true }, 200, 20).rect], ['0.00', { x: '190.00', y: (y3 - 2.5).toFixed(2), width: '20.00', height: '5.00' }]);
+  assert.deepEqual(L.boxMarks(xf, bx, 1, { ...bx.boxes[1], minBox: true }, 200, 20).rect, k.rect);
   const lab = L.boxLabel(X, xf, bx, 1, bx.boxes[1], 200, k, '#000', '#fff');
   assert.equal(lab.txt, '4.20 ± 0.40'); near(lab.at.y, Math.min(k.yhi, ...bx.boxes[1].out.map(xf.Yc)) - 3, 1e-12, 'over the highest outlier');
   // a curve: the points with a place, its symbols at 2 decimals

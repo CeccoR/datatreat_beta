@@ -236,7 +236,7 @@ function fileCallbacks(S){
 }
 function removeAll(S){
   S.allFiles.length=0;
-  cards(S).forEach(a=>{ const e = S.live.get(a.id); if (a.type === 'scherrer' && e) e.inst.clear(); const s = a.states.scherrer; if (a.type !== 'scherrer' && s){ s.perParams = []; s.manualPeaks = []; s.removedPeaks = []; if (Array.isArray(s.cif)) s.cif = []; } });
+  cards(S).forEach(a=>{ const e = S.live.get(a.id); if (a.type === 'scherrer' && e) e.inst.clear(); const s = a.states.scherrer; if (a.type !== 'scherrer' && s){ s.perParams = []; s.manualPeaks = []; s.removedPeaks = []; if (Array.isArray(s.cif)){ s.cif = []; delete s.cifTexts; } } });
   S.loadAlerts = ''; S.leftOut = ''; S.uploadAlerts = ''; afterFilesChange(S);
 }
 

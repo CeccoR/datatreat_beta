@@ -506,15 +506,17 @@ class Plot{
      to the furthest values within 1.5 IQR, each value beyond them a circle, and the
      mean a cross. `st` = {q1, med, q3, lo, hi, mean, err, out[]}; `err`, the ± written
      beside the mean, is carried for whatever reads the plot back. `meta.label` names
-     its series. */
+     its series; `meta.minBox` (v576, XRPD's crystallite sizes) draws the box no shorter
+     than the mean's cross, about its middle, so that a box of one value (or of values all
+     alike: its quartiles one) shows its colour, not its lines alone. */
   box(xc, st, color, hw, dx, meta){
     const entry = {type:'box', xc, q1:st.q1, med:st.med, q3:st.q3, lo:st.lo, hi:st.hi, mean:st.mean, err:st.err,
-                   out:(st.out||[]).slice(), color, hw:hw||14, dx:dx||0, label: meta && meta.label};
+                   out:(st.out||[]).slice(), color, hw:hw||14, dx:dx||0, label: meta && meta.label, ...(meta && meta.minBox ? { minBox: true } : {})};
     this._stored.push(entry);
     return this._renderBox(entry);
   }
   _renderBox(e){
-    const x = this.px(e.xc) + e.dx, Y = v => this.py(v), hw = e.hw, cap = hw*0.5;
+    const x = this.px(e.xc) + e.dx, Y = v => this.py(v), hw = e.hw, cap = hw*0.5, r = Math.min(3.5, hw*0.4);
     // The lines in the ink error bars are drawn in, which the theme and the export set.
     const ink = { stroke:'#fff', 'stroke-width':1.2, 'class':'plot-errbar' };
     const g = svgEl('g', {});
@@ -523,10 +525,11 @@ class Plot{
     add('line', {x1:x, x2:x, y1:Y(e.q3), y2:Y(e.hi), ...ink});
     add('line', {x1:x-cap, x2:x+cap, y1:Y(e.lo), y2:Y(e.lo), ...ink});
     add('line', {x1:x-cap, x2:x+cap, y1:Y(e.hi), y2:Y(e.hi), ...ink});
-    add('rect', {x:x-hw, y:Math.min(Y(e.q1), Y(e.q3)), width:hw*2, height:Math.abs(Y(e.q1)-Y(e.q3)), fill:e.color});
+    const y0 = Math.min(Y(e.q1), Y(e.q3)), h0 = Math.abs(Y(e.q1)-Y(e.q3)), grow = e.minBox ? Math.max(0, 2*r - h0) : 0;
+    add('rect', {x:x-hw, y:y0 - grow/2, width:hw*2, height:h0 + grow, fill:e.color});
     add('line', {x1:x-hw, x2:x+hw, y1:Y(e.med), y2:Y(e.med), ...ink, 'stroke-width':2});
     if (isFinite(e.mean)){
-      const r = Math.min(3.5, hw*0.4), ym = Y(e.mean);
+      const ym = Y(e.mean);
       add('line', {x1:x-r, x2:x+r, y1:ym-r, y2:ym+r, ...ink});
       add('line', {x1:x-r, x2:x+r, y1:ym+r, y2:ym-r, ...ink});
     }

@@ -13,7 +13,8 @@
    their listeners. Each is a function at module level of S, not a closure inside
    createPeakAnalysis (to v560 one of 908 lines): what a listener holds is what it is handed.
    (v575) Each sample's CIF, chosen among the tab's or read here, names its peaks by its
-   phase's reflections, and the Results chart the sizes by species.
+   phase's reflections, and the Results chart the sizes by species. (v576) At its tube's Kα2
+   too, a peak none names at λ; the boxes of one size seen, the reflections by their hkl.
 ========================================================= */
 import { esc, fmtNum, csvLine, linspace, interpLinear, meanArr, stdArr, boxStats, maxArr, minArr, X_SVG, guardNumericInput, guardNumberInputs, fitCsvIcons, barNames, barChipYmax, NORM_OPTIONS, normOf, keeper, boxHtml } from './utils.js';
 import { svgEl, Plot, axisReadout } from './plot.js';
@@ -739,7 +740,8 @@ function drawSizeBarChart(S, rows, SER, chips){
   if (legend) legend.innerHTML = H.sizeLegendHtml(SER, U);
 }
 // Each row's boxes (its species' series, a pair: size and corrected), their labels, and its
-// name under them.
+// name under them. A box no shorter than its mean's cross (v576: plot.js minBox), so that one
+// of a single size, as a reflection of one sample by peak, shows its series' colour.
 function drawBoxes(plot, rows, SER, L, fit){
   for (let k=0;k<L.n;k++){
     const xc=k+1, r = rows[k];
@@ -747,7 +749,7 @@ function drawBoxes(plot, rows, SER, L, fit){
       const b = r[m.k+'Box'];
       if (!b) return;
       const off = L.offOf(mi);
-      plot.box(xc, { ...b, mean: r[m.k+'Mean'], err: r[m.k+'Std'] }, m.color, L.hw, off, { label: m.name });
+      plot.box(xc, { ...b, mean: r[m.k+'Mean'], err: r[m.k+'Std'] }, m.color, L.hw, off, { label: m.name, minBox: true });
       plot.barLabel(xc, M.boxTop(b), M.sizeLab(r[m.k+'Mean'], r[m.k+'Std']), {gap:L.gap, dx:off});
     });
     plot.tickLabel(xc, fit.labels[k], fit.rot, r.label, r.name);

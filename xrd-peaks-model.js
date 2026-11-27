@@ -9,13 +9,15 @@
    works out: its fields, the plot's curves and marks, the Results' stack and the size
    chart's layout, the changes to its state (below: THE CARD'S WIRING, WORKED OUT). And
    (v575) each sample's CIF, its species, and its peaks assigned to its phase's reflections
-   (below: THE SAMPLES' CIFS), which the sizes by species and by reflection are drawn from.
+   (below: THE SAMPLES' CIFS), which the sizes by species and by reflection are drawn from;
+   (v576) a peak at a reflection's Kα2 alone named so, and the CIFs' texts saved once.
    utils.js's helpers (maxArr, meanArr, stdArr, boxStats, fmtNum, csvLine, linspace,
    interpLinear), which need a page to load, are handed in (u: xrd-peaks.js U).
 ========================================================= */
 import { boxSmooth, boxWeights, meanStep, widthText, ptsText } from './smooth.js';
 import { prepOf, phaseReflections } from './xrd-rv-model.js';
 import { hklText } from './xrd-math.js';
+import { ANODE_LINES } from './xrd-instr.js';
 
 // Index of the grid point nearest to a 2θ, by bisection: an axis need not be even (a scan
 // with points left out, xrd-instr.js, or listed positions). Up to v484 it was taken as
@@ -442,9 +444,23 @@ function topOf(maxima){ const m = Math.max(-Infinity, ...maxima); return m > 0 ?
    together, (110)/(101); none, unassigned. A sample's sizes and those by reflection take its
    assigned peaks alone; a sample with no CIF has its peaks listed, not grouped, and is in
    neither. To v574 the samples' peaks were matched with one another by their positions,
-   which reflections closer than a FWHM could swap. */
-// A sample's CIF as a state holds it, its file's name and its text; anything else, none.
+   which reflections closer than a FWHM could swap.
+   (v576) Where the sample's λ names a tube's line (kAlpha2Of), a peak no reflection is
+   within its tolerance of is looked for at the reflections' Kα2 too: one there is named by
+   them, "(110) Kα2", and is left out of the sizes as an unassigned one, as it repeats its
+   Kα1 peak. */
+// A sample's CIF, its file's name and its text; anything else, none.
 const cifEntry = v => v && typeof v === 'object' && typeof v.file === 'string' && typeof v.cif === 'string' ? { file: v.file, cif: v.cif } : null;
+/* As a state holds it (v576; to v575 each sample its text, a CIF given to ten samples saved ten
+   times): its file's name and the place of its text in the state's pool (texts, each text
+   once, added there where it is not yet: cifRef); a sample's entry read back from it, or
+   one with its text in it as v575 saved it (cifIn: anything else none). */
+function cifRef(q, texts){
+  let at = texts.indexOf(q.cif);
+  if (at < 0) at = texts.push(q.cif) - 1;
+  return { file: q.file, ref: at };
+}
+const cifIn = (v, texts)=> cifEntry(v && typeof v === 'object' && Number.isInteger(v.ref) && Array.isArray(texts) && typeof texts[v.ref] === 'string' ? { file: v.file, cif: texts[v.ref] } : v);
 // Its phase (prepOf's, kept by its text), or null: none, or one that does not read as a CIF.
 function phaseOfCif(q){
   if (!q) return null;
@@ -457,16 +473,33 @@ const assignTol = w => Math.max(ASSIGN.floor, Number.isFinite(w) && w > 0 ? ASSI
 const peakRefl = (pk, refl)=>{ const tol = assignTol(pk.fwhmClassic) + 1e-9; return refl.filter(r=> Math.abs(r.tt - pk.detPos) <= tol); };
 // Their label: each one's hkl in brackets, '/' between them, "(110)/(101)"; none, ''.
 const reflLabel = rs => rs.map(r=> '(' + hklText(r.hkl) + ')').join('/');
+/* The Kα2 of the tube whose line a sample's λ is (v576): the anode (xrd-instr.js ANODE_LINES)
+   whose Kα1, or whose Kα mean (2·Kα1 + Kα2)/3, is within K2_TOL of it (the λ selector's Cu
+   Kα1 and Kα, Mo, Co and Cr Kα1 are, their digits a little other than the table's); NaN where
+   it is none's (a value of one's own, a Kα2 itself): no Kα2, the peaks named as to v575. A
+   tube's Kα1 and its mean are 0.0012 Å apart at least. */
+const K2_TOL = 2e-4;
+function kAlpha2Of(lam){
+  for (const [a1, a2] of Object.values(ANODE_LINES)) if (Math.abs(lam - a1) <= K2_TOL || Math.abs(lam - (2*a1 + a2)/3) <= K2_TOL) return a2;
+  return NaN;
+}
 /* A sample's assignment: its phase (prep) and species (sp, its name), its reflections over
    its pattern f's range at the wavelength lam (refl; reflOf: phaseReflections, which the
-   card keeps), and each kept peak of its processing pr, in their order, with its reflections
-   and their label (rows: { pk, refl, label }); null with no CIF (q), one that does not read
-   as one, or no processing. */
+   card keeps) and at its tube's Kα2 (lam2, refl2: none where lam names no tube's line), and
+   each kept peak of its processing pr, in their order (rows: peakRow's); null with no CIF
+   (q), one that does not read as one, or no processing. */
 function sampleAssign(f, pr, lam, q, reflOf = phaseReflections){
   const prep = phaseOfCif(q);
   if (!prep || !pr) return null;
-  const a = f.x[0], b = f.x[f.x.length - 1], refl = reflOf(prep, lam, Math.min(a, b), Math.max(a, b));
-  return { prep, sp: prep.name, refl, rows: pr.peaks.filter(pk=> !pk.removed).map(pk=>{ const rs = peakRefl(pk, refl); return { pk, refl: rs, label: reflLabel(rs) }; }) };
+  const a = f.x[0], b = f.x[f.x.length - 1], lo = Math.min(a, b), hi = Math.max(a, b), lam2 = kAlpha2Of(lam);
+  const refl = reflOf(prep, lam, lo, hi), refl2 = lam2 > 0 ? reflOf(prep, lam2, lo, hi) : [];
+  return { prep, sp: prep.name, refl, lam2, refl2, rows: pr.peaks.filter(pk=> !pk.removed).map(pk=> peakRow(pk, refl, refl2)) };
+}
+// A peak's row: its reflections (refl) and their label; none within its tolerance, those at
+// Kα2 that are (k2, v576: none where it has some at λ), labelled "(110) Kα2"; neither, ''.
+function peakRow(pk, refl, refl2){
+  const rs = peakRefl(pk, refl), k2 = rs.length ? [] : peakRefl(pk, refl2);
+  return { pk, refl: rs, k2, label: rs.length ? reflLabel(rs) : k2.length ? reflLabel(k2) + ' Kα2' : '' };
 }
 // The samples' species (A: their assignments), each once, in the samples' order.
 const speciesOf = A => [...new Set(A.filter(Boolean).map(a=> a.sp))];
@@ -475,7 +508,10 @@ const speciesOf = A => [...new Set(A.filter(Boolean).map(a=> a.sp))];
    index among speciesOf's; species: its name). By sample, each sample with a CIF, its
    species' sizes (sampleSizes); by peak, each reflection (its label) a species' peaks are
    assigned to, in the species' order then in 2θ, its box over its samples' sizes there,
-   each sample's the mean of its peaks there (one, as a rule), each in ps ({ k, raw, corr }). */
+   each sample's the mean of its peaks there (one, as a rule), each in ps ({ k, raw, corr }).
+   A reflection's label under the chart its hkl alone (v576; to v575, with two species or more,
+   its species' name before it, cut in the middle where it did not fit): its species is its
+   series', the boxes' colour, named in the legend. */
 function sizeRows(by, fs, A, procs, fps, m, u){
   const sps = speciesOf(A);
   if (by !== 'peak') return fs.flatMap((f, k)=> A[k] ? [{ name: f.name, label: f.label, sp: sps.indexOf(A[k].sp), species: A[k].sp, ...sampleSizes(procs[k], fps[k], m, false, u, A[k]) }] : []);
@@ -497,8 +533,7 @@ function sizeRows(by, fs, A, procs, fps, m, u){
       groups.get(key).ps.push({ k, raw: u.meanArr(o.raw), corr: o.corr.length ? u.meanArr(o.corr) : NaN });
     });
   });
-  const many = sps.length > 1;
-  return [...groups.values()].sort((g, h)=> g.sp - h.sp || g.tt - h.tt).map(g=> ({ name: `${g.species} ${g.hkl}`, label: many ? `${g.species} ${g.hkl}` : g.hkl,
+  return [...groups.values()].sort((g, h)=> g.sp - h.sp || g.tt - h.tt).map(g=> ({ name: `${g.species} ${g.hkl}`, label: g.hkl,
     sp: g.sp, species: g.species, hkl: g.hkl, ps: g.ps, ...sizeSummary(g.ps.map(q=> q.raw), g.ps.map(q=> q.corr).filter(isFinite), false, !!m, u) }));
 }
 /* The CIFs a sample can be given: those of the tab's cards (list, { file, cif }: every
@@ -571,10 +606,13 @@ function fileParams(pp, paramMode, shared){
 
 /* The card's state as saved (c: its settings, its peaks added and removed by hand, the
    samples' CIFs and the note of an older version's matching (v575: none for the standard),
-   what the size chart is by, the normalisation, a project's conversion's note and points). */
+   what the size chart is by, the normalisation, a project's conversion's note and points).
+   The samples' CIFs (cif) each its file's name and its text's place in cifTexts, where each
+   text is once (v576: cifRef; none, no cifTexts). */
 function stateOf({ std, perParams, manualPeaks, removedPeaks, cifs, oldGroups, shared, paramMode, sizeBy, norm, stepNote, heldPts }){
+  const texts = [], cif = std ? null : cifs.map(v=>{ const q = cifEntry(v); return q && cifRef(q, texts); });
   return { perParams: perParams.map(q=>({...q})), manualPeaks: manualPeaks.map(a=>a.slice()), removedPeaks: removedPeaks.map(a=>a.slice()),
-    ...(std ? {} : { cif: cifs.map(cifEntry) }), ...(oldGroups ? { oldGroups: true } : {}),
+    ...(cif ? { cif } : {}), ...(texts.length ? { cifTexts: texts } : {}), ...(oldGroups ? { oldGroups: true } : {}),
     shared: {...shared}, paramMode: {...paramMode}, sizeBy, norm, ...(stepNote.length ? { stepNote: stepNote.slice() } : {}),
     ...(Object.keys(heldPts).length ? { heldPts: {...heldPts} } : {}) };
 }
@@ -588,9 +626,10 @@ function stateOf({ std, perParams, manualPeaks, removedPeaks, cifs, oldGroups, s
    read in) threw. The widths of a project to v510, in points, are converted (fromPts).
    st: the steps of the files included, stAll: those and the steps of the files left out
    (which come back with their entries). The normalisation is the card's to read (utils.js
-   normOf). The samples' CIFs (v575), each a file's name and text or none; a state of an
-   older version has none, and where it had samples to match peaks across (two or more), the
-   note that says so (oldGroups) until a CIF is chosen (setCif). */
+   normOf). The samples' CIFs (v575), each a file's name and text or none (its text in the
+   state's pool, cifTexts, or, saved by v575, in its entry: cifIn); a state of an older
+   version has none, and where it had samples to match peaks across (two or more), the note
+   that says so (oldGroups) until a CIF is chosen (setCif). */
 function readState(s, std, st, stAll){
   const obj = objOf;
   s = obj(s);
@@ -633,7 +672,7 @@ function readState(s, std, st, stAll){
   const manualPeaks = arr(s.manualPeaks, ()=> []).map(posOf);
   const removedPeaks = arr(s.removedPeaks, ()=> []).map(posOf);
   const sizeBy = s.sizeBy === 'peak' ? 'peak' : 'sample';
-  const cifs = arr(std ? null : s.cif, ()=> null).map(cifEntry);
+  const cifs = arr(std ? null : s.cif, ()=> null).map(v=> cifIn(v, s.cifTexts));
   const oldGroups = !std && (s.oldGroups === true || (!('cif' in s) && Array.isArray(s.perParams) && n > 1));
   return { shared, paramMode, heldPts, perParams, stepNote, manualPeaks, removedPeaks, cifs, oldGroups, sizeBy };
 }
@@ -1011,7 +1050,7 @@ function showNext(panel, v){ if (v && Number.isFinite(v.sel)) panel.sel = v.sel;
 export { nearestIdx, computeBaseline, findPeaks, computeFWHM, fwhmSigma, fwhmGeom, smoothingOf, processingOf,
   cagAt, fitCaglioti, instrModelOf, instrBetaOf, stdSpanOf, scherrerD, sizeCorr, belowInstr, sizeSummary, sampleSizes,
   lighter, sizeSeries, seriesOf, boxTop, sizeTops, topOf,
-  phaseOfCif, ASSIGN, assignTol, peakRefl, reflLabel, sampleAssign, speciesOf, sizeRows, cifPool, poolAt,
+  cifRef, cifIn, phaseOfCif, ASSIGN, assignTol, peakRefl, reflLabel, K2_TOL, kAlpha2Of, sampleAssign, speciesOf, sizeRows, cifPool, poolAt,
   modeDef, FIELD_DEF, SHOWN, sharedDef, FIELD_MIN, LEGACY, modeOf, objOf, entryOf, fileParams, stateOf, readState,
   csvTables,
   fieldInputs, guardsOf, TOGGLES, SIZE_ONLY, PEAK_SEARCH, numIn, fieldIn, takeInputs, widthHint, presetOf, procKeys,

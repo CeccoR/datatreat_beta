@@ -50,13 +50,16 @@ export function rng(seed){
 /* XRPD: a PANalytical XRDML scan, 5384 points over 10–80° 2θ, of a cubic perovskite
    (SrTiO3-like, Pm-3m) with Kα1 and Kα2, a pseudo-Voigt profile, a sloping background and
    counting noise. Sample k has its cell 0.035 % smaller per step, so its peaks move a
-   little to higher angle. */
+   little to higher angle. (v576) Another range and other reflections may be asked for
+   (lo, hi, refl: [h, k, l, height]): PEROV_HI, the same perovskite's from 100° to 140°, where
+   each Kα2 peak is resolved from its Kα1 one. */
 const L1 = 1.540598, L2 = 1.544426;
 const PEROV = [[1,0,0,800],[1,1,0,5000],[1,1,1,1500],[2,0,0,2500],[2,1,0,60],[2,1,1,2000],[2,2,0,1200],[3,0,0,40],[3,1,0,700],[3,1,1,250]];
-export function xrdml(k = 0, { n = 5384, a = 3.905*(1 - 0.00035*k), seed = 101 + k } = {}){
-  const r = rng(seed), lo = 10, hi = 80, y = new Array(n);
+export const PEROV_HI = [[4,0,0,1500],[4,1,0,800],[4,1,1,1200],[3,3,1,600],[4,2,0,1000],[4,2,1,700],[3,3,2,500]];
+export function xrdml(k = 0, { n = 5384, a = 3.905*(1 - 0.00035*k), seed = 101 + k, lo = 10, hi = 80, refl = PEROV } = {}){
+  const r = rng(seed), y = new Array(n);
   const pk = [];
-  for (const [h, kk, l, I] of PEROV){
+  for (const [h, kk, l, I] of refl){
     const d = a/Math.hypot(h, kk, l);
     for (const [lam, f] of [[L1, 1], [L2, 0.5]]){ const s = lam/(2*d); if (s < 1) pk.push([2*Math.asin(s)*180/Math.PI, I*f]); }
   }

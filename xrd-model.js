@@ -18,6 +18,7 @@
 ========================================================= */
 import { fixed } from './db.js';
 import { keepSeen } from './alerts.js';
+import { cifRef, cifIn } from './xrd-peaks-model.js';
 
 /* A file's scans as read, kept by its bytes for every instance (the file's bytes are the
    same array in the tabs, their histories and their parked states): a tab woken, or an
@@ -201,13 +202,17 @@ export const cardIn = (U, src, gone)=> ({ states: Object.fromEntries(Object.entr
 // earlier version under 'k' + its key (heldAs: slots, in xrd.js).
 export const copyArr = v => Array.isArray(v) ? v.slice() : [];
 export const heldAs = sl => ({ ...sl, make: (v, f)=> sl.make(v === undefined && f && f.held ? f.held['k' + sl.key] : v, f) });
-// The per-sample slots of the Scherrer settings a Rietveld card keeps (s), under its key; its
-// samples' CIFs too where it has them (v575: a state of an older version has none, nor any
-// CIF, and keeps it so for its note: xrd-peaks-model.js readState).
+/* The per-sample slots of the Scherrer settings a Rietveld card keeps (s), under its key; its
+   samples' CIFs too where it has them (v575: a state of an older version has none, nor any
+   CIF, and keeps it so for its note: xrd-peaks-model.js readState). A CIF's entry refers to
+   the state's pool of texts (v576: xrd-peaks-model.js cifRef): a file left out holds it whole
+   (out), as the pool of the state it comes back to may be another (the card a Scherrer one
+   again meanwhile, saved anew); it comes back into the pool (made where there is none). */
+const textsOf = s => Array.isArray(s.cifTexts) ? s.cifTexts : (s.cifTexts = []);
 export const keptSlots = (key, s)=> [{ key: key + ':params', arr: s.perParams, make: v=> v ? {...v} : {...s.shared} },
   { key: key + ':manual', arr: s.manualPeaks, make: copyArr },
   { key: key + ':removed', arr: s.removedPeaks, make: copyArr },
-  ...(Array.isArray(s.cif) ? [{ key: key + ':cif', arr: s.cif, make: v=> v || null }] : [])];
+  ...(Array.isArray(s.cif) ? [{ key: key + ':cif', arr: s.cif, make: v=>{ const q = cifIn(v, s.cifTexts); return q && cifRef(q, textsOf(s)); }, out: v=> cifIn(v, s.cifTexts) }] : [])];
 // A card's element ids by its kind.
 export const prefixOf = a => (a.type === 'scherrer' ? 'xrdA' : 'xrdR') + a.id;
 // A Rietveld state with what a run wrote for the patterns named (runPatch), put where it

@@ -711,20 +711,23 @@ export function barLabel(C, fr, s, j, cx, yy, yv, zero, err, ink, paper){
 
 /* One box of a box plot, in its bar's slot: the box from the first to the third
    quartile, the median across it, whiskers to the furthest values within 1.5 IQR with
-   caps, each value beyond a circle, the mean a cross (none when it is no number). The
-   lines and shapes as { x1, x2, y1, y2 } and the like; its division (d) and colour. */
+   caps, each value beyond a circle, the mean a cross (none when it is no number); a box
+   marked minBox (v576: XRPD's crystallite sizes, plot.js box) no shorter than the cross,
+   about its middle. The lines and shapes as { x1, x2, y1, y2 } and the like; its division
+   (d) and colour. */
 export function boxMarks(fr, s, j, b, cx, wPx){
   const { Yc } = fr;
-  const hw = wPx/2, cap = Math.min(4, hw/2);
+  const hw = wPx/2, cap = Math.min(4, hw/2), r = Math.min(2.5, hw*0.4);
   const yq1 = Yc(b.q1), yq3 = Yc(b.q3), ylo = Yc(b.lo), yhi = Yc(b.hi), ym = Yc(b.med);
   const whiskers = [{ x1:cx, x2:cx, y1:ylo, y2:yq1 }, { x1:cx, x2:cx, y1:yq3, y2:yhi },
                     { x1:cx-cap, x2:cx+cap, y1:ylo, y2:ylo }, { x1:cx-cap, x2:cx+cap, y1:yhi, y2:yhi }];
   const d = divOfBar(s, j), color = divColor(s, d);
-  const rect = { x:(cx - hw).toFixed(2), y:Math.min(yq1, yq3).toFixed(2), width:wPx.toFixed(2), height:Math.abs(yq1 - yq3).toFixed(2) };
+  const h0 = Math.abs(yq1 - yq3), grow = b.minBox ? Math.max(0, 2*r - h0) : 0;
+  const rect = { x:(cx - hw).toFixed(2), y:(Math.min(yq1, yq3) - grow/2).toFixed(2), width:wPx.toFixed(2), height:(h0 + grow).toFixed(2) };
   const median = { x1:cx-hw, x2:cx+hw, y1:ym, y2:ym };
   let mean = [];
   if (isFinite(b.mean)){
-    const r = Math.min(2.5, hw*0.4), yv = Yc(b.mean);
+    const yv = Yc(b.mean);
     mean = [{ x1:cx-r, x2:cx+r, y1:yv-r, y2:yv+r }, { x1:cx-r, x2:cx+r, y1:yv+r, y2:yv-r }];
   }
   const outliers = b.out.map(v=> ({ cx, cy:Yc(v), r:Math.max(1, Math.min(2, hw/3)) }));

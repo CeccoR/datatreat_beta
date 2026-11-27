@@ -22,7 +22,8 @@ const RAD = Math.PI/180;
 // [Kα1, Kα2, Kβ] in Å, for a file that names its anode but carries no <usedWavelength>:
 // Cu exactly as X'Pert Data Collector writes it, the others the usual tabulated values
 // (Bearden, Rev. Mod. Phys. 39 (1967) 78). With no anode either, Cu — by far the
-// commonest laboratory tube.
+// commonest laboratory tube. (v576: also the Kα2 of the anode a Scherrer sample's λ names,
+// xrd-peaks-model.js kAlpha2Of.)
 const ANODE_LINES = {
   Cu: [1.540598, 1.544426, 1.392250],
   Co: [1.788965, 1.792850, 1.620790],
@@ -589,4 +590,4 @@ function readXrdmlScanText(text){
   return isXrdml(text) ? readScans(LITE_ACCESS, parseXmlLite(text))[0] : { error: 'not an .xrdml file' };
 }
 
-export { readXrdmlInstrumentText, readXrdmlScans, readXrdmlScanText, decodeXml, noiseCountScale };
+export { ANODE_LINES, readXrdmlInstrumentText, readXrdmlScans, readXrdmlScanText, decodeXml, noiseCountScale };

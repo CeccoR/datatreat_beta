@@ -145,7 +145,8 @@ function seriesFromPlot(plot, legendEl){
     const g = groups.get(gk);
     if (e.type === 'box'){
       g.boxes = g.boxes || [];
-      g.boxes[g.xs.length] = { q1: e.q1, med: e.med, q3: e.q3, lo: e.lo, hi: e.hi, mean: e.mean, out: e.out.slice() };
+      // (minBox: no shorter than its mean's cross, as the plot drew it: plot.js box, v576)
+      g.boxes[g.xs.length] = { q1: e.q1, med: e.med, q3: e.q3, lo: e.lo, hi: e.hi, mean: e.mean, out: e.out.slice(), ...(e.minBox ? { minBox: true } : {}) };
       g.xs.push(e.xc); g.ys.push(e.mean); g.errs.push(isFinite(e.err) ? e.err : 0); g.keys.push(null);
       continue;
     }

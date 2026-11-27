@@ -793,8 +793,10 @@ function setupDropzone(dropzone, inputEl, onFiles){
    never meets an excluded file, and needs no test for one anywhere. An excluded file
    takes its entries in those arrays with it (`held`), so including it again gives
    back what it had; a slot it holds nothing for (one added since) starts afresh.
-   slots: [{ key, arr, make(held, file) }] — make gives the entry to put back, from the
-   one held or, given undefined, a new one.
+   slots: [{ key, arr, make(held, file), out(entry) }] — make gives the entry to put back,
+   from the one held or, given undefined, a new one; out, where a slot has it, the entry as
+   the file holds it, taken out (v576: a CIF's that refers to its state's pool of texts,
+   written out whole: xrd-model.js keptSlots).
    `isSample` (GC's raw chromatograms, v544): whether a record is a sample of the analysis
    at all, included or not; one that is not (a file of raw chromatograms with no table)
    has no entry in the per-sample arrays, whatever its box. By default every record is.
@@ -820,7 +822,7 @@ function setIncluded(all, j, on, slots, isSample = anySample){
     delete f.held; delete f.included;
   } else {
     const held = {};
-    slots.forEach(s=>{ if (i < s.arr.length) held[s.key] = s.arr.splice(i, 1)[0]; });
+    slots.forEach(s=>{ if (i < s.arr.length){ const v = s.arr.splice(i, 1)[0]; held[s.key] = s.out ? s.out(v) : v; } });
     f.held = held; f.included = false;
   }
 }

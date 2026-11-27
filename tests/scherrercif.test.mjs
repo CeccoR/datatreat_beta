@@ -13,10 +13,20 @@
      with no error, no CIF, its peaks not grouped, an info box saying so in the card, gone with
      the first CIF chosen, back with its undo;
    - the right column's first title level with the plot frame's top (CLAUDE.md), with the CIF's
-     row and the note under it. No page error, no CSP violation. */
+     row and the note under it;
+   - (v576) by peak, each reflection by its hkl alone, whole (to v575 its species before it, cut
+     in the middle), each box of one sample seen in its colour (to v575 its lines alone);
+   - (v576) the CIFs' texts saved once (a pool in the card's state, the samples referring to
+     it), undone, redone, exported and opened again as before; a project of v575 (each sample
+     its text) opened as it was; a card switched to Rietveld and back, a sample left out and
+     taken back in meanwhile, its CIF kept;
+   - (v576) a pattern whose Kα2 peaks are resolved (115° to 140°): each named "(hkl) Kα2" (to
+     v575 unassigned), out of the sizes and the chart, the rule in grey saying so.
+   No page error, no CSP violation. */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { start, openModule, loadFiles, settle, moduleState, undo, download, readZip, parseCsv, exportProject, importProject, projectFile, openProject, firstTop } from './helpers.mjs';
+import { xrdml, PEROV_HI } from './fixtures.mjs';
 
 let env;
 before(async ()=>{ env = await start(); });
@@ -29,12 +39,12 @@ const table = page => page.$eval(P + 'PeakTableWrap', w=> ({ head: [...w.querySe
 const sel = page => page.$eval(P + 'Cif', s=> ({ value: s.value, shown: s.selectedOptions[0] ? s.selectedOptions[0].textContent : null, options: [...s.options].map(o=> o.textContent), disabled: s.disabled }));
 const scherrer = async page => (await moduleState(page, 'xrd')).cards[0].states.scherrer;
 const cifFiles = async page => (await scherrer(page)).cif.map(q=> q && q.file);
-// The size chart: its legend, its names under it, its boxes' colours, the note under it.
+// The size chart: its legend, its names under it, its boxes' colours and least height (px), the note under it.
 const chart = page => page.evaluate(p=>{
-  const svg = document.querySelector(p + 'SizeBarSvg'), wrap = svg.closest('.plot-wrap');
+  const svg = document.querySelector(p + 'SizeBarSvg'), wrap = svg.closest('.plot-wrap'), rects = [...svg.querySelectorAll('rect')].filter(r=> /^#/.test(r.getAttribute('fill')));
   return { shown: wrap.style.display !== 'none', legend: [...document.querySelectorAll(p + 'SizeBarLegend span')].map(s=> s.textContent),
     names: [...svg.querySelectorAll('.plot-tick')].map(t=> t.textContent).filter(t=> !/^[\d.]+$/.test(t)),
-    boxes: [...svg.querySelectorAll('rect')].map(r=> r.getAttribute('fill')).filter(f=> /^#/.test(f)), note: document.querySelector(p + 'SizeByNote').textContent,
+    boxes: rects.map(r=> r.getAttribute('fill')), least: Math.min(...rects.map(r=> r.getBoundingClientRect().height)), note: document.querySelector(p + 'SizeByNote').textContent,
     chips: [...document.querySelectorAll(p + 'SizeBy [data-size-by]')].map(b=> b.dataset.sizeBy + (b.disabled ? ':off' : '')) };
 }, P);
 const step = async page =>{ await page.click(P + 'Next'); await settle(page); };
@@ -47,8 +57,6 @@ async function addCif(page, file){
   await settle(page);
 }
 const HKL = ['(100)', '(110)', '(111)', '(200)', '(211)', '(220)', '(310)'];
-// A name under the chart as it is drawn: whole, or cut short with "…" where it would not fit (utils.js barNames).
-const drawnAs = (shown, full)=> shown === full || (shown.includes('…') && full.startsWith(shown.split('…')[0]) && full.endsWith(shown.split('…').pop()));
 const filesOf = d => Object.fromEntries(readZip(d.buf).map(e=> [e.name.replace(/^.* - /, ''), parseCsv(e.data.toString('utf8').replace(/^﻿/, ''), ';')]));
 
 test('a CIF a sample: the hkl, the species\' series, the samples with none, the pool, the CSVs, undo and redo, the project opened again', async ()=>{
@@ -80,12 +88,14 @@ test('a CIF a sample: the hkl, the species\' series, the samples with none, the 
     assert.deepEqual(await cifFiles(page), ['SrTiO3.cif', 'BaTiO3_tetra.cif', null]);
     let c = await chart(page);
     assert.deepEqual([c.shown, c.legend, c.names, c.boxes, c.note, c.chips], [true, ['SrTiO3', 'BaTiO3'], ['s00', 's01'], ['#3aa0ff', '#ff7a59'], 'Not charted, no CIF: s02.', ['sample', 'peak']]);
-    // By peak: a box per species' reflection, over its samples (one each here).
+    assert.ok(c.least >= 6.5, `a box of several sizes, at least the mean's cross tall: ${c.least}`);
+    // By peak: a box per species' reflection, over its samples (one each here): each seen in
+    // its colour, its name its hkl alone, whole (v576); its species its colour's, in the legend.
     await page.click(P + 'SizeBy [data-size-by="peak"]'); await settle(page);
     c = await chart(page);
-    const byPeak = [...HKL.map(h=> 'SrTiO3 ' + h), ...['(100)', '(101)/(110)', '(111)', '(200)', '(211)', '(220)', '(301)/(310)'].map(h=> 'BaTiO3 ' + h)];
-    assert.ok(c.names.length === byPeak.length && c.names.every((n, i)=> drawnAs(n, byPeak[i])), c.names.join(' | '));
-    assert.deepEqual([c.legend, c.boxes.length], [['SrTiO3', 'BaTiO3'], 14]);
+    const TET_HKL = ['(100)', '(101)/(110)', '(111)', '(200)', '(211)', '(220)', '(301)/(310)'], byPeak = [...HKL.map(h=> 'SrTiO3 ' + h), ...TET_HKL.map(h=> 'BaTiO3 ' + h)];
+    assert.deepEqual(c.names, [...HKL, ...TET_HKL]);
+    assert.deepEqual([c.legend, c.boxes, c.least >= 6.5], [['SrTiO3', 'BaTiO3'], [...HKL.map(()=> '#3aa0ff'), ...TET_HKL.map(()=> '#ff7a59')], true], `one sample a box, seen: ${c.least} px`);
     // The CSVs: the species and hkl of each peak, the sizes by species and hkl.
     const z = filesOf(await download(page, ()=> page.click('.proj-csv')));
     const pk = z['peaks.csv'], colOf = h => pk.slice(1).map(r=> r[pk[0].indexOf(h)]).filter(v=> v !== '');
@@ -96,6 +106,9 @@ test('a CIF a sample: the hkl, the species\' series, the samples with none, the 
     // The pool: s02 given s00's CIF from its selector; a Rietveld card's phase offered too.
     await page.selectOption(P + 'Cif', { label: 'SrTiO3' }); await settle(page);
     assert.deepEqual([(await table(page)).rows.map(r=> r[2]).filter(h=> h !== 'unassigned').length > 0, await cifFiles(page)], [true, ['SrTiO3.cif', 'BaTiO3_tetra.cif', 'SrTiO3.cif']]);
+    // Its text saved once (v576): the state's pool, two texts for three samples.
+    const sc = await scherrer(page);
+    assert.deepEqual([sc.cif.map(q=> q.ref), sc.cifTexts.length, JSON.stringify(sc).split('data_SrTiO3').length - 1], [[0, 1, 0], 2, 1]);
     assert.deepEqual((await chart(page)).note, '');
     const cu = env.fx.put('Cu_fcc.cif', "data_Cu\n_cell_length_a 3.615\n_cell_length_b 3.615\n_cell_length_c 3.615\n_cell_angle_alpha 90\n_cell_angle_beta 90\n_cell_angle_gamma 90\n_chemical_formula_sum 'Cu4'\n"
       + "loop_\n_symmetry_equiv_pos_as_xyz\n'x, y, z'\nloop_\n_atom_site_label\n_atom_site_type_symbol\n_atom_site_fract_x\n_atom_site_fract_y\n_atom_site_fract_z\nCu1 Cu 0 0 0\nCu2 Cu 0.5 0.5 0\nCu3 Cu 0.5 0 0.5\nCu4 Cu 0 0.5 0.5\n");
@@ -161,5 +174,81 @@ test('an older version\'s project: no CIF, its peaks not grouped, the note in th
     assert.deepEqual((await note(page)).pop(), 'alert bad compact: ✕ Not added: bad.cif: not a CIF: no data_ block found.');
     assert.deepEqual([await cifFiles(page), (await sel(page)).value], [[null, null, null], '']);
     assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+/* v576: the CIFs' texts saved once. A project of v575 (each sample its CIF's text in its entry)
+   opened as it was, saved anew with the pool; the card switched to Rietveld (its Scherrer
+   settings kept, the samples referring to the pool), a sample left out, the card a Scherrer one
+   again, the sample taken back in: its CIF with it (held whole, as the pool it comes back to
+   may be another); undone and redone. */
+test('the CIFs\' texts once: a project of v575 opened as it was; a card switched to Rietveld and back, a sample left out meanwhile, its CIF kept (v576)', async ()=>{
+  const { page, errors, csp, close } = await env.page({ viewport: { width: 1400, height: 1000 } });
+  const kind = async k =>{ await page.click('#tab-xrd .an-card[data-an="1"] .an-type'); await page.click(`.an-menu:not([hidden]) [data-kind="${k}"]`); await settle(page); };
+  const leave = async (i, what)=>{ await page.locator('#xrdFileTableWrap .file-incl').nth(i).click(); await settle(page); assert.ok(what === await page.locator('#xrdFileTableWrap .file-incl').nth(i).isChecked()); };
+  try {
+    await openModule(page, 'xrd');
+    await loadFiles(page, 'xrd', env.fx.files.xrd);
+    await addCif(page, env.fx.cif);
+    await step(page);
+    await page.selectOption(P + 'Cif', { label: 'SrTiO3' }); await settle(page);
+    const rows = (await table(page)).rows.map(r=> r[2]);
+    const { obj } = await exportProject(page), st = obj.state, sc = st.cards[0].states.scherrer;
+    assert.deepEqual([sc.cif, sc.cifTexts.length, JSON.stringify(obj).split('data_SrTiO3').length - 1], [[{ file: 'SrTiO3.cif', ref: 0 }, { file: 'SrTiO3.cif', ref: 0 }, null], 1, 1], 'the text once in the project');
+    // As v575 saved it: each sample its text.
+    const inline = (({ cifTexts, ...s })=> ({ ...s, cif: s.cif.map(q=> q && { file: q.file, cif: cifTexts[q.ref] }) }))(sc);
+    const cards = st.cards.map((a, i)=> i ? a : { ...a, states: { ...a.states, scherrer: inline } });
+    await importProject(page, projectFile(env, 'v575cifs.datatreat', { ...obj, title: 'Inline CIFs', appVersion: 'v575', state: { ...st, cards } }, { sign: true }));
+    await openProject(page, 'xrd', 'Inline CIFs');
+    assert.deepEqual([await cifFiles(page), (await sel(page)).shown, (await table(page)).rows.map(r=> r[2])], [['SrTiO3.cif', 'SrTiO3.cif', null], 'SrTiO3', rows], 'opened as it was');
+    const again = await scherrer(page);
+    assert.deepEqual([again.cif, again.cifTexts], [sc.cif, sc.cifTexts], 'saved with the pool');
+    // The card a Rietveld one, s00 left out, the card a Scherrer one again, s00 back in: its CIF kept.
+    await kind('rietveld');
+    assert.deepEqual([(await scherrer(page)).cif, (await scherrer(page)).cifTexts.length], [sc.cif, 1], 'kept with the pool');
+    await leave(0, false);
+    await kind('scherrer');
+    assert.deepEqual(await cifFiles(page), ['SrTiO3.cif', null]);
+    await leave(0, true);
+    assert.deepEqual(await cifFiles(page), ['SrTiO3.cif', 'SrTiO3.cif', null]);
+    assert.deepEqual([(await scherrer(page)).cif, (await scherrer(page)).cifTexts.length], [sc.cif, 1]);
+    await undo(page);
+    assert.deepEqual(await cifFiles(page), ['SrTiO3.cif', null]);
+    await undo(page, true);
+    assert.deepEqual(await cifFiles(page), ['SrTiO3.cif', 'SrTiO3.cif', null]);
+    assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
+  } finally { await close(); }
+});
+
+/* v576: the fixture's perovskite from 115° to 140°, its Kα2 peaks resolved: each named "(hkl)
+   Kα2" at its reflection's Kα2 (to v575 unassigned), in the table and peaks.csv, out of the
+   sizes (the mean, the chart by peak), the rule in grey saying so. λ a Kα2 itself (Cu Kα2): no
+   Kα2 to look at, the peaks named at λ alone, as before. */
+test('Kα2 peaks resolved: each "(hkl) Kα2", in the table and peaks.csv, out of the sizes and the chart, the rule saying so; λ a Kα2 itself, none (v576)', async ()=>{
+  const { page, errors, csp, close } = await env.page({ viewport: { width: 1400, height: 1000 } });
+  try {
+    await openModule(page, 'xrd');
+    await loadFiles(page, 'xrd', [env.fx.put('hi.xrdml', xrdml(0, { lo: 115, hi: 140, n: 1924, refl: PEROV_HI }))]);
+    await addCif(page, env.fx.cif);
+    const K2 = ['(331)', '(331) Kα2', '(420)', '(420) Kα2', '(421)', '(421) Kα2', '(332)', '(332) Kα2'];
+    let t = await table(page);
+    assert.deepEqual(t.rows.map(r=> r[2]), K2);
+    assert.equal(t.rule, 'hkl: the reflections of SrTiO3 at λ 1.540598 Å within 0.5 FWHM of a peak\'s 2θ, 0.1° at least; 4 of 8 peaks only at a reflection\'s Kα2 (λ 1.544426 Å), named so and left out of its sizes, as each repeats its Kα1 peak.');
+    // The mean over the Kα1 peaks' sizes alone (the table's own, rows 1, 3, 5, 7).
+    const sizes = t.rows.filter((_, i)=> i % 2 === 0).map(r=> +r[5]), mean = sizes.reduce((a, v)=> a + v, 0)/sizes.length;
+    const said = await page.$eval(P + 'PeakTableWrap .size-summary b', b=> parseFloat(b.textContent));
+    assert.ok(Math.abs(said - mean) < 0.1, `the mean ${said}, the Kα1 peaks' ${mean}`);
+    await page.click(P + 'SizeBy [data-size-by="peak"]'); await settle(page);
+    const c = await chart(page);
+    assert.deepEqual([c.names, c.boxes.length, c.least >= 6.5], [['(331)', '(420)', '(421)', '(332)'], 4, true]);
+    const z = filesOf(await download(page, ()=> page.click('.proj-csv')));
+    const pk = z['peaks.csv'];
+    assert.deepEqual(pk.slice(1).map(r=> r[pk[0].indexOf('Peak_hkl_hi')]).filter(v=> v !== ''), K2);
+    assert.deepEqual(z['crystallite_size_by_peak.csv'].slice(1).map(r=> r[1]), ['(331)', '(420)', '(421)', '(332)']);
+    // λ Cu Kα2: no Kα2 to look at; the peaks named at λ alone.
+    await page.selectOption(P + 'LambdaSel', '1.544426'); await settle(page);
+    t = await table(page);
+    assert.ok(t.rows.every(r=> !/Kα2/.test(r[2])) && !/Kα2/.test(t.rule), t.rows.map(r=> r[2]).join(' | '));
+    assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
   } finally { await close(); }
 });

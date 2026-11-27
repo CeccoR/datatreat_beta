@@ -28,11 +28,25 @@ was proposed; nothing here is in the code yet.
 - **Scherrer: a sample's CIF (v575, done: the matching across samples gone).** Each sample
   takes one CIF or none and its peaks are named by its phase's reflections (within half the
   FWHM, 0.1° at least). Left for later: (1) the hkl ticks drawn on the sample's plot, as the
-  Rietveld card draws them before a refinement; (2) the reflections at Kα2 too, for a peak of
-  the doublet resolved at high angle (unassigned now, where it is more than its tolerance
-  from the Kα1 line); (3) a sample's cell shifted from its CIF's (a solid solution, strain, a
+  Rietveld card draws them before a refinement; (2) the reflections at Kα2 too (v576, done:
+  where λ is a tube's Kα1 or Kα mean, a peak no reflection names at λ is looked for at the
+  tube's Kα2, named "(hkl) Kα2" there and left out of the sizes; with a λ of one's own,
+  nothing); (3) a sample's cell shifted from its CIF's (a solid solution, strain, a
   displacement): a zero or a cell refined from the assigned peaks before they are named again,
-  as the tolerance is fixed.
+  as the tolerance is fixed. Seen in v576's tests, and tied to (3): a sample's Kα1 peak
+  shifted to higher angle than its CIF's line can fall on that line's Kα2 position and be
+  named "(hkl) Kα2" (left out of the sizes, as it was when unassigned); and a resolved Kα2
+  peak whose half-maximum walk runs over its Kα1 peak (a valley above half its height, the
+  smoothing widening both) has a FWHM so wide that its tolerance reaches the Kα1 line: it
+  keeps that line's hkl and is sized, as to v575. To try: a peak within the tolerance of both
+  a line and another line's Kα2 named by the nearer; the Kα2 peak's width read on its own
+  side only. And (v576) the CIFs' texts are kept once in a card's state, but a file left out
+  holds its sample's CIF whole in its own record (the pool is the card's): one copy more for
+  each such file, until it is taken back in.
+- **Box plots of one value elsewhere (v576).** XRPD's size chart draws a box of one value (its
+  quartiles one) at least its mean's cross tall (plot.js minBox, the composer too); the Figure
+  card's box plot does not ask for it, and a series of one value, or of values all alike,
+  draws there as its lines alone, no colour. To weigh: the same for every box plot.
 - **Free shape: a size distribution and a texture refined with the solid (round 2's open
   limits).** Round 2 (research/free-shape/round2/VALIDATION.md) leaves both as model errors
   the solid takes up: a log-normal size distribution gives every sphere carrying one a

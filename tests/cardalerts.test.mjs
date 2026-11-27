@@ -11,8 +11,13 @@
    - Iodometry's calibration (C19, C17): a field holding no number flashes as it is confirmed
      and is said in red under its group, the line's or the standards'; a line that is none, every
      field a number, a compact error; Apply held back as before.
+   - XRPD's Scherrer card (v576): peaks at a reflection's Kα2 alone, named "(hkl) Kα2", said in
+     the grey rule under its table (R1: how the data were treated, no box), in the rules' words.
    - A numeric field's rule said in red under it as a value is refused (utils.js
      guardNumericInput: GC's m), floating, so that nothing moves; gone as the field is typed in.
+     (v576) Measured once the field's shake is over: the rule is placed under the field at rest
+     and stays there while the field shakes; to v575 the field was measured a frame or two into
+     its shake, up to 6 px aside, and the test failed now and then (dx 2.8).
    - Drags start with the primary button of any pointer (v570's follow-up): a pen's barrel
      button (2) or its eraser (5) starts none of the trace list's grip, a card's grip and a
      plot's draggable line; its tip (0) does (to v570 a mouse's other buttons alone were
@@ -20,6 +25,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { start, openModule, loadFiles, settle, moduleState, firstTop } from './helpers.mjs';
+import { xrdml, PEROV_HI } from './fixtures.mjs';
 
 let env;
 before(async ()=>{ env = await start(); });
@@ -98,6 +104,32 @@ test('XRPD standard: the Caglioti fit not fitted, a compact warning in its box; 
   } finally { await close(); }
 });
 
+/* XRPD's Scherrer card (v576): a sample's peaks at a reflection's Kα2 alone (the fixture's
+   perovskite from 115° to 140°, its Kα2 peaks resolved), said in the grey rule under the table,
+   after the mean: how they were treated, no box (R1); no "!", no "—", no version, a period at
+   its end (R4); the Parameters' title still on the plot frame's top (CLAUDE.md). */
+test('XRPD Scherrer: peaks at a reflection\'s Kα2 alone said in the grey rule under the table, no box; Parameters\' top on the plot frame\'s', async ()=>{
+  const { page, errors, csp, close } = await env.page();
+  try {
+    await openModule(page, 'xrd');
+    await loadFiles(page, 'xrd', [env.fx.put('hi.xrdml', xrdml(0, { lo: 115, hi: 140, n: 1924, refl: PEROV_HI }))]);
+    await page.setInputFiles('#xrdA1CifInput', env.fx.cif);
+    await page.waitForSelector('#xrdA1PeakTableWrap .xrd-hkl-rule'); await settle(page);
+    const r = await page.evaluate(()=>{
+      const w = document.querySelector('#xrdA1PeakTableWrap'), rule = w.querySelector('.xrd-hkl-rule');
+      const grey = document.createElement('i'); grey.style.color = 'var(--muted)'; document.body.appendChild(grey); const muted = getComputedStyle(grey).color; grey.remove();
+      return { text: rule.textContent, grey: getComputedStyle(rule).color === muted && rule.matches('p.txt-meta'), after: rule.previousElementSibling.matches('.size-summary'),
+        boxes: w.querySelectorAll('.alert').length, k2: [...w.querySelectorAll('.peak-row')].filter(t=> / Kα2$/.test(t.cells[2].textContent)).length };
+    });
+    assert.deepEqual([r.grey, r.after, r.boxes, r.k2], [true, true, 0, 4]);
+    assert.match(r.text, /; 4 of 8 peaks only at a reflection's Kα2 \(λ 1\.544426 Å\), named so and left out of its sizes, as each repeats its Kα1 peak\.$/);
+    assert.ok(!/[!—]|v\d{3}/.test(r.text), r.text);
+    const t = await firstTop(page, '#tab-xrd .an-card:nth-child(1)', { frame: 'svg.plot', head: ':scope .col.mw280 > .param-head' });
+    assert.ok(Math.abs(t.top - t.frame) <= 1, `the title's top ${t.top}, the plot frame's ${t.frame}`);
+    assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
+  } finally { await close(); }
+});
+
 test('Iodometry\'s calibration: a field holding no number said in red under its group; a line that is none, a compact error; Apply held back', async ()=>{
   const { page, errors, csp, close } = await env.page();
   try {
@@ -141,10 +173,16 @@ test('a numeric field\'s value refused: its rule in red under it, floating, gone
     const card = await page.locator('#tab-gc .an-card').first().boundingBox();
     await m.fill('0'); await m.press('Enter');
     await page.waitForSelector('.field-rule-float');
+    // The field shakes as it is refused (0.4 s: style.css field-shake, up to 6 px aside); the
+    // rule, placed under it at rest, stays put: measured as it comes and once the shake is over.
+    const ruleAt = ()=> page.$eval('.field-rule-float', e=>{ const b = e.getBoundingClientRect(); return [b.left, b.top]; });
+    const at0 = await ruleAt();
+    await page.waitForFunction(()=> document.querySelector('#tab-gc .gcShared[data-f="m"]').getAnimations().length === 0);
     const r = await page.evaluate(()=>{ const e = document.querySelector('.field-rule-float'), f = document.querySelector('#tab-gc .gcShared[data-f="m"]').getBoundingClientRect(), b = e.getBoundingClientRect();
       return { text: e.textContent, dy: b.top - f.bottom, dx: b.left - f.left, pos: getComputedStyle(e).position, n: document.querySelectorAll('.field-rule-float').length }; });
     assert.deepEqual([r.text, r.pos, r.n], ['A number, at least 0.001.', 'fixed', 1]);
-    assert.ok(r.dy >= 0 && r.dy <= 6 && Math.abs(r.dx) <= 1, `under the field: ${JSON.stringify(r)}`);
+    assert.ok(r.dy >= 0 && r.dy <= 6 && Math.abs(r.dx) <= 1, `under the field at rest: ${JSON.stringify(r)}`);
+    assert.deepEqual(await ruleAt(), at0, 'the rule still through the shake');
     assert.equal(await m.inputValue(), was, 'the value put back');
     assert.deepEqual(await page.locator('#tab-gc .an-card').first().boundingBox(), card, 'nothing in the card moved');
     await m.focus(); await page.keyboard.type('1');
