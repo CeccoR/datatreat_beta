@@ -22,7 +22,7 @@
    the results an Urbach card reads off its reference).
 ========================================================= */
 import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS, decodeText } from './textdata.js';
-import { heldLine } from './alerts.js';
+import { heldLine, thrownWhy } from './alerts.js';
 
 /* Energies are hν = hc/λ, hc in eV·nm to the digits a third decimal of E_g needs: 1240 put
    every energy 0.013% high. A spectrum's energies are made once for its array of
@@ -556,16 +556,20 @@ export function fileNotes(f){
   return { read: f.warn ? [WARNS[f.read === 'R%' ? 'R' : 'F']] : [], check: f.left && Object.keys(LEFT).some(k=> f.left[k] > 0) ? [leftText(f.left)] : [] };
 }
 /* A file's bytes read (readDrs), kept by them: a drop's reading, and the file read again as a
-   project opens (restoredFile), once a page. */
+   project opens (restoredFile), once a page. A reader that throws gives why (thrownWhy): the
+   drop refuses the file, a project keeps the spectrum it holds (heldNote says so). */
 const readings = new WeakMap();
-export const readingOf = (bytes, text)=>{ if (!readings.has(bytes)) readings.set(bytes, readDrs(text === undefined ? decodeText(bytes) : text)); return readings.get(bytes); };
+export function readingOf(bytes, text){
+  if (!readings.has(bytes)){ let r; try { r = readDrs(text === undefined ? decodeText(bytes) : text); } catch(e){ r = { error: thrownWhy(e) }; } readings.set(bytes, r); }
+  return readings.get(bytes);
+}
 /* A file as a restore takes it (modkit RESTORED): its bytes a Uint8Array, or none (null);
    read again from them (readingOf), what they read as its spectrum and how it was read (READ),
    the rest of the record as it is. Where they read as none (bytes not stored, or ones the
    reader refuses: heldNote says so), the spectrum it holds: its wavelengths and F(R), the
    points with both a finite number and a wavelength above 0 (none: left out, null); how it was
    read (a format not standard, `warn`, with the column read, `read` or `head`), and the points
-   left out at its load, as its notes say them. tauc.js keeps its spectrum (keepSpectrum) and
+   left out at its load, as its notes say them. tauc.js fixes its spectrum (fixedSpectrum) and
    makes its energies from its wavelengths (withHv). */
 const READ = ['wl', 'FR', 'warn', 'read', 'head', 'left'];
 export function restoredFile(U, f0){
@@ -637,13 +641,11 @@ export function defaultLinesOf(U, spec, f){
 }
 // The interval-line set used for sample i (shared object, or the sample's own)
 // A spec with `ownLines` keeps every sample's lines its own whatever the mode, which
-// then decides the parameters alone; a sample with none yet starts from the common
-// set an older project kept, if there is one.
+// then decides the parameters alone; a sample with none yet starts from the default lines.
 export function vlinesFor(U, spec, P, files, i){
   if (P.mode==='shared' && !spec.ownLines) return P.sharedVlines;
   let pp = P.per[i]; if (!U.isObj(pp)) pp = P.per[i] = {};
-  if (!okLines(U, spec, pp.vlines))
-    pp.vlines = spec.ownLines && isFinite(P.sharedVlines.v1) ? {...P.sharedVlines} : defaultLinesOf(U, spec, files[i]);
+  if (!okLines(U, spec, pp.vlines)) pp.vlines = defaultLinesOf(U, spec, files[i]);
   return pp.vlines;
 }
 // Every fit of a sample: each window's scan on its curve c (Yraw, Ys) over the energies

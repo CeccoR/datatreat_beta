@@ -58,6 +58,9 @@ const withMarks = (f, marks)=> ({ ...f, seen: [...(Array.isArray(f.seen) ? f.see
    none: gone from this browser, or never held as bytes), or bytes the reader refuses (`why` its
    reason). Its data are then those the project holds. */
 export const heldLine = why => `${why ? 'its bytes no longer read: ' + why : 'its bytes are not stored'}: its data are those the project holds`;
+// Why a file's reader gave nothing where it threw (e): a drop's refusal (modkit.js dropText,
+// xrd.js), or the reason a project's file is said with (heldLine).
+export const thrownWhy = e => `could not be read: ${e && e.message || e}`;
 // A live record and one of a state the same file: its name, and its bytes where it has them.
 export const sameFile = (a, b)=> a.name === b.name && (a.rawBytes || null) === (b.rawBytes || null);
 // The records a state holds under its keys (each a list of them or one), marked by `mark`

@@ -2,30 +2,25 @@
    numbers of points): XRPD's in °2θ, the samples' and the standard's, EPR's in mT. Each
    field shows its value to 4 significant digits, keeps it exact, and shows in its box what
    it spans in points of the file on show, as it is typed; the same width treats alike
-   patterns measured at different steps. A project saved up to v510 (its settings in
-   points: N, blWin, smooth) opens with them converted at each file's step: one step, the
-   same results (v510's FWHMs here); steps that differ under all, that chip to one, a width
-   per pattern, and a note; points per sample, N = 1, values that are no number, a file
-   left out (its step counted: taken back in, the points v510 gave it, the shared ones
-   under all), a Rietveld card's Scherrer settings (v583: an EPR card's points, and an EPR
-   project from before the cards, ignored: the default width, one card of the defaults). The
-   CSV headers give the widths. An EPR spectrum with a value that is no
+   patterns measured at different steps. A project saved up to v510 (its settings in points:
+   N, blWin, smooth) opens with its points ignored, the default widths (EPR's here, v583;
+   XRPD's in tests/oldprojects.test.mjs, v586: to v585 converted at each file's step), and an
+   EPR project from before the cards with one card of the defaults. The CSV headers give the
+   widths. An EPR spectrum with a value that is no
    number smooths the others, the project reopened the same (v583: read again from its bytes). At 320 px, in both themes, and in
    a narrow side column, the points stay in their field, muted, the value whole beside or
    above them, nothing past the edge. */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { start, openModule, loadFiles, settle, moduleState, exportProject, projectFile, importProject, openProject, download, readZip, parseCsv, undo, switchTab } from './helpers.mjs';
+import { start, openModule, loadFiles, settle, moduleState, exportProject, projectFile, importProject, openProject, download, readZip, parseCsv, switchTab } from './helpers.mjs';
 import { xrdml, eprPair } from './fixtures.mjs';
 
-let env, h00, t00, epr2, eprNaN;
+let env, h00, epr2, eprNaN;
 before(async ()=>{
   env = await start();
   // The fixture's first pattern at half its points (a step of 0.026°), and an EPR pair at
   // half the points of the fixture's (512 over the same sweep).
   h00 = env.fx.put('h00.xrdml', xrdml(0, { n: 2692 }));
-  // and at a third of them (0.039°)
-  t00 = env.fx.put('t00.xrdml', xrdml(0, { n: 1795 }));
   const { dsc, dta } = eprPair({ title: 'half' }), M = 512, half = Buffer.alloc(M*8);
   for (let i = 0; i < M; i++) half.writeDoubleBE(dta.readDoubleBE(16*i), 8*i);
   epr2 = [env.fx.put('h1.DSC', Buffer.from(dsc.toString('latin1').replace('XPTS 1024', 'XPTS 512').replace('XWID 200.0', 'XWID ' + 200*1022/1023), 'latin1')), env.fx.put('h1.DTA', half)];
@@ -36,15 +31,12 @@ before(async ()=>{
 });
 after(()=> env && env.close());
 
-// The patterns' steps (°): 70° over 5383, 2691 and 1794 intervals.
-const S0 = 70/5383, SH = 70/2691, ST = 70/1794;
 // v510's FWHMs (°) with N = 10 points and the SNIP's 150, from its peaks.csv: the fixture's
 // s00 and the same pattern at half the points.
 const V509 = { s00: [0.19151, 0.21703, 0.2427, 0.26481, 0.31051, 0.35426, 0.39709], h00: [0.28451, 0.29628, 0.30995, 0.32525, 0.35975, 0.39925, 0.4443] };
 const val = (page, id)=> page.inputValue('#' + id);
 const pts = (page, id)=> page.textContent('#' + id + 'Pts');
 async function enter(page, id, v){ await page.fill('#' + id, String(v)); await page.press('#' + id, 'Enter'); await settle(page); }
-const near = (a, b, tol, what)=> assert.ok(Math.abs(a - b) <= tol, `${what}: ${a} against ${b}`);
 // The CSVs of the project bar, read.
 async function csvs(page){
   const out = {};
@@ -57,12 +49,6 @@ function fwhms(c, label){
   return rows.slice(1).map(r=> r[j]).filter(v=> v !== '' && v != null).map(Number);
 }
 const xrdShared = s => s.cards[0].states.scherrer;
-// A state's Scherrer settings as v510 kept them: the widths as points.
-const pointsOf = (q, N, blWin)=>{ const { smoothW, snipW, ...r } = q; return { ...r, N, blWin }; };
-function asV509(sc, N, blWin, per = []){
-  const { stepNote, heldPts, ...r } = sc;
-  return { ...r, shared: pointsOf(sc.shared, N, blWin), perParams: sc.perParams.map((q, i)=> pointsOf(q, ...(per[i] || [N, blWin]))) };
-}
 // A project made here, its state changed by `edit`, signed and opened as a project read in.
 async function reopen(page, mod, name, edit){
   const { obj } = await exportProject(page);
@@ -151,192 +137,6 @@ test('XRPD: the standard\'s widths at its own file\'s step; the CSV headers give
     await page.click('#xrdA1BlOn'); await settle(page);
     const h2 = (await csvs(page))['Scherrer - diffractograms.csv'][0];
     assert.ok(h2.includes('SNIP_background_h00 (off)') && h2.includes('SNIP_background_s00 (W=5°)'), JSON.stringify(h2));
-    assert.deepEqual(errors, []);
-  } finally { await close(); }
-});
-
-test('XRPD: a project to v510 at one step opens with its points as widths, and v510\'s results', async ()=>{
-  const { page, errors, close } = await env.page();
-  try {
-    await openModule(page, 'xrd');
-    await loadFiles(page, 'xrd', env.fx.files.xrd);
-    await page.click('#xrdA1Std');
-    await page.setInputFiles('#xrdStdPeaksFiles', env.fx.std);
-    await page.waitForSelector('#xrdStdPeaks .xrd-std-name'); await settle(page);
-    await page.keyboard.press('Escape'); await settle(page);
-    await reopen(page, 'xrd', 'Old one step', s=>{
-      s.cards[0].states.scherrer = asV509(s.cards[0].states.scherrer, 10, 150);
-      s.stdPeaks = asV509(s.stdPeaks, 1, 150);
-    });
-    const s = await moduleState(page, 'xrd'), sc = xrdShared(s);
-    near(sc.shared.smoothW, 10*S0, 1e-15, 'one width, 10 steps');
-    near(sc.shared.snipW, 150*S0, 1e-14, 'the SNIP\'s, 150 steps');
-    assert.deepEqual([sc.paramMode.N, sc.paramMode.blWin, sc.stepNote], ['shared', 'shared', undefined]);
-    sc.perParams.forEach(q=> near(q.smoothW, 10*S0, 1e-15, 'a sample\'s own'));
-    assert.deepEqual([s.stdPeaks.shared.smoothW, s.stdPeaks.shared.snipW.toFixed(6)], [0, (150*S0).toFixed(6)], 'the standard: N = 1 is none');
-    assert.deepEqual(await page.$$eval('#xrdA1ModeN, #xrdA1ModeBl', cs=> cs.map(c=> c.textContent)), ['all', 'all']);
-    assert.equal(await page.textContent('#xrdA1StepNote'), '');
-    assert.deepEqual([await val(page, 'xrdA1Smooth'), await pts(page, 'xrdA1Smooth'), await val(page, 'xrdA1BlWin'), await pts(page, 'xrdA1BlWin')], ['0.13', '≈ 10 pts', '3.901', '≈ 300 pts']);
-    // v510's FWHMs (the last peak, 2.8° from the end, within 1e-4: the end points count half now)
-    const f = fwhms(await csvs(page), 's00');
-    assert.equal(f.length, V509.s00.length);
-    f.forEach((v, i)=> near(v, V509.s00[i], i < f.length - 1 ? 1e-5 : 1e-4, `s00 peak ${i + 1}`));
-    assert.equal(await page.isVisible('.proj-save.is-saved'), true, 'opened as it was saved');
-    assert.deepEqual(errors, []);
-  } finally { await close(); }
-});
-
-test('XRPD: a project to v510 at different steps: those chips to one, a width each, v510\'s results, and a note', async ()=>{
-  const { page, errors, close } = await env.page();
-  try {
-    await openModule(page, 'xrd');
-    await loadFiles(page, 'xrd', [env.fx.files.xrd[0], h00]);
-    await reopen(page, 'xrd', 'Old two steps', s=>{ s.cards[0].states.scherrer = asV509(s.cards[0].states.scherrer, 10, 150); });
-    let sc = xrdShared(await moduleState(page, 'xrd'));
-    assert.deepEqual([sc.paramMode.N, sc.paramMode.blWin, sc.stepNote], ['per', 'per', ['N', 'blWin']]);
-    [S0, SH].forEach((st, i)=>{ near(sc.perParams[i].smoothW, 10*st, 1e-15, 'smoothing ' + i); near(sc.perParams[i].snipW, 150*st, 1e-13, 'SNIP ' + i); assert.equal(sc.perParams[i].blOn, true); });
-    near(sc.shared.smoothW, 10*SH, 1e-15, 'the shared value at the median step');
-    assert.deepEqual(await page.$$eval('#xrdA1ModeN, #xrdA1ModeBl', cs=> cs.map(c=> c.textContent)), ['one', 'one']);
-    assert.match(await page.textContent('#xrdA1StepNote'), /different steps: the smoothing and SNIP width, set in points by an older version, are kept as they were, a width for each pattern \(one\)\. Set one width in all/);
-    const c = await csvs(page);
-    for (const [lab, want] of Object.entries(V509)){
-      const f = fwhms(c, lab);
-      assert.equal(f.length, want.length);
-      f.forEach((v, i)=> near(v, want[i], i < f.length - 2 ? 1e-5 : 2e-4, `${lab} peak ${i + 1}`));
-    }
-    await page.click('#xrdA1Next'); await settle(page);
-    assert.deepEqual([await val(page, 'xrdA1Smooth'), await pts(page, 'xrdA1Smooth'), await pts(page, 'xrdA1BlWin')], ['0.2601', '≈ 10 pts', '≈ 300 pts']);
-    // The smoothing back to all: the width on show for both, its note gone; the SNIP's stays.
-    await page.click('#xrdA1ModeN'); await settle(page);
-    sc = xrdShared(await moduleState(page, 'xrd'));
-    assert.deepEqual([sc.paramMode.N, sc.stepNote], ['shared', ['blWin']]);
-    near(sc.shared.smoothW, 10*SH, 1e-15, 'the width on show, shared');
-    assert.match(await page.textContent('#xrdA1StepNote'), /the SNIP width, set in points by an older version, is kept as it was/);
-    await page.click('#xrdA1StepNote [data-step-x]'); await settle(page);
-    assert.equal(await page.textContent('#xrdA1StepNote'), '');
-    assert.equal(xrdShared(await moduleState(page, 'xrd')).stepNote, undefined);
-    await undo(page);
-    assert.match(await page.textContent('#xrdA1StepNote'), /SNIP width/, 'the dismissal undone');
-    assert.deepEqual(errors, []);
-  } finally { await close(); }
-});
-
-test('XRPD: points per sample, N = 1, values that are no number, a file left out and a Rietveld card\'s Scherrer settings, converted', async ()=>{
-  const { page, errors, close } = await env.page();
-  try {
-    await openModule(page, 'xrd');
-    await loadFiles(page, 'xrd', [env.fx.files.xrd[0], env.fx.files.xrd[1], h00]);
-    await reopen(page, 'xrd', 'Old mixed', s=>{
-      const sc = s.cards[0].states.scherrer;
-      s.cards[0].states.scherrer = { ...asV509(sc, 'abc', -5, [[1, 150], [9, 'x']]), paramMode: { ...sc.paramMode, N: 'per' } };
-      s.cards[0].states.scherrer.perParams.length = 2;
-      // h00 left out, its entries held as v510 held them
-      s.files[2].included = false;
-      s.files[2].held = { 'A1:params': pointsOf(sc.perParams[2], 12, 100), 'A1:manual': [], 'A1:removed': [] };
-      s.cards[1].states.scherrer = asV509(sc, 6, 50);
-      s.cards[1].states.scherrer.perParams.length = 2;
-    });
-    let sc = xrdShared(await moduleState(page, 'xrd'));
-    // (the SNIP's shared under all, h00 left out at another step: one, its note, and its
-    // points kept for h00)
-    assert.deepEqual([sc.perParams[0].smoothW, sc.paramMode.N, sc.paramMode.blWin, sc.stepNote, sc.heldPts], [0, 'per', 'per', ['blWin'], { blWin: -5, blOn: true }], 'N = 1: none');
-    near(sc.perParams[1].smoothW, 9*S0, 1e-15, 'an odd N');
-    assert.equal(sc.shared.smoothW, 0.25, 'no number: the default');
-    near(sc.shared.snipW, S0, 1e-15, 'below 1: one point, as v510 took it');
-    near(sc.perParams[1].snipW, S0, 1e-15, 'its own no number: the shared value, one point');
-    assert.equal(await pts(page, 'xrdA1Smooth'), 'off');
-    await page.click('#xrdA1Next'); await settle(page);
-    assert.deepEqual([await val(page, 'xrdA1Smooth'), await pts(page, 'xrdA1Smooth')], ['0.117', '≈ 9 pts']);
-    // The file left out taken in: at its own step, its held smoothing (one), and the SNIP's
-    // shared point (all), not its own 100, as v510 gave it.
-    await page.locator('#xrdFileTableWrap .file-incl').nth(2).click(); await settle(page);
-    sc = xrdShared(await moduleState(page, 'xrd'));
-    near(sc.perParams[2].smoothW, 12*SH, 1e-15, 'the held smoothing');
-    near(sc.perParams[2].snipW, SH, 1e-15, 'the held SNIP');
-    // The Rietveld card back to Scherrer: its settings in points converted at each step,
-    // the patterns' steps differing under all: one, with the note.
-    await page.click('#xrdAnalyses .an-card[data-an="2"] .an-type');
-    await page.click('.an-menu:not([hidden]) [data-kind="scherrer"]'); await settle(page);
-    const s2 = (await moduleState(page, 'xrd')).cards[1].states.scherrer;
-    assert.deepEqual([s2.paramMode.N, s2.paramMode.blWin, s2.stepNote], ['per', 'per', ['N', 'blWin']]);
-    [S0, S0, SH].forEach((st, i)=> near(s2.perParams[i].smoothW, 6*st, 1e-15, 'card 2, sample ' + i));
-    assert.match(await page.textContent('#xrdA2StepNote'), /different steps/);
-    assert.deepEqual(errors, []);
-  } finally { await close(); }
-});
-
-// v510's shared baseline box, off, under all: the file left out comes back with it off, as
-// v510 took it in, not with its own held entry's box (the default, on).
-test('XRPD: a file left out of a project to v510 comes back with v510\'s shared baseline box', async ()=>{
-  const { page, errors, close } = await env.page();
-  try {
-    await openModule(page, 'xrd');
-    await loadFiles(page, 'xrd', [env.fx.files.xrd[0], env.fx.files.xrd[1], h00]);
-    await reopen(page, 'xrd', 'Old box off', s=>{
-      const sc = s.cards[0].states.scherrer;
-      s.cards[0].states.scherrer = asV509(sc, 10, 150);
-      s.cards[0].states.scherrer.shared.blOn = false;
-      s.cards[0].states.scherrer.perParams.length = 2;
-      s.files[2].included = false;
-      s.files[2].held = { 'A1:params': { ...pointsOf(sc.perParams[2], 10, 150), blOn: true }, 'A1:manual': [], 'A1:removed': [] };
-    });
-    let sc = xrdShared(await moduleState(page, 'xrd'));
-    assert.deepEqual([sc.paramMode.blWin, sc.heldPts, sc.perParams.map(q=> q.blOn)], ['per', { N: 10, blWin: 150, blOn: false }, [false, false]]);
-    await page.locator('#xrdFileTableWrap .file-incl').nth(2).click(); await settle(page);
-    sc = xrdShared(await moduleState(page, 'xrd'));
-    assert.equal(sc.perParams[2].blOn, false, 'h00\'s box off, as v510 shared it');
-    await page.click('#xrdA1Next'); await page.click('#xrdA1Next'); await settle(page);
-    assert.equal(await page.isChecked('#xrdA1BlOn'), false, 'its box unticked on show');
-    assert.deepEqual(errors, []);
-  } finally { await close(); }
-});
-
-test('XRPD: files left out of a project to v510 come back with the points v510 gave them, at their own steps', async ()=>{
-  const { page, errors, close } = await env.page();
-  try {
-    await openModule(page, 'xrd');
-    await loadFiles(page, 'xrd', [env.fx.files.xrd[0], env.fx.files.xrd[1], h00]);
-    // Those included at one step, h00 left out at another, the shared 10 points under all;
-    // h00's own entry, held, of 12 and 100 (under all, not in use: v510 took the shared).
-    const leftOut = (s, i, k, own)=>{ s.files[i].included = false; s.files[i].held = { [k + ':params']: own, [k + ':manual']: [], [k + ':removed']: [] }; };
-    await reopen(page, 'xrd', 'Old held', s=>{
-      const sc = s.cards[0].states.scherrer;
-      s.cards[0].states.scherrer = asV509(sc, 10, 150);
-      s.cards[0].states.scherrer.perParams.length = 2;
-      leftOut(s, 2, 'A1', pointsOf(sc.perParams[2], 12, 100));
-    });
-    let sc = xrdShared(await moduleState(page, 'xrd'));
-    assert.deepEqual([sc.paramMode.N, sc.paramMode.blWin, sc.stepNote, sc.heldPts], ['per', 'per', ['N', 'blWin'], { N: 10, blWin: 150, blOn: true }], 'the step left out counted');
-    sc.perParams.forEach((q, i)=>{ near(q.smoothW, 10*S0, 1e-15, 'smoothing ' + i); near(q.snipW, 150*S0, 1e-13, 'SNIP ' + i); });
-    assert.match(await page.textContent('#xrdA1StepNote'), /different steps/);
-    // Saved so and opened again (a project of this version: nothing converted), then h00
-    // taken in: the shared 10 and 150 points at its step, as v510 took it in under all.
-    await reopen(page, 'xrd', 'Held saved', ()=>{});
-    await page.locator('#xrdFileTableWrap .file-incl').nth(2).click(); await settle(page);
-    sc = xrdShared(await moduleState(page, 'xrd'));
-    near(sc.perParams[2].smoothW, 10*SH, 1e-15, 'h00\'s smoothing');
-    near(sc.perParams[2].snipW, 150*SH, 1e-13, 'h00\'s SNIP');
-    await page.click('#xrdA1Next'); await page.click('#xrdA1Next'); await settle(page);
-    assert.deepEqual([await val(page, 'xrdA1Smooth'), await pts(page, 'xrdA1Smooth'), await pts(page, 'xrdA1BlWin')], ['0.2601', '≈ 10 pts', '≈ 300 pts']);
-    // The smoothing shared again: its points for the files left out go with its note.
-    await page.click('#xrdA1ModeN'); await settle(page);
-    assert.deepEqual(xrdShared(await moduleState(page, 'xrd')).heldPts, { blWin: 150, blOn: true });
-    // The steps of those included differing too, under all a shared 20 points that the file
-    // left out never had as its own (its entry kept from before, 10): taken in, 20 at its step.
-    await loadFiles(page, 'xrd', [t00]);
-    await reopen(page, 'xrd', 'Old held 2', s=>{
-      const sc = s.cards[0].states.scherrer;
-      s.cards[0].states.scherrer = { ...asV509(sc, 20, 150), paramMode: { ...sc.paramMode, N: 'shared', blWin: 'shared' } };
-      s.cards[0].states.scherrer.perParams.length = 3;
-      leftOut(s, 3, 'A1', pointsOf(sc.perParams[3], 10, 100));
-    });
-    sc = xrdShared(await moduleState(page, 'xrd'));
-    assert.deepEqual([sc.paramMode.N, sc.stepNote, sc.heldPts], ['per', ['N', 'blWin'], { N: 20, blWin: 150, blOn: true }]);
-    [S0, S0, SH].forEach((st, i)=> near(sc.perParams[i].smoothW, 20*st, 1e-15, 'smoothing ' + i));
-    await page.locator('#xrdFileTableWrap .file-incl').nth(3).click(); await settle(page);
-    sc = xrdShared(await moduleState(page, 'xrd'));
-    near(sc.perParams[3].smoothW, 20*ST, 1e-15, 't00\'s smoothing');
-    near(sc.perParams[3].snipW, 150*ST, 1e-13, 't00\'s SNIP');
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });

@@ -265,34 +265,45 @@ was proposed; nothing here is in the code yet.
 
 ## General
 
-- **Backward compatibility under the rule (CLAUDE.md, v583: stage 1 of 4 done).** An old project
-  is opened by redoing the calculations with the current engine, from the parameters that still
-  exist and the original data; no code is kept for old formats. An inventory of the code for
-  old projects, made on v576 (outside the repository), staged it in four. Done in v583
-  (stage 1, the modules with no saved results): DRS, EPR and GC's tables read again from their
-  files' bytes as a project opens (a file of none, or one the reader refuses, keeps the data the
-  project holds, said under the drop zone: ALERTS-REVIEW.md U8), as XRPD's; bytes written as
-  numbers (records to v470, `.json` exports v473–v483) no file's bytes; the decoded text of older
-  sessions none either; IndexedDB's `drafts` store (before the tabs) no longer carried over;
-  XRPD's entries held under v477's key not read; EPR's smoothing in points (to v510) and its
-  settings before the cards; GC's one interval, paired modes, single gas selector and 0 °C of a
-  project with no T (25 °C, the default); DRS's widths in eV (v515–v519), its fields by their ids
-  (to v514), its lines under their older key and its settings before the cards; SEM's crops of
-  pixels made square since (to v487: the default crop), its one figure for every group (to v439)
-  and its figure's positions of v439–v449; Custom's series normalised each (v527–v528) and its
-  files left out whole (to v531); the composer's division names of before v328 (presets and the
-  per-plot memory too). Left: stage 2 (XRPD's files and Scherrer: the project from before the
-  cards, the version switch, the notes on arrays read again, a sample's CIF slot always, the
-  widths in points of v510, the old groups' note), stage 3 (GC Integration: the fits keyed by
-  the engine, the calibrations of v544–v548 without their table), stage 4 (Rietveld's results
-  recomputed at their refined parameters). Found in stage 1 and left, not in the inventory: an
-  Urbach card's lines start from the common set an older project kept (tauc-model.js
-  vlinesFor: an Urbach card keeps none of its own now); SEM's Default boxes (intensity, crop,
-  correction) taken from the values where a state has none (a missing key read as more than
-  the default); the sharing of a spectrum's arrays by its bytes (tauc.js and epr-model.js
-  keepSpectrum), which the readings kept by the same bytes now make redundant. Kept by
-  decision: a DRS card's lines saved without the `suggested` flag are the user's, not
-  suggested again.
+- **Backward compatibility under the rule (CLAUDE.md, v583 and v586: stages 1 and 2 of 4 done).**
+  An old project is opened by redoing the calculations with the current engine, from the
+  parameters that still exist and the original data; no code is kept for old formats. An
+  inventory of the code for old projects, made on v576 (outside the repository), staged it in
+  four. Done in v583 (stage 1, the modules with no saved results): DRS, EPR and GC's tables read
+  again from their files' bytes as a project opens (a file of none, or one the reader refuses,
+  keeps the data the project holds, said under the drop zone: ALERTS-REVIEW.md U8), as XRPD's;
+  bytes written as numbers (records to v470, `.json` exports v473–v483) no file's bytes; the
+  decoded text of older sessions none either; IndexedDB's `drafts` store (before the tabs) no
+  longer carried over; XRPD's entries held under v477's key not read; EPR's smoothing in points
+  (to v510) and its settings before the cards; GC's one interval, paired modes, single gas
+  selector and 0 °C of a project with no T (25 °C, the default); DRS's widths in eV
+  (v515–v519), its fields by their ids (to v514), its lines under their older key and its
+  settings before the cards; SEM's crops of pixels made square since (to v487: the default
+  crop), its one figure for every group (to v439) and its figure's positions of v439–v449;
+  Custom's series normalised each (v527–v528) and its files left out whole (to v531); the
+  composer's division names of before v328 (presets and the per-plot memory too). Done in v586
+  (stage 2, XRPD's files and Scherrer): a project from before the cards (to v459) opens with a
+  new project's cards, its settings of then ignored, the standard it named among its samples a
+  sample (xrd-model.js migrate and the version switch gone; the state no longer writes `v`); a
+  pattern's arrays read again from its bytes, nothing kept of how they changed (the notes of
+  points of no number kept to v484 and of a minimum subtracted to v262 gone, with the hint of a
+  lowest point 0 in a project of no bytes); the instrument read from the bytes every time, kept
+  by them (an instrument the project holds used only for a file whose bytes are not there); a
+  Scherrer card's widths in points (to v510), the note of patterns at different steps and the
+  points held for files left out ignored (the default widths); the note of the peaks matched
+  across samples (to v574) gone (the chart's "Not charted, no CIF" says why); a Scherrer card's
+  settings always with their samples' CIFs' slot. And stage 1's leftovers: an Urbach sample of
+  no lines of its own takes the default lines (tauc-model.js vlinesFor: no longer the common set
+  an older project kept); the card made for a project that has none a new card in every module
+  (DRS: its lines suggested, E<sub>g</sub> worked out); SEM's Default boxes missing from a state
+  ticked, as new ones are, their values the defaults (no longer deduced from the values);
+  keepSpectrum (DRS, EPR) gone, the readings kept by the bytes sharing the arrays; a DRS or GC
+  reader that throws on a project's bytes keeps the data the project holds, said with why (to
+  v585 the file was left out). Left: stage 3 (GC Integration: the fits keyed by the engine, the
+  calibrations of v544–v548 without their table), stage 4 (Rietveld's results recomputed at
+  their refined parameters; with it the instruments' and results' messages saved as words
+  alone, xrd-rv-model.js msgOf, INSTR_INFO). Kept by decision: a DRS card's lines saved without
+  the `suggested` flag are the user's, not suggested again.
 
 - **Warnings and errors, reviewed by kind.** The map of every message the app shows was
   made again from the code at v565 (331 entries) and the rules agreed (R1–R4: a kind for

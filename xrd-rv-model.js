@@ -356,29 +356,35 @@ function plotRuns(shown, hkl){
   return r.some(x=> x[1]) ? (pre ? [[pre, false], ...r] : r) : null;
 }
 
-// ---- the instrument, read from the file's own header (kept on the file object) ----
-/* A pattern of a later <xrdMeasurement> of its file (f.meas, its index, v485) takes that
-   measurement's header, kept with its index (meas): to v493 every pattern took the first
-   measurement's, a scan measured otherwise (another tube, other optics) refined with the
-   first's wavelengths. */
+// ---- the instrument, read from the file's own header ----
+/* A pattern's instrument: its file's header, read from the file's bytes, whatever a project
+   holds of it; a pattern of a later <xrdMeasurement> of its file (f.meas, its index, v485)
+   takes that measurement's header, kept with its index (meas: to v493 every pattern took the
+   first measurement's, a scan measured otherwise refined with the first's wavelengths). Read
+   once, kept by the bytes and the measurement (an undo, a tab woken read none again), and on
+   the file (f.instr), so that a state holds it as it holds the pattern's arrays: a file whose
+   bytes are not held has the instrument its record holds (none: null). */
+const instrs = new WeakMap();
+// A pattern's file's bytes (none: a project of no bytes, or opened without them, not stored
+// in this browser any more), or null; whether it is held.
+const bytesIn = f => f.rawBytes instanceof Uint8Array && f.rawBytes.length ? f.rawBytes : null;
+const bytesHeld = f => !!bytesIn(f);
 function instrOf(f){
+  const b = bytesIn(f);
+  if (!b) return f.instr || null;
   const k = Number.isInteger(f.meas) && f.meas > 0 ? f.meas : 0;
-  // (one read before v426, saved with a session, lacks the monochromators' crystals; one
-  // read to v493 for a later measurement's pattern, the first's header: read again)
-  if (f.instr && Array.isArray(f.instr.monochromators) && (f.instr.meas || 0) === k) return f.instr;
-  let ins;
-  try {
-    const b = f.rawBytes, u8 = b == null ? null : b instanceof Uint8Array ? b : ArrayBuffer.isView(b) ? new Uint8Array(b.buffer, b.byteOffset, b.byteLength) : null;
+  let m = instrs.get(b);
+  if (!m) instrs.set(b, m = new Map());
+  if (!m.has(k)){
+    let ins;
     // the bytes as they are: the reader finds their encoding (UTF-16 too)
-    ins = u8 && u8.length ? readXrdmlInstrumentText(u8, k) : null;
-  } catch(e){ ins = null; }
-  if (ins && k) ins.meas = k;
-  f.instr = ins || f.instr || null;
+    try { ins = readXrdmlInstrumentText(b, k); } catch(e){ ins = null; }
+    if (ins && k) ins.meas = k;
+    m.set(k, ins || null);
+  }
+  f.instr = m.get(k);
   return f.instr;
 }
-// Whether a pattern's file is held, its bytes (none: a project of no bytes, or opened without
-// them, not stored in this browser any more), as instrOf reads them.
-const bytesHeld = f => { const b = f.rawBytes; return !!b && typeof b === 'object' && b.length > 0; };
 /* A message of a reading or of a result as the page says it: { kind, text } (xrd-math.js MSG,
    v572), and a key where the results say it apart (xrd-rv-html.js). Words alone, as a file's
    instrument and a result were saved to v571: their kind by `kindOf`, a result's a warning

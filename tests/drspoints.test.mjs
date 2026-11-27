@@ -9,7 +9,8 @@
    (all mode through Projects › Import, one mode, values that are no number); v583: one from
    before the cards (its fields by their ids, its lines at the top) opens with one Tauc card of
    the defaults, its old fields ignored, as v583 dropped the widths in eV of v515 to v519 (to
-   v582 converted to points). v514's numbers were taken on v514's app (git show 82b2939). */
+   v582 converted to points); v586: that card a new one, its lines suggested, its E_g that of
+   the files loaded now. v514's numbers were taken on v514's app (git show 82b2939). */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { start, openModule, loadFiles, settle, moduleState, exportProject, projectFile, importProject, openProject, download, readZip } from './helpers.mjs';
@@ -191,20 +192,18 @@ test('DRS: a project saved to v514 opens as v514 opened it: its points kept, its
     // rounded where it acts.
     await openModule(page, 'tauc');
     await loadFiles(page, 'tauc', env.fx.files.tauc);
-    const f = (await encoded(page)).files;
+    const f = (await encoded(page)).files, fresh = (await csvs(page)).eg;
     await restore(page, saved(f, { tauc: { N: 'x', N2: -5, M: null, M2: 50.4 }, urbach: { N: 1, N2: 'y', M: '25' } })); await settle(page);
     assert.deepEqual([await shared(page), await shared(page, 1)], [{ a: 0.5, N: 1, N2: 20, M: 25, M2: 50.4 }, { N: 1, N2: 20, M: 25 }]);
     assert.equal(await val(page, 'an1M2'), '50');
     assert.equal((await csvs(page)).eg, V514.BAD);
     // A project from before the cards (one Tauc analysis, its fields' values by their ids, its
-    // lines at the top, v583): those ignored, one Tauc card of the defaults, as a state that
-    // holds one card of no settings gives.
-    await restore(page, { files: f, analyses: [{ id: 1, type: 'tauc' }] }); await settle(page);
-    const def = (await csvs(page)).eg;
+    // lines at the top, v583): those ignored, one Tauc card made for it, a new card, its lines
+    // suggested as on the files loaded now (v586; to v585 the default lines).
     await restore(page, { files: f, params: { taucA: '0.5', taucN: '4', taucN2: '20', taucM: '30', taucM2: '100' }, vlines: LINES }); await settle(page);
-    assert.deepEqual([(await states(page)).length, await shared(page)], [1, { a: 0.5, N: 1, N2: 20, M: 25, M2: 100 }]);
-    assert.equal((await csvs(page)).eg, def);
-    assert.equal(def.trim().split('\n').length, 3, 'E_g of each sample');
+    assert.deepEqual([(await states(page)).length, await shared(page), (await states(page))[0].suggested], [1, { a: 0.5, N: 1, N2: 20, M: 25, M2: 100 }, true]);
+    assert.equal((await csvs(page)).eg, fresh);
+    assert.equal(fresh.trim().split('\n').length, 3, 'E_g of each sample');
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });

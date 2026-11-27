@@ -69,19 +69,9 @@ export const isReadNote = t => /: \d+ scans, |(^|: )counts over unequal counting
 export const dropAlerts = (invalid, already, u)=> ({
   load: u.fileAlertHtml('bad', invalid, 'xrd-dismiss-invalid'),
   upload: u.fileAlertHtml('dup', already, 'xrd-dismiss-upload') });
-/* What a project opened found in a pattern, to check, or '': read again from its own bytes,
-   its arrays changed (xrd-model.js readAgain, oldData: the points left out that an older
-   version kept, or its minimum subtracted); no file kept: its data those the project holds
-   (U8), or, its lowest point exactly 0, that its minimum may have been subtracted. A project
-   read in may hold anything: only a whole count, or true, says. */
-export function openedNote(f){
-  const d = f.oldData, n = d && d.dropped;
-  if (Number.isInteger(n) && n > 0) return `read again from the file itself, ${n} point${n > 1 ? 's' : ''} whose values are no finite number left out: the project held ${n > 1 ? 'them' : 'it'}, as an older version did. Results refined before are from those: refine again`;
-  if (d && d.minimum === true) return 'read again from the file itself: the project held its data as an older version had read them, with their minimum subtracted. Results refined before are from those: refine again';
-  if (f.rawBytes instanceof Uint8Array) return '';
-  let lo = Infinity; for (const v of f.y || []) if (v < lo) lo = v;
-  return lo === 0 ? 'its lowest point is exactly 0 and the project does not hold the file itself: its minimum may have been subtracted, as an older version did, which the Rietveld weights would take for the counts; load the file again' : heldLine(null);
-}
+/* What a project opened found in a pattern, to check, or '': no file kept, its data those the
+   project holds (U8; read again from its bytes, xrd-model.js readAgain, nothing to say). */
+export const openedNote = f => f.rawBytes instanceof Uint8Array ? '' : heldLine(null);
 /* What the reading of the files said (alerts.js notes, v572: worked out from the patterns in
    the list, each until its box's ×; to v571 the drop's words and the restore's, gone at the
    next undo and left when their file was removed): of each file, from the scans its bytes

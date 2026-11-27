@@ -10,7 +10,8 @@
    scale; the state saved and read back (as saved, a v517 project's base64, ids made again,
    files twice or lost, malformed values everywhere); v583: an old project (a crop of pixels
    made square since, one figure for every group, bytes as arrays), its old fields ignored, the
-   defaults in their place; the alerts' lines; the Image box, the groups and the options, every name escaped. Then the three
+   defaults in their place; v586: one whose Default boxes are missing, ticked as new ones are;
+   the alerts' lines; the Image box, the groups and the options, every name escaped. Then the three
    fixtures as v557's page analysed them (its CSV, every byte), and 60 cases (random images,
    states and a few steps each: the crop typed, re-ratioed and reset, links, the scope and
    settings, groups moved, renamed, scaled, added, removed and reset, files left out,
@@ -302,13 +303,13 @@ test('intensity: the levels, each normalisation and its curve, the settings read
   assert.equal(tj[top], Math.fround(65534/65535));
   assert.equal(tj[M.levelAt(sj, 0.5)] < 65530/65535, true);
   assert.equal(M.normOf(U, J, jj).table[65534], Math.fround(65534/65535), 'J against itself: its top level its own');
-  // The settings read back: junk to the defaults, a Default box ticked over other values
-  // unticked, one saved before the boxes (v442) default where its values are.
+  // The settings read back: junk to the defaults; unticked, each value in its range; the Default
+  // box ticked (none, as a new one: v586), the defaults, the reference kept, as ticking it sets them.
   assert.deepEqual(M.intensityOf(U, 'x'), M.INT_DEF);
-  assert.deepEqual(M.intensityOf(U, { mode: 'gamma', pLo: -1, pHi: 'x', b: 1e9, c: 0.01, g: null, ref: 5, def: 'no' }), M.INT_DEF);
-  assert.deepEqual(M.intensityOf(U, { mode: 'hist', pLo: 2, b: -100, c: 20, g: 0.05, ref: 'r', def: true }), { ...M.INT_DEF, mode: 'hist', pLo: 2, b: -100, c: 20, g: 0.05, ref: 'r', def: false });
-  assert.equal(M.intensityOf(U, { pLo: 0.5 }).def, true);
-  assert.equal(M.intensityOf(U, { b: 5 }).def, false);
+  assert.deepEqual(M.intensityOf(U, { mode: 'gamma', pLo: -1, pHi: 'x', b: 1e9, c: 0.01, g: null, ref: 5, def: false }), { ...M.INT_DEF, def: false });
+  assert.deepEqual(M.intensityOf(U, { mode: 'hist', pLo: 2, b: -100, c: 20, g: 0.05, ref: 'r', def: false }), { ...M.INT_DEF, mode: 'hist', pLo: 2, b: -100, c: 20, g: 0.05, ref: 'r', def: false });
+  assert.deepEqual(M.intensityOf(U, { mode: 'hist', pLo: 2, b: -100, c: 20, g: 0.05, ref: 'r', def: true }), { ...M.INT_DEF, ref: 'r' });
+  for (const def of [undefined, 'no']) assert.deepEqual(M.intensityOf(U, { mode: 'hist', b: 5, def }), M.INT_DEF);
   // The scope: All, or each group its own, starting from All's; back to All, the group's on show.
   S.intensity = { ...M.INT_DEF, b: 7 };
   assert.equal(M.scopeOf(S), 'all'); assert.equal(M.edited(S), S.intensity);
@@ -428,7 +429,7 @@ test('the state: saved and read back, a v517 project, ids made again, files twic
   assert.deepEqual([y0.name, y0.label, y0.crop, y0.aspect, y0.adj, y0.adjDef, y0.cropDef, y0.linked, y0.clamped, 'included' in y0, y0.held],
     ['image', 'image', { x: 0, y: 0, w: 96, h: 84 }, 'free', { b: 0, c: 1, g: 1 }, true, true, false, false, false, undefined]);
   assert.deepEqual([y1.crop, y1.adj, y1.adjDef, y1.included, y1.held], [{ x: 0, y: 0, w: 48, h: 40 }, { b: 0, c: 1, g: 1 }, true, false, { a: 1 }]);
-  assert.deepEqual([Y.intensity, Y.groupInt, Y.figures, Y.cur], [M.INT_DEF, { g1: { ...M.INT_DEF, mode: 'none', def: false } }, { g2: { a: 1 } }, 0]);
+  assert.deepEqual([Y.intensity, Y.groupInt, Y.figures, Y.cur], [M.INT_DEF, { g1: M.INT_DEF }, { g2: { a: 1 } }, 0]);
   // (the largest pixel first, an empty group last)
   assert.deepEqual(Y.groups, [{ id: 'g1', name: '312 x', named: false, mode: 'common', members: [y1.raw.id] }, { id: 'g2', members: [y0.raw.id], name: '5.00 kx', named: false, mode: 'common' },
     { id: 'g5', members: [], keep: true, name: '', named: false, mode: 'common' }]);
@@ -461,8 +462,9 @@ test('an old project: old fields ignored, the defaults in their place (v583)', (
     files: [s.files[0], { ...s.files[1], sq: undefined, cropDef: false, crop: { x: 10, y: 10, w: 80, h: 60 }, aspect: '4:3' }, { ...s.files[2], raw: { id: s.files[2].raw.id, bytes: [...s.files[2].raw.bytes] } }] };
   const X = newS();
   assert.doesNotThrow(()=> restore(X, old));
-  // the crop of no square pixels: the default, its ratio free, the default's box ticked; one of now kept
-  assert.deepEqual([X.allFiles[1].crop, X.allFiles[1].sq, X.allFiles[1].aspect, X.allFiles[1].cropDef], [{ x: 0, y: 0, w: 110, h: 101 }, true, 'free', true]);
+  // the crop of no square pixels: the default, its ratio free, its box as the state holds it
+  // (unticked: v586, to v585 ticked, deduced from the crop); one of now kept
+  assert.deepEqual([X.allFiles[1].crop, X.allFiles[1].sq, X.allFiles[1].aspect, X.allFiles[1].cropDef], [{ x: 0, y: 0, w: 110, h: 101 }, true, 'free', false]);
   const Y = newS(); restore(Y, { files: [{ ...s.files[1], cropDef: false, crop: { x: 10, y: 10, w: 80, h: 70 }, aspect: 'free' }] });
   assert.deepEqual([Y.allFiles[0].crop, Y.allFiles[0].cropDef], [{ x: 10, y: 10, w: 80, h: 70 }, false]);
   // the one figure: none of a group's (each its default); the image of no bytes left out, said
@@ -470,6 +472,25 @@ test('an old project: old fields ignored, the defaults in their place (v583)', (
   assert.equal(alertsOf(X), PAGE.alertHtml('warn', 'Opened, to check:', ['1 file left out: its stored bytes no longer read.'], 'sem-dismiss-invalid'));
   // what it shows worked out from the images: their curves and CSV as a project of now's with those crops
   const N = newS(); restore(N, { ...s, files: [s.files[0], { ...s.files[1], cropDef: true }] });
+  assert.deepEqual(M.csvOf(U, X), M.csvOf(U, N));
+});
+
+/* v586: the Default boxes of a project saved before them (to v441: the settings, an image's crop
+   and correction with no box) take their default, ticked, as a new image's and new settings'
+   are: their values the defaults, as ticking them sets them (to v585 each box was deduced from
+   the values, unticked where they were not the defaults). A box the state holds stays as it is. */
+test('an old project: Default boxes missing, ticked as new ones are, their values the defaults (v586)', ()=>{
+  const S = loaded('a', 'b'), s = M.snapshotOf(S), strip = ({ cropDef: _c, adjDef: _a, ...f })=> f;
+  const old = { ...s, intensity: { mode: 'hist', pLo: 2, pHi: 90, b: 7, c: 1.3, g: 0.8, ref: s.files[1].raw.id }, groupInt: { g1: { mode: 'none', b: 5 } },
+    files: [{ ...strip(s.files[0]), crop: { x: 4, y: 5, w: 70, h: 66 }, adj: { b: 9, c: 1.5, g: 1.2 } }, { ...strip(s.files[1]), cropDef: false, adjDef: false, crop: { x: 2, y: 3, w: 80, h: 64 }, adj: { b: -3, c: 1, g: 1 } }] };
+  const X = newS();
+  assert.doesNotThrow(()=> restore(X, old));
+  const [a, b] = X.allFiles, r = info(a);
+  assert.deepEqual([a.cropDef, a.crop, a.aspect, a.adjDef, a.adj], [true, { x: 0, y: 0, w: r.width, h: r.imageH }, M.aspectOf(r.width, r.imageH), true, M.ADJ_DEF]);
+  assert.deepEqual([b.cropDef, b.crop, b.adjDef, b.adj], [false, { x: 2, y: 3, w: 80, h: 64 }, false, { b: -3, c: 1, g: 1 }], 'the boxes it holds: as they are');
+  assert.deepEqual([X.intensity, X.groupInt], [{ ...M.INT_DEF, ref: s.files[1].raw.id }, { g1: M.INT_DEF }]);
+  // what it shows: as a project of now's with the boxes ticked
+  const N = newS(); restore(N, { ...s, intensity: { ...M.INT_DEF, ref: s.files[1].raw.id }, groupInt: { g1: M.INT_DEF }, files: [s.files[0], old.files[1]] });
   assert.deepEqual(M.csvOf(U, X), M.csvOf(U, N));
 });
 

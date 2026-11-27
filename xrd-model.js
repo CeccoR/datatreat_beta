@@ -3,11 +3,10 @@
    it to the drop zone, the file list, the cards, the standard's two windows and the
    history; tests/xrdmodel.test.mjs calls it in Node): a file's scans made patterns (each
    scan one, 2θ ascending, their arrays fixed and shared), read again from a project's
-   bytes (kept by them: a note where the arrays held changed); a file and a project as a
-   restore takes them (the files read again, those left out, the sample on show, a project
-   from before the cards migrated, a kind's settings, the cards' records); the per-sample
-   slots of the cards' settings; what a run wrote patched into the states of the history;
-   the cards' states saved; the patterns a drop loads; what the tab shows beside its state
+   bytes (kept by them); a file and a project as a restore takes them (the files read
+   again, those left out, the sample on show, a kind's settings, the cards' records, those
+   of a new project where it has none); the per-sample slots of the cards' settings; what a
+   run wrote patched into the states of the history; the cards' states saved; the patterns a drop loads; what the tab shows beside its state
    and what it is given back. Taken out of v562's xrd.js (createXrd, one closure of 488
    lines, and the functions round it) with their operations in their order: the same
    values to the last bit.
@@ -34,8 +33,7 @@ export const keptScans = f => f.rawBytes && typeof f.rawBytes === 'object' && /\
 
 /* ---- A file read, and a state put back (pure: the module's, for every instance) ---- */
 // A scan run downwards (start above end) turned round: the plots, the peak search and
-// the Rietveld card take 2θ ascending (rawBytes keep the file as it was). On loading,
-// and on restoring a project saved by an earlier version that kept the file's order.
+// the Rietveld card take 2θ ascending (rawBytes keep the file as it was).
 export const ascending = f => f.x.length > 1 && f.x[0] > f.x[f.x.length-1]
   ? { ...f, x: f.x.slice().reverse(), y: f.y.slice().reverse(), ...(f.varMul ? { varMul: f.varMul.slice().reverse() } : {}) } : f;
 /* A pattern's 2θ, intensities and variance factors never change once read (a file read
@@ -72,17 +70,12 @@ export function patternsOf(name, rawBytes, scans, sample = ''){
 // file loaded under that name: its results by it) stays as it is.
 export const freshOf = (r, existing)=> r.pats.filter(q=> !(q.f.src && existing.has(q.f.name)));
 
-/* A project keeps each file's arrays as the version that loaded it read them. Up to v262
-   the intensities came in with their minimum subtracted, which the Rietveld weights then
-   took for the counts: the user's LaB6, so kept, fitted at χ²_ν 3.93, R_exp 3.89 % where
-   the file itself gives 2.17 and 3.54 % (the same parameters, the esds and the weights
-   off). Restored, a file is read again from its own bytes (rawBytes), as a file loaded
-   now is, and one whose arrays changed keeps how (oldData, below: said under the drop zone
-   until its box's ×, xrd-html.js openedNote; v572, to v571 a note of the restore's, gone at
-   the next undo); one whose bytes were not kept is used as it was. The readings are kept
-   by their bytes, so an undo does not read a file again. A pattern is its scan of the
-   file (f.scan; the first, none given), so a file of several gives its scans again, in
-   their order. (reread: the module's, above) */
+/* Restored, a file is read again from its own bytes (rawBytes), as a file loaded now is:
+   its arrays those of its scan, whatever the project held; one whose bytes were not kept,
+   or do not read as that scan, is used as it was (said under the drop zone: xrd-html.js
+   openedNote, fileNotes). The readings are kept by their bytes, so an undo does not read a
+   file again. A pattern is its scan of the file (f.scan; the first, none given), so a file
+   of several gives its scans again, in their order. (reread: the module's, above) */
 export function readAgain(U, f){
   const b = f.rawBytes;
   if (!(b instanceof Uint8Array) || !/\.(xrdml|xml)$/i.test(f.name || '')) return fixedArrs(ascending({ ...f }));
@@ -94,36 +87,20 @@ export function readAgain(U, f){
   const sc = all[Number.isInteger(f.scan) && f.scan >= 0 ? f.scan : 0] || { error: 'no such scan' };
   if (sc.error) return fixedArrs(ascending({ ...f }));
   const { varMul: _, ...rest } = f, a = scanArrays(sc);
-  const g = { ...rest, x: a.x, y: a.y, ...(a.varMul ? { varMul: a.varMul } : {}) };
-  const old = movedOf(ascending({ ...f }), g, sc);
-  return old ? { ...g, oldData: old } : g;
-}
-/* What a file read again found: nothing where its arrays are the ones the state held (old),
-   else how they changed (oldData): the points left out that an earlier version, to v484,
-   kept as no number ({ dropped: n }), or its minimum subtracted, up to v262 ({ minimum:
-   true }). */
-function movedOf(old, g, sc){
-  const n = g.y.length;
-  // (the arrays the state holds, the scan's own: nothing moved)
-  const same = old.x === g.x && old.y === g.y && old.varMul === g.varMul;
-  let moved = !same && (!old.y || old.y.length !== n || !old.x || old.x.length !== n || !!old.varMul !== !!g.varMul);
-  for (let i = 0; !same && !moved && i < n; i++)
-    moved = Math.abs(old.y[i] - g.y[i]) > 1e-9*Math.max(1, Math.abs(g.y[i])) || Math.abs(old.x[i] - g.x[i]) > 1e-9 || (g.varMul && Math.abs(old.varMul[i] - g.varMul[i]) > 1e-12);
-  // (points left out that an earlier version, to v484, kept as no number: those)
-  const lost = sc.dropped && old.y && old.y.length === n + sc.dropped;
-  return !moved ? null : lost ? { dropped: sc.dropped } : { minimum: true };
+  return { ...rest, x: a.x, y: a.y, ...(a.varMul ? { varMul: a.varMul } : {}) };
 }
 /* A project read in may hold anything (an imported .json): the restore takes what it reads
    only as what it should be — a file an object with its pattern, 2θ and intensities as
    many and two at least (else it is left out, with a note), its name and label text, its
    marks of what was said seen those that are one (alerts.js seenIn, v573); an index an
-   integer in range; arrays where arrays are kept; the cards of a known kind —
-   and anything else as its default (up to v484 a curIdx that was no number made the index
-   NaN, and the cards read files[NaN].label; a file not an object, or with no arrays,
-   threw before anything was drawn). */
+   integer in range; arrays where arrays are kept; the cards of a known kind (no list, those
+   of a new project: START) — and anything else as its default (up to v484 a curIdx that was
+   no number made the index NaN, and the cards read files[NaN].label; a file not an object,
+   or with no arrays, threw before anything was drawn). */
 export const isArr = v => Array.isArray(v) || ArrayBuffer.isView(v);
-// The cards' kinds, as the menu lists them.
+// The cards' kinds, as the menu lists them; the cards a new project starts with.
 export const KINDS = { scherrer: 'Scherrer', rietveld: 'Rietveld' };
+export const START = ['scherrer', 'rietveld'];
 // (a kind of KINDS' own: 'constructor', 'toString' and the like are none)
 export const isKind = k => Object.prototype.hasOwnProperty.call(KINDS, k);
 export function keptFile(U, f, i, color){
@@ -137,47 +114,16 @@ export function keptFile(U, f, i, color){
   try { r = readAgain(U, g); } catch (e){ return null; }
   return isArr(r.x) && isArr(r.y) && r.x.length === r.y.length && r.x.length > 1 ? r : null;
 }
-/* A project from before the cards (v460): one Analysis and one Rietveld card, and the
-   standard a file among the samples, chosen in a select. It becomes the standard's own
-   file, its parameters and peaks the standard's analysis, its refinement the standard's
-   Rietveld; the samples' settings go to a Scherrer card and a Rietveld card. A standard
-   left out of the analysis was not in use: it stays a sample, left out. */
-export function migrate(U, s){
-  // (an entry that is no file kept in its place: the restore leaves it out with its
-  // entries in the per-sample lists)
-  const all = Array.isArray(s.files) ? s.files : [], incl = all.filter(f=> !U.isObj(f) || f.included !== false);
-  const si = s.standardName ? incl.findIndex(f=> U.isObj(f) && f.name === s.standardName) : -1;
-  const cut = a => Array.isArray(a) ? a.filter((_, i)=> i !== si) : a;
-  const rv = U.isObj(s.rv) ? s.rv : {}, res = U.isObj(rv.results) ? rv.results : {};
-  const stdRes = si >= 0 && own(res, s.standardName) ? { [s.standardName]: own(res, s.standardName) } : {};
-  const smpRes = Object.fromEntries(Object.entries(res).filter(([k])=> !(si >= 0 && k === s.standardName)));
-  let ci = s.curIdx || 0; if (si >= 0 && ci > si) ci--;
-  return {
-    files: si >= 0 ? all.filter(f=> f !== incl[si]) : all,
-    std: si >= 0 ? (({ included, held, ...f })=> f)(incl[si]) : null,
-    stdPeaks: si >= 0 ? { shared: s.stdParams, perParams: [s.stdParams], manualPeaks: [(s.manualPeaks || [])[si] || []], removedPeaks: [(s.removedPeaks || [])[si] || []] } : { shared: s.stdParams },
-    stdRv: { phases: [], std: rv.std, start: rv.start, hold: rv.hold, fit: rv.fit, results: stdRes, refineB: rv.refineB },
-    curIdx: ci,
-    cards: [
-      { id: 1, type: 'scherrer', states: { scherrer: { perParams: cut(s.perParams), manualPeaks: cut(s.manualPeaks), removedPeaks: cut(s.removedPeaks), shared: s.shared, paramMode: s.paramMode, sizeBy: s.sizeBy, norm: s.norm } } },
-      { id: 2, type: 'rietveld', states: { rietveld: { ...rv, results: smpRes } } },
-    ],
-  };
-}
 // A kind's settings, the card's or kept while it is the other kind: an object, and the
-// Scherrer one's per-sample lists arrays (the file list keeps them aligned: slots), the
-// entries of the included files left out (gone: their places among the included) taken
-// out, so each file after them keeps its own; its samples' CIFs too where it has them
-// (v575: a state of an older version none, as keptSlots keeps it).
+// Scherrer one's per-sample lists arrays (the file list keeps them aligned: slots), its
+// samples' CIFs among them, the entries of the included files left out (gone: their places
+// among the included) taken out, so each file after them keeps its own.
 export function keptState(U, k, v, gone){
   if (!U.isObj(v)) return null;
   if (k !== 'scherrer') return v;
   const arr = a => Array.isArray(a) ? a.filter((_, i)=> !gone.has(i)) : [];
-  return { ...v, shared: U.isObj(v.shared) ? v.shared : {}, perParams: arr(v.perParams), manualPeaks: arr(v.manualPeaks), removedPeaks: arr(v.removedPeaks),
-    ...(Array.isArray(v.cif) ? { cif: arr(v.cif) } : {}) };
+  return { ...v, shared: U.isObj(v.shared) ? v.shared : {}, perParams: arr(v.perParams), manualPeaks: arr(v.manualPeaks), removedPeaks: arr(v.removedPeaks), cif: arr(v.cif) };
 }
-// A state as the restore takes it: of this version (v 2), or migrated.
-export const stateIn = (U, s0)=> U.isObj(s0) && s0.v === 2 ? s0 : migrate(U, U.isObj(s0) ? s0 : {});
 /* Its files read again (each its default colour by its place: U.colorOf; null, one left
    out; the CIFs a file left out holds, whole again: heldIn), the standard's, how many are
    lost, and the places among the included of the files left out (an entry that is no file
@@ -195,34 +141,32 @@ export function curIdxOf(s, gone, n){
   const ci = Number.isFinite(s.curIdx) ? Math.max(0, Math.trunc(s.curIdx)) : 0;
   return Math.min(ci - [...gone].filter(j=> j < ci).length, Math.max(0, n-1));
 }
-// The cards a state holds, of a known kind (or none given), and each one's settings by
-// kind as the deck reads its record (cards.js load's read).
-export const cardsIn = (U, s)=> Array.isArray(s.cards) ? s.cards.filter(c=> U.isObj(c) && (c.type == null || isKind(c.type))) : [];
+// The cards a state holds, of a known kind (or none given; no list, a new project's: START),
+// and each one's settings by kind as the deck reads its record (cards.js load's read).
+export const cardsIn = (U, s)=> Array.isArray(s.cards) ? s.cards.filter(c=> U.isObj(c) && (c.type == null || isKind(c.type))) : START.map((type, i)=> ({ id: i + 1, type }));
 export const cardIn = (U, src, gone)=> ({ states: Object.fromEntries(Object.entries(clone(U.isObj(src.states) ? src.states : {})).filter(([k])=> isKind(k)).map(([k, v])=> [k, keptState(U, k, v, gone)]).filter(([, v])=> v)) });
 
 /* ---- The cards' states ---- */
 // A slot's entries copied.
 export const copyArr = v => Array.isArray(v) ? v.slice() : [];
-/* The per-sample slots of the Scherrer settings a Rietveld card keeps (s), under its key; its
-   samples' CIFs too where it has them (v575: a state of an older version has none, nor any
-   CIF, and keeps it so for its note: xrd-peaks-model.js readState). A CIF's entry refers to
-   the state's pool of texts (v576: xrd-peaks-model.js cifRef): a file left out holds it whole
-   (out), as the pool of the state it comes back to may be another (the card a Scherrer one
-   again meanwhile, saved anew); it comes back into the pool (made where there is none). */
+/* The per-sample slots of the Scherrer settings a Rietveld card keeps (s), under its key, its
+   samples' CIFs among them. A CIF's entry refers to the state's pool of texts (v576:
+   xrd-peaks-model.js cifRef): a file left out holds it whole (out), as the pool of the state
+   it comes back to may be another (the card a Scherrer one again meanwhile, saved anew); it
+   comes back into the pool (made where there is none). */
 const textsOf = s => Array.isArray(s.cifTexts) ? s.cifTexts : (s.cifTexts = []);
 export const keptSlots = (key, s)=> [{ key: key + ':params', arr: s.perParams, make: v=> v ? {...v} : {...s.shared} },
   { key: key + ':manual', arr: s.manualPeaks, make: copyArr },
   { key: key + ':removed', arr: s.removedPeaks, make: copyArr },
-  ...(Array.isArray(s.cif) ? [{ key: key + ':cif', arr: s.cif, make: v=>{ const q = cifIn(v, s.cifTexts); return q && cifRef(q, textsOf(s)); }, out: v=> cifIn(v, s.cifTexts) }] : [])];
+  { key: key + ':cif', arr: s.cif, make: v=>{ const q = cifIn(v, s.cifTexts); return q && cifRef(q, textsOf(s)); }, out: v=> cifIn(v, s.cifTexts) }];
 /* A file left out holds its sample's CIF whole while the page has it (held, under its card's
    key: a reference to the text the card's samples share), and the state saved holds it as
    a sample's (v577; to v576 its text whole, one copy more in the state, the history's steps
    and the project for each such file): its file's name and its text's place in the pool of
-   its card's Scherrer settings (heldOut: cifRef, the text added there where it is not yet),
-   where that card has them with its samples' CIFs; else whole, as before. Read back (heldIn,
-   readsOf) it is whole again; one of v575 or v576 is whole already. cifStates: the cards'
-   Scherrer settings with their samples' CIFs, by the key their held CIFs are under. */
-const cifStates = (U, cards)=> new Map(cards.filter(c=> U.isObj(c) && U.isObj(c.states) && U.isObj(c.states.scherrer) && Array.isArray(c.states.scherrer.cif))
+   its card's Scherrer settings (heldOut: cifRef, the text added there where it is not yet);
+   under the key of no card, whole. Read back (heldIn, readsOf) it is whole again. cifStates:
+   the cards' Scherrer settings, by the key their held CIFs are under. */
+const cifStates = (U, cards)=> new Map(cards.filter(c=> U.isObj(c) && U.isObj(c.states) && U.isObj(c.states.scherrer))
   .map(c=> ['A' + c.id + ':cif', c.states.scherrer]));
 // The files and cards of a state being saved, its own copies (a file's held is the page's:
 // one with a CIF made anew).

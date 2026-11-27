@@ -2,20 +2,21 @@
    (xrd-html.js), in Node: no browser (v563, out of v562's xrd.js). A file's scans made
    patterns (one, several named by scan and labelled by the sample, 2θ running down turned
    round, variance factors, a scan not read, none read), their arrays made once and shared;
-   a file of a project read again from its bytes (kept by them: read once), as it was with no
-   bytes (its lowest point 0 said), its data moved (points dropped up to v484, a minimum
-   subtracted up to v262), its scan out of range; a file as a restore takes it (no object, no
-   name, no arrays, variance factors of another length); a project from before the cards
-   migrated (the standard among the samples, left out, the sample on show); a kind's
-   settings and the entries of the files left out; the files read, those lost and their
-   places, the sample on show; the cards' records and their settings by kind; the slots;
-   v583: an old project's file whose bytes are numbers (to v483), one left out under v477's
-   key, read as files of no bytes and entries of none; (v577) a file left out's CIF by its card's pool in the state saved, read
-   back whole; a run's results and instruments patched into a state (a card's, the
-   standard's, nothing new); what it shows and is given back; the patterns a drop loads; the
-   markup escaped. Then 40 cases (random files of synthetic scans dropped twice, a state put
-   back as it was, migrated, with no bytes, moved, left out, malformed; a run's results
-   patched in) as v562's xrd.js gave them, run from its source on a page of stubs (the panels
+   a file of a project read again from its bytes (kept by them: read once), its arrays the
+   bytes' whatever it held, as it was with no bytes (said), its scan out of range; a file as a
+   restore takes it (no object, no name, no arrays, variance factors of another length); a
+   kind's settings (the samples' CIFs among them) and the entries of the files left out; the
+   files read, those lost and their places, the sample on show; the cards' records and their
+   settings by kind, a new project's where a state has none; the slots; v583: an old
+   project's file whose bytes are numbers (to v483), one left out under v477's key, read as
+   files of no bytes and entries of none; v586: a project from before the cards (to v459),
+   files whose arrays an older version read otherwise (to v484, to v262), Scherrer settings
+   with no CIFs (to v574), as this version reads them; (v577) a file left out's CIF by its
+   card's pool in the state saved, read back whole; a run's results and instruments patched
+   into a state (a card's, the standard's, nothing new); what it shows and is given back; the
+   patterns a drop loads; the markup escaped. Then 40 cases (random files of synthetic scans
+   dropped twice, a state put back as it was, from before the cards, with no bytes, moved,
+   left out, malformed; a run's results patched in) as v562's xrd.js gave them, run from its source on a page of stubs (the panels
    recording stubs): the files and alerts each drop gives, the files, standard, sample on
    show, alerts and cards a restore gives, the state a run's release writes; SHA-256 digests
    in tests/golden/xrdmodel.json (npm run test:update writes them anew after a change meant
@@ -86,25 +87,22 @@ test('a file\'s scans made patterns: one, several, running down, not read; their
   assert.deepEqual(M.freshOf({ pats: one.pats }, new Set(['a.xrdml'])).length, 1);
 });
 
-test('a file read again: by its bytes (once), as it was, its data moved, points dropped; kept or left out', ()=>{
-  const sc = [scan([1, 2, 3], [5, 6, 7], { varMul: [1, 1, 1] }), scan([4, 5, 6], [1, 2, 3], { dropped: 1 })], b = enc(JSON.stringify({ scans: sc }));
+test('a file read again: by its bytes (once), its arrays theirs whatever it held, as it was with no bytes; kept or left out', ()=>{
+  const sc = [scan([1, 2, 3], [5, 6, 7], { varMul: [1, 1, 1] }), scan([4, 5, 6], [1, 2, 3])], b = enc(JSON.stringify({ scans: sc }));
   read.n = 0;
   const same = M.readAgain(U, { name: 'a.xrdml', rawBytes: b, x: [1, 2, 3], y: [5, 6, 7], varMul: [1, 1, 1] });
-  assert.equal(same.oldData, undefined); assert.deepEqual(same.x, [1, 2, 3]);
+  assert.deepEqual([same.x, same.y, same.varMul], [[1, 2, 3], [5, 6, 7], [1, 1, 1]]);
   assert.equal(M.readAgain(U, { name: 'a.xrdml', rawBytes: b, x: same.x, y: same.y, varMul: same.varMul }).x, same.x);
   assert.equal(read.n, 1, 'read once');
-  // What it found kept with the file (v572: said until its box's ×, xrd-html.js openedNote;
-  // v567: no version number in the words, ALERTS-REVIEW.md R4)
-  const min = M.readAgain(U, { name: 'a.XML', rawBytes: b, x: [1, 2, 3], y: [4, 5, 6], varMul: [1, 1, 1] }), drop = M.readAgain(U, { name: 'a.xrdml', rawBytes: b, scan: 1, x: [4, 5, 6, 7], y: [1, 2, 3, 4] });
-  assert.deepEqual([min.oldData, drop.oldData], [{ minimum: true }, { dropped: 1 }]);
-  assert.match(H.openedNote(min), /as an older version had read them, with their minimum subtracted/);
-  assert.match(H.openedNote(drop), /1 point whose values are no finite number left out: the project held it, as an older version did/);
-  assert.equal(M.readAgain(U, { ...drop, seen: ['opened'] }).oldData, drop.oldData, 'kept as the file is read again (an undo), with its mark');
+  // other arrays held: the bytes' (the scan's own, shared), nothing said
+  const moved = M.readAgain(U, { name: 'a.XML', rawBytes: b, x: [1, 2, 3], y: [4, 5, 6] });
+  assert.deepEqual([moved.x, moved.y, moved.varMul, H.openedNote(moved)], [same.x, same.y, same.varMul, '']);
+  assert.equal(M.readAgain(U, { name: 'a.xrdml', rawBytes: b, scan: 1, x: [4, 5, 6, 7], y: [1, 2, 3, 4] }).y.join(), '1,2,3');
   assert.equal(M.readAgain(U, { name: 'a.xrdml', rawBytes: b, scan: 7, x: [3, 2], y: [1, 2] }).x.join(), '2,3');
-  assert.match(H.openedNote(M.readAgain(U, { name: 'a.txt', y: [0, 1], x: [1, 2] })), /lowest point is exactly 0/);
+  // no bytes, or a file not read again (no XRDML name): its arrays as held; said where it has none
+  assert.equal(H.openedNote(M.readAgain(U, { name: 'a.txt', y: [0, 1], x: [1, 2] })), 'its bytes are not stored: its data are those the project holds');
   assert.equal(H.openedNote(M.readAgain(U, { name: 'a.txt', rawBytes: b, y: [0, 1], x: [1, 2] })), '');
-  assert.equal(M.readAgain(U, { name: 'b.xrdml', rawBytes: enc('<no'), y: [1, 1], x: [1, 2] }).oldData, undefined);
-  for (const oldData of [{ dropped: 0 }, { dropped: 1.5 }, { dropped: '2' }, { minimum: 'yes' }, 'x', null, 5]) assert.equal(H.openedNote({ oldData, rawBytes: b, y: [0] }), '', 'a project\'s .json: only a whole count, or true');
+  assert.equal(M.readAgain(U, { name: 'b.xrdml', rawBytes: enc('<no'), y: [1, 1], x: [1, 2] }).y.join(), '1,1');
   const bad = enc('q'); M.keepScans(bad, [{ error: 'x' }]); read.n = 0; M.readAgain(U, { name: 'c.xrdml', rawBytes: bad, x: [1, 2], y: [1, 2] }); assert.equal(read.n, 0);
   // as a restore takes it
   const f2 = { name: 'f2', x: [1, 2], y: [1, 2] };
@@ -125,17 +123,11 @@ test('a file read again: by its bytes (once), as it was, its data moved, points 
   assert.deepEqual([R.reads[0].seen, R.stdRead.seen], [['read', 'opened:x'], ['read', 'opened:x', 'opened']]);
 });
 
-test('a project restored: migrated, its files read, those lost, the sample on show, the cards', ()=>{
+test('a project restored: its files read, those lost, the sample on show, the cards', ()=>{
   const f = n => ({ name: n, x: [1, 2], y: [3, 4] });
-  const old = { files: [f('a'), { ...f('std'), included: true, held: {} }, f('b'), { ...f('c'), included: false }], standardName: 'std', curIdx: 2, stdParams: { w: 1 },
-    perParams: [{ p: 0 }, { p: 1 }, { p: 2 }], manualPeaks: [[0], [1], [2]], removedPeaks: [[], [], []], shared: { s: 1 }, rv: { std: 1, results: { std: { r: 1 }, a: { r: 2 } } } };
-  const m = M.migrate(U, old);
-  assert.deepEqual(m.files.map(x=> x.name), ['a', 'b', 'c']); assert.deepEqual(m.std, f('std')); assert.equal(m.curIdx, 1);
-  assert.deepEqual(m.stdPeaks.manualPeaks, [[1]]); assert.deepEqual(m.stdRv.results, { std: { r: 1 } });
-  assert.deepEqual(m.cards[0].states.scherrer.perParams, [{ p: 0 }, { p: 2 }]); assert.deepEqual(m.cards[1].states.rietveld.results, { a: { r: 2 } });
-  assert.equal(M.migrate(U, { files: [f('a')], standardName: 'zz', curIdx: 0 }).std, null);
-  assert.equal(M.stateIn(U, { v: 2, files: [] }).v, 2); assert.equal(M.stateIn(U, 5).cards.length, 2);
-  assert.deepEqual(M.keptState(U, 'scherrer', { perParams: [1, 2, 3], manualPeaks: 'x', shared: 5 }, new Set([1])), { perParams: [1, 3], manualPeaks: [], removedPeaks: [], shared: {} });
+  assert.deepEqual(M.keptState(U, 'scherrer', { perParams: [1, 2, 3], manualPeaks: 'x', shared: 5, cif: [null, { file: 'a', ref: 0 }, null] }, new Set([1])),
+    { perParams: [1, 3], manualPeaks: [], removedPeaks: [], shared: {}, cif: [null, null] });
+  assert.deepEqual(M.keptState(U, 'scherrer', { perParams: [1, 2] }, new Set()).cif, [], 'the CIFs\' slot always (v586)');
   assert.equal(M.keptState(U, 'rietveld', 5, new Set()), null);
   const s = { files: [f('a'), 5, { ...f('b'), included: false }, { name: 'bad' }, f('c')], std: { name: 'std' }, curIdx: 4 };
   const R = M.readsOf(U, s);
@@ -143,7 +135,10 @@ test('a project restored: migrated, its files read, those lost, the sample on sh
   assert.deepEqual(R.reads[4].color, PAGE.colorOf(4));
   assert.equal(M.curIdxOf(s, R.gone, 2), 1); assert.equal(M.curIdxOf({ curIdx: 'x' }, R.gone, 2), 0); assert.equal(M.curIdxOf({ curIdx: 1.9 }, new Set([0]), 3), 0);
   assert.deepEqual(M.cardsIn(U, { cards: [null, { type: 'pie' }, { type: 'constructor' }, { id: 3 }, { type: 'rietveld' }] }), [{ id: 3 }, { type: 'rietveld' }]);
-  assert.deepEqual(M.cardIn(U, { states: { scherrer: { perParams: [1, 2] }, rietveld: 5, constructor: {}, x: {} } }, new Set([0])), { states: { scherrer: { perParams: [2], manualPeaks: [], removedPeaks: [], shared: {} } } });
+  // no list of cards: a new project's (v586); an empty one, none
+  assert.deepEqual([M.cardsIn(U, {}), M.cardsIn(U, { cards: 5 }), M.cardsIn(U, { cards: [] })], [[{ id: 1, type: 'scherrer' }, { id: 2, type: 'rietveld' }], [{ id: 1, type: 'scherrer' }, { id: 2, type: 'rietveld' }], []]);
+  assert.deepEqual(M.START, ['scherrer', 'rietveld']);
+  assert.deepEqual(M.cardIn(U, { states: { scherrer: { perParams: [1, 2] }, rietveld: 5, constructor: {}, x: {} } }, new Set([0])), { states: { scherrer: { perParams: [2], manualPeaks: [], removedPeaks: [], shared: {}, cif: [] } } });
 });
 
 /* v583: an old project's files as this version reads them. Made here as older versions saved
@@ -162,9 +157,36 @@ test('an old project: bytes as numbers none, entries under an old key none (v583
   assert.deepEqual([params.make(f.held[params.key], f), params.make({ w: 5 }, f)], [{ w: 2 }, { w: 5 }]);
 });
 
+/* v586: an old project as this version reads it. Made here as older versions saved it: no
+   cards (to v459: the settings of one Analysis and one Rietveld at the top level, the standard
+   a sample named in standardName), a file whose intensities the project holds with their
+   minimum subtracted (to v262), one whose bytes are not stored and whose lowest point is 0,
+   and, on a Rietveld card, Scherrer settings with no CIFs (to v574). Its old fields ignored:
+   its files read again from their bytes, their arrays the bytes' and nothing said; the
+   standard a sample; a new project's cards; the CIFs' slot made. */
+test('an old project: before the cards, arrays read otherwise, no CIFs: a new project\'s cards, the bytes\' arrays (v586)', ()=>{
+  const b = enc(JSON.stringify({ scans: [scan([1, 2, 3], [5, 6, 7])] })), f = (name, o)=> ({ name, x: [1, 2, 3], y: [3, 4, 5], ...o });
+  const old = { files: [f('a.xrdml', { rawBytes: b, y: [0, 1, 2] }), f('std.xrdml', { rawBytes: b }), f('c.xrdml', { y: [0, 4, 5] })], standardName: 'std.xrdml', curIdx: 1,
+    stdParams: { w: 1 }, perParams: [{ p: 0 }, { p: 1 }, { p: 2 }], manualPeaks: [[30], [31], [32]], removedPeaks: [[], [], []], shared: { smoothW: 0.5 }, rv: { results: { 'a.xrdml': { chi: 1 } } } };
+  let R, cards;
+  assert.doesNotThrow(()=>{ R = M.readsOf(U, old); cards = M.cardsIn(U, old).map(c=> M.cardIn(U, c, R.gone)); });
+  // the files read again from their bytes, the arrays theirs; the standard named a sample; none of no bytes left out
+  assert.deepEqual(R.reads.map(r=> [r.name, r.y.join(), 'oldData' in r]), [['a.xrdml', '5,6,7', false], ['std.xrdml', '5,6,7', false], ['c.xrdml', '0,4,5', false]]);
+  assert.deepEqual([R.stdRead, R.lost, M.curIdxOf(old, R.gone, 3)], [null, 0, 1]);
+  assert.deepEqual(R.reads.map(H.openedNote), ['', '', 'its bytes are not stored: its data are those the project holds']);
+  // a new project's cards, of no settings: the old ones ignored
+  assert.deepEqual(M.cardsIn(U, old), [{ id: 1, type: 'scherrer' }, { id: 2, type: 'rietveld' }]);
+  assert.deepEqual(cards, [{ states: {} }, { states: {} }]);
+  // Scherrer settings of no CIFs kept on a Rietveld card: the CIFs' slot made, a sample's taken back in
+  const sc = M.cardIn(U, { states: { rietveld: {}, scherrer: { perParams: [{}, {}], manualPeaks: [[], []], removedPeaks: [[], []], shared: {} } } }, new Set()).states.scherrer;
+  const slot = M.keptSlots('A2', sc).find(s=> s.key === 'A2:cif');
+  assert.deepEqual([sc.cif, slot.make({ file: 'a.cif', cif: 'data_a' }), sc.cifTexts], [[], { file: 'a.cif', ref: 0 }, ['data_a']]);
+});
+
 test('the cards\' states: slots, a run\'s results patched in, what it shows', ()=>{
-  const s = { perParams: [], manualPeaks: [], removedPeaks: [], shared: { w: 2 } }, ks = M.keptSlots('A4', s);
-  assert.deepEqual(ks.map(k=> k.key), ['A4:params', 'A4:manual', 'A4:removed']); assert.deepEqual(ks[0].make(), { w: 2 }); assert.deepEqual(ks[1].make([1]), [1]);
+  const s = { perParams: [], manualPeaks: [], removedPeaks: [], cif: [], shared: { w: 2 } }, ks = M.keptSlots('A4', s);
+  assert.deepEqual(ks.map(k=> k.key), ['A4:params', 'A4:manual', 'A4:removed', 'A4:cif']); assert.deepEqual(ks[0].make(), { w: 2 }); assert.deepEqual(ks[1].make([1]), [1]);
+  assert.deepEqual([ks[3].make({ file: 'a.cif', cif: 'data_a' }), s.cifTexts, ks[3].out({ file: 'a.cif', ref: 0 }), ks[3].make()], [{ file: 'a.cif', ref: 0 }, ['data_a'], { file: 'a.cif', cif: 'data_a' }, null]);
   assert.equal(M.prefixOf({ type: 'scherrer', id: 3 }), 'xrdA3'); assert.equal(M.prefixOf({ type: 'rietveld', id: 3 }), 'xrdR3');
   const a = { type: 'rietveld', states: { scherrer: { p: [1] }, rietveld: { q: 1 }, z: null } }, o = M.otherStates(a);
   assert.deepEqual(o, { scherrer: { p: [1] } }); assert.notEqual(o.scherrer, a.states.scherrer);
@@ -187,28 +209,27 @@ test('the cards\' states: slots, a run\'s results patched in, what it shows', ()
 /* v577: a file left out holds its sample's CIF whole while the page has it, and in the state
    saved by its card's pool, as a sample in use does (to v576 whole there too: one copy more for
    each such file): heldOut puts it in the pool of its card's Scherrer settings (the text added
-   where the pool lacks it, a pool made where there is none), readsOf reads it back whole. A
-   card whose settings hold no CIFs (an older version's), or no card of its key: whole, as
-   before; a state of v576 (whole) read as it is; a place in no pool, none. */
+   where the pool lacks it, a pool made where there is none), readsOf reads it back whole. No
+   card of its key: whole; a state with it whole read as it is; a place in no pool, none. */
 test('a file left out: its sample\'s CIF by its card\'s pool in the state saved, read back whole; v576\'s as it is (v577)', ()=>{
   const STO = 'data_SrTiO3\n_cell_length_a 3.905\n', BTO = 'data_BaTiO3\n_cell_length_a 4.0\n', s = { file: 'S.cif', cif: STO }, b = { file: 'B.cif', cif: BTO };
   const f = (name, held)=> ({ name, x: [1, 2], y: [3, 4], ...(held ? { included: false, held } : {}) });
   const page = [f('a'), f('b', { 'A1:params': { w: 1 }, 'A1:cif': s, 'A2:cif': b, 'A3:cif': s, 'A4:cif': s }), f('c', { 'A1:cif': null, 'A2:cif': s })];
   const cards = ()=> [{ id: 1, type: 'scherrer', states: { scherrer: { cif: [{ file: 'S.cif', ref: 0 }], cifTexts: [STO] } } },
     { id: 2, type: 'rietveld', states: { rietveld: {}, scherrer: { cif: [null] } } }, { id: 3, type: 'scherrer', states: { scherrer: { perParams: [] } } }];
-  const st = { v: 2, files: page.map(x=> ({ ...x })), cards: cards() }, held = page[1].held;
+  const st = { files: page.map(x=> ({ ...x })), cards: cards() }, held = page[1].held;
   M.heldOut(U, st.files, st.cards);
-  assert.deepEqual(st.files.map(x=> x.held), [undefined, { 'A1:params': { w: 1 }, 'A1:cif': { file: 'S.cif', ref: 0 }, 'A2:cif': { file: 'B.cif', ref: 0 }, 'A3:cif': s, 'A4:cif': s },
-    { 'A1:cif': null, 'A2:cif': { file: 'S.cif', ref: 1 } }], 'by the pool; no CIFs in the card\'s settings, or no card: whole');
-  assert.deepEqual(st.cards.map(c=> c.states.scherrer.cifTexts), [[STO], [BTO, STO], undefined], 'a text added where the pool lacks it, a pool made');
+  assert.deepEqual(st.files.map(x=> x.held), [undefined, { 'A1:params': { w: 1 }, 'A1:cif': { file: 'S.cif', ref: 0 }, 'A2:cif': { file: 'B.cif', ref: 0 }, 'A3:cif': { file: 'S.cif', ref: 0 }, 'A4:cif': s },
+    { 'A1:cif': null, 'A2:cif': { file: 'S.cif', ref: 1 } }], 'by the pool (v586: a card\'s settings with no CIFs too); no card: whole');
+  assert.deepEqual(st.cards.map(c=> c.states.scherrer.cifTexts), [[STO], [BTO, STO], [STO]], 'a text added where the pool lacks it, a pool made');
   assert.ok(page[1].held === held && held['A1:cif'] === s, 'the page\'s own untouched');
   // Read back: each whole, as the page had it; the state's own untouched.
   const R = M.readsOf(U, st);
   assert.deepEqual(R.reads.map(r=> r.held), page.map(x=> x.held));
   assert.deepEqual(st.files[1].held['A1:cif'], { file: 'S.cif', ref: 0 });
-  // A state of v576: whole, read as it is; a place in no pool (or of no text), none.
-  assert.deepEqual(M.readsOf(U, { v: 2, files: page, cards: cards() }).reads.map(r=> r.held), page.map(x=> x.held));
-  const bad = M.readsOf(U, { v: 2, files: [f('d', { 'A1:cif': { file: 'S.cif', ref: 3 }, 'A2:cif': { file: 'S.cif', ref: 0 }, 'A5:cif': { file: 'S.cif', ref: 0 } })], cards: cards() });
+  // Whole, read as it is; a place in no pool (or of no text), none.
+  assert.deepEqual(M.readsOf(U, { files: page, cards: cards() }).reads.map(r=> r.held), page.map(x=> x.held));
+  const bad = M.readsOf(U, { files: [f('d', { 'A1:cif': { file: 'S.cif', ref: 3 }, 'A2:cif': { file: 'S.cif', ref: 0 }, 'A5:cif': { file: 'S.cif', ref: 0 } })], cards: cards() });
   assert.deepEqual(bad.reads[0].held, { 'A1:cif': null, 'A2:cif': null, 'A5:cif': { file: 'S.cif', ref: 0 } });
 });
 
@@ -248,18 +269,17 @@ test('the markup: the standard\'s window and file, its alerts, the drop\'s, a re
   assert.equal(M.keptScans({ name: 'f (scan 1).xrdml', rawBytes: b1 }).length, 3);
   assert.deepEqual([M.keptScans({ name: 'f.txt', rawBytes: b1 }), M.keptScans({ name: 'f.xrdml' }), M.keptScans({ name: 'f.xrdml', rawBytes: enc('h') })], [null, null, null]);
   const p1 = { name: 'f (scan 1).xrdml', src: 'f.xrdml', scan: 0, rawBytes: b1, y: [0] }, p3 = { name: 'f (scan 3).xrdml', src: 'f.xrdml', scan: 2, rawBytes: b1 };
-  const g = { name: 'g.xrdml', label: 'G', rawBytes: b2, oldData: { dropped: 2 } }, o = { name: 'o', label: 'O<', y: [3, 0, 1] }, std = { name: 's.xrdml', y: [0] };
+  const g = { name: 'g.xrdml', label: 'G', rawBytes: b2 }, o = { name: 'o', label: 'O<', y: [3, 0, 1] }, q = { name: 'q.xrdml', label: 'Q', y: [3, 1] }, std = { name: 's.xrdml', y: [0] };
   const box = (all, st, lost)=> PAGE.notesHtml(H.fileNotes(all, st, M.keptScans, HU), w=> 'xrd-dismiss-' + w, { opened: lost ? [lost] : [] });
   const CHECK = ['f.xrdml: scan 2 not read: no scan data.', 'f (scan 3).xrdml: n&lt;.'], READ = ['f.xrdml: 3 scans, 2 of them loaded, each a pattern of its own.', 'g.xrdml: intensities in cps with no counting time: 0.5 s per point estimated from the noise, for the weights.'];
-  const OPENED = ['G: read again from the file itself, 2 points whose values are no finite number left out: the project held them, as an older version did. Results refined before are from those: refine again.',
-    'O&lt;: its lowest point is exactly 0 and the project does not hold the file itself: its minimum may have been subtracted, as an older version did, which the Rietveld weights would take for the counts; load the file again.'];
-  const STD = 's.xrdml: its lowest point is exactly 0 and the project does not hold the file itself: its minimum may have been subtracted, as an older version did, which the Rietveld weights would take for the counts; load the file again.';
-  assert.equal(box([p1, p3, g, o], std, H.leftOutLine(1, true, null, HU)), PAGE.alertHtml('warn', 'Loaded, to check:', CHECK, 'xrd-dismiss-check')
+  const OPENED = ['O&lt;: its bytes are not stored: its data are those the project holds.', 'Q: its bytes are not stored: its data are those the project holds.'];
+  const STD = 's.xrdml: its bytes are not stored: its data are those the project holds.';
+  assert.equal(box([p1, p3, g, o, q], std, H.leftOutLine(1, true, null, HU)), PAGE.alertHtml('warn', 'Loaded, to check:', CHECK, 'xrd-dismiss-check')
     + PAGE.alertHtml('warn', 'Opened, to check:', [...OPENED, STD, '1 file and the standard left out: no data in the project.'], 'xrd-dismiss-opened') + PAGE.alertHtml('info', 'How these files were read:', READ, 'xrd-dismiss-read'));
   // A file's line goes when all its patterns are seen (or gone), a pattern's with it alone.
-  assert.equal(box([{ ...p1, seen: ['check', 'read'] }, p3, g], null, ''), PAGE.alertHtml('warn', 'Loaded, to check:', CHECK, 'xrd-dismiss-check')
+  assert.equal(box([{ ...p1, seen: ['check', 'read'] }, p3, g, o], null, ''), PAGE.alertHtml('warn', 'Loaded, to check:', CHECK, 'xrd-dismiss-check')
     + PAGE.alertHtml('warn', 'Opened, to check:', OPENED.slice(0, 1), 'xrd-dismiss-opened') + PAGE.alertHtml('info', 'How these files were read:', READ, 'xrd-dismiss-read'));
-  assert.equal(box([p1, { ...p3, seen: ['check'] }, { ...g, seen: ['opened', 'read'] }], null, ''), PAGE.alertHtml('warn', 'Loaded, to check:', CHECK.slice(0, 1), 'xrd-dismiss-check')
+  assert.equal(box([p1, { ...p3, seen: ['check'] }, { ...g, seen: ['read'] }, { ...o, seen: ['opened'] }], null, ''), PAGE.alertHtml('warn', 'Loaded, to check:', CHECK.slice(0, 1), 'xrd-dismiss-check')
     + PAGE.alertHtml('info', 'How these files were read:', READ.slice(0, 1), 'xrd-dismiss-read'));
   assert.equal(box([p3], null, ''), PAGE.alertHtml('warn', 'Loaded, to check:', CHECK, 'xrd-dismiss-check') + PAGE.alertHtml('info', 'How these files were read:', ['f.xrdml: 3 scans, 1 of them loaded, each a pattern of its own.'], 'xrd-dismiss-read'));
   assert.deepEqual(['the standard', '2 files', '1 file and the standard'].map(t=> t + ' left out: no data in the project.'), [H.leftOutLine(0, true, null, HU), H.leftOutLine(2, false, null, HU), H.leftOutLine(1, true, null, HU)]);
@@ -284,7 +304,11 @@ function scanSet(r){
   return chance(0.06) ? '<not json' : JSON.stringify(j);
 }
 export const EDITS = ['same', 'migrate', 'nobytes', 'moved', 'scan', 'held', 'junk', 'std', 'cards'];
-// A state as an earlier version, a hand or a damage left it: from the state s the case's drops gave.
+/* A state as an earlier version, a hand or a damage left it: from the state s the case's drops
+   gave. 'migrate': a state from before the cards (to v459), its settings at the top level, the
+   standard named among the samples (v586: ignored, a new project's cards); 'moved': arrays an
+   older version read otherwise (v586: the bytes'); 'nobytes': none, the lowest point 0 (v586:
+   said as the files of no bytes are). */
 export function edited(s, kind, r){
   const files = s.files.map(f=> ({ ...f }));
   if (kind === 'migrate'){ const std = files[Math.floor(r()*files.length)]; return { files, standardName: std && std.name, curIdx: 1, stdParams: { w: 1 }, perParams: files.map((_, i)=> ({ i })), manualPeaks: files.map((_, i)=> [i]), removedPeaks: files.map(()=> []), shared: { s: 2 }, rv: { results: Object.fromEntries(files.map(f=> [f.name, { chi: 1 }])) } }; }
@@ -334,12 +358,12 @@ const fileOut = f => f && [f.name, f.label, f.color, dg(f.x), dg(f.y), f.varMul 
 // The state the module saves (its cards with their kinds' settings: a panel's its own as restored).
 // (v577: a file left out holding a sample's CIF, its text in its card's pool: heldOut)
 function stateOf(S){
-  const s = { v: 2, files: S.all.map(f=> ({ ...f })), std: S.std ? { ...S.std } : null, stdRv: S.stdRv, curIdx: S.curIdx, cards: S.cards.map(a=>{ const st = M.otherStates(a); st[a.type] = M.clone(a.own); return { ...saved(a), states: st }; }) };
+  const s = { files: S.all.map(f=> ({ ...f })), std: S.std ? { ...S.std } : null, stdRv: S.stdRv, curIdx: S.curIdx, cards: S.cards.map(a=>{ const st = M.otherStates(a); st[a.type] = M.clone(a.own); return { ...saved(a), states: st }; }) };
   M.heldOut(U, s.files, s.cards);
   return s;
 }
 function restoreCase(S, s0){
-  const s = M.stateIn(U, s0), R = M.readsOf(U, s);
+  const s = U.isObj(s0) ? s0 : {}, R = M.readsOf(U, s);
   S.all = R.reads.filter(Boolean);
   S.std = R.stdRead;
   S.curIdx = M.curIdxOf(s, R.gone, S.all.filter(f=> f.included !== false).length);
@@ -349,8 +373,9 @@ function restoreCase(S, s0){
   S.alerts = notesOf(S, H.leftOutLine(R.lost, !!s.std, R.stdRead, HU));
 }
 export function runCase(c){
+  // (v586: a Scherrer card's settings hold its samples' CIFs, as every one has since v575)
   const S = { all: [], std: null, curIdx: 0, stdRv: {}, bytes: new Map(),
-    cards: [{ id: 1, type: 'scherrer', base: '', nameAuto: true, name: '', collapsed: false, states: {}, own: {} }, { id: 2, type: 'rietveld', base: '', nameAuto: true, name: '', collapsed: false, states: {}, own: {} }] };
+    cards: [{ id: 1, type: 'scherrer', base: '', nameAuto: true, name: '', collapsed: false, states: {}, own: { cif: [] } }, { id: 2, type: 'rietveld', base: '', nameAuto: true, name: '', collapsed: false, states: {}, own: {} }] };
   const out = [];
   for (const d of c.drops){ dropCase(S, c, d); out.push([S.all.map(fileOut), S.alerts]); }
   const s1 = stateOf(S), s = edited(s1, c.edit, rnd(c.er));

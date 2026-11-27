@@ -6,7 +6,13 @@
    defaults in their place, its data read again from its files' bytes where it holds other
    arrays (an older reader's), what the cards show worked out anew from them (the CSVs those of
    the same files loaded now), and a file whose bytes are numbers (to v483) one of no bytes:
-   its data the project's, said under the drop zone (ALERTS-REVIEW.md U8), its download none. */
+   its data the project's, said under the drop zone (ALERTS-REVIEW.md U8), its download none.
+   v586: the card made for a project that has none a new card (DRS: its lines suggested, E_g
+   worked out; to v585 the default lines), as the cards of the same files loaded now; XRPD (a
+   project from before the cards, the standard named among the samples, arrays an older version
+   read, an instrument an older reader read; a Scherrer card's widths in points, the steps'
+   note, no CIFs): a new project's cards, the arrays and the instrument read from the bytes,
+   the default widths, nothing said of the old ones. */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { start, openModule, loadFiles, settle, moduleState, exportProject, projectFile, importProject, openProject, download, readZip, banner, answer } from './helpers.mjs';
@@ -58,6 +64,7 @@ test('GC: a project from before the cards, one interval, the paired modes, the s
     assert.deepEqual(c.map(k=> [k.type, k.mMode, k.qMode, k.startMode, k.endMode, k.startShared, k.endShared, k.tShared, k.ms]),
       [['rate', 'all', 'all', 'all', 'all', 0, 24, 25, [15, 15]]], 'one card of the defaults: 25 °C, all, every gas');
     assert.deepEqual(c[0].gasSel, { a: ['h2', 'o2'], r: ['h2', 'o2'] });
+    assert.deepEqual(c, now.cards, 'a new card, as the files loaded now have (v586)');
     assert.deepEqual(s.files[0].gas, now.files[0].gas, 'read again from its bytes');
     assert.deepEqual([s.files[1].rawBytes, s.files[1].gas], [null, now.files[1].gas]);
     assert.deepEqual(await heldSaid(page, 'gc'), ['beta.csv']);
@@ -70,7 +77,7 @@ test('GC: a project from before the cards, one interval, the paired modes, the s
 test('DRS: a project from before the cards, its fields by their ids, its lines at the top, widths in eV, energies held; a spectrum read again, one of no bytes', async ()=>{
   const { page, errors, close } = await env.page();
   try {
-    const { now } = await reopenOld(page, 'tauc', env.fx.files.tauc, 'DRS old', st=>{
+    const { now, csv } = await reopenOld(page, 'tauc', env.fx.files.tauc, 'DRS old', st=>{
       const t = st.analyses[0].states.tauc;
       delete st.analyses;
       Object.assign(st, { mode: 'per', shared: { a: 2, w: 0.03, W: 0.25 }, vlines: t.sharedVlines, params: { taucA: '2', taucN: '4' }, urbachOn: true, urbach: { shared: { W: 0.2 } } });
@@ -80,6 +87,10 @@ test('DRS: a project from before the cards, its fields by their ids, its lines a
     });
     const s = await moduleState(page, 'tauc', true), a = s.analyses;
     assert.deepEqual(a.map(k=> [k.type, k.states.tauc.mode, k.states.tauc.shared]), [['tauc', 'shared', { a: 0.5, N: 1, N2: 20, M: 25, M2: 100 }]], 'one Tauc card of the defaults');
+    // (v586: a new card, its lines suggested as on the files loaded now, its E_g theirs; to v585
+    // the default lines, E_g none where they fell outside the edge)
+    assert.deepEqual([a, a[0].states.tauc.suggested], [now.analyses, true], 'a new card');
+    assert.deepEqual(await csvs(page), csv, 'the CSVs of those files loaded now');
     assert.deepEqual([s.files[0].FR, 'hv' in s.files[0]], [now.files[0].FR, false], 'read again from its bytes');
     assert.deepEqual([s.files[1].rawBytes, s.files[1].FR], [null, now.files[1].FR]);
     assert.deepEqual(await heldSaid(page, 'tauc'), ['drs2.csv']);
@@ -101,6 +112,7 @@ test('EPR: a project from before the cards, its smoothing in points; a spectrum 
     });
     const s = await moduleState(page, 'epr', true);
     assert.deepEqual(s.cards.map(k=> [k.type, k.norm, k.smoothW, 'smooth' in k]), [['spectra', 'global', 0.2, false]], 'one card of the defaults');
+    assert.deepEqual(s.cards, now.cards, 'a new card, as the files loaded now have (v586)');
     assert.deepEqual(s.files[0].a, now.files[0].a, 'read again from its bytes');
     assert.deepEqual([s.files[1].rawFiles.map(f=> f.bytes), s.files[1].a], [[null, null], now.files[1].a]);
     assert.deepEqual(await heldSaid(page, 'epr'), ['e2.DTA + e2.DSC']);
@@ -126,6 +138,58 @@ test('SEM: a figure of v439–v449 (positions as corners and sides, the middle r
     assert.deepEqual(pos, [['label.pos', 'auto'], ['letter.pos', 'in'], ['bar.pos', 'in']], 'the old positions none: the defaults');
     await page.keyboard.press('Escape');
     await page.waitForFunction(()=> !document.querySelector('.fig-backdrop'));
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+/* v586: an XRPD project from before the cards (to v459: one Analysis's settings at the top
+   level, the standard a sample named in standardName, a Rietveld at `rv`), a pattern whose
+   intensities the project holds with their minimum subtracted (to v262), one whose instrument
+   an older reader read (other values, no measurement's index). */
+test('XRPD: a project from before the cards, arrays and an instrument an older version read: a new project\'s cards, the bytes\' arrays and instrument, nothing said (v586)', async ()=>{
+  const { page, errors, close } = await env.page();
+  try {
+    const { now, csv } = await reopenOld(page, 'xrd', env.fx.files.xrd, 'XRPD old', st=>{
+      const sc = st.cards[0].states.scherrer;
+      delete st.cards; delete st.stdPeaks; delete st.stdRv;
+      Object.assign(st, { standardName: st.files[1].name, stdParams: { smoothW: 0 }, perParams: sc.perParams.map(q=> ({ ...q, pkHeight: 9 })), manualPeaks: [[30], [], []],
+        removedPeaks: [[], [], []], shared: { ...sc.shared, smoothW: 0.5 }, paramMode: sc.paramMode, rv: { results: {}, fit: { maxIter: 3 } }, curIdx: 2 });
+      const y = st.files[0].y, lo = Math.min(...y);
+      st.files[0].y = y.map(v=> v - lo);
+      st.files[2].instr = { lam1: 1.6, lam2: 1.61, ratio: 0.4, radius: 200, monochromator: false, monochromators: [], warnings: [] };
+    });
+    const s = await moduleState(page, 'xrd', true);
+    // (a sample's own settings in a Scherrer card made with the files there: none, the shared
+    // values, as in a card added to them; the first card of a tab, there before them, copies those)
+    const bare = cs => cs.map(c=> ({ ...c, states: Object.fromEntries(Object.entries(c.states).map(([k, v])=> [k, k === 'scherrer' ? { ...v, perParams: v.perParams.length } : v])) }));
+    assert.deepEqual(bare(s.cards), bare(now.cards), 'a new project\'s cards, its settings ignored');
+    assert.deepEqual([s.std, s.files.map(f=> f.name)], [null, now.files.map(f=> f.name)], 'the standard named a sample');
+    assert.deepEqual(s.files[0].y, now.files[0].y, 'read again from its bytes');
+    assert.equal(await page.locator('#xrdAlerts .alert').count(), 0, 'nothing said');
+    assert.deepEqual(await csvs(page), csv, 'the CSVs of those files loaded now');
+    // s02 on show: its instrument read from its file's bytes, not the one the project held
+    await page.waitForFunction(()=> /\S/.test(document.querySelector('#xrdR2Instr').textContent));
+    assert.match(await page.textContent('#xrdR2Instr'), /Kα₁ 1\.540598 Å/);
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+/* v586: a Scherrer card's settings as older versions saved them: the widths in points (N, blWin,
+   to v510), the note of patterns at different steps and the points held for files left out
+   (v511-v585), and no samples' CIFs, its peaks matched across its samples (to v574). */
+test('XRPD: a Scherrer card\'s widths in points, the steps\' note, no CIFs: the default widths, no CIF, nothing said (v586)', async ()=>{
+  const { page, errors, close } = await env.page();
+  try {
+    const { now, csv } = await reopenOld(page, 'xrd', env.fx.files.xrd, 'Scherrer old', st=>{
+      const sc = st.cards[0].states.scherrer, pts = ({ smoothW: _s, snipW: _w, ...q })=> ({ ...q, N: 10, blWin: 150 });
+      delete sc.cif; delete sc.cifTexts;
+      Object.assign(sc, { shared: pts(sc.shared), perParams: sc.perParams.map(pts), stepNote: ['N', 'blWin'], heldPts: { N: 9, blWin: 120, blOn: false }, oldGroups: true, sizeBy: 'peak' });
+    });
+    const sc = (await moduleState(page, 'xrd')).cards[0].states.scherrer, was = now.cards[0].states.scherrer;
+    assert.deepEqual([sc.shared, sc.perParams, sc.paramMode, sc.cif], [was.shared, was.perParams.map(({ smoothW: _s, snipW: _w, ...q })=> q), was.paramMode, [null, null, null]]);
+    assert.ok(['stepNote', 'heldPts', 'oldGroups', 'N', 'blWin'].every(k=> !(k in sc) && !(k in sc.shared)), 'the old fields none');
+    assert.deepEqual([await page.locator('#xrdA1StepNote').count(), await page.innerHTML('#xrdA1CifNote')], [0, ''], 'nothing said in the card');
+    assert.deepEqual(await csvs(page), csv, 'the CSVs of those files loaded now');
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });

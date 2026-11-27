@@ -6,7 +6,7 @@ import { createDeck, cardInfo, fileSafe } from './cards.js';
 import { isObj } from './modkit.js';
 import * as M from './xrd-model.js';
 import * as H from './xrd-html.js';
-import { markSeen, inKeys } from './alerts.js';
+import { markSeen, inKeys, thrownWhy } from './alerts.js';
 
 /* =========================================================
    XRD MODULE
@@ -29,7 +29,7 @@ import { markSeen, inKeys } from './alerts.js';
    registerModule says how a module is made so.
 
    SPLIT (v563): what the host of the cards works out that touches no page (a file's scans
-   made patterns and read again, a project restored and migrated, the cards' per-sample
+   made patterns and read again, a project restored, the cards' per-sample
    slots, what a run wrote patched into the history, the cards' states, what it shows) in
    xrd-model.js, its words and markup (the standard's windows, the alerts) in xrd-html.js,
    both tested in Node. Here the page: the instance's state (S), the drop, the file list,
@@ -126,7 +126,7 @@ function createXrd(ctx){
   registerTabRedraw(S.key, ()=> redrawTab(S));
   registerCsvExport(S.key, ()=> exportXrdZip(S));
   // A new project starts with a Scherrer card and a Rietveld one.
-  S.deck.start(['scherrer', 'rietveld']);
+  S.deck.start(M.START);
   return apiOf(S);
 }
 function makeState({ key, root, layer, shown }){
@@ -232,7 +232,7 @@ function fileCallbacks(S){
 }
 function removeAll(S){
   S.allFiles.length=0;
-  cards(S).forEach(a=>{ const e = S.live.get(a.id); if (a.type === 'scherrer' && e) e.inst.clear(); const s = a.states.scherrer; if (a.type !== 'scherrer' && s){ s.perParams = []; s.manualPeaks = []; s.removedPeaks = []; if (Array.isArray(s.cif)){ s.cif = []; delete s.cifTexts; } } });
+  cards(S).forEach(a=>{ const e = S.live.get(a.id); if (a.type === 'scherrer' && e) e.inst.clear(); const s = a.states.scherrer; if (a.type !== 'scherrer' && s){ s.perParams = []; s.manualPeaks = []; s.removedPeaks = []; s.cif = []; delete s.cifTexts; } });
   S.loadAlerts = ''; S.leftOut = ''; S.uploadAlerts = ''; afterFilesChange(S);
 }
 
@@ -248,7 +248,7 @@ async function onDrop(S, fileList){
   for (const f of fileList){
     if (existing.has(f.name)){ alreadyLoaded.push(esc(f.name)); continue; }
     let r;
-    try { r = await readFile(f); } catch (e){ r = { error: `could not be read: ${e && e.message || e}` }; }
+    try { r = await readFile(f); } catch (e){ r = { error: thrownWhy(e) }; }
     if (r.error){ invalidFiles.push(esc(fileLine(f.name, r.error))); continue; }
     // A scan whose name is in the list stays as it is (xrd-model.js freshOf), the others
     // load; every scan there, the file is already loaded.
@@ -272,7 +272,7 @@ function addPattern(S, p, existing){
     const e = S.live.get(a.id);
     if (a.type === 'scherrer' && e) e.inst.addFile();
     const s = a.states.scherrer;
-    if (a.type !== 'scherrer' && s){ s.perParams.push({...s.shared}); s.manualPeaks.push([]); s.removedPeaks.push([]); if (Array.isArray(s.cif)) s.cif.push(null); }
+    if (a.type !== 'scherrer' && s){ s.perParams.push({...s.shared}); s.manualPeaks.push([]); s.removedPeaks.push([]); s.cif.push(null); }
   });
 }
 
@@ -358,7 +358,7 @@ async function onStdDrop(S, m, fl){
   const f = fl[0];
   if (!f) return;
   let r;
-  try { r = await readFile(f); } catch (e){ r = { error: `could not be read: ${e && e.message || e}` }; }
+  try { r = await readFile(f); } catch (e){ r = { error: thrownWhy(e) }; }
   if (r.error){ S.stdSaid = { at: m, bad: fileAlertHtml('bad', [esc(fileLine(f.name, r.error))], 'xrd-std-dismiss-bad'), read: '' }; rebuildXrdAlerts(S); return; }
   const p = r.pats[0].f;
   p.color = '#d4a72c';
@@ -537,7 +537,6 @@ function named(S, a){
    order, labels and colours are captured so any change can be stepped back. ---- */
 function snapshot(S){
   const s = {
-    v: 2,
     files: S.allFiles.map(f=>({...f})),
     std: S.stdFile ? {...S.stdFile} : null,
     stdPeaks: S.stdPeaks.snapshot(), stdRv: S.stdRv.snapshot(),
@@ -553,10 +552,10 @@ function snapshot(S){
   return s;
 }
 // step: an undo or a redo (UndoStack), which a run going on keeps its own panel through
-// (xrd-rv.js restore). (xrd-model.js: the state migrated, its files read again, the
-// sample on show, the cards' records.)
+// (xrd-rv.js restore). (xrd-model.js: its files read again, the sample on show, the cards'
+// records, a new project's where it has none.)
 function restore(S, s0, step){
-  const s = M.stateIn(U, s0), R = M.readsOf(U, s);
+  const s = isObj(s0) ? s0 : {}, R = M.readsOf(U, s);
   S.allFiles = R.reads.filter(Boolean);
   S.files = includedOf(S.allFiles);
   S.stdFile = R.stdRead;

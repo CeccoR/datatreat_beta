@@ -1,7 +1,7 @@
 import { esc, fileAlertHtml, notesHtml, fileLine, NOT_READ, bytesOf, includedOf, setIncluded, removeFileAt, moveFileTo, renderUnifiedFileList, setTabLoaded, setupDropzone, registerHistory, registerTabRedraw, registerCsvExport, csvLine, nextColor, colorOf } from './utils.js';
 import { createDeck } from './cards.js';
 import { decodeText } from './textdata.js';
-import { markSeen, keepSeen } from './alerts.js';
+import { markSeen, keepSeen, thrownWhy } from './alerts.js';
 import { dropPart } from './filelist-model.js';
 
 /* =========================================================
@@ -188,7 +188,7 @@ export function moduleKit(mod, o){
       const rawBytes = await bytesOf(f);
       if (!rawBytes){ bad.push(fileLine(f.name, NOT_READ)); continue; }
       let data;
-      try { data = read(decodeText(rawBytes), rawBytes); } catch(e){ data = { error: `could not be read: ${e && e.message || e}` }; }
+      try { data = read(decodeText(rawBytes), rawBytes); } catch(e){ data = { error: thrownWhy(e) }; }
       if (!data || data.error){ bad.push(fileLine(f.name, data ? data.error : more.none || 'not a file this module reads')); continue; }
       const rec = { name: f.name, label: f.name.replace(/\.[^.]+$/, ''), ...data, color: nextColor([...all, ...got]), rawBytes };
       if (more.collect) got.push(rec); else kit.add(rec);

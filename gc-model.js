@@ -26,7 +26,7 @@ import { textLines, readTable, parseNum, width, commonWidth, decodeText } from '
 import { readTcd } from './gc-tcd.js';
 import { looksTcd } from './gc-pair.js';
 import { fixed } from './db.js';
-import { keepSeen, inKeys, heldLine } from './alerts.js';
+import { keepSeen, inKeys, heldLine, thrownWhy } from './alerts.js';
 
 /* ---- The gases, the flow and the pressure (pure: the module's, for every instance) ---- */
 // Axis titles. The SVG form carries the superscripts (g⁻¹, cm⁻², h⁻¹); the plain form is
@@ -261,9 +261,13 @@ export const isTcd = f => isObj(f) && isObj(f.tcd);
 export const isTable = f => isObj(f) && isArr(f.injDates) && isObj(f.gas);
 export const hasTcd = r => isTcd(r) || (isObj(r) && isTcd(r.mate));
 /* A table's bytes read (readGc), kept by them: a drop's reading (readGcAny), and the file read
-   again as a project opens (tableIn), once a page. */
+   again as a project opens (tableIn), once a page. A reader that throws gives why (thrownWhy):
+   the drop refuses the file, a project keeps the table it holds (heldOf says so). */
 const readings = new WeakMap();
-const tableRead = (bytes, text)=>{ if (!readings.has(bytes)) readings.set(bytes, readGc(text === undefined ? decodeText(bytes) : text)); return readings.get(bytes); };
+function tableRead(bytes, text){
+  if (!readings.has(bytes)){ let t; try { t = readGc(text === undefined ? decodeText(bytes) : text); } catch(e){ t = { error: thrownWhy(e) }; } readings.set(bytes, t); }
+  return readings.get(bytes);
+}
 // (`seen(bytes, read)`: readTcd's result, for the Integration cards: gc-integ.js prime)
 export function readGcAny(text, bytes, seen){
   if (!looksTcd(text)) return bytes instanceof Uint8Array ? tableRead(bytes, text) : readGc(text);

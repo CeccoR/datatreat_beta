@@ -74,7 +74,6 @@ export const STD_INFO = H.STD_INFO;
      changed()        its peaks or sizes changed: the standard's, every card's sizes follow;
                       a card's, its Results section is redrawn by itself
      openStd()        open the standard's modal (samples)
-     allFiles()       every file loaded, for the steps of those left out (samples)
      hidden()         the card is folded: nothing is drawn
      cifs()           the tab's CIFs, { file, cif } (samples: every Rietveld card's phases'
                       and every Scherrer card's samples', v575)
@@ -116,18 +115,9 @@ export function createPeakAnalysis(host, root, o){
                           (projects before v463) is on.
      cifs                 per file: its CIF, { file, cif }, or null (v575: its species, whose
                           reflections name its peaks)
-     oldGroups            a project of an older version that matched its peaks across
-                          samples: its note in the card, until a CIF is chosen
      sizeBy               what the crystallite-size box plot is by: each sample's peaks of its
                           species ('sample'), or each reflection of a species, over its
                           samples ('peak'; to v574 each reflection the samples shared)
-     stepNote             the chips a project's conversion turned to one, its patterns'
-                          steps differing (restore), whose note shows under the fields until
-                          each is shared again or the note dismissed
-     heldPts              and, files being left out then, those chips' values in points as
-                          v510 shared them ({ N, blWin }): such a file taken back in has them
-                          at its own step, as v510 gave it the shared value under all (its
-                          own entry, held, not in use), until the chip is shared again
      norm                 the Results' normalisation
      panel                selection/hover state of the peak table and plot: { sel, hov }
      ana, stack           the plot (the pattern on show) and the Results' stacked patterns
@@ -136,10 +126,10 @@ export function createPeakAnalysis(host, root, o){
                           that happens unfolded (v568; to v567 the card unfolded drew the
                           new sample at the zoom it had on the other); so too a file left
                           out, taken in or removed, or a state loaded (refresh: v569)
-     K                    each view's key or markup as last drawn (ana: the plot's, step:
-                          the step note's, table, cag: the Caglioti box's, stack, stackLeg:
-                          its legend's, size: the size chart's, chips, note: its note's;
-                          cif: the CIF selector's options, cifNote: the notes under it)
+     K                    each view's key or markup as last drawn (ana: the plot's, table,
+                          cag: the Caglioti box's, stack, stackLeg: its legend's, size: the
+                          size chart's, chips, note: its note's; cif: the CIF selector's
+                          options, cifNote: the note under it)
      cardName             the card's name, its downloads'
      pool, cifSaid        the CIFs its selector offers (xrd-peaks-model.js cifPool), and what
                           the last CIF read said (its refusal), under it
@@ -161,11 +151,11 @@ function makeState(host, root, o){
     host, root, res, p, std,
     $: id => root.querySelector('#' + p + id) || (res && res.querySelector('#' + p + id)),
     fields: M.fieldInputs(std),
-    processed: [], manualPeaks: [], removedPeaks: [], perParams: [], cifs: [], oldGroups: false,
+    processed: [], manualPeaks: [], removedPeaks: [], perParams: [], cifs: [],
     paramMode: { ...M.modeDef(std) }, shared: { ...M.sharedDef(std) },
-    sizeBy: 'sample', stepNote: [], heldPts: {}, norm: 'global',
+    sizeBy: 'sample', norm: 'global',
     panel: { sel:null, hov:null }, ana: null, stack: null, fullView: false,
-    K: { ana: '', step: '', table: '', cag: '', stack: '', stackLeg: '', size: '', chips: '', note: '', cif: '', cifNote: '' },
+    K: { ana: '', table: '', cag: '', stack: '', stackLeg: '', size: '', chips: '', note: '', cif: '', cifNote: '' },
     cardName: '', pool: [], cifSaid: '', hoverRaf: null, nav: null, A: null,
   };
 }
@@ -226,15 +216,10 @@ function guardFields(S){
   M.guardsOf(S.std).forEach(([id,min,def])=> guardNumericInput(S.$(id), { min, def }));
 }
 // The widths' hints as they are typed (and as they are left: a value refused is set back
-// with no input event); the step note's ×; the size chart's chips.
+// with no input event); the size chart's chips.
 function wireNotes(S){
   for (const id of ['Smooth', 'BlWin']) ['input', 'blur'].forEach(t=> S.$(id).addEventListener(t, ()=> syncHints(S)));
-  if (!S.std) S.$('StepNote').addEventListener('click', e=> onStepX(S, e));
   if (S.res) S.res.addEventListener('click', e=> onSizeBy(S, e));
-}
-function onStepX(S, e){
-  if (!e.target.closest('[data-step-x]')) return;
-  S.stepNote = []; syncStepNote(S); S.host.commit();
 }
 function onSizeBy(S, e){
   const b = e.target.closest('[data-size-by]');
@@ -324,14 +309,13 @@ function writeStoreToInputs(S){
   const pr = paramsOf(S, curIdx(S));
   for (const key in S.fields){
     const el = S.$(S.fields[key]);
-    if (key in M.LEGACY){ el.value = el._shown = widthText(pr[key]*M.SHOWN[key]); el._exact = pr[key]; }
+    if (M.WIDTHS.has(key)){ el.value = el._shown = widthText(pr[key]*M.SHOWN[key]); el._exact = pr[key]; }
     else el.value = pr[key];
   }
   // (disabled, not hidden: the width means nothing with no baseline)
   S.$('BlOn').checked = pr.blOn; S.$('BlWin').disabled = !pr.blOn;
   if (!S.std){ S.$('Norm').value = S.norm; syncLambdaSelect(S); syncCif(S); }
   syncHints(S);
-  syncStepNote(S);
 }
 // What each width spans in points of the pattern on show (the standard's: its file), in
 // its field after the value (xrd-peaks-model.js widthHint).
@@ -343,13 +327,6 @@ function syncHints(S){
     if (out.textContent !== t) out.textContent = t;
     if (out.title !== tip) out.title = tip;
   }
-}
-// The note of a project to v510 whose patterns' steps differ, with its ×.
-function syncStepNote(S){
-  const el = S.$('StepNote');
-  if (!el) return;
-  const t = H.stepNoteHtml(S.stepNote.filter(m=> S.paramMode[m] === 'per'), U);
-  if (t !== S.K.step){ S.K.step = t; el.innerHTML = t; }
 }
 // Keep the wavelength preset selector in step with the numeric λ value: pick the
 // matching source preset (else "Custom"), and lock the value field unless Custom.
@@ -786,8 +763,7 @@ const csvEntries = (S, pre)=> M.csvTables(pre, { files: files(S), procs: S.proce
    one for the sample on show as the Rietveld card reads its phases (xrd-rv-model.js
    readCifs). Its options made again as the card is drawn, as another card's change is
    committed (xrd.js syncCifs) and as it is focused or pressed; under it, what the last CIF
-   read said (its refusal, until the next CIF chosen or read, or a state put back) and an
-   older version's note (readState's oldGroups). */
+   read said (its refusal, until the next CIF chosen or read, or a state put back). */
 function wireCif(S){
   if (S.std) return;
   const sel = S.$('Cif'), inp = S.$('CifInput');
@@ -803,8 +779,7 @@ function syncCif(S){
   if (opts !== S.K.cif){ S.K.cif = opts; sel.innerHTML = opts; }
   sel.value = at >= 0 ? String(at) : '';
   sel.disabled = !files(S).length;
-  const note = (S.oldGroups ? H.OLD_GROUPS : '') + S.cifSaid;
-  if (note !== S.K.cifNote){ S.K.cifNote = note; S.$('CifNote').innerHTML = note; }
+  if (S.cifSaid !== S.K.cifNote){ S.K.cifNote = S.cifSaid; S.$('CifNote').innerHTML = S.cifSaid; }
 }
 // A choice: none, one of the pool's, or Add CIF… (the selector set back to the sample's own
 // until one is read).
@@ -976,14 +951,10 @@ function destroy(S){
   if (S.hoverRaf){ cancelAnimationFrame(S.hoverRaf); S.hoverRaf = null; }
 }
 /* Every setting from the state (xrd-peaks-model.js readState: each set whether the state
-   holds it or not, a value that is no number the default, the widths of a project to
-   v510, in points, converted at each pattern's step, and those of the files left out
-   held), the normalisation made valid; nothing picked. */
+   holds it or not, a value that is no number the default), the normalisation made valid;
+   nothing picked. */
 function restore(S, s){
-  const fs = files(S), st = fs.map(f=> meanStep(f.x));
-  // (and the steps of the files left out, which come back with their entries)
-  const stAll = st.concat(!S.std ? S.host.allFiles().filter(f=> f.included === false).map(f=> meanStep(f.x)) : []);
-  M.takeState(S, M.readState(s, S.std, st, stAll), normOf(M.objOf(s).norm));
+  M.takeState(S, M.readState(s, S.std, files(S).length), normOf(M.objOf(s).norm));
   S.cifSaid = '';
   writeStoreToInputs(S); syncModeButtons(S);
 }

@@ -11,7 +11,8 @@
    state read back, malformed values), files as a project holds them (a table read again from
    its bytes, raw chromatograms, pairs); v583: an old project (before the cards, one interval,
    paired modes, before T, the single gas selector, bytes as arrays, bytes lost), its old
-   fields ignored, the defaults in their place, its tables read again from their bytes; the replicates' links (a head removed, chains, a name twice, a walk
+   fields ignored, the defaults in their place, its tables read again from their bytes; v586: a
+   table whose reader throws (its injections held, said); the replicates' links (a head removed, chains, a name twice, a walk
    through a select), the pairs' rows; the cards' markup, the parameter table and the alerts,
    every label escaped. Then the fixtures as v556's page analysed them (its CSVs, every byte,
    at two steps of a session: the two fixtures dropped; five more files of every form), and
@@ -340,6 +341,17 @@ test('an old project: old fields ignored, the defaults, its tables read again fr
   assert.deepEqual(card(Q, tables).csvs, card(E, tables).csvs);
   assert.ok(card(Q, tables).costResults.every(c=> Number.isFinite(c.rate.h2)), 'a rate for each');
   assert.ok(M.molarVolume(Q.tShared, Q.pShared) > 24.46 && M.molarVolume(Q.tShared, Q.pShared) < 24.47, '25 °C, 1 atm');
+});
+
+/* v586: a table whose reader throws on its bytes as a project opens (made here by bytes no
+   decoder takes): the injections the project holds, said with why, kept by its bytes (to v585 the
+   throw left the file out). */
+test('an old project: a table whose reader throws, its injections held, said (v586)', ()=>{
+  const t = rec('t.csv', decodeText(new Uint8Array(gcCsv({ h2: [0.05, 0.12], seed: 7 })))), bytes = new Proxy(new Uint8Array(t.rawBytes), {});
+  let f;
+  assert.doesNotThrow(()=>{ f = M.fileIn(U, { ...t, rawBytes: bytes }); });
+  assert.deepEqual([f.injDates, f.gas, f.rawBytes], [t.injDates, t.gas, bytes]);
+  assert.match(M.heldOf(f), /^its bytes no longer read: could not be read: .+: its data are those the project holds$/);
 });
 
 test('files as a project holds them, the replicates\' links, the pairs', ()=>{

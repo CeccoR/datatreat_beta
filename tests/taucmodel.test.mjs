@@ -10,7 +10,9 @@
    and ranges; the cards' markup and alerts, every label escaped; v583: an old project (the
    fields of v514, the widths in eV of v515 to v519, the common lines under their old key,
    energies held, bytes as arrays, bytes gone or refused), its old fields ignored, the
-   defaults in their place, its spectra read again from their bytes, a file without them said. Then the fixtures as v555's page analysed them (its CSVs, every byte, at two
+   defaults in their place, its spectra read again from their bytes, a file without them said;
+   v586: an Urbach sample of no lines beside common ones (the default lines), a reader that
+   throws (the spectrum held, said). Then the fixtures as v555's page analysed them (its CSVs, every byte, at two
    steps of a session: two spectra and the Tauc card; four and an Urbach card read against
    it), and 36 cases (random spectra, saved states, suggestions, a reference, the CSVs) as
    v555's tauc.js gave them, run from its source on a page of stubs: their digests in
@@ -273,6 +275,28 @@ test('an old project: old fields ignored, the defaults, its spectra read again f
   assert.ok(Number.isFinite(T.analyze(0).Eg));
 });
 
+/* v586: an old project as this version reads it. An Urbach card's state with common lines (an
+   older version's: to v568 an Urbach card's lines were common) and a sample with none: its lines
+   the default lines (to v585 the common set). */
+test('an old project: an Urbach sample of no lines beside common ones, the default lines (v586)', ()=>{
+  const files = [loaded('drs1.csv', drsCsv({ Eg: 3.2 })), loaded('drs2.csv', drsCsv({ Eg: 2.9, A: 45, seed: 4 }))], own = { v1: 2.9, v2: 3.1 };
+  const W = panel('urbach', files);
+  W.restore({ mode: 'shared', sharedVlines: { v1: 2.5, v2: 2.7 }, per: [{ vlines: own }, {}], suggested: true });
+  assert.deepEqual([W.vlinesFor(0), W.vlinesFor(1)], [own, M.defaultLinesOf(U, M.URBACH, files[1])]);
+});
+
+/* v586: a file whose reader throws on its bytes as a project opens (made here by bytes no decoder
+   takes): the spectrum the project holds, said with why, kept by its bytes (to v585 the throw
+   left the file out). */
+test('an old project: a reader that throws, the spectrum held, said (v586)', ()=>{
+  const bytes = new Proxy(new Uint8Array(drsCsv({ Eg: 3.2 })), {});
+  let f;
+  assert.doesNotThrow(()=>{ f = M.restoredFile(U, { name: 'x.csv', label: 'x', wl: [400, 500], FR: [1, 2], rawBytes: bytes }); });
+  assert.deepEqual([f.wl, f.FR, f.rawBytes], [[400, 500], [1, 2], bytes]);
+  assert.match(M.heldNote(f), /^its bytes no longer read: could not be read: .+: its data are those the project holds$/);
+  assert.equal(M.readingOf(bytes), M.readingOf(bytes), 'kept by its bytes');
+});
+
 test('the references, the Results\' words, series and ranges', ()=>{
   const recs = [{ id: 1, type: 'urbach', ref: 3, refAuto: false }, { id: 2, type: 'tauc' }, { id: 3, type: 'urbach', ref: null, refAuto: true },
     { id: 4, type: 'urbach', ref: 2, refAuto: false }, { id: 5, type: 'tauc' }, { id: 6, type: 'urbach', ref: 2, refAuto: true }];
@@ -356,7 +380,8 @@ function pageSession(){
 
 /* ---- Cases as v555's tauc.js gave them ----
    Random spectra (steps of 0.5 to 2 nm, either way, a point of F(R) ≤ 0 now and then), a
-   saved state (all or one, values that are no number, widths in eV), the suggestion or a
+   saved state (all or one, values that are no number, widths in eV; an Urbach card's common
+   lines, an older version's: v586, a sample of none takes the default lines), the suggestion or a
    sample's, a reference for the Urbach card, a file taken back in: every state, fit and
    CSV, each case's digest (tests/golden/taucmodel.json). `mk(kind, files, ref)` a card's
    panel (here panel() above). */

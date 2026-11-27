@@ -5,7 +5,7 @@
    and IKKF store them, the spectrum with its baseline taken off, or why it cannot be; the
    list's rows (v581, as GC's: a .DTA and its .DSC, paired by their names or by a file's grip,
    a half alone waiting for its partner), each one's record, what it reads as and what is said
-   of it; a spectrum's arrays fixed and kept by its .DTA's bytes; a file and a card as a
+   of it; a spectrum's arrays fixed; a file and a card as a
    project holds them (a row read again from its files' bytes) and the state saved;
    the smoothing width typed and the points it spans; the stacking each normalisation draws,
    the plot's options and range; the CSV's columns. Taken out of v562's epr.js (createEpr,
@@ -21,24 +21,11 @@ import { fixed } from './db.js';
 import { decodeText } from './textdata.js';
 import { heldLine } from './alerts.js';
 
-/* ---- A spectrum kept (pure: the module's, for every instance) ----
+/* ---- A spectrum fixed ----
    Its field and intensities, which nothing changes once read: fixed (db.js), the same
-   arrays in a tab's states and its parked state. Kept by its .DTA's bytes (the file as it
-   came, the same array in its states and its record): a tab of a record read back (a
-   reload, a project opened), which holds copies, takes the arrays another state holds of
-   that file, the same values, rather than keeping both. */
-const spectra = new WeakMap();
-export const sameArr = (a, b)=> a === b || (a.length === b.length && a.every((v, i)=> Object.is(v, b[i])));
-export const dtaOf = f =>{ const r = Array.isArray(f.rawFiles) && f.rawFiles.find(r=> r && /\.dta$/i.test(r.name)); return r && r.bytes instanceof Uint8Array ? r.bytes : null; };
-export function keepSpectrum(f){
-  const k = dtaOf(f);
-  fixed(f.b); fixed(f.a);
-  if (!k) return f;
-  const s = spectra.get(k);
-  if (s && sameArr(s.b, f.b) && sameArr(s.a, f.a)){ f.b = s.b; f.a = s.a; }
-  else spectra.set(k, { b: f.b, a: f.a });
-  return f;
-}
+   arrays in a tab's states and its parked state (and in every tab of the pair's bytes: its
+   reading is kept by them, readRow). */
+const fixedSpectrum = f =>{ fixed(f.b); fixed(f.a); return f; };
 
 /* ---- Reading a pair, .DTA and .DSC ---- */
 // A .DSC's parameters, a name and its value a line.
@@ -196,7 +183,7 @@ function rowRec(files, was){
     rec.color = base.color;
     if (base.included === false){ rec.included = false; rec.held = base.held; }
   }
-  return r.b ? keepSpectrum({ ...rec, b: r.b, a: r.a, rescaled: r.rescaled }) : rec;
+  return r.b ? fixedSpectrum({ ...rec, b: r.b, a: r.a, rescaled: r.rescaled }) : rec;
 }
 /* The rows given anew (arrays of files): the list's records (`all`, in place) made of them. A
    row of the files a record has (by their names, in the list's order) is that record as it
@@ -252,14 +239,14 @@ export const DEF = { norm: 'global', smoothW: 0.2 };
    them, or a row not plotted. Where they read as none and the file holds its field and
    intensities (bytes not stored, or ones the reader refuses: heldNote says so), those are its
    spectrum, the points where both are numbers, two at least; none of either, it is left out. A
-   spectrum kept by its .DTA's bytes (keepSpectrum). */
+   spectrum fixed (fixedSpectrum). */
 const bytesIn = x => x && typeof x === 'object' && x.bytes != null && !(x.bytes instanceof Uint8Array) ? { ...x, bytes: null } : x;
 export function fileIn(U, f){
   const g = Array.isArray(f.rawFiles) ? { ...f, rawFiles: ordered(f.rawFiles.map(bytesIn)) } : f;
   const fs = Array.isArray(g.rawFiles) ? g.rawFiles.filter(kindAt) : [], r = fs.length ? readRow(ordered(fs)) : null;
-  if (r && r.b) return keepSpectrum({ ...g, b: r.b, a: r.a, rescaled: r.rescaled });
+  if (r && r.b) return fixedSpectrum({ ...g, b: r.b, a: r.a, rescaled: r.rescaled });
   const p = U.finitePairs(g.b, g.a);
-  if (p && p[0].length > 1) return keepSpectrum({ ...g, b: p[0], a: p[1], rescaled: g.rescaled !== false });
+  if (p && p[0].length > 1) return fixedSpectrum({ ...g, b: p[0], a: p[1], rescaled: g.rescaled !== false });
   if (!fs.length) return null;
   const { b: _b, a: _a, rescaled: _r, ...w } = g;
   return w;

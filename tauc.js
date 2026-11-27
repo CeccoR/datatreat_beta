@@ -35,21 +35,9 @@ const CARD_INFO = cardInfo(true, true), INFO = { tauc: H.taucInfo(CARD_INFO), ur
 const cardInfoOf = t => INFO[t];
 
 /* A file's spectrum, which nothing changes once read: fixed (db.js), the same arrays in a
-   tab's states and its parked state. Kept by its bytes (the file as it came, the same
-   array in its states and its record): a tab of a record read back (a reload, a project
-   opened), which holds copies, takes the arrays another state holds of that file, the
-   same values, rather than keeping both. */
-const spectra = new WeakMap();
-const sameArr = (a, b)=> a === b || (a.length === b.length && a.every((v, i)=> Object.is(v, b[i])));
-function keepSpectrum(f){
-  const b = f.rawBytes;
-  fixed(f.wl); fixed(f.FR);
-  if (!(b instanceof Uint8Array)) return f;
-  const s = spectra.get(b);
-  if (s && sameArr(s.wl, f.wl) && sameArr(s.FR, f.FR)){ f.wl = s.wl; f.FR = s.FR; }
-  else spectra.set(b, { wl: f.wl, FR: f.FR });
-  return f;
-}
+   tab's states and its parked state (and in every tab of the file's bytes: its reading is
+   kept by them, tauc-model.js readingOf). */
+const fixedSpectrum = f =>{ fixed(f.wl); fixed(f.FR); return f; };
 /* What an analysis works out of a spectrum, kept by its F(R) (utils.js keeper: while a
    state, a tab asleep or a history holds the spectrum), each under all it is made from: a
    card's curve as read and smoothed (its kind, the wavelengths, the exponent and the
@@ -153,9 +141,9 @@ function kitHooks(S, key, layer){
     redraw: what =>{ if (what === 'label') quietly(S, ()=> livePanels(S).forEach(p=>{ if (p.hasPlot()) p.update(true); })); renderResView(S); },
     cleared: ()=>{ livePanels(S).forEach(p=> p.clear()); eachKeptState(S, s=>{ s.per = []; s.sharedVlines = {}; }); },
     snapshot: ()=> snapshotOf(S),
-    // A file as a restore takes it (tauc-model.js restoredFile), its spectrum kept and its
+    // A file as a restore takes it (tauc-model.js restoredFile), its spectrum fixed and its
     // energies made from its wavelengths.
-    file: f =>{ const g = M.restoredFile(U, f); return g && M.withHv(keepSpectrum(g)); },
+    file: f =>{ const g = M.restoredFile(U, f); return g && M.withHv(fixedSpectrum(g)); },
     // The notes are the restored files' own, shown again.
     restore: (s, gone)=> restoreState(S, s, gone),
     redrawTab: ()=> redrawTab(S),
@@ -186,7 +174,11 @@ function restoreState(S, s, gone){
   // (a wake's or a reload's: the sample its tab showed, by its file's name, else its place)
   const next = S.sampleNext;
   if (next){ const k = S.files.findIndex(f=> f.name === next.name); S.currIndex = k >= 0 ? k : num(next.sample, 0, Number.isInteger); S.sampleNext = null; }
-  loadAnalyses(S, cardList(s.analyses, M.KINDS) || [{ id: 1, type: 'tauc' }], gone);
+  // (a project with no cards: one Tauc card made for it, a new card, its lines suggested on
+  // its files as a card added is: added)
+  const list = cardList(s.analyses, M.KINDS);
+  loadAnalyses(S, list || [{ id: 1, type: 'tauc' }], gone);
+  if (!list && S.files.length) cards(S).forEach(a=> panelOf(S, a).autoSuggestAll());
 }
 // A card of a kind there is no more (the debug defect band, taken out) is left out
 // (deck.load), as are the settings a card kept for one (readAnalysis). A card kept
@@ -714,7 +706,7 @@ function stayOn(S, f){ const k = includedOf(S.allFiles).indexOf(f); if (k >= 0) 
 
 /* ---- The files ---- */
 function filesDropped(S, had){
-  S.allFiles.slice(had).forEach(keepSpectrum);
+  S.allFiles.slice(had).forEach(fixedSpectrum);
   afterFilesChange(S);
   // Once, when the first data lands: propose optimal interval-line positions. The
   // Tauc cards go first: the Urbach ones are placed on their regions.

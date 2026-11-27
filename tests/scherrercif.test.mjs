@@ -10,8 +10,9 @@
    - a choice undone and redone, the selector, the table and the state with it;
    - the project exported and opened again: the CIFs, the table, the chart as they were;
    - a project of an older version (no CIFs: its peaks were matched across samples): opened
-     with no error, no CIF, its peaks not grouped, an info box saying so in the card, gone with
-     the first CIF chosen, back with its undo;
+     with no error, no CIF, its peaks not grouped, nothing said but the chart's "Not charted, no
+     CIF" (v586: to v585 an info box in the card until a CIF was chosen); a CIF chosen, its
+     sample charted, undone;
    - the right column's first title level with the plot frame's top (CLAUDE.md), with the CIF's
      row and the note under it;
    - (v576) by peak, each reflection by its hkl alone, whole (to v575 its species before it, cut
@@ -146,7 +147,7 @@ test('a CIF a sample: the hkl, the species\' series, the samples with none, the 
   } finally { await close(); }
 });
 
-test('an older version\'s project: no CIF, its peaks not grouped, the note in the card until a CIF is chosen; the tops aligned (CLAUDE.md)', async ()=>{
+test('an older version\'s project: no CIF, its peaks not grouped, not charted, nothing else said (v586); the tops aligned (CLAUDE.md)', async ()=>{
   const { page, errors, close } = await env.page({ viewport: { width: 1400, height: 1000 } });
   try {
     await openModule(page, 'xrd');
@@ -158,21 +159,21 @@ test('an older version\'s project: no CIF, its peaks not grouped, the note in th
     await importProject(page, projectFile(env, 'v574.datatreat', { ...obj, title: 'Old XRPD', appVersion: 'v574', state: { ...st, cards } }, { sign: true }));
     await openProject(page, 'xrd', 'Old XRPD');
     const note = page => page.$eval(P + 'CifNote', n=> [...n.querySelectorAll('.alert')].map(a=> a.className + ': ' + a.textContent));
-    assert.deepEqual(await note(page), ['alert info compact: Opened from an older version: its peaks were matched across samples, which is no longer done. A sample\'s peaks are grouped by the reflections of the CIF chosen for it.']);
-    assert.deepEqual([await cifFiles(page), (await scherrer(page)).oldGroups, (await table(page)).head.includes('hkl'), (await table(page)).rows.length], [[null, null, null], true, false, 7]);
-    const c = await chart(page);
+    assert.deepEqual(await note(page), [], 'no box in the card: the chart says why the sizes are not charted');
+    assert.deepEqual([await cifFiles(page), 'oldGroups' in (await scherrer(page)), (await table(page)).head.includes('hkl'), (await table(page)).rows.length], [[null, null, null], false, false, 7]);
+    let c = await chart(page);
     assert.deepEqual([c.shown, c.chips, c.note], [false, [], 'Not charted, no CIF: s00, s01, s02.']);
     // The right column's first title on the plot frame's top, the note under the CIF's row.
     const top = await firstTop(page, '#tab-xrd .an-card:nth-child(1)', { frame: 'svg.plot', head: ':scope .col.mw280 > .param-head' });
     assert.ok(Math.abs(top.top - top.frame) <= 1, `the title ${top.text}'s top ${top.top}, the plot frame's ${top.frame}`);
     const order = await page.$eval(P + 'Cif', s=>{ const col = s.closest('.col'), at = e => e.getBoundingClientRect(); return { below: at(col.querySelector('[id$="CifNote"]')).top >= at(s).bottom, inCol: at(s).right <= at(col).right + 0.5 }; });
     assert.deepEqual(order, { below: true, inCol: true });
-    // A CIF chosen: the note goes, the state's with it; undone, it comes back.
+    // A CIF chosen: its sample charted, the others said; undone, none.
     await addCif(page, env.fx.cif);
-    assert.deepEqual([await note(page), 'oldGroups' in (await scherrer(page))], [[], false]);
+    c = await chart(page);
+    assert.deepEqual([await note(page), c.shown, c.legend, c.note], [[], true, ['SrTiO3'], 'Not charted, no CIF: s01, s02.']);
     await undo(page);
-    assert.equal((await note(page)).length, 1);
-    assert.deepEqual([await cifFiles(page), (await scherrer(page)).oldGroups], [[null, null, null], true]);
+    assert.deepEqual([await cifFiles(page), (await chart(page)).note, await note(page)], [[null, null, null], 'Not charted, no CIF: s00, s01, s02.', []]);
     // A CIF that cannot be read: said under the selector, nothing chosen.
     const bad = env.fx.put('bad.cif', 'nothing here');
     const [fc] = await Promise.all([page.waitForEvent('filechooser'), (async ()=>{ await page.focus(P + 'Cif'); await page.keyboard.press('End'); })()]);

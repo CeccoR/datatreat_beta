@@ -248,9 +248,6 @@ export function hitTest(view, c, px, py, touch){
 
 /* ---- Intensity: the settings' defaults and fields ---- */
 export const INT_DEF = { mode: 'percentile', pLo: 0.5, pHi: 99.5, ref: null, b: 0, c: 1, g: 1, def: true };
-// Settings at their defaults (the reference aside, which they do not reset).
-export const isIntDef = I => ['mode', 'pLo', 'pHi', 'b', 'c', 'g'].every(k=> I[k] === INT_DEF[k]);
-export const isAdjDef = a => !a || ['b', 'c', 'g'].every(k=> a[k] === ADJ_DEF[k]);
 export const ADJ_DEF = { b: 0, c: 1, g: 1 };
 // The fields, with the range each takes; a value outside it is refused (the field
 // shakes and shows the last good one).
@@ -588,14 +585,16 @@ export const isNum = v => typeof v === 'number' && Number.isFinite(v);
 export const inRange = (v, lo, hi, d) => isNum(v) && v >= lo && v <= hi ? v : d;
 export const isKey = k => typeof k === 'string' && k !== '' && !(k in Object.prototype);
 const str = (v, d) => typeof v === 'string' ? v : d;
-// Settings: those saved before the Default boxes (v442) are default where their
-// values are; a Default ticked over other values is unticked.
+// A Default box as a state holds it; none, ticked, as new settings and a new image have it.
+const boxIn = v => typeof v === 'boolean' ? v : true;
+// Settings: their Default box (boxIn) ticked, the defaults, the reference kept, as ticking it
+// sets them; unticked, each value within its field's range, else its default.
 export function intensityOf(U, v){
-  const o = U.isObj(v) ? v : {}, I = { ...INT_DEF };
+  const o = U.isObj(v) ? v : {}, I = { ...INT_DEF, ref: typeof o.ref === 'string' ? o.ref : null };
+  I.def = boxIn(o.def);
+  if (I.def) return I;
   if (MODES.includes(o.mode)) I.mode = o.mode;
   for (const [k, lo, hi] of Object.values(INT_FIELDS)) I[k] = inRange(o[k], lo, hi, INT_DEF[k]);
-  I.ref = typeof o.ref === 'string' ? o.ref : null;
-  I.def = typeof o.def === 'boolean' ? o.def && isIntDef(I) : isIntDef(I);
   return I;
 }
 /* A state put back (sem.js restore: an undo's, a project's opened or read in): what it
@@ -608,8 +607,8 @@ export function intensityOf(U, v){
      another tab holds where one does (U.rawOf); strings for its name and label; its
      marks of what was said seen, those that are one; its crop whole pixels inside the
      image, at least MIN_CROP a side, else the default one; its ratio one of the locks;
-     its correction within the fields' ranges; its Default boxes ticked only where the
-     crop and correction are the defaults;
+     its correction within the fields' ranges; its Default boxes as it holds them (none,
+     ticked: boxIn), one ticked its crop or correction the default;
    - the settings: a normalisation of the four, numbers within the fields' ranges,
      else the defaults;
    - the groups: ids that are names (no key of a plain object's own), once, each image
@@ -669,10 +668,12 @@ function fileIn(U, f, f0, r){
   if (r.squared) f.sq = true; else delete f.sq;
   f.crop = validCrop(crop, r, Object.keys(ASPECTS).includes(f.aspect) ? ASPECTS[f.aspect] : null) ? crop : fitCrop(crop, r.width, r.imageH, null);
   if (!Object.keys(ASPECTS).includes(f.aspect)) f.aspect = aspectOf(f.crop.w, f.crop.h);
+  // (its Default boxes: one ticked, its crop the default, its correction none, as ticking it sets them)
+  f.cropDef = boxIn(f0.cropDef);
+  if (f.cropDef && !isDefaultCrop(U, f)) setCropDef(U, f, true);
   const a0 = U.isObj(f0.adj) ? f0.adj : {};
-  f.adj = { b: inRange(a0.b, -100, 100, 0), c: inRange(a0.c, 0.05, 20, 1), g: inRange(a0.g, 0.05, 20, 1) };
-  f.cropDef = typeof f0.cropDef === 'boolean' && inPx ? f0.cropDef && isDefaultCrop(U, f) : isDefaultCrop(U, f);
-  f.adjDef = typeof f0.adjDef === 'boolean' ? f0.adjDef && isAdjDef(f.adj) : isAdjDef(f.adj);
+  f.adjDef = boxIn(f0.adjDef);
+  f.adj = f.adjDef ? { ...ADJ_DEF } : { b: inRange(a0.b, -100, 100, 0), c: inRange(a0.c, 0.05, 20, 1), g: inRange(a0.g, 0.05, 20, 1) };
 }
 // The groups (into `groups`): ids that are names, once; each image in one group.
 function groupsIn(U, list, groups){

@@ -224,14 +224,19 @@ test('the instrument read once from the file\'s own bytes; a result written; the
   const f = pattern('s00.xrdml', xrdml(0)), i1 = M.instrOf(f);
   assert.equal(M.instrOf(f), i1, 'kept on the file');
   assert.deepEqual([i1.lam1, i1.lam2, i1.ratio, i1.radius, i1.monochromators], [1.540598, 1.544426, 0.5, 240, []]);
-  // (bytes as numbers, as a .json of v473–v483 holds them: no bytes, nothing read, v583; one
-  // read before v426 lacks the monochromators: read again)
+  // (bytes as numbers, as a .json of v473–v483 holds them: no bytes, nothing read, v583)
   assert.equal(M.instrOf({ ...pattern('s00.xrdml', xrdml(0)), rawBytes: Array.from(xrdml(0)) }), null);
-  const g = pattern('s00.xrdml', xrdml(0));
-  const old = { lam1: 1.5, monochromator: false };
-  g.instr = old;
-  assert.notEqual(M.instrOf(g), old);
-  assert.equal(M.instrOf({ x: [], instr: old }), old, 'no bytes: the one it has');
+  // v586: an old project's instrument (read by an older reader: one of no monochromators' crystals,
+  // to v426; one of every measurement's first, to v493; one of other values), its bytes held: read
+  // again from them, kept by them (the same object for another record of those bytes); its bytes
+  // not held, the one it has.
+  const g = pattern('s00.xrdml', xrdml(0)), olds = [{ lam1: 1.5, monochromator: false }, { ...i1, meas: 0, lam1: 1.6 }, { ...i1, ratio: 0.47 }];
+  for (const old of olds){
+    g.instr = old;
+    assert.deepEqual([M.instrOf(g), g.instr], [i1, i1]);
+  }
+  assert.equal(M.instrOf({ ...g, instr: olds[2] }), g.instr, 'kept by its bytes');
+  assert.equal(M.instrOf({ x: [], instr: olds[2] }), olds[2], 'no bytes: the one it has');
   // A result as kept: the worker's, then its role, phases, profile, time and cells; frozen through.
   const ph = [{ id: 1, prep: M.prepOf(SRT, 'SrTiO3.cif') }];
   const r = M.resultRecord({ params: { a: 1 }, stats: { Rwp: 0.1 }, irf: { U: 1 }, ms: 3 }, ph, false, 1234);
@@ -409,7 +414,8 @@ test('the words: indices barred, formulae, what a phase is refined with, the ins
   // (v572: a pattern whose file is not held, a project opened without its bytes, is said so as it
   // opens: not taken for a file of no header)
   assert.equal(H.instrNotesHtml(null, false), '');
-  assert.deepEqual([{ rawBytes: new Uint8Array(3) }, { rawBytes: [1, 2] }, { rawBytes: null }, {}, { rawBytes: new Uint8Array(0) }, { rawBytes: 'x' }].map(M.bytesHeld), [true, true, false, false, false, false]);
+  // (v586: bytes as numbers none, as instrOf takes them)
+  assert.deepEqual([{ rawBytes: new Uint8Array(3) }, { rawBytes: [1, 2] }, { rawBytes: null }, {}, { rawBytes: new Uint8Array(0) }, { rawBytes: 'x' }].map(M.bytesHeld), [true, false, false, false, false, false]);
   // Each assumption's kind: neutral (info) or one that may be wrong (warn), the reader's (v572:
   // the file's own, ins0's; xrd-math.js MSG); an instrument a project saved to v571 kept as words
   // alone, by its words.

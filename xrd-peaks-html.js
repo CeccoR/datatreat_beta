@@ -1,12 +1,11 @@
 /* =========================================================
    XRPD — the peak analysis's words and markup that need no page (xrd-peaks.js puts them in
    the cards; tests/peaksmodel.test.mjs reads them in Node): the peak table with the
-   sample's mean size and its warnings, the standard's Caglioti fit, the note of a project
-   whose patterns' steps differ, the size chart's chips and the note under it, each from
-   plain values; and (v561, to v560 in xrd-peaks.js) the instructions, the card's markup
-   (the samples' and the standard's) and its section of the Results, the table with no
-   peak, the legends of the Results' plots; and (v575) a sample's CIF: its selector's
-   options, the hkl in the table and the rule they follow, an older version's note.
+   sample's mean size and its warnings, the standard's Caglioti fit, the size chart's chips
+   and the note under it, each from plain values; and (v561, to v560 in xrd-peaks.js) the
+   instructions, the card's markup (the samples' and the standard's) and its section of the
+   Results, the table with no peak, the legends of the Results' plots; and (v575) a sample's
+   CIF: its selector's options, the hkl in the table and the rule they follow.
    utils.js's esc, X_SVG and NORM_OPTIONS, modcharts.js's icons and snav.js's snavHtml,
    which need a page to load, are handed in (u: xrd-peaks.js U).
 ========================================================= */
@@ -32,13 +31,6 @@ const fmtCell = v => isFinite(v) ? v.toFixed(1) : '—';
 
 const outsideStdHtml = (n, span)=> `<div class="alert warn">⚠ ${n} peak${n > 1 ? 's lie' : ' lies'} beyond the standard's peaks (${span[2].toFixed(2)}–${span[3].toFixed(2)}°) by more than ${n > 1 ? 'their' : 'its'} width: there the instrumental width is extrapolated, not measured.</div>`;
 const belowInstrHtml = n => `<div class="alert warn">⚠ ${n} peak${n > 1 ? 's are' : ' is'} narrower than the instrumental width at ${n > 1 ? 'their angles' : 'its angle'}, which is not physically possible: the standard is likely unsuitable. ${n > 1 ? 'They are' : 'It is'} left out of the corrected size.</div>`;
-
-/* The note of a project to v510 whose patterns' steps differ, with its × (on: the chips its
-   conversion turned to one and still one, N the smoothing's, blWin the SNIP's); none, ''. */
-function stepNoteHtml(on, { X_SVG }){
-  const what = on.map(m=> m === 'N' ? 'smoothing' : 'SNIP width').join(' and ');
-  return on.length ? `<div class="alert warn">⚠ The patterns were measured at different steps: the ${what}, set in points by an older version, ${on.length > 1 ? 'are' : 'is'} kept as ${on.length > 1 ? 'they were' : 'it was'}, a width for each pattern (one). Set one width in all to treat them alike.<button class="alert-dismiss close-x" data-step-x title="Dismiss">${X_SVG(15)}</button></div>` : '';
-}
 
 /* The peak table of a pattern's kept peaks (pks, at least one): 2θ, rel intensity, classic
    FWHM, size. With a standard in use (m, its model), the samples show the size both
@@ -141,9 +133,6 @@ const sizeNoteHtml = (labels, { esc })=> labels.length ? `Not charted, no CIF: $
    has, by its phase's name, its file in its title, and the one that reads another. */
 const cifOptionsHtml = (pool, { esc })=> '<option value="">none</option>'
   + pool.map((q, i)=> `<option value="${i}" title="${esc(q.file)}">${esc(q.text)}</option>`).join('') + '<option value="add">Add CIF…</option>';
-// The note of a project of an older version whose peaks were matched across samples, in
-// the card until a CIF is chosen (xrd-peaks-model.js readState's oldGroups).
-const OLD_GROUPS = boxHtml('info', 'Opened from an older version: its peaks were matched across samples, which is no longer done. A sample\'s peaks are grouped by the reflections of the CIF chosen for it.');
 
 /* ---- The instructions: over the cards (PEAKS_INFO) and in the standard's window (STD_INFO);
    xrd-peaks.js gives them to xrd.js as before ---- */
@@ -229,7 +218,7 @@ function sampleCardHtml(p, u){
         </div>`
     + peakBoxHtml(p, 'data-csv-base="peaks.csv" data-csv-names="peaks.csv"', CSV_ICON);
 }
-// The samples' parameters, each field with its all / one chip; the step note and the buttons under them.
+// The samples' parameters, each field with its all / one chip; the CIF's note and the buttons under them.
 function sampleParamsHtml(p, { NORM_OPTIONS }){
   return `
           <div class="col mw280" style="align-self:flex-start">
@@ -267,7 +256,6 @@ function sampleParamsHtml(p, { NORM_OPTIONS }){
             </div>
             <input type="file" id="${p}CifInput" accept=".cif,.CIF" style="display:none">
             <div id="${p}CifNote" class="xrd-cif-note"></div>
-            <div id="${p}StepNote"></div>
             <div class="xrd-pk-btns">
               <button class="btn plot-action-btn" id="${p}AddPeak" title="Add a peak by clicking on the plot">+ Add peak</button>
               <button class="btn plot-action-btn" id="${p}Std" aria-haspopup="dialog" title="The instrumental standard: its file, its peaks and the Caglioti fit that corrects the sizes for the instrument's width">Instrumental standard…</button>
@@ -320,5 +308,5 @@ const stackLegendHtml = (fs, shown, { esc })=> shown.map(k=> `<span><i style="ba
 // named after its species (v575: a CIF's name, escaped).
 const sizeLegendHtml = (SER, { esc })=> SER.map(m=> `<span><i class="mk-box" style="background:${m.color}"></i>${esc(m.name)}</span>`).join('');
 
-export { fmtMeanStd, fmtPar, fmtCell, outsideStdHtml, belowInstrHtml, stepNoteHtml, peakTableHtml, cagliotiHtml, sizeChipsHtml, sizeNoteHtml,
-  cifOptionsHtml, OLD_GROUPS, PEAKS_INFO, STD_INFO, cardHtml, resHtml, NO_PEAKS, stackLegendHtml, sizeLegendHtml };
+export { fmtMeanStd, fmtPar, fmtCell, outsideStdHtml, belowInstrHtml, peakTableHtml, cagliotiHtml, sizeChipsHtml, sizeNoteHtml,
+  cifOptionsHtml, PEAKS_INFO, STD_INFO, cardHtml, resHtml, NO_PEAKS, stackLegendHtml, sizeLegendHtml };

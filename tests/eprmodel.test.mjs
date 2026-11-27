@@ -7,7 +7,7 @@
    names, a file named constructor, __proto__ or toString as any other, bug 23; a half alone
    waiting; a file dragged by its grip pairing, swapping, standing alone; each row's record,
    its label, colour and inclusion kept from the row its first file headed; what is said of a
-   row not plotted, keyed by its issue); a spectrum's arrays fixed and shared by its bytes; a file and a card as a project holds them (points not numbers left
+   row not plotted, keyed by its issue); a spectrum's arrays fixed, the same for its bytes; a file and a card as a project holds them (points not numbers left
    out, a row read again from its files' bytes), the state saved; v583: an old project (before
    the cards, the smoothing in points, bytes as arrays, bytes lost), its old fields ignored, the
    defaults in their place, its spectra read again from their bytes, a row without them said; the smoothing width typed and the points it spans; the smoothed columns and the
@@ -27,6 +27,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import * as M from '../epr-model.js';
+import { isFixed } from '../db.js';
 import * as H from '../epr-html.js';
 import { boxSmooth, widthText } from '../smooth.js';
 import { settleNames, saved, recIn } from '../cards-model.js';
@@ -211,13 +212,13 @@ test('a label renamed kept a file: the pair split gives each file back its own (
   assert.deepEqual(labels(), ['first', 'B', 'A'], 'x.DSC labelled by its .DSC');
 });
 
-test('a spectrum kept by its bytes; a file and a card as a project holds them; the state', ()=>{
-  const bytes = new Uint8Array([1, 2, 3]), rawFiles = [{ name: 'a.DSC', bytes: new Uint8Array(1) }, { name: 'a.DTA', bytes }];
-  const a = M.keepSpectrum({ b: [1, 2, 3], a: [4, 5, 6], rawFiles }), b = M.keepSpectrum({ b: [1, 2, 3], a: [4, 5, 6], rawFiles });
-  assert.equal(a.b, b.b); assert.equal(a.a, b.a);
-  const c = M.keepSpectrum({ b: [1, 2, 3], a: [4, 5, 7], rawFiles });
-  assert.notEqual(c.a, a.a);
-  assert.equal(M.dtaOf({ rawFiles: [null, { name: 'x.dta', bytes: [1] }] }), null);
+test('a spectrum fixed, the same arrays for the same bytes; a file and a card as a project holds them; the state', ()=>{
+  // (v586: the arrays of the reading kept by the pair's bytes, readRow; to v585 keepSpectrum too)
+  const k = pairBytes('K'), rawFiles = [file('k.DTA', k.dta), file('k.DSC', k.dsc)];
+  const a = M.fileIn(U, { name: 'k', rawFiles, b: [1, 2], a: [3, 4] }), b = M.fileIn(U, { name: 'k', rawFiles: rawFiles.map(x=> ({ ...x })), b: [9, 9], a: [9, 9] });
+  assert.ok(a.b === b.b && a.a === b.a && isFixed(a.b) && isFixed(a.a));
+  const held = M.fileIn(U, { name: 'h', b: [1, 2, 3], a: [4, 5, 6] });
+  assert.ok(isFixed(held.b) && isFixed(held.a), 'the one a project holds: fixed');
   // a file: its points with both values, two at least; rescaled unless it says not
   const f = M.fileIn(U, { name: 'f', b: [1, NaN, 3, 4], a: [1, 2, 3, 4], rescaled: false });
   assert.deepEqual([f.b, f.a, f.rescaled], [[1, 3, 4], [1, 3, 4], false]);

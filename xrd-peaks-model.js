@@ -4,8 +4,8 @@
    baseline, the peak search, the half-maximum FWHM and its counting uncertainty, a
    pattern's processing from its settings; the standard's Caglioti fit and the
    instrumental width from it; the Scherrer sizes, a sample's and by reflection, and what
-   the size chart draws; a sample's settings, the card's state saved and read back (a
-   project's to v510, in points, converted); the CSVs. And (v561) what the card's wiring
+   the size chart draws; a sample's settings, the card's state saved and read back; the
+   CSVs. And (v561) what the card's wiring
    works out: its fields, the plot's curves and marks, the Results' stack and the size
    chart's layout, the changes to its state (below: THE CARD'S WIRING, WORKED OUT). And
    (v575) each sample's CIF, its species, and its peaks assigned to its phase's reflections
@@ -458,8 +458,8 @@ function topOf(maxima){ const m = Math.max(-Infinity, ...maxima); return m > 0 ?
 const cifEntry = v => v && typeof v === 'object' && typeof v.file === 'string' && typeof v.cif === 'string' ? { file: v.file, cif: v.cif } : null;
 /* As a state holds it (v576; to v575 each sample its text, a CIF given to ten samples saved ten
    times): its file's name and the place of its text in the state's pool (texts, each text
-   once, added there where it is not yet: cifRef); a sample's entry read back from it, or
-   one with its text in it as v575 saved it (cifIn: anything else none). */
+   once, added there where it is not yet: cifRef); a sample's entry read back from it, or one
+   with its text in it, as a file left out holds it (cifIn: anything else none). */
 function cifRef(q, texts){
   let at = texts.indexOf(q.cif);
   if (at < 0) at = texts.push(q.cif) - 1;
@@ -577,39 +577,28 @@ const modeDef = std => std ? { N:'shared', blWin:'shared', pkHeight:'shared', pk
    smoothW, the smoothing's width, and snipW, the SNIP's half-width, are in °2θ: 0.25°
    is about 19 points at a step of 0.013°; 2.5°, its field showing the whole width, 5°
    (SHOWN), about 385 points there, 299 at 0.0167° (to v515 0.13° and 2°, the field the
-   half-width; to v510 numbers of points, N 10 and blWin 150, whatever the step: restore
-   converts them). */
+   half-width; to v510 numbers of points, N 10 and blWin 150, whatever the step). */
 const FIELD_DEF = { smoothW:0.25, snipW:2.5, pkHeight:5, pkProm:3, pkDist:0.3, K:0.9, lambda:1.540598, blOn:true };
 // (what a width's field shows of the value stored: the SNIP's, its whole width)
 const SHOWN = { smoothW:1, snipW:2 };
 const sharedDef = std => std ? { ...FIELD_DEF, smoothW:0 } : FIELD_DEF;
 // (the SNIP's half-width above 0: one step at least, whatever is set)
 const FIELD_MIN   = { smoothW:0, snipW:1e-6, pkHeight:0, pkProm:0, pkDist:0, K:1e-6, lambda:1e-6 };
-// The widths, by the keys of the points they were up to v510; the chip each goes under.
-const LEGACY = { smoothW:'N', snipW:'blWin' };
+// The widths (a width below its least is none: numOf; its field kept exact: fieldIn), and the
+// chip each setting goes under.
+const WIDTHS = new Set(['smoothW', 'snipW']);
 const modeOf = k => k === 'smoothW' ? 'N' : k === 'snipW' || k === 'blOn' ? 'blWin' : k;
 
 /* A state's settings as a restore takes them (a project read in may hold anything): a
    value that is no number, or a width below its least, none (the default, or the shared
-   value), another below its least that least. Up to v510 the widths were points (N,
-   blWin), each pattern's at its own step: they become widths at that step, the mean as
-   the peak search takes it, so that each pattern is smoothed as it was (to rounding, for
-   an even N; an odd N's box edges fall mid-cell, a quarter step² wider in variance; the
-   end points count half; N = 1, none, is 0) and clipped as it was (K = the points). */
+   value), another below its least that least. */
 const objOf = v => v && typeof v === 'object' && !Array.isArray(v) ? v : {};
-const numOf = (q, k)=> !Number.isFinite(q[k]) ? undefined : k in LEGACY ? (q[k] >= FIELD_MIN[k] ? q[k] : undefined) : Math.max(FIELD_MIN[k], q[k]);
-const fromPts = (k, v, st)=>{
-  if (!Number.isFinite(v)) return undefined;
-  const N = Math.max(1, k === 'smoothW' ? Math.round(v) : v);
-  return k === 'smoothW' && N === 1 ? 0 : st > 0 ? N*st : undefined;
-};
-// A sample's own settings, a project's to v510 in points at its pattern's step st (those
-// of heldPts, pts, in place of its own: the SNIP's box too, v510's shared one, for an
-// entry not converted yet).
-function entryOf(q, st, pts = {}){
+const numOf = (q, k)=> !Number.isFinite(q[k]) ? undefined : WIDTHS.has(k) ? (q[k] >= FIELD_MIN[k] ? q[k] : undefined) : Math.max(FIELD_MIN[k], q[k]);
+// A sample's own settings: its numbers, its baseline's box on unless it says off.
+function entryOf(q){
   const o = {};
-  for (const k in FIELD_MIN){ const v = k in LEGACY && !(k in q) ? fromPts(k, Number.isFinite(pts[LEGACY[k]]) ? pts[LEGACY[k]] : q[LEGACY[k]], st) : numOf(q, k); if (v !== undefined) o[k] = v; }
-  o.blOn = !('snipW' in q) && Number.isFinite(pts.blWin) && typeof pts.blOn === 'boolean' ? pts.blOn : q.blOn !== false;
+  for (const k in FIELD_MIN){ const v = numOf(q, k); if (v !== undefined) o[k] = v; }
+  o.blOn = q.blOn !== false;
   return o;
 }
 // A file's params (pp: its own entry; respects per-field shared/per mode)
@@ -619,16 +608,14 @@ function fileParams(pp, paramMode, shared){
 }
 
 /* The card's state as saved (c: its settings, its peaks added and removed by hand, the
-   samples' CIFs and the note of an older version's matching (v575: none for the standard),
-   what the size chart is by, the normalisation, a project's conversion's note and points).
-   The samples' CIFs (cif) each its file's name and its text's place in cifTexts, where each
-   text is once (v576: cifRef; none, no cifTexts). */
-function stateOf({ std, perParams, manualPeaks, removedPeaks, cifs, oldGroups, shared, paramMode, sizeBy, norm, stepNote, heldPts }){
+   samples' CIFs (v575: none for the standard), what the size chart is by, the
+   normalisation). The samples' CIFs (cif) each its file's name and its text's place in
+   cifTexts, where each text is once (v576: cifRef; none, no cifTexts). */
+function stateOf({ std, perParams, manualPeaks, removedPeaks, cifs, shared, paramMode, sizeBy, norm }){
   const texts = [], cif = std ? null : cifs.map(v=>{ const q = cifEntry(v); return q && cifRef(q, texts); });
   return { perParams: perParams.map(q=>({...q})), manualPeaks: manualPeaks.map(a=>a.slice()), removedPeaks: removedPeaks.map(a=>a.slice()),
-    ...(cif ? { cif } : {}), ...(texts.length ? { cifTexts: texts } : {}), ...(oldGroups ? { oldGroups: true } : {}),
-    shared: {...shared}, paramMode: {...paramMode}, sizeBy, norm, ...(stepNote.length ? { stepNote: stepNote.slice() } : {}),
-    ...(Object.keys(heldPts).length ? { heldPts: {...heldPts} } : {}) };
+    ...(cif ? { cif } : {}), ...(texts.length ? { cifTexts: texts } : {}),
+    shared: {...shared}, paramMode: {...paramMode}, sizeBy, norm };
 }
 /* Every setting from the state s (the card's restore), each set whether the state holds
    it or not: a value it has none of, or one that is no number (a project read in may
@@ -637,17 +624,12 @@ function stateOf({ std, perParams, manualPeaks, removedPeaks, cifs, oldGroups, s
    shared values and the modes were merged over those in use: an undo past the box's
    untick, or a project without it, kept the box as it was left (the baseline off, the
    widths and sizes changed), and a list holding something else than lists (a project
-   read in) threw. The widths of a project to v510, in points, are converted (fromPts).
-   st: the steps of the files included, stAll: those and the steps of the files left out
-   (which come back with their entries). The normalisation is the card's to read (utils.js
-   normOf). The samples' CIFs (v575), each a file's name and text or none (its text in the
-   state's pool, cifTexts, or, saved by v575, in its entry: cifIn); a state of an older
-   version has none, and where it had samples to match peaks across (two or more), the note
-   that says so (oldGroups) until a CIF is chosen (setCif). */
-function readState(s, std, st, stAll){
+   read in) threw. n: the files included. The normalisation is the card's to read
+   (utils.js normOf). The samples' CIFs (v575), each a file's name and text or none (its
+   text in the state's pool, cifTexts, or in its entry: cifIn). */
+function readState(s, std, n){
   const obj = objOf;
   s = obj(s);
-  const n = st.length;
   const SHARED_DEF = sharedDef(std), MODE_DEF = modeDef(std);
   const arr = (a, make)=> Array.isArray(a) ? a.slice(0, n).concat(Array.from({ length: Math.max(0, n - a.length) }, make)) : Array.from({ length: n }, make);
   const sh = obj(s.shared), pm = std ? {} : obj(s.paramMode);
@@ -655,40 +637,13 @@ function readState(s, std, st, stAll){
   for (const k in FIELD_MIN) shared[k] = numOf(sh, k) ?? SHARED_DEF[k];
   shared.blOn = sh.blOn !== false;
   for (const k in MODE_DEF) paramMode[k] = pm[k] === 'shared' || pm[k] === 'per' ? pm[k] : MODE_DEF[k];
-  const hp = obj(s.heldPts);
-  const heldPts = {};
-  for (const m of ['N', 'blWin']) if (Number.isFinite(hp[m])) heldPts[m] = hp[m];
-  if (Number.isFinite(heldPts.blWin) && typeof hp.blOn === 'boolean') heldPts.blOn = hp.blOn;
-  const perParams = arr(s.perParams, ()=> ({})).map((q, i)=> entryOf(obj(q), st[i], heldPts));
-  const stepNote = Array.isArray(s.stepNote) ? ['N', 'blWin'].filter(m=> s.stepNote.includes(m)) : [];
-  /* A shared value in points was as many points on every pattern, those left out as
-     they came back included: at one step (to 10⁻⁶), one width; at several, under all,
-     as many widths, so its chip turns to one, each pattern its own (the note says so),
-     a file left out its own as it comes back (heldPts); under one, each sample's own,
-     or this where it had none. The shared value, which a file added takes, at the
-     median step of those included. */
-  const same = stAll.length > 0 && stAll.every(v=> Math.abs(v - stAll[0]) <= 1e-6*stAll[0]);
-  const mid = q => q.slice().sort((a, b)=> a - b)[q.length >> 1];
-  const med = same ? stAll[0] : n ? mid(st) : stAll.length ? mid(stAll) : NaN;
-  for (const k in LEGACY){
-    const v = sh[LEGACY[k]], m = modeOf(k);
-    if (k in sh || !Number.isFinite(v)) continue;
-    if (paramMode[m] === 'shared' && stAll.length > 1 && !same){
-      paramMode[m] = 'per';
-      if (!stepNote.includes(m)) stepNote.push(m);
-      if (stAll.length > n){ heldPts[m] = v; if (k === 'snipW') heldPts.blOn = shared.blOn; }
-      perParams.forEach(o=>{ delete o[k]; if (k === 'snipW') o.blOn = shared.blOn; });
-    }
-    if (paramMode[m] === 'per') perParams.forEach((o, i)=>{ if (!(k in o)) o[k] = fromPts(k, v, st[i]) ?? SHARED_DEF[k]; });
-    shared[k] = fromPts(k, v, med) ?? SHARED_DEF[k];
-  }
+  const perParams = arr(s.perParams, ()=> ({})).map(q=> entryOf(obj(q)));
   const posOf = a => Array.isArray(a) ? a.filter(Number.isFinite) : [];
   const manualPeaks = arr(s.manualPeaks, ()=> []).map(posOf);
   const removedPeaks = arr(s.removedPeaks, ()=> []).map(posOf);
   const sizeBy = s.sizeBy === 'peak' ? 'peak' : 'sample';
   const cifs = arr(std ? null : s.cif, ()=> null).map(v=> cifIn(v, s.cifTexts));
-  const oldGroups = !std && (s.oldGroups === true || (!('cif' in s) && Array.isArray(s.perParams) && n > 1));
-  return { shared, paramMode, heldPts, perParams, stepNote, manualPeaks, removedPeaks, cifs, oldGroups, sizeBy };
+  return { shared, paramMode, perParams, manualPeaks, removedPeaks, cifs, sizeBy };
 }
 
 /* ---- The CSVs ---- */
@@ -822,7 +777,7 @@ function numIn(text, def){
 // its least.
 function fieldIn(key, text, shown, exact){
   const sh = SHOWN[key] || 1;
-  return key in LEGACY && text === shown ? exact : Math.max(FIELD_MIN[key], numIn(text, FIELD_DEF[key]*sh)/sh);
+  return WIDTHS.has(key) && text === shown ? exact : Math.max(FIELD_MIN[key], numIn(text, FIELD_DEF[key]*sh)/sh);
 }
 /* The fields read into the store (vals: each setting's value, in the fields' order; on: the
    baseline's box): for the sample on show (k), its own where its chip is one, else the
@@ -995,16 +950,13 @@ const sizeDlNames = (pre, by)=> ({ csv: ['crystallite_size.csv', 'crystallite_si
 /* A chip switched (key: its mode's) from the settings shown, cur (the sample on show's):
    to "all", every sample takes the value of the sample on show; to "one", every sample (n:
    the files) starts from the common value, then each is changed on its own. One chip for
-   the baseline's width and its box. A width shared again: its note, if a project's
-   conversion left one, goes, and the value in points it kept for the files left out.
-   → the mode. */
+   the baseline's width and its box. → the mode. */
 function switchMode(S, key, cur, n){
   const mode = S.paramMode[key]==='shared' ? 'per' : 'shared';
   const keys = key==='blWin' ? ['snipW', 'blOn'] : key==='N' ? ['smoothW'] : [key];
   S.paramMode[key] = mode;
   if (mode==='shared') keys.forEach(k=>{ S.shared[k] = cur[k]; });
   else for (let i = 0; i < n; i++){ if (!S.perParams[i]) S.perParams[i] = {}; keys.forEach(k=>{ S.perParams[i][k] = cur[k]; }); }
-  if (mode==='shared'){ S.stepNote = S.stepNote.filter(m=> m !== key); delete S.heldPts[key]; if (key === 'blWin') delete S.heldPts.blOn; }
   return mode;
 }
 // A peak-search field changed (key) with the sample k on show: the peaks removed come back,
@@ -1025,11 +977,9 @@ function dropPeak(S, idx, det, manual){
   }
 }
 /* The per-sample arrays, for the file list to keep aligned with the included files (key:
-   the card's). A file left out keeps its entry as it was: one of a project to v510, in
-   points, takes its widths at the file's step as it comes back, those v510 shared where the
-   conversion turned the chip to one (heldPts). None: the standard's. */
+   the card's). A file left out keeps its entry as it was. None: the standard's. */
 const slotsOf = (S, key)=> S.std ? [] : [
-  { key: key + ':params', arr:S.perParams, make: (v, f)=> v ? entryOf(objOf(v), f && f.x ? meanStep(f.x) : NaN, S.heldPts) : {...S.shared} },
+  { key: key + ':params', arr:S.perParams, make: v=> v ? entryOf(objOf(v)) : {...S.shared} },
   { key: key + ':manual', arr:S.manualPeaks, make: v=> v ? v.slice() : [] },
   { key: key + ':removed', arr:S.removedPeaks, make: v=> v ? v.slice() : [] },
   { key: key + ':cif', arr:S.cifs, make: cifEntry },
@@ -1043,15 +993,13 @@ function freshEntries(S, fs){
 }
 // Every file gone.
 function clearEntries(S){ S.processed=[]; S.perParams=[]; S.manualPeaks=[]; S.removedPeaks=[]; S.cifs=[]; S.panel.sel=S.panel.hov=null; }
-// A sample's CIF chosen (k: its index; q: { file, cif }, or none): an older version's note
-// goes with the first one chosen (v575).
-function setCif(S, k, q){ S.cifs[k] = cifEntry(q); if (S.cifs[k]) S.oldGroups = false; }
-/* A state read (readState's t) taken: every setting, the peaks by hand, the samples' CIFs and
-   the note of an older version's matching, the chart's choice, the normalisation (norm, made
-   valid by the card); nothing picked. */
+// A sample's CIF chosen (k: its index; q: { file, cif }, or none).
+function setCif(S, k, q){ S.cifs[k] = cifEntry(q); }
+/* A state read (readState's t) taken: every setting, the peaks by hand, the samples' CIFs, the
+   chart's choice, the normalisation (norm, made valid by the card); nothing picked. */
 function takeState(S, t, norm){
   Object.assign(S.shared, t.shared); Object.assign(S.paramMode, t.paramMode);
-  ({ heldPts: S.heldPts, perParams: S.perParams, stepNote: S.stepNote, manualPeaks: S.manualPeaks, removedPeaks: S.removedPeaks, cifs: S.cifs, oldGroups: S.oldGroups, sizeBy: S.sizeBy } = t);
+  ({ perParams: S.perParams, manualPeaks: S.manualPeaks, removedPeaks: S.removedPeaks, cifs: S.cifs, sizeBy: S.sizeBy } = t);
   S.norm = norm;
   S.panel.sel = S.panel.hov = null;
 }
@@ -1065,7 +1013,7 @@ export { nearestIdx, computeBaseline, findPeaks, computeFWHM, fwhmSigma, fwhmGeo
   cagAt, fitCaglioti, instrModelOf, instrBetaOf, stdSpanOf, scherrerD, sizeCorr, belowInstr, sizeSummary, sampleSizes,
   lighter, sizeSeries, seriesOf, boxTop, sizeTops, topOf,
   cifRef, cifIn, phaseOfCif, ASSIGN, assignTol, peakRefl, reflLabel, K2_TOL, kAlpha2Of, sampleAssign, speciesOf, sizeRows, cifPool, poolAt,
-  modeDef, FIELD_DEF, SHOWN, sharedDef, FIELD_MIN, LEGACY, modeOf, objOf, entryOf, fileParams, stateOf, readState,
+  modeDef, FIELD_DEF, SHOWN, sharedDef, FIELD_MIN, WIDTHS, modeOf, objOf, entryOf, fileParams, stateOf, readState,
   csvTables,
   fieldInputs, guardsOf, TOGGLES, SIZE_ONLY, PEAK_SEARCH, numIn, fieldIn, takeInputs, widthHint, presetOf, procKeys,
   PEAK_BASE, PEAK_HOVER, PEAK_SEL, FWHM_BASE, FWHM_HOVER, FWHM_SEL, anaOf, nearestOf, markStyles, toggled, nudge,

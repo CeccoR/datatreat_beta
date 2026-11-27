@@ -8,17 +8,17 @@
    instrument taken off in quadrature; the sizes summarised, a sample's (with a CIF, its
    assigned peaks') and by species, by sample and by reflection (v575; to v574 by reflection
    the samples' peaks matched by position), the chart's series, a species each. The settings:
-   a sample's own, a project's to v510 in points converted at each step (one step, several,
-   files left out), a malformed state, the standard's, the state saved and read back, the
-   samples' CIFs with it; an older version's project (v575: no CIF, its note). A sample's CIF
+   a sample's own, a malformed state, the standard's, the state saved and read back, the
+   samples' CIFs with it; v586: an old project's (its widths in points, to v510; the steps'
+   note; no CIFs, to v574), its old fields ignored. A sample's CIF
    (v575): read, its phase's reflections (a cubic cell, a face-centred one, a tetragonal one),
    its peaks assigned (the nearest, several, none, the tolerance's ends), the pool. Then the
    fixture's three samples and its standard, at their defaults, as the page analyses them:
    the CSVs, the peak tables, the Caglioti box, the size chart's chips, each as HEAD v551's
    page wrote them (xrd-peaks.js before the split; from v575 the species and hkl columns
    beside v551's, and with the fixture's CIF the sizes by peak v551's numbers). And the words:
-   the warnings, the step note, the chips, the note under the chart, the hkl, the CIF
-   selector, an older version's note, every label escaped. Then (v561) what the card's
+   the warnings, the chips, the note under the chart, the hkl, the CIF selector, every label
+   escaped. Then (v561) what the card's
    wiring works out (xrd-peaks-model.js, below THE CARD'S WIRING): a field read and written,
    a width's hint, the λ preset, the processing's keys, the plot's curves, marks and their
    colours, the Results' stack, the size chart's layout, the chips switched, peaks removed
@@ -277,98 +277,82 @@ test('the sizes summarised: a sample\'s, by reflection; the chart\'s series', ()
   assert.deepEqual([M.topOf([3, 7, -Infinity]), M.topOf([]), M.topOf([-2, 0])], [7, 1, 1]);
 });
 
-test('the settings: a sample\'s own, a project\'s to v510 converted, a malformed state, the state saved and read back', ()=>{
+test('the settings: a sample\'s own, a malformed state, the state saved and read back', ()=>{
   const SH = { smoothW: 0.25, snipW: 2.5, pkHeight: 5, pkProm: 3, pkDist: 0.3, K: 0.9, lambda: 1.540598, blOn: true };
   const PM = { N: 'shared', blWin: 'shared', pkHeight: 'per', pkProm: 'per', pkDist: 'per', K: 'shared', lambda: 'shared' };
   assert.deepEqual([M.sharedDef(false), M.modeDef(false)], [SH, PM]);
   assert.deepEqual([M.sharedDef(true), M.modeDef(true)], [{ ...SH, smoothW: 0 }, Object.fromEntries(Object.keys(PM).map(k=> [k, 'shared']))]);
   assert.deepEqual([M.modeOf('smoothW'), M.modeOf('snipW'), M.modeOf('blOn'), M.modeOf('K')], ['N', 'blWin', 'blWin', 'K']);
+  assert.deepEqual([...M.WIDTHS], ['smoothW', 'snipW']);
   // A file's: the shared value under all, its own (else the shared) under one; the box on unless false.
   assert.deepEqual(M.fileParams({ smoothW: 0.1, pkHeight: 9, blOn: false }, PM, SH), { ...SH, pkHeight: 9 });
   assert.deepEqual(M.fileParams({ smoothW: 0.1, pkHeight: 9, blOn: false }, { ...PM, N: 'per', blWin: 'per' }, SH), { ...SH, smoothW: 0.1, pkHeight: 9, blOn: false });
   assert.deepEqual(M.fileParams({}, { ...PM, N: 'per' }, SH), SH);
-  // A sample's entry: a width in points of v510 at its step (N = 1 none), a value below its
-  // least none (a width) or that least, one that is no number none; those held in place of its own.
-  assert.deepEqual(M.entryOf({ N: 10, blWin: 150, pkHeight: 7, K: -3, pkDist: 'a' }, 0.01), { smoothW: 0.1, snipW: 1.5, pkHeight: 7, K: 1e-6, blOn: true });
-  assert.deepEqual(M.entryOf({ N: 1, blWin: 0.2 }, 0.02), { smoothW: 0, snipW: 0.02, blOn: true }, 'N = 1: none; under a point: one');
-  assert.deepEqual(M.entryOf({ smoothW: -1, snipW: 0, blOn: false }, 0.01), { blOn: false });
-  assert.deepEqual(M.entryOf({ N: 10 }, 0.01, { N: 4, blWin: 100, blOn: false }), { smoothW: 0.04, snipW: 1, blOn: false });
-  assert.deepEqual(M.entryOf({ snipW: 2 }, 0.01, { blWin: 100, blOn: false }), { snipW: 2, blOn: true }, 'converted already: its own box');
+  // A sample's entry: a value below its least none (a width) or that least, one that is no number none.
+  assert.deepEqual(M.entryOf({ smoothW: 0.1, snipW: 1.5, pkHeight: 7, K: -3, pkDist: 'a' }), { smoothW: 0.1, snipW: 1.5, pkHeight: 7, K: 1e-6, blOn: true });
+  assert.deepEqual(M.entryOf({ smoothW: -1, snipW: 0, blOn: false }), { blOn: false });
   assert.deepEqual([M.objOf(null), M.objOf([1]), M.objOf(5)], [{}, {}, {}]);
   // Saved and read back.
-  const c = { perParams: [{ ...SH, pkHeight: 7 }, { ...SH, blOn: false }], manualPeaks: [[33.3], []], removedPeaks: [[], [40, 41]], cifs: [{ file: 'a.cif', cif: 'data_a' }, null], oldGroups: false,
-    shared: { ...SH, K: 0.95 }, paramMode: { ...PM, blWin: 'per' }, sizeBy: 'peak', norm: 'local', stepNote: [], heldPts: {} };
+  const c = { perParams: [{ ...SH, pkHeight: 7 }, { ...SH, blOn: false }], manualPeaks: [[33.3], []], removedPeaks: [[], [40, 41]], cifs: [{ file: 'a.cif', cif: 'data_a' }, null],
+    shared: { ...SH, K: 0.95 }, paramMode: { ...PM, blWin: 'per' }, sizeBy: 'peak', norm: 'local' };
   const s = M.stateOf(c);
   assert.deepEqual(s, { perParams: c.perParams, manualPeaks: c.manualPeaks, removedPeaks: c.removedPeaks, cif: [{ file: 'a.cif', ref: 0 }, null], cifTexts: ['data_a'], shared: c.shared, paramMode: c.paramMode, sizeBy: 'peak', norm: 'local' });
   assert.ok(s.perParams[0] !== c.perParams[0] && s.manualPeaks[0] !== c.manualPeaks[0] && s.shared !== c.shared, 'copies');
-  assert.deepEqual(Object.keys(M.stateOf({ ...c, stepNote: ['N'], heldPts: { N: 4 } })).slice(-2), ['stepNote', 'heldPts']);
-  assert.deepEqual([M.stateOf({ ...c, oldGroups: true }).oldGroups, 'cif' in M.stateOf({ ...c, std: true })], [true, false], 'the note kept; the standard: no CIF');
-  const back = M.readState(JSON.parse(JSON.stringify(s)), false, [0.01, 0.01], [0.01, 0.01]);
-  assert.deepEqual(back, { shared: c.shared, paramMode: c.paramMode, heldPts: {}, perParams: c.perParams, stepNote: [], manualPeaks: c.manualPeaks, removedPeaks: c.removedPeaks, cifs: c.cifs, oldGroups: false, sizeBy: 'peak' });
-  // v510's points: at one step, one width each; at two, under all, a width a pattern (the
-  // chip to one, the note), the shared value at the median step; a file left out holds them.
-  const old = { shared: { N: 10, blWin: 150, pkHeight: 5, pkProm: 3, pkDist: 0.3, K: 0.9, lambda: 1.540598, blOn: true }, paramMode: PM,
-    perParams: [{ N: 10, blWin: 150, pkHeight: 7 }, { N: 10, blWin: 150 }], manualPeaks: [[30], []], removedPeaks: [[], [40]] };
-  const one = M.readState(old, false, [0.01, 0.01], [0.01, 0.01]);
-  assert.deepEqual([one.shared.smoothW, one.shared.snipW, one.paramMode, one.stepNote, one.heldPts], [0.1, 1.5, PM, [], {}]);
-  assert.deepEqual(one.perParams, [{ smoothW: 0.1, snipW: 1.5, pkHeight: 7, blOn: true }, { smoothW: 0.1, snipW: 1.5, blOn: true }]);
-  const two = M.readState(old, false, [0.01, 0.02], [0.01, 0.02]);
-  assert.deepEqual(two, { shared: { ...SH, smoothW: 0.2, snipW: 3 }, paramMode: { ...PM, N: 'per', blWin: 'per' }, heldPts: {},
-    perParams: [{ smoothW: 0.1, snipW: 1.5, pkHeight: 7, blOn: true }, { smoothW: 0.2, snipW: 3, blOn: true }], stepNote: ['N', 'blWin'],
-    manualPeaks: [[30], []], removedPeaks: [[], [40]], cifs: [null, null], oldGroups: true, sizeBy: 'sample' });
-  const out = M.readState(old, false, [0.01, 0.02], [0.01, 0.02, 0.04]);
-  assert.deepEqual([out.heldPts, out.stepNote, out.shared.smoothW], [{ N: 10, blWin: 150, blOn: true }, ['N', 'blWin'], 0.2]);
-  // Under one already: each sample's own, converted at its step.
-  const per = M.readState({ ...old, paramMode: { ...PM, N: 'per' }, perParams: [{ N: 4, blWin: 150 }, { blWin: 150 }] }, false, [0.01, 0.02], [0.01, 0.02]);
-  assert.deepEqual(per.perParams.map(q=> q.smoothW), [0.04, 0.2]);
+  assert.equal('cif' in M.stateOf({ ...c, std: true }), false, 'the standard: no CIF');
+  const back = M.readState(JSON.parse(JSON.stringify(s)), false, 2);
+  assert.deepEqual(back, { shared: c.shared, paramMode: c.paramMode, perParams: c.perParams, manualPeaks: c.manualPeaks, removedPeaks: c.removedPeaks, cifs: c.cifs, sizeBy: 'peak' });
   // A malformed state: every value of another type, the defaults; lists cut or filled to the files.
   const bad = { shared: { smoothW: 'x', snipW: -1, pkHeight: null, K: -3, lambda: 'Mo', blOn: 0 }, paramMode: { N: 'per', blWin: 7, pkHeight: 'shared' },
-    perParams: [{ smoothW: 0.3, pkDist: 'a' }, 5, null], manualPeaks: [[30, 'x', null], 'q'], removedPeaks: { a: 1 }, sizeBy: 'peak', norm: 'weird',
-    heldPts: { N: 4, blWin: 'x', blOn: true }, stepNote: ['N', 'zz'] };
-  assert.deepEqual(M.readState(bad, false, [0.01, 0.02], [0.01, 0.02, 0.03]), { shared: { ...SH, K: 1e-6 }, paramMode: { ...PM, N: 'per', pkHeight: 'shared' },
-    heldPts: { N: 4 }, perParams: [{ smoothW: 0.3, blOn: true }, { smoothW: 0.08, blOn: true }], stepNote: ['N'], manualPeaks: [[30], []], removedPeaks: [[], []], cifs: [null, null], oldGroups: true, sizeBy: 'peak' });
-  for (const v of [null, 5, 'x', []]) assert.deepEqual(M.readState(v, false, [0.01], [0.01]),
-    { shared: SH, paramMode: PM, heldPts: {}, perParams: [{ blOn: true }], stepNote: [], manualPeaks: [[]], removedPeaks: [[]], cifs: [null], oldGroups: false, sizeBy: 'sample' });
-  // The standard's: its own defaults, everything shared whatever the state says; no CIF, no note.
-  const std = M.readState({ paramMode: { N: 'per', pkHeight: 'per' }, perParams: [{}, {}], cif: [{ file: 'a', cif: 'b' }] }, true, [0.01, 0.01], [0.01, 0.01]);
-  assert.deepEqual([std.shared.smoothW, Object.values(std.paramMode).every(v=> v === 'shared'), std.cifs, std.oldGroups], [0, true, [null, null], false]);
+    perParams: [{ smoothW: 0.3, pkDist: 'a' }, 5, null], manualPeaks: [[30, 'x', null], 'q'], removedPeaks: { a: 1 }, sizeBy: 'peak', norm: 'weird' };
+  assert.deepEqual(M.readState(bad, false, 2), { shared: { ...SH, K: 1e-6 }, paramMode: { ...PM, N: 'per', pkHeight: 'shared' },
+    perParams: [{ smoothW: 0.3, blOn: true }, { blOn: true }], manualPeaks: [[30], []], removedPeaks: [[], []], cifs: [null, null], sizeBy: 'peak' });
+  for (const v of [null, 5, 'x', []]) assert.deepEqual(M.readState(v, false, 1),
+    { shared: SH, paramMode: PM, perParams: [{ blOn: true }], manualPeaks: [[]], removedPeaks: [[]], cifs: [null], sizeBy: 'sample' });
+  // The standard's: its own defaults, everything shared whatever the state says; no CIF.
+  const std = M.readState({ paramMode: { N: 'per', pkHeight: 'per' }, perParams: [{}, {}], cif: [{ file: 'a', cif: 'b' }] }, true, 2);
+  assert.deepEqual([std.shared.smoothW, Object.values(std.paramMode).every(v=> v === 'shared'), std.cifs], [0, true, [null, null]]);
 });
 
-/* v575: an older version's project (no samples' CIFs: its peaks matched across samples)
-   opens with no CIF, and where it had two samples or more the note that the matching is
-   gone, kept with the state until a CIF is chosen; a sample's CIF read back as a file's name
-   and text, anything else none; a project of the cards' migration (xrd-model.js migrate) and
-   a card switched to Rietveld and back the same. */
-test('an older version\'s project: no CIF, the note of its matching across samples; the CIFs read back', ()=>{
-  const v574 = { perParams: [{}, {}, {}], manualPeaks: [[], [], []], removedPeaks: [[], [], []], shared: {}, paramMode: {}, sizeBy: 'peak', norm: 'global' };
-  const st = [0.013, 0.013, 0.013], r = M.readState(v574, false, st, st);
-  assert.deepEqual([r.cifs, r.oldGroups, r.sizeBy], [[null, null, null], true, 'peak']);
-  assert.equal(M.readState({ ...v574, perParams: [{}] }, false, [0.013], [0.013]).oldGroups, false, 'one sample: nothing was matched');
-  assert.equal(M.readState({ ...v574, cif: [null, null, null] }, false, st, st).oldGroups, false, 'this version\'s: no note');
-  assert.equal(M.readState({ ...v574, cif: [], oldGroups: true }, false, st, st).oldGroups, true, 'the note kept, until a CIF is chosen');
-  assert.equal(M.readState({}, false, st, st).oldGroups, false, 'a card made now (no state)');
-  const q = { file: 'SrTiO3.cif', cif: 'data_x' };
-  assert.deepEqual(M.readState({ cif: [q, { file: 1, cif: 'x' }, 'q', { ...q, extra: 1 }] }, false, st, st).cifs, [q, null, null], 'cut to the files, a malformed one none, the rest dropped');
-  // Taken, saved, a CIF chosen: the note goes; none chosen: it stays.
+/* v586: an old project's Scherrer settings as this version reads them. Made here as older
+   versions saved them: the widths in points (N, blWin, to v510), the note of patterns at
+   different steps and the points held for the files left out (v511-v585), and no samples'
+   CIFs, its peaks matched across its samples (to v574). Its old fields ignored: the default
+   widths where it has no other, no note, no CIF; its other settings and its peaks by hand
+   kept; the state saved holds none of them; a CIF chosen, the sample's. */
+test('an old project: widths in points, the steps\' note, no CIFs: the default widths, no note, no CIF (v586)', ()=>{
+  const SH = M.sharedDef(false), PM = M.modeDef(false);
+  const old = { shared: { N: 10, blWin: 150, pkHeight: 4, pkProm: 3, pkDist: 0.3, K: 0.9, lambda: 1.540598, blOn: false }, paramMode: { ...PM, N: 'per', blWin: 'per' },
+    perParams: [{ N: 4, blWin: 100, pkHeight: 7 }, { N: 10, blWin: 150 }, { N: 3 }], manualPeaks: [[30], [], [31]], removedPeaks: [[], [40], []], sizeBy: 'peak', norm: 'global',
+    stepNote: ['N', 'blWin'], heldPts: { N: 9, blWin: 120, blOn: false }, oldGroups: true };
+  let t;
+  assert.doesNotThrow(()=>{ t = M.readState(old, false, 3); });
+  assert.deepEqual(t, { shared: { ...SH, pkHeight: 4, blOn: false }, paramMode: { ...PM, N: 'per', blWin: 'per' },
+    perParams: [{ pkHeight: 7, blOn: true }, { blOn: true }, { blOn: true }], manualPeaks: [[30], [], [31]], removedPeaks: [[], [40], []], cifs: [null, null, null], sizeBy: 'peak' });
+  // Taken: each sample's widths the shared defaults; saved, nothing of the old fields.
   const S = { std: false, shared: {}, paramMode: {}, panel: { sel: 1, hov: 2 } };
-  M.takeState(S, r, 'global');
-  assert.deepEqual([S.cifs, S.oldGroups, M.stateOf(S).oldGroups, M.stateOf(S).cif], [[null, null, null], true, true, [null, null, null]]);
-  M.setCif(S, 1, null);
-  assert.equal(S.oldGroups, true, 'none chosen: the note stays');
+  M.takeState(S, t, 'global');
+  assert.deepEqual(M.fileParams(S.perParams[0], S.paramMode, S.shared), { ...SH, pkHeight: 7 });
+  const s = M.stateOf(S);
+  assert.deepEqual(Object.keys(s), ['perParams', 'manualPeaks', 'removedPeaks', 'cif', 'shared', 'paramMode', 'sizeBy', 'norm']);
+  assert.deepEqual(s.cif, [null, null, null]);
+  // A file left out with its entry in points, taken back in: its numbers, the widths none (the shared ones).
+  const [params] = M.slotsOf(S, 'A1');
+  assert.deepEqual(params.make({ N: 5, blWin: 80, pkProm: 2 }, { x: [10, 10.02] }), { pkProm: 2, blOn: true });
+  // A CIF chosen: the sample's, nothing else said.
+  const q = { file: 'SrTiO3.cif', cif: 'data_x' };
   M.setCif(S, 1, { ...q, key: 'k', name: 'n', text: 't' });
-  assert.deepEqual([S.cifs[1], S.oldGroups, 'oldGroups' in M.stateOf(S)], [q, false, false]);
-  // A project of the version before the cards (migrated): its Scherrer card's state an older one.
-  const mig = XM.migrate({ isObj: v=> !!v && typeof v === 'object' && !Array.isArray(v) }, { files: [{ name: 'a' }, { name: 'b' }], perParams: [{}, {}], manualPeaks: [[], []], removedPeaks: [[], []], sizeBy: 'peak' });
-  const sc = mig.cards[0].states.scherrer;
-  assert.deepEqual(['cif' in sc, M.readState(sc, false, [0.01, 0.01], [0.01, 0.01]).oldGroups], [false, true]);
-  // Kept while its card is a Rietveld one (xrd-model.js keptState, keptSlots): an older state
-  // with no CIFs (its note to come), this version's with them, files left out alike.
-  const isObj = v=> !!v && typeof v === 'object' && !Array.isArray(v);
-  assert.equal('cif' in XM.keptState({ isObj }, 'scherrer', v574, new Set([1])), false);
-  assert.deepEqual(XM.keptState({ isObj }, 'scherrer', { ...v574, cif: [q, null, q] }, new Set([1])).cif, [q, q]);
-  assert.deepEqual(XM.keptSlots('A1', v574).map(x=> x.key), ['A1:params', 'A1:manual', 'A1:removed']);
-  const ks = XM.keptSlots('A1', { ...v574, cif: [q] });
-  assert.deepEqual([ks.map(x=> x.key).pop(), ks[3].make(undefined), ks[3].out(q)], ['A1:cif', null, q], 'v575\'s, its text in it: held as it is');
+  assert.deepEqual([S.cifs, Object.keys(M.stateOf(S)).includes('oldGroups')], [[null, q, null], false]);
+});
+
+/* v575: a sample's CIF read back as a file's name and text (anything else none); kept while
+   its card is a Rietveld one (xrd-model.js keptState, keptSlots), files left out alike. */
+test('the CIFs read back; kept while the card is a Rietveld one', ()=>{
+  const q = { file: 'SrTiO3.cif', cif: 'data_x' }, v = { perParams: [{}, {}, {}], manualPeaks: [[], [], []], removedPeaks: [[], [], []], shared: {}, paramMode: {}, sizeBy: 'peak', norm: 'global' };
+  assert.deepEqual(M.readState({ cif: [q, { file: 1, cif: 'x' }, 'q', { ...q, extra: 1 }] }, false, 3).cifs, [q, null, null], 'cut to the files, a malformed one none, the rest dropped');
+  const isObj = x => !!x && typeof x === 'object' && !Array.isArray(x);
+  assert.deepEqual(XM.keptState({ isObj }, 'scherrer', { ...v, cif: [q, null, q] }, new Set([1])).cif, [q, q]);
+  const ks = XM.keptSlots('A1', { ...v, cif: [q] });
+  assert.deepEqual([ks.map(x=> x.key).pop(), ks[3].make(undefined), ks[3].out(q)], ['A1:cif', null, q], 'its text in it: held as it is');
 });
 
 /* v575: a sample's CIF, read as the Rietveld card reads its phases. Its phase's reflections
@@ -667,24 +651,24 @@ test('a Kα1 peak of a cell smaller than its CIF\'s on its line\'s Kα2, no part
    goes into the pool (once), a pool made where there is none. */
 test('the samples\' CIFs saved once each: the pool, read back, v575\'s states, a card switched to Rietveld (v576)', ()=>{
   const TET = { file: 'BaTiO3_tetra.cif', cif: TETRA_CIF }, OTHER = { file: 'other.cif', cif: STO.cif };
-  const c = { perParams: [{}, {}, {}, {}, {}], manualPeaks: [[], [], [], [], []], removedPeaks: [[], [], [], [], []], cifs: [STO, TET, null, { ...STO }, OTHER], oldGroups: false,
-    shared: { ...M.FIELD_DEF }, paramMode: M.modeDef(false), sizeBy: 'sample', norm: 'global', stepNote: [], heldPts: {} };
+  const c = { perParams: [{}, {}, {}, {}, {}], manualPeaks: [[], [], [], [], []], removedPeaks: [[], [], [], [], []], cifs: [STO, TET, null, { ...STO }, OTHER],
+    shared: { ...M.FIELD_DEF }, paramMode: M.modeDef(false), sizeBy: 'sample', norm: 'global' };
   const s = M.stateOf(c), json = JSON.stringify(s);
   assert.deepEqual([s.cif, s.cifTexts], [[{ file: 'SrTiO3.cif', ref: 0 }, { file: 'BaTiO3_tetra.cif', ref: 1 }, null, { file: 'SrTiO3.cif', ref: 0 }, { file: 'other.cif', ref: 0 }], [STO.cif, TETRA_CIF]]);
   assert.equal(json.split('data_SrTiO3').length - 1, 1, 'SrTiO3\'s text once, given three samples');
-  const st = [0.01, 0.01, 0.01, 0.01, 0.01], back = M.readState(JSON.parse(json), false, st, st);
+  const back = M.readState(JSON.parse(json), false, 5);
   assert.deepEqual(back.cifs, [STO, TET, null, STO, OTHER]);
   assert.deepEqual(Object.keys(M.stateOf({ ...c, cifs: [null, null, null, null, null] })).filter(k=> /^cif/.test(k)), ['cif'], 'no CIF, no pool');
   // v575's (each sample its text), read whole and saved pooled; a reference to no text, none.
   const v575 = { ...JSON.parse(json), cif: [STO, TET, null, STO, OTHER], cifTexts: undefined };
-  assert.deepEqual(M.readState(v575, false, st, st).cifs, [STO, TET, null, STO, OTHER]);
+  assert.deepEqual(M.readState(v575, false, 5).cifs, [STO, TET, null, STO, OTHER]);
   const S = { std: false, shared: {}, paramMode: {}, panel: { sel: null, hov: null } };
-  M.takeState(S, M.readState(v575, false, st, st), 'global');
+  M.takeState(S, M.readState(v575, false, 5), 'global');
   const again = M.stateOf(S);
   assert.deepEqual([again.cif, again.cifTexts], [s.cif, s.cifTexts], 'saved again as this version saves it');
-  assert.deepEqual(M.readState({ cif: [{ file: 'a', ref: 0 }, { file: 'b', ref: 2 }, { file: 'c', ref: '0' }, { file: 4, ref: 0 }, STO], cifTexts: ['data_a'] }, false, st, st).cifs,
+  assert.deepEqual(M.readState({ cif: [{ file: 'a', ref: 0 }, { file: 'b', ref: 2 }, { file: 'c', ref: '0' }, { file: 4, ref: 0 }, STO], cifTexts: ['data_a'] }, false, 5).cifs,
     [{ file: 'a', cif: 'data_a' }, null, null, null, STO], 'beyond the pool, not a place, no name: none');
-  assert.deepEqual(M.readState({ cif: [{ file: 'a', ref: 0 }], cifTexts: 'data_a' }, false, [0.01], [0.01]).cifs, [null], 'a pool that is none');
+  assert.deepEqual(M.readState({ cif: [{ file: 'a', ref: 0 }], cifTexts: 'data_a' }, false, 1).cifs, [null], 'a pool that is none');
   // Kept by a Rietveld card: held whole, back into the pool once; a pool made where it has none.
   const kept = JSON.parse(json), ks = XM.keptSlots('A1', kept)[3];
   assert.deepEqual([ks.out(kept.cif[1]), ks.out(null), ks.out(STO)], [TET, null, STO]);
@@ -693,7 +677,7 @@ test('the samples\' CIFs saved once each: the pool, read back, v575\'s states, a
   assert.deepEqual(kept.cifTexts, [STO.cif, TETRA_CIF, 'data_q']);
   const bare = { ...v575, cif: [null] }, kb = XM.keptSlots('A1', bare)[3];
   assert.deepEqual([kb.make(TET), bare.cifTexts], [{ file: 'BaTiO3_tetra.cif', ref: 0 }, [TETRA_CIF]]);
-  assert.deepEqual(M.readState({ ...bare, cif: [kb.make(TET)] }, false, [0.01], [0.01]).cifs, [TET]);
+  assert.deepEqual(M.readState({ ...bare, cif: [kb.make(TET)] }, false, 1).cifs, [TET]);
 });
 
 /* v576: the names under the size chart by peak, the hkl alone, whole where v575's, the species
@@ -711,7 +695,7 @@ test('the size chart by peak: each reflection by its hkl alone, whole; its speci
   assert.deepEqual(M.sizeSeries(rows, M.speciesOf(A)).map(m=> [m.name, m.color]), [['SrTiO3', '#3aa0ff'], ['BaTiO3', '#ff7a59']], 'the species, a colour each, in the legend');
 });
 
-test('the words: the warnings under the table, the step note, the chips, the note under the chart, a sample\'s CIF, labels escaped', ()=>{
+test('the words: the warnings under the table, the chips, the note under the chart, a sample\'s CIF, labels escaped', ()=>{
   assert.deepEqual([H.fmtMeanStd(12.345, 1.26, 3), H.fmtMeanStd(12.345, 1.26, 1), H.fmtMeanStd(NaN, 1, 3), H.fmtMeanStd(5, NaN, 2)], ['12.3 ± 1.3', '12.3', '—', '5.0']);
   assert.deepEqual([H.fmtPar(0.01234, 0.00056), H.fmtPar(123.4, 12), H.fmtPar(0.012345678, NaN), H.fmtPar(NaN, 1)], ['0.01234 ± 0.00056', '123 ± 12', '0.01235', '—']);
   assert.deepEqual([H.fmtCell(12.34), H.fmtCell(Infinity)], ['12.3', '—']);
@@ -732,11 +716,6 @@ test('the words: the warnings under the table, the step note, the chips, the not
   const D = (b, tt)=> H.fmtCell(M.scherrerD(b, tt, 0.9, 1.540598));
   assert.deepEqual(cells(tc), [['1', '32.000', '50.0%', '0.300', D(0.3, 32), '⚠'], ['2', '50.000', '100.0%', '0.500', D(0.5, 50), D(Math.sqrt(0.5**2 - 0.35**2), 50)]]);
   assert.ok(tc.includes('<td title="Narrower than the instrumental width at this angle">⚠</td>') && tc.includes('<tr class="peak-row manual-peak"'));
-  // A project of v510 whose steps differ: the chips its conversion turned to one, with the ×.
-  const x = n => `<svg w="${n}"/>`;
-  assert.equal(H.stepNoteHtml([], { X_SVG: x }), '');
-  assert.equal(H.stepNoteHtml(['N'], { X_SVG: x }), '<div class="alert warn">⚠ The patterns were measured at different steps: the smoothing, set in points by an older version, is kept as it was, a width for each pattern (one). Set one width in all to treat them alike.<button class="alert-dismiss close-x" data-step-x title="Dismiss"><svg w="15"/></button></div>');
-  assert.match(H.stepNoteHtml(['N', 'blWin'], { X_SVG: x }), /the smoothing and SNIP width, set in points by an older version, are kept as they were,/);
   // The chips (v575): none with no sample with a CIF; by peak disabled with no peak assigned.
   assert.equal(H.sizeChipsHtml(0, false, 'sample'), '');
   assert.equal(H.sizeChipsHtml(1, false, 'sample'), '<button type="button" class="mode-chip plot-chip is-on" data-size-by="sample" title="Crystallite size by sample">by sample</button>'
@@ -757,12 +736,9 @@ test('the words: the warnings under the table, the step note, the chips, the not
   assert.ok(tb.includes('<td title="Calculated 2θ: 50.000°">(1<span class="hkl-bar"><span class="hkl-sign">-</span>1</span>0)</td>'));
   assert.ok(/at least\.<\/p>$/.test(tb), 'every peak assigned: no count');
   // The CIF selector's options (none, the pool's by name, their files in the titles, Add
-  // CIF…), escaped; an older version's note, an info, in the rules' words (no "!", no "—", no version).
+  // CIF…), escaped.
   assert.equal(H.cifOptionsHtml([{ file: 'a<b>.cif', text: 'SrTiO3' }, { file: 'x.cif', text: evil }], U), '<option value="">none</option><option value="0" title="a&lt;b&gt;.cif">SrTiO3</option>'
     + '<option value="1" title="x.cif">&quot;&#39;&gt;&lt;i data-x=1&gt;&lt;/i&gt;</option><option value="add">Add CIF…</option>');
-  assert.match(H.OLD_GROUPS, /^<div class="alert info compact">/);
-  const og = H.OLD_GROUPS.replace(/<[^>]*>/g, '');
-  assert.ok(!/[!—]|v\d{3}/.test(og) && og.endsWith('.'), og);
   // The Caglioti box with no standard, no peaks, too few peaks, peaks at too few angles, an exact fit, a curve dropping to zero.
   assert.match(H.cagliotiHtml(null, 0).box, /No standard loaded: no instrumental correction/);
   assert.match(H.cagliotiHtml({ pts: [], fit: null }, 1).box, /No peaks: no instrumental correction/);
@@ -887,18 +863,17 @@ test('the plot: its curves and marks and their colours; the Results\' stack, the
 
 test('the state changed: a chip switched, peaks removed and placed, the per-sample arrays, a state taken', ()=>{
   const Q = { file: 'a.cif', cif: 'data_a' };
-  const mk = ()=> ({ std: false, paramMode: M.modeDef(false), shared: { ...M.FIELD_DEF }, perParams: [{ snipW: 1 }, undefined, {}], stepNote: ['N', 'blWin'], heldPts: { N: 9, blWin: 100, blOn: false },
-    manualPeaks: [[30], [], [40, 41]], removedPeaks: [[], [33], []], cifs: [Q, null, null], oldGroups: false, panel: { sel: 3, hov: 4 }, processed: [1] });
-  // To one: every sample from the value on show; to all, theirs the one on show's, the note
-  // and the points held for that chip gone (the baseline's box with its width).
+  const mk = ()=> ({ std: false, paramMode: M.modeDef(false), shared: { ...M.FIELD_DEF }, perParams: [{ snipW: 1 }, undefined, {}],
+    manualPeaks: [[30], [], [40, 41]], removedPeaks: [[], [33], []], cifs: [Q, null, null], panel: { sel: 3, hov: 4 }, processed: [1] });
+  // To one: every sample from the value on show; to all, theirs the one on show's (the
+  // baseline's box with its width).
   const S = mk(), cur = { ...DEF, snipW: 3, blOn: false };
   assert.equal(M.switchMode(S, 'blWin', cur, 3), 'per');
   assert.deepEqual(S.perParams, [{ snipW: 3, blOn: false }, { snipW: 3, blOn: false }, { snipW: 3, blOn: false }]);
-  assert.deepEqual([S.stepNote, S.heldPts], [['N', 'blWin'], { N: 9, blWin: 100, blOn: false }], 'to one: the note kept');
   assert.equal(M.switchMode(S, 'blWin', { ...cur, snipW: 4 }, 3), 'shared');
-  assert.deepEqual([S.shared.snipW, S.shared.blOn, S.stepNote, S.heldPts], [4, false, ['N'], { N: 9 }]);
+  assert.deepEqual([S.shared.snipW, S.shared.blOn], [4, false]);
   M.switchMode(S, 'pkHeight', { ...cur, pkHeight: 7 }, 3);
-  assert.deepEqual([S.paramMode.pkHeight, S.shared.pkHeight, S.stepNote], ['shared', 7, ['N']]);
+  assert.deepEqual([S.paramMode.pkHeight, S.shared.pkHeight], ['shared', 7]);
   M.switchMode(S, 'N', { ...cur, smoothW: 0.5 }, 2);
   assert.deepEqual([S.perParams[0].smoothW, S.perParams[1].smoothW, S.perParams[2].smoothW], [0.5, 0.5, undefined], 'one per file (n)');
   // The peak search's fields bring back the removed peaks: the sample's, or every one's under all.
@@ -910,16 +885,15 @@ test('the state changed: a chip switched, peaks removed and placed, the per-samp
   const W = mk();
   M.dropPeak(W, 2, 40.0000001, true); M.dropPeak(W, 0, 33, false); M.dropPeak(W, 1, 33.0000005, false); M.dropPeak(W, 5, 20, false); M.dropPeak(W, 6, 20, true);
   assert.deepEqual([W.manualPeaks[2], W.removedPeaks[0], W.removedPeaks[1], W.removedPeaks[5], W.manualPeaks[6]], [[41], [33], [33], [20], undefined]);
-  // The per-sample arrays the file list keeps aligned: a file taken back in takes its entry,
-  // one of v510 in points at its step (the points held), or the shared values; none for the standard.
+  // The per-sample arrays the file list keeps aligned: a file taken back in takes its entry
+  // (its numbers), or the shared values; none for the standard.
   const X = mk(), sl = M.slotsOf(X, 'A3');
   assert.deepEqual(sl.map(q=> q.key), ['A3:params', 'A3:manual', 'A3:removed', 'A3:cif']);
   assert.ok(sl[0].arr === X.perParams && sl[1].arr === X.manualPeaks && sl[2].arr === X.removedPeaks && sl[3].arr === X.cifs);
   assert.deepEqual([sl[3].make(Q), sl[3].make(undefined), sl[3].make({ file: 'a' })], [Q, null, null], 'a CIF held (v575), a copy');
   assert.notEqual(sl[3].make(Q), Q);
   assert.deepEqual(sl[0].make(undefined), X.shared); assert.notEqual(sl[0].make(undefined), X.shared);
-  const st = meanStep([10, 10.02, 10.04]);
-  assert.deepEqual(sl[0].make({ N: 5 }, { x: [10, 10.02, 10.04] }), { smoothW: 9*st, snipW: 100*st, blOn: false }, 'the N held (9 points at its step), the SNIP v510 shared');
+  assert.deepEqual(sl[0].make({ smoothW: 0.5, pkHeight: 'x', blOn: false }), { smoothW: 0.5, blOn: false });
   assert.deepEqual([sl[1].make([3]), sl[2].make(null)], [[3], []]);
   assert.deepEqual(M.slotsOf({ ...X, std: true }, 'S'), []);
   const Y = mk(); M.addEntry(Y);
@@ -929,10 +903,10 @@ test('the state changed: a chip switched, peaks removed and placed, the per-samp
   M.clearEntries(Y);
   assert.deepEqual([Y.processed, Y.perParams, Y.manualPeaks, Y.removedPeaks, Y.cifs, Y.panel], [[], [], [], [], [], { sel: null, hov: null }]);
   // A state read, taken: the objects of S kept (its shared and modes), the rest replaced; nothing picked.
-  const Z = mk(), sh = Z.shared, t = M.readState({ shared: { pkHeight: 2 }, sizeBy: 'peak', manualPeaks: [[30.5]], cif: [Q] }, false, [0.02], [0.02]);
+  const Z = mk(), sh = Z.shared, t = M.readState({ shared: { pkHeight: 2 }, sizeBy: 'peak', manualPeaks: [[30.5]], cif: [Q] }, false, 1);
   M.takeState(Z, t, 'none');
   assert.ok(Z.shared === sh && Z.perParams === t.perParams && Z.manualPeaks === t.manualPeaks && Z.cifs === t.cifs);
-  assert.deepEqual([Z.shared.pkHeight, Z.sizeBy, Z.norm, Z.stepNote, Z.heldPts, Z.manualPeaks, Z.cifs, Z.oldGroups, Z.panel], [2, 'peak', 'none', [], {}, [[30.5]], [Q], false, { sel: null, hov: null }]);
+  assert.deepEqual([Z.shared.pkHeight, Z.sizeBy, Z.norm, Z.manualPeaks, Z.cifs, Z.panel], [2, 'peak', 'none', [[30.5]], [Q], { sel: null, hov: null }]);
   assert.deepEqual(M.stateOf(Z), { perParams: [{ blOn: true }], manualPeaks: [[30.5]], removedPeaks: [[]], cif: [{ file: 'a.cif', ref: 0 }], cifTexts: ['data_a'], shared: Z.shared, paramMode: M.modeDef(false), sizeBy: 'peak', norm: 'none' });
   M.setCif(Z, 0, null);
   assert.deepEqual(M.stateOf(Z).cif, [null]);
@@ -947,9 +921,9 @@ test('the card\'s markup: the samples\' and the standard\'s, the Results\' secti
   const card = H.cardHtml('xrdA4', false, U), std = H.cardHtml('xrdStdA', true, U), res = H.resHtml('xrdA4', U);
   // Every element the wiring looks up, once each.
   for (const id of ['Svg', 'Prev', 'Next', 'CurrentLabel', 'Norm', 'Smooth', 'SmoothPts', 'BlOn', 'BlWin', 'BlWinPts', 'PkHeight', 'PkProm', 'PkDist', 'K', 'LambdaSel', 'Lambda',
-    'Cif', 'CifInput', 'CifNote', 'StepNote', 'AddPeak', 'Std', 'PeakBox', 'PkReset', 'PeakTableWrap', ...Object.keys(M.TOGGLES).map(k=> 'Mode' + k)]) assert.equal(ids(card).filter(x=> x === 'xrdA4' + id).length, 1, id);
+    'Cif', 'CifInput', 'CifNote', 'AddPeak', 'Std', 'PeakBox', 'PkReset', 'PeakTableWrap', ...Object.keys(M.TOGGLES).map(k=> 'Mode' + k)]) assert.equal(ids(card).filter(x=> x === 'xrdA4' + id).length, 1, id);
   for (const id of ['Svg', 'Smooth', 'BlOn', 'BlWin', 'PkHeight', 'PkProm', 'PkDist', 'Cag', 'CagAlert', 'AddPeak', 'PeakBox', 'PkReset', 'PeakTableWrap']) assert.ok(ids(std).includes('xrdStdA' + id), id);
-  assert.ok(!/Norm|Lambda|Mode|StepNote|Prev|Cif/.test(ids(std).join()), 'the standard: no normalisation, no λ, no chips, no selector, no CIF');
+  assert.ok(!/Norm|Lambda|Mode|Prev|Cif/.test(ids(std).join()), 'the standard: no normalisation, no λ, no chips, no selector, no CIF');
   // The CIF's row (v575): its name and its field, a row of the grid as the others, the last.
   assert.match(card, /<label class="txt-label" for="xrdA4Cif" title="[^"]+">CIF<\/label>\s*<select id="xrdA4Cif" class="pg-field" title="[^"]+"><\/select>\s*<\/div>/);
   assert.deepEqual(ids(res), ['xrdA4ResSvg', 'xrdA4ResLegend', 'xrdA4SizeBarSvg', 'xrdA4SizeBy', 'xrdA4SizeBarLegend', 'xrdA4SizeByNote']);
@@ -972,8 +946,8 @@ test('the card\'s markup: the samples\' and the standard\'s, the Results\' secti
    standard's, its file or none) with a state of any version or malformed, then eight steps
    each, done as xrd-peaks.js does them (its wiring, in short, below: the fields and their
    guards, the chips, the λ preset, the selector, peaks removed, placed by the keys and
-   reset, picked and hovered, the size chart's chips, the step note's ×, a state put back,
-   showNext), after the state and each step what the card shows (outputs). Their digests:
+   reset, picked and hovered, the size chart's chips, a state put back, showNext), after the
+   state and each step what the card shows (outputs). Their digests:
    tests/golden/peaksmodel.json. v575: the 40 cases as they were, what they show with the
    samples' CIFs (none chosen: the size chart charts none, its chips none, the CSVs' species
    and hkl columns empty, the state's CIFs and an older version's note; the rest as v574
@@ -991,7 +965,11 @@ test('the card\'s markup: the samples\' and the standard\'s, the Results\' secti
    nearer, the (200) peak below and taller) and left out of the sizes (12 steps of 4 cases:
    there the size chart and both size CSVs too), the rule's words where some are at Kα2;
    nothing else (the states, the plots, the fields, the CIFs' selector, the other CSVs)
-   changed. */
+   changed. v586: the states of an older version (the widths in points, the steps' note and
+   the points held, the note of the matching across samples) read as this version reads them,
+   their old fields ignored: the step note and that note gone from what the card shows (the
+   step note's ×, stepX, a step of nothing, kept so that the cases' random numbers stay as
+   they were); checked field by field against v584's. */
 // The patterns: the fixture's, shorter (one at another step, one labelled with markup), and a standard.
 const casePat = (k, n, label, color)=>{ const sc = readXrdmlScanText(new Uint8Array(xrdml(k, { n }))); return { name: 's' + k + '.xrdml', label, color, x: sc.x, y: sc.y, ...(sc.varMul ? { varMul: sc.varMul } : {}) }; };
 export const CASE_PATS = [casePat(0, 900, 's0', '#3aa0ff'), casePat(1, 900, 's1', '#ff7a59'), casePat(2, 700, 'S<2> & "b"', 'red<"'), casePat(5, 900, 's5', '#5fcf6a'), casePat(11, 900, 's11', '#d4a72c')];
@@ -1005,7 +983,7 @@ const STATES = [{}, null, 'x', [], { perParams: 5, manualPeaks: 'x', removedPeak
 const TEXTS = ['0', '0.1', '0,2', '0.05', '1', '2.5', '5', '', 'abc', '-1', '1e-7', '0.3', '3', ' 0.5 ', '0.9', '1.1', '1.540598', '2,28976', '1.5406'];
 const OPS = ['field', 'field', 'field', 'blon', 'chip', 'chip', 'norm', 'preset', 'step', 'del', 'del', 'add', 'add', 'reset', 'pick', 'hover', 'sizeBy', 'stepX', 'restore', 'showNext'];
 // (v575) The CIFs a step gives the sample on show, and the states of the cases that choose
-// them: some CIFs already, one malformed, an older version's note.
+// them: some CIFs already, one malformed, one an older version's note held.
 const TETRA = { file: 'BaTiO3_tetra.cif', cif: TETRA_CIF }, CASE_CIFS = [null, STO, TETRA];
 const CIF_STATES = [...STATES, { cif: [STO, TETRA, null, STO] }, { cif: [TETRA, { file: 3 }], sizeBy: 'peak' }, { cif: [null, STO], oldGroups: true, norm: 'local' },
   { perParams: [{}, {}, {}], sizeBy: 'peak' }];
@@ -1048,8 +1026,8 @@ function stdModel(){
 }
 export function caseEnv(c){
   const std = c.std, fs = c.files.map(i=> CASE_PATS[i]);
-  const S = { std, fields: M.fieldInputs(std), processed: [], manualPeaks: [], removedPeaks: [], perParams: [], cifs: [], oldGroups: false, paramMode: { ...M.modeDef(std) }, shared: { ...M.sharedDef(std) },
-    sizeBy: 'sample', stepNote: [], heldPts: {}, norm: 'global', panel: { sel: null, hov: null } };
+  const S = { std, fields: M.fieldInputs(std), processed: [], manualPeaks: [], removedPeaks: [], perParams: [], cifs: [], paramMode: { ...M.modeDef(std) }, shared: { ...M.sharedDef(std) },
+    sizeBy: 'sample', norm: 'global', panel: { sel: null, hov: null } };
   const T = { Smooth: std ? '0' : '0.25', BlWin: '5', PkHeight: '5', PkProm: '3', PkDist: '0.3', ...(std ? {} : { K: '0.9', Lambda: '1.540598' }) };
   const E = { std, fs, S, idx: 0, T, shown: {}, exact: {}, last: Object.fromEntries(Object.entries(T).map(([k, v])=> [k, parseFloat(v)])),
     blOn: true, blWinOff: false, norm: 'global', preset: '1.540598', ro: true, on: false, at: null, instr: c.instr ? stdModel() : null };
@@ -1063,7 +1041,7 @@ function writeStore(E){
   const pr = fpOf(E, cur(E));
   for (const key in E.S.fields){
     const id = E.S.fields[key];
-    if (key in M.LEGACY){ E.T[id] = E.shown[id] = widthText(pr[key]*M.SHOWN[key]); E.exact[id] = pr[key]; } else E.T[id] = String(pr[key]);
+    if (M.WIDTHS.has(key)){ E.T[id] = E.shown[id] = widthText(pr[key]*M.SHOWN[key]); E.exact[id] = pr[key]; } else E.T[id] = String(pr[key]);
   }
   E.blOn = pr.blOn; E.blWinOff = !pr.blOn;
   if (!E.std){ E.norm = E.S.norm; lambdaSync(E); }
@@ -1087,8 +1065,7 @@ function refresh(E){
 }
 function rerun(E, m){ if (E.S.paramMode[m] === 'shared') reprocessAll(E); else reprocessOne(E, cur(E)); }
 function restore(E, s){
-  const st = E.fs.map(f=> meanStep(f.x));
-  M.takeState(E.S, M.readState(s, E.std, st, st), normOf(M.objOf(s).norm));
+  M.takeState(E.S, M.readState(s, E.std, E.fs.length), normOf(M.objOf(s).norm));
   writeStore(E);
 }
 // The kept peaks of the table on show (none: no table).
@@ -1145,11 +1122,10 @@ export function step(E, [op, a, b]){
     if (V.A.some(Boolean) && (a === 'sample' || V.ok) && a !== S.sizeBy) S.sizeBy = a;
   }
   else if (op === 'cif' && !E.std && n) M.setCif(S, cur(E), CASE_CIFS[a]);
-  else if (op === 'stepX' && !E.std){ if (S.stepNote.some(m=> S.paramMode[m] === 'per')) S.stepNote = []; }
   else if (op === 'restore'){ restore(E, a && typeof a === 'object' ? JSON.parse(JSON.stringify(a)) : a); refresh(E); }
   else if (op === 'showNext'){ M.showNext(S.panel, a); refresh(E); }
 }
-/* What the card shows: its fields, their hints, the chips, the step note; the plot (its range,
+/* What the card shows: its fields, their hints, the chips; the plot (its range,
    curves, marks, their colours), the table, the Caglioti box (the standard's); the Results'
    stack and its legend, the size chart (its chips, note, range, boxes, labels, names,
    legend); its CSVs, state, what it shows beside it, the add-peak mode. */
@@ -1159,9 +1135,8 @@ export function outputs(E){
   o.fields = [{ ...E.T }, E.blOn, E.blWinOff, ...(E.std ? [] : [E.norm, E.preset, E.ro])];
   o.hints = ['Smooth', 'BlWin'].map(id=> M.widthHint(id, E.T[id], E.shown[id], E.exact[id], f ? meanStep(f.x) : NaN, f && f.label));
   o.chips = E.std ? null : Object.values(M.TOGGLES).map(k=> S.paramMode[k] === 'shared' ? 'all' : 'one');
-  o.step = E.std ? null : H.stepNoteHtml(S.stepNote.filter(m=> S.paramMode[m] === 'per'), U);
   const pr = n ? S.processed[ci] : null, instr = E.std ? null : E.instr, A = n ? asgOf(E, ci) : null;
-  if (!E.std){ const pool = M.cifPool(S.cifs.filter(Boolean)); o.cif = [H.cifOptionsHtml(pool, U), n ? M.poolAt(pool, S.cifs[ci]) : -1, S.oldGroups ? H.OLD_GROUPS : '']; }
+  if (!E.std){ const pool = M.cifPool(S.cifs.filter(Boolean)); o.cif = [H.cifOptionsHtml(pool, U), n ? M.poolAt(pool, S.cifs[ci]) : -1]; }
   if (pr){
     const D = M.anaOf(f, pr, fpOf(E, ci).blOn, U), pos = D.peakMarks.map(m=> m.pos);
     o.plot = [[U.minArr(f.x), U.maxArr(f.x)], dg(f.x), dg(D.raw), dg(D.smoothed), D.base ? [dg(D.dense), dg(D.base)] : null, pos, D.fwhmMarks, M.markStyles(pos, D.fwhmMarks.map(m=> m.pos), S.panel.sel, S.panel.hov)];
