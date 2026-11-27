@@ -236,7 +236,7 @@ function fileCallbacks(S){
 }
 function removeAll(S){
   S.allFiles.length=0;
-  cards(S).forEach(a=>{ const e = S.live.get(a.id); if (a.type === 'scherrer' && e) e.inst.clear(); const s = a.states.scherrer; if (a.type !== 'scherrer' && s){ s.perParams = []; s.manualPeaks = []; s.removedPeaks = []; } });
+  cards(S).forEach(a=>{ const e = S.live.get(a.id); if (a.type === 'scherrer' && e) e.inst.clear(); const s = a.states.scherrer; if (a.type !== 'scherrer' && s){ s.perParams = []; s.manualPeaks = []; s.removedPeaks = []; if (Array.isArray(s.cif)) s.cif = []; } });
   S.loadAlerts = ''; S.leftOut = ''; S.uploadAlerts = ''; afterFilesChange(S);
 }
 
@@ -276,7 +276,7 @@ function addPattern(S, p, existing){
     const e = S.live.get(a.id);
     if (a.type === 'scherrer' && e) e.inst.addFile();
     const s = a.states.scherrer;
-    if (a.type !== 'scherrer' && s){ s.perParams.push({...s.shared}); s.manualPeaks.push([]); s.removedPeaks.push([]); }
+    if (a.type !== 'scherrer' && s){ s.perParams.push({...s.shared}); s.manualPeaks.push([]); s.removedPeaks.push([]); if (Array.isArray(s.cif)) s.cif.push(null); }
   });
 }
 
@@ -490,9 +490,19 @@ function buildCard(S, a, card, prev){
   S.live.set(a.id, { inst, el });
   placeRes(S);
 }
+/* The tab's CIFs (v575), for the Scherrer cards' samples: every Rietveld card's phases' and
+   every Scherrer card's samples', in the cards' order (xrd-peaks-model.js cifPool takes each
+   once); and each Scherrer card's selector made again, as a step committed may have changed
+   them (a phase added or removed, a sample's CIF chosen). */
+function cifPool(S){
+  const out = [];
+  eachCard(S, e=> out.push(...e.inst.cifs()));
+  return out;
+}
+const syncCifs = S => eachCard(S, (e, a)=>{ if (a.type === 'scherrer') e.inst.syncCifs(); });
 // A card's panel's host (xrd-peaks.js's and xrd-rv.js's host).
 function cardHost(S, a, el){
-  return { files: ()=> S.files, allFiles: ()=> S.allFiles, idx: ()=> S.curIdx, step: d => step(S, d), commit: ()=> S.hist.commit(),
+  return { files: ()=> S.files, allFiles: ()=> S.allFiles, idx: ()=> S.curIdx, step: d => step(S, d), commit: ()=>{ S.hist.commit(); syncCifs(S); }, cifs: ()=> cifPool(S),
     instr: ()=> S.stdPeaks.instrModel(), irf: ()=> S.stdRv.irf(), hidden: ()=> S.deck.isFolded(a) || !S.shown(),
     // (its tab not on show: nothing drawn, the tab's redraw draws it as it is shown; the
     // card still the one of its deck, not closed)

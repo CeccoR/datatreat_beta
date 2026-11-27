@@ -25,18 +25,14 @@ was proposed; nothing here is in the code yet.
   standard shows at each angle) so the sample's Kα1 width is what is sized. Without
   a standard nothing says how the width varies: no Caglioti can be invented, and
   nothing is done.
-- **Peak assignment across samples (crystallite size by peak).** Peaks are matched
-  in one greedy sweep in order of 2θ: each joins the current reflection if its
-  sample is not in it yet and it lies within √(w² + w̄²) of the reflection's mean
-  position (w its FWHM, w̄ the reflection's mean FWHM), else it starts a new one. It
-  is order-dependent and compares against the mean only, so two reflections closer
-  than about one FWHM can swap peaks. (The Rietveld card's size by peak needs none of
-  this: its reflections are its hkl.) Proposed, for the Scherrer card: (1) an optimal
-  assignment that keeps the order in 2θ (peaks cannot cross): each sample's peaks
-  aligned to one list of reflections by dynamic programming, at the least total distance
-  in widths, a peak left unpaired at a cost, in place of the sweep; (2) with a CIF at
-  hand (the Rietveld card's phases), each peak given its calculated hkl, so that the
-  reflections are named, (110), (200)…, alike in every sample.
+- **Scherrer: a sample's CIF (v575, done: the matching across samples gone).** Each sample
+  takes one CIF or none and its peaks are named by its phase's reflections (within half the
+  FWHM, 0.1° at least). Left for later: (1) the hkl ticks drawn on the sample's plot, as the
+  Rietveld card draws them before a refinement; (2) the reflections at Kα2 too, for a peak of
+  the doublet resolved at high angle (unassigned now, where it is more than its tolerance
+  from the Kα1 line); (3) a sample's cell shifted from its CIF's (a solid solution, strain, a
+  displacement): a zero or a cell refined from the assigned peaks before they are named again,
+  as the tolerance is fixed.
 - **Free shape: a size distribution and a texture refined with the solid (round 2's open
   limits).** Round 2 (research/free-shape/round2/VALIDATION.md) leaves both as model errors
   the solid takes up: a log-normal size distribution gives every sphere carrying one a

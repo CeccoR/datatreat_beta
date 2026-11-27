@@ -20,7 +20,6 @@ import { fileSafe } from './cards.js';
 import { Plot } from './plot.js';
 import { PLOT_DL_ICON, CSV_ICON } from './modcharts.js';
 import { snavHtml, snav } from './snav.js';
-import { decodeText } from './textdata.js';
 import { fitSettings } from './xrd-rietveld.js';
 import { shapeView } from './xrd-shape3d.js';
 import { cellView } from './xrd-cell3d.js';
@@ -211,7 +210,7 @@ function cardState(host, root, o){
    too (sel: an undo goes back to its step's, a project saved reopens on it), but a click on
    its row is no change, and its record held the one before till the next (to v517 a reload
    showed it). csvEntries: every refined pattern's curves, one row per pattern and phase,
-   the peak widths. */
+   the peak widths. cifs: its phases' CIFs, for the Scherrer cards' samples (v575). */
 function cardApi(S){
   return {
     res: S.res,
@@ -231,6 +230,7 @@ function cardApi(S){
     restore(s, step){ restore(S, s, step); },
     csvEntries(pre){ return M.csvTables(pre || '', S.host.files(), S.results, { curves: (f, r)=> curvesOf(S, f, r), stale: (f, r)=> staleOf(S, f, r), std: S.std }, { data: fmtData, line: csvLine, decimal: settings.decimal }); },
     setName(n){ S.csvPre = n ? n + ' - ' : ''; nameFiles(S); },
+    cifs: ()=> S.phases.map(q=> ({ file: q.file, cif: q.cif })),
   };
 }
 function refresh(S, preserve){
@@ -916,27 +916,13 @@ function fitSide(S){
     S.cellV.redraw();
   });
 }
-// CIFs read into phases (xrd-rv-model.js newPhase), the first of them shown.
+// CIFs read (xrd-rv-model.js readCifs, as a Scherrer card reads its samples') into phases
+// (newPhase), the first of them shown.
 async function addCifs(S, fileList){
   if (M.locked(S)) return;
-  const errs = [];
-  let first = null;
-  for (const file of fileList){
-    try {
-      // A file dropped may be any (the picker offers .cif alone): one not named so is read
-      // all the same, a CIF under another name taken and anything else said (parseCif: "Not
-      // a CIF: …"), but not one larger than any CIF of a phase, a pattern or an image.
-      if (!/\.cif$/i.test(file.name) && file.size > 4e6) throw new Error('not a CIF file (.cif).');
-      // (its encoding found as the text files' are, textdata.js: UTF-16 too, which
-      // file.text(), UTF-8 alone, read as no CIF to v493)
-      const text = decodeText(new Uint8Array(await file.arrayBuffer()));
-      const prep = M.prepOf(text, file.name);
-      const q = M.newPhase(S.nextId++, text, file.name, prep, S.phases.length, S.std);
-      S.phases.push(q);
-      if (first == null) first = q.id;
-    } catch(e){ errs.push([file.name, e.message]); }
-  }
-  if (first != null) S.sel = first;
+  const { got, errs } = await M.readCifs(fileList);
+  got.forEach(c=> S.phases.push(M.newPhase(S.nextId++, c.text, c.file, c.prep, S.phases.length, S.std)));
+  if (got.length) S.sel = S.phases[S.phases.length - got.length].id;
   draw(S, true); renderSettings(S); S.host.commit();
   // (an error in the status's place, "Not added: {file}: {why}.": v571, X07; to v570 grey,
   // "⚠ {file}: {message} · …")

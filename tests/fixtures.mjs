@@ -9,6 +9,35 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const CIF = path.join(HERE, 'fixtures', 'SrTiO3.cif');
+/* A tetragonal perovskite, made up (BaTiO₃-like, its atoms in P1: P4/mmm found from them,
+   a = 3.905, c = 3.93 Å): a Scherrer sample's CIF (v575) beside the fixture's SrTiO₃. The
+   fixture's patterns (cubic, a = 3.905 Å) read with it have peaks where one reflection falls
+   within half a FWHM, (100), (111), (200), and one where two do, (110)/(101). */
+export const TETRA_CIF = `data_tetra
+_cell_length_a 3.905
+_cell_length_b 3.905
+_cell_length_c 3.93
+_cell_angle_alpha 90
+_cell_angle_beta 90
+_cell_angle_gamma 90
+_chemical_formula_sum 'Ba1 Ti1 O3'
+_cell_formula_units_Z 1
+loop_
+_symmetry_equiv_pos_as_xyz
+'x, y, z'
+loop_
+_atom_site_label
+_atom_site_type_symbol
+_atom_site_fract_x
+_atom_site_fract_y
+_atom_site_fract_z
+_atom_site_B_iso_or_equiv
+Ba1 Ba 0 0 0 0.5
+Ti1 Ti 0.5 0.5 0.5 0.5
+O1 O 0.5 0.5 0 0.6
+O2 O 0.5 0 0.5 0.6
+O3 O 0 0.5 0.5 0.6
+`;
 
 // A seeded uniform generator (an LCG), and a normal one from it (Box–Muller).
 export function rng(seed){
@@ -179,7 +208,8 @@ export function makeTiff({ W = 256, H = 266, bits = 8, strip = 10, sign = 'Sampl
 export const tif = (name, o)=> ({ name, mimeType: 'image/tiff', buffer: makeTiff(o) });
 
 /* Every module's set, written to a fresh temporary directory: { dir, files: { mod: [paths] },
-   std, cif, remove() }. The XRPD set has 3 patterns (s00–s02) and a standard-like 4th (s11). */
+   std, cif, tetra, remove() }. The XRPD set has 3 patterns (s00–s02) and a standard-like 4th
+   (s11); its CIFs the fixture's SrTiO₃ (cif) and the tetragonal one above (tetra). */
 export function writeFixtures(){
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'datatreat-fx-'));
   const put = (name, buf)=>{ const p = path.join(dir, name); fs.writeFileSync(p, buf); return p; };
@@ -193,7 +223,7 @@ export function writeFixtures(){
       put('img3.tif', makeTiff({ sign: 'S3', pixelNm: 50, mag: 2500, seed: 3, extraMain: 'Note=<i data-x=1>meta\r\n' }))],
   };
   const std = put('s11.xrdml', xrdml(11));
-  return { dir, files, std, cif: CIF, put, remove(){ fs.rmSync(dir, { recursive: true, force: true }); } };
+  return { dir, files, std, cif: CIF, tetra: put('BaTiO3_tetra.cif', TETRA_CIF), put, remove(){ fs.rmSync(dir, { recursive: true, force: true }); } };
 }
 // How many rows each module's file list shows for its set (an EPR pair is one file).
 export const ROWS = { tauc: 2, xrd: 3, gc: 2, epr: 2, sem: 3 };

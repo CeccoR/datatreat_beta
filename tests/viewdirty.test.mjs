@@ -139,6 +139,9 @@ test('XRPD: the size chart by sample / by peak and a card\'s fold a step, no "*"
   try {
     await openModule(page, 'xrd');
     await loadFiles(page, 'xrd', env.fx.files.xrd);
+    // (a sample with a CIF: the size chart's chips there are, v575)
+    await page.setInputFiles('#xrdA1CifInput', env.fx.cif);
+    await page.waitForSelector('#xrdA1SizeBy [data-size-by="peak"]', { state: 'attached' });
     await saveAs(page, 'View XRPD');
     const st = async ()=> (await moduleState(page, 'xrd')).cards[0];
     assert.equal((await st()).type, 'scherrer');

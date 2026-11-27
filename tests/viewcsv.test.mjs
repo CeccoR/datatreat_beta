@@ -3,7 +3,8 @@
    whichever it shows: every option, side by side.
    - GC: the gas chips (H₂ / O₂, Analysis and Results): every CSV has every gas the samples
      have (to v529 the Results' choice alone);
-   - XRPD: the size chart by sample / by peak, of a Scherrer card and of a Rietveld one: its
+   - XRPD: the size chart by sample / by peak, of a Scherrer card (its first sample given the
+     fixture's CIF: v575, the chart charts the samples with one) and of a Rietveld one: its
      CSV button gives both files (to v529 the one on show), the module's export the same;
    - DRS: the E_g chips (x-axis / baseline): Eg.csv has both readings (as it had).
    Each export taken whole (the project bar's CSV) and from the chart's own button, before
@@ -61,6 +62,7 @@ test('XRPD Scherrer: the size chart\'s CSV by sample and by peak, whichever it s
   try {
     await openModule(page, 'xrd');
     await loadFiles(page, 'xrd', env.fx.files.xrd);
+    await page.setInputFiles('#xrdA1CifInput', env.fx.cif);
     const peak = '#xrdA1SizeBy [data-size-by="peak"]', sample = '#xrdA1SizeBy [data-size-by="sample"]';
     await page.waitForSelector(peak, { state: 'attached' });
     const z0 = await all(page), c0 = await chartCsv(page, '#xrdA1SizeBarSvg');

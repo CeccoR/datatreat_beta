@@ -12,12 +12,15 @@
    Here the page: the instance's state (S), its fields, plots, table and add-peak mode, and
    their listeners. Each is a function at module level of S, not a closure inside
    createPeakAnalysis (to v560 one of 908 lines): what a listener holds is what it is handed.
+   (v575) Each sample's CIF, chosen among the tab's or read here, names its peaks by its
+   phase's reflections, and the Results chart the sizes by species.
 ========================================================= */
-import { esc, fmtNum, csvLine, linspace, interpLinear, meanArr, stdArr, boxStats, maxArr, minArr, X_SVG, guardNumericInput, guardNumberInputs, fitCsvIcons, barNames, barChipYmax, NORM_OPTIONS, normOf, keeper } from './utils.js';
+import { esc, fmtNum, csvLine, linspace, interpLinear, meanArr, stdArr, boxStats, maxArr, minArr, X_SVG, guardNumericInput, guardNumberInputs, fitCsvIcons, barNames, barChipYmax, NORM_OPTIONS, normOf, keeper, boxHtml } from './utils.js';
 import { svgEl, Plot, axisReadout } from './plot.js';
 import { meanStep, widthText } from './smooth.js';
 import { PLOT_DL_ICON, CSV_ICON } from './modcharts.js';
 import { snavHtml, snav } from './snav.js';
+import { readCifs, notAddedLines, phaseReflections } from './xrd-rv-model.js';
 import * as M from './xrd-peaks-model.js';
 import * as H from './xrd-peaks-html.js';
 
@@ -41,6 +44,18 @@ const atOrigin = P => P.xmin === P._origXmin && P.xmax === P._origXmax && P.ymin
    processing (modelOf). A tab woken, an undo to widths used before, a card made again
    take them as made (to v517 a card kept its own, and a tab shown again made all again). */
 const smoothKept = keeper('xrd-smoothing'), procKept = keeper('xrd-peaks', 8), modelOf = new WeakMap();
+/* (v575) A phase's reflections over a pattern's range at a wavelength (xrd-rv-model.js
+   phaseReflections), kept by the phase (one object for one CIF: prepOf) for each; and a
+   sample's assignment (xrd-peaks-model.js sampleAssign), by its processing, under its CIF,
+   λ and 2θ (assignOf). */
+const reflKept = new WeakMap(), asgKept = new WeakMap();
+function reflOf(prep, lam, x0, x1){
+  let m = reflKept.get(prep);
+  if (!m) reflKept.set(prep, m = new Map());
+  const k = lam + '|' + x0 + '|' + x1;
+  if (!m.has(k)) m.set(k, phaseReflections(prep, lam, x0, x1));
+  return m.get(k);
+}
 /* utils.js's, modcharts.js's and snav.js's helpers, which need a page to load, as the
    calculations and the markup take them (xrd-peaks-model.js, xrd-peaks-html.js: no page,
    imported by Node's tests too). */
@@ -60,6 +75,8 @@ export const STD_INFO = H.STD_INFO;
      openStd()        open the standard's modal (samples)
      allFiles()       every file loaded, for the steps of those left out (samples)
      hidden()         the card is folded: nothing is drawn
+     cifs()           the tab's CIFs, { file, cif } (samples: every Rietveld card's phases'
+                      and every Scherrer card's samples', v575)
    }
    o: { prefix, standard } */
 export function createPeakAnalysis(host, root, o){
@@ -69,6 +86,7 @@ export function createPeakAnalysis(host, root, o){
   wireModes(S);
   wireFields(S);
   wireNav(S);
+  wireCif(S);
   wirePeaks(S);
   return apiOf(S);
 }
@@ -95,9 +113,13 @@ export function createPeakAnalysis(host, root, o){
                           subtracted (its box ticked, the default) or not; it goes with its
                           width, under the width's all / one (paramMode.blWin). Absent
                           (projects before v463) is on.
-     sizeBy               what the crystallite-size box plot is by: each sample's peaks
-                          ('sample'), or each reflection the samples share, over the
-                          samples ('peak')
+     cifs                 per file: its CIF, { file, cif }, or null (v575: its species, whose
+                          reflections name its peaks)
+     oldGroups            a project of an older version that matched its peaks across
+                          samples: its note in the card, until a CIF is chosen
+     sizeBy               what the crystallite-size box plot is by: each sample's peaks of its
+                          species ('sample'), or each reflection of a species, over its
+                          samples ('peak'; to v574 each reflection the samples shared)
      stepNote             the chips a project's conversion turned to one, its patterns'
                           steps differing (restore), whose note shows under the fields until
                           each is shared again or the note dismissed
@@ -115,8 +137,11 @@ export function createPeakAnalysis(host, root, o){
                           out, taken in or removed, or a state loaded (refresh: v569)
      K                    each view's key or markup as last drawn (ana: the plot's, step:
                           the step note's, table, cag: the Caglioti box's, stack, stackLeg:
-                          its legend's, size: the size chart's, chips, note: its note's)
+                          its legend's, size: the size chart's, chips, note: its note's;
+                          cif: the CIF selector's options, cifNote: the notes under it)
      cardName             the card's name, its downloads'
+     pool, cifSaid        the CIFs its selector offers (xrd-peaks-model.js cifPool), and what
+                          the last CIF read said (its refusal), under it
      hoverRaf             the frame a mark's hover is cleared in
      nav                  its sample selector (snav.js; none on the standard's)
      A                    its add-peak mode: { on, idx (the guide's index on the pattern),
@@ -135,12 +160,12 @@ function makeState(host, root, o){
     host, root, res, p, std,
     $: id => root.querySelector('#' + p + id) || (res && res.querySelector('#' + p + id)),
     fields: M.fieldInputs(std),
-    processed: [], manualPeaks: [], removedPeaks: [], perParams: [],
+    processed: [], manualPeaks: [], removedPeaks: [], perParams: [], cifs: [], oldGroups: false,
     paramMode: { ...M.modeDef(std) }, shared: { ...M.sharedDef(std) },
     sizeBy: 'sample', stepNote: [], heldPts: {}, norm: 'global',
     panel: { sel:null, hov:null }, ana: null, stack: null, fullView: false,
-    K: { ana: '', step: '', table: '', cag: '', stack: '', stackLeg: '', size: '', chips: '', note: '' },
-    cardName: '', hoverRaf: null, nav: null, A: null,
+    K: { ana: '', step: '', table: '', cag: '', stack: '', stackLeg: '', size: '', chips: '', note: '', cif: '', cifNote: '' },
+    cardName: '', pool: [], cifSaid: '', hoverRaf: null, nav: null, A: null,
   };
 }
 // What it gives xrd.js.
@@ -169,6 +194,10 @@ function apiOf(S){
     shows: ()=> M.showsOf(S.panel),
     showNext: v => M.showNext(S.panel, v),
     instrModel: ()=> instrModel(S),
+    // Its samples' CIFs, among those of the tab (xrd.js cifPool), and its selector's
+    // options made again as they change (v575).
+    cifs: ()=> S.cifs.filter(Boolean),
+    syncCifs: ()=> syncCif(S),
     // The downloads named after the card ("<name> - peaks.csv"), the size chart's by what it shows.
     setName: n => setName(S, n),
     csvEntries: pre => csvEntries(S, pre),
@@ -299,7 +328,7 @@ function writeStoreToInputs(S){
   }
   // (disabled, not hidden: the width means nothing with no baseline)
   S.$('BlOn').checked = pr.blOn; S.$('BlWin').disabled = !pr.blOn;
-  if (!S.std){ S.$('Norm').value = S.norm; syncLambdaSelect(S); }
+  if (!S.std){ S.$('Norm').value = S.norm; syncLambdaSelect(S); syncCif(S); }
   syncHints(S);
   syncStepNote(S);
 }
@@ -385,9 +414,20 @@ function instrModel(S){
 }
 // The samples' correction, from the standard's model (host.instr).
 const instrOf = S => S.std ? null : S.host.instr();
-// The classic crystallite sizes of a sample's kept peaks, summarised (xrd-peaks-model.js
-// sampleSizes).
-const sampleSizeStats = (S, i)=> M.sampleSizes(S.processed[i], paramsOf(S, i), instrOf(S), S.std, U);
+// Sample k's assignment (xrd-peaks-model.js sampleAssign: null with no CIF), kept (asgKept).
+function assignOf(S, k){
+  const pr = S.processed[k], q = S.cifs[k], f = files(S)[k];
+  if (S.std || !pr || !q || !f) return null;
+  const lam = paramsOf(S, k).lambda, key = [idOf(q), lam, idOf(f.x)].join('|'), c = asgKept.get(pr);
+  if (c && c.key === key) return c.A;
+  const A = M.sampleAssign(f, pr, lam, q, reflOf);
+  asgKept.set(pr, { key, A });
+  return A;
+}
+const assignAll = S => files(S).map((_, k)=> assignOf(S, k));
+// The classic crystallite sizes of a sample's kept peaks (with a CIF, those assigned),
+// summarised (xrd-peaks-model.js sampleSizes).
+const sampleSizeStats = (S, i)=> M.sampleSizes(S.processed[i], paramsOf(S, i), instrOf(S), S.std, U, assignOf(S, i));
 // Re-derive everything downstream of a peak edit (add/remove/reset) on file `idx`.
 function refreshAfterPeakEdit(S, idx){
   reprocessOne(S, idx);
@@ -554,7 +594,7 @@ function renderTable(S){
   if (S.std) renderCaglioti(S);
   const fs = files(S), idx = Math.min(curIdx(S), fs.length - 1);
   const kp = fs.length && S.processed[idx] && !S.std ? paramsOf(S, idx) : null;
-  const key = !fs.length || !S.processed[idx] ? 'none' : [idx, idOf(S.processed[idx]), ...(kp ? [kp.K, kp.lambda, idOf(instrOf(S))] : []), S.panel.sel, wrap.getClientRects().length > 0].join('|');
+  const key = !fs.length || !S.processed[idx] ? 'none' : [idx, idOf(S.processed[idx]), ...(kp ? [kp.K, kp.lambda, idOf(instrOf(S)), idOf(assignOf(S, idx))] : []), S.panel.sel, wrap.getClientRects().length > 0].join('|');
   if (key === S.K.table) return;
   S.K.table = key;
   if (!fs.length || !S.processed[idx]){ wrap.innerHTML=''; const rb = S.$('PkReset'); if (rb) rb.style.display = 'none'; fitCsvIcons(S.root); return; }
@@ -569,7 +609,7 @@ function paintTable(S, wrap, idx){
   if (resetBtn) resetBtn.style.display = (hasRemoved || hasManual) ? '' : 'none';
   const pks = S.processed[idx].peaks.filter(pk=>!pk.removed);
   if (!pks.length){ wrap.innerHTML = H.NO_PEAKS; return; }
-  wrap.innerHTML = H.peakTableHtml(pks, { std: S.std, m: instrOf(S), fp: paramsOf(S, idx), picked: S.panel.sel, st: S.std ? null : sampleSizeStats(S, idx) }, U);
+  wrap.innerHTML = H.peakTableHtml(pks, { std: S.std, m: instrOf(S), fp: paramsOf(S, idx), picked: S.panel.sel, st: S.std ? null : sampleSizeStats(S, idx), A: assignOf(S, idx) }, U);
   wireRows(S, wrap, idx);
   fitCsvIcons(S.root);
 }
@@ -640,36 +680,43 @@ function drawStackedResults(S, curves){
     { raw: { xs: fs[k].x, ys: norm1 }, label: fs[k].label, key: fs[k].name }));
   S.K.stack = key;
 }
-// The reflections the samples share (xrd-peaks-model.js sizeReflections).
-const reflections = S => M.sizeReflections(S.processed, paramsAll(S), instrOf(S));
-// The chart as last drawn: what it draws (its rows, the chips in its corner) and its size;
-// the chips and the note under it as last written.
+/* What the size chart shows (v575; to v574 every sample, and by peak the reflections the
+   samples shared, matched by position): the samples' assignments (A) and how many have a
+   CIF (n), its rows by what the chips ask (by peak where a peak is assigned: ok), the
+   species and the series (xrd-peaks-model.js sizeRows, speciesOf, sizeSeries). */
+function sizeView(S){
+  const fs = files(S), A = assignAll(S), fps = paramsAll(S), m = instrOf(S);
+  const byPeak = M.sizeRows('peak', fs, A, S.processed, fps, m, U), ok = byPeak.length > 0, by = ok ? S.sizeBy : 'sample';
+  const rows = by === 'peak' ? byPeak : M.sizeRows('sample', fs, A, S.processed, fps, m, U);
+  return { A, n: A.filter(Boolean).length, ok, by, rows, SER: M.sizeSeries(rows, M.speciesOf(A)) };
+}
+// The chart as last drawn: what it draws (its rows, series, the chips in its corner) and its
+// size; the chips and the note under it as last written.
 function renderSizeChart(S){
   const chips = S.$('SizeBy'), note = S.$('SizeByNote'), svg = S.$('SizeBarSvg');
-  const R = reflections(S), ok = M.byPeakOk(R), by = ok ? S.sizeBy : 'sample';
-  // Two chips, one at a time; with a single sample there is nothing to compare by peak.
-  const ch = H.sizeChipsHtml(R.idxs.length, ok, by);
+  const V = sizeView(S);
+  // Two chips, one at a time; with no sample with a CIF, none.
+  const ch = H.sizeChipsHtml(V.n, V.ok, V.by);
   if (chips && ch !== S.K.chips){ S.K.chips = ch; chips.innerHTML = ch; }
-  const rows = by === 'peak' ? M.reflectionRows(R, instrOf(S), U)
-    : files(S).map((f, k)=>({name:f.name, label:f.label, ...sampleSizeStats(S, k)}));
   // (shown before it is measured: one hidden measures nothing)
-  const hide = !files(S).length || !S.processed.length || !M.sizeTops(rows).length;
+  const hide = !files(S).length || !S.processed.length || !M.sizeTops(V.rows, V.SER).length;
   if (svg && !hide){ svg.style.display = ''; svg.closest('.plot-wrap').style.display = ''; }
-  const key = hide ? 'none' : JSON.stringify([rows, ch, sizeOf(svg)]);
-  if (key !== S.K.size){ S.K.size = ''; drawSizeBarChart(S, rows, chips); S.K.size = key; }
-  // What is left out by peak: the reflections not every sample has, and whose they are.
-  const nt = H.sizeNoteHtml(R, by, files(S).map(f=> f.label), U);
+  const key = hide ? 'none' : JSON.stringify([V.rows, V.SER, ch, sizeOf(svg)]);
+  if (key !== S.K.size){ S.K.size = ''; drawSizeBarChart(S, V.rows, V.SER, chips); S.K.size = key; }
+  // What it leaves out: the samples with no CIF.
+  const nt = H.sizeNoteHtml(files(S).filter((_, k)=> !V.A[k]).map(f=> f.label), U);
   if (note && nt !== S.K.note){ S.K.note = nt; note.innerHTML = nt; }
-  sizeNames(S);
+  sizeNames(S, V.by);
 }
-/* Per-sample crystallite size as a box plot of its peaks' sizes — one box per sample,
-   two side by side when a standard is in use (size, and corrected) — with the mean ±
-   the standard deviation written above (its series and their tops: xrd-peaks-model.js
-   sizeSeries, sizeTops; its layout: barLayout). */
-function drawSizeBarChart(S, rows, chips){
+/* The crystallite sizes as box plots — by sample, a box per sample with a CIF over its
+   assigned peaks' sizes; by peak, a box per reflection of a species over its samples' — each
+   species a series, two boxes side by side when a standard is in use (size, and
+   corrected), with the mean ± the standard deviation written above (its series and their
+   tops: xrd-peaks-model.js sizeSeries, sizeTops; its layout: barLayout). */
+function drawSizeBarChart(S, rows, SER, chips){
   const svg = S.$('SizeBarSvg'); if (!svg) return;
   const wrap = svg.closest('.plot-wrap'), legend = S.$('SizeBarLegend');
-  const SER = M.sizeSeries(rows), tops = M.sizeTops(rows, SER);
+  const tops = M.sizeTops(rows, SER);
   if (!files(S).length || !S.processed.length || !tops.length){
     svg.style.display='none'; if(wrap)wrap.style.display='none'; if(legend)legend.innerHTML=''; return;
   }
@@ -689,13 +736,14 @@ function drawSizeBarChart(S, rows, chips){
   plot.drawAxes();
   drawBoxes(plot, rows, SER, L, fit);
   plot.attachTools(wrap);
-  if (legend) legend.innerHTML = H.sizeLegendHtml(SER);
+  if (legend) legend.innerHTML = H.sizeLegendHtml(SER, U);
 }
-// Each row's boxes (a pair: size and corrected), their labels, and its name under them.
+// Each row's boxes (its species' series, a pair: size and corrected), their labels, and its
+// name under them.
 function drawBoxes(plot, rows, SER, L, fit){
   for (let k=0;k<L.n;k++){
     const xc=k+1, r = rows[k];
-    SER.forEach((m, mi)=>{
+    M.seriesOf(SER, r).forEach((m, mi)=>{
       const b = r[m.k+'Box'];
       if (!b) return;
       const off = L.offOf(mi);
@@ -705,11 +753,10 @@ function drawBoxes(plot, rows, SER, L, fit){
     plot.tickLabel(xc, fit.labels[k], fit.rot, r.label, r.name);
   }
 }
-// The chart's image follows what it shows, its CSVs never (xrd-peaks-model.js
-// sizeDlNames). Both named after the card.
-function sizeNames(S){
-  if (!S.res) return;
-  const R = reflections(S), by = M.byPeakOk(R) ? S.sizeBy : 'sample', N = M.sizeDlNames(S.cardName ? S.cardName + ' - ' : '', by);
+// The chart's image follows what it shows (by: sizeView's), its CSVs never
+// (xrd-peaks-model.js sizeDlNames). Both named after the card.
+function sizeNames(S, by){
+  const N = M.sizeDlNames(S.cardName ? S.cardName + ' - ' : '', by);
   const wrap = S.$('SizeBarSvg').closest('.plot-wrap');
   wrap.querySelectorAll('.plot-dl-btn, .plot-csv-btn').forEach(b=>{
     b.dataset.csvNames = N.csv;
@@ -725,11 +772,59 @@ function setName(S, n){
     el.querySelectorAll('[data-dl-base]').forEach(b=>{ b.dataset.dlName = pre + b.dataset.dlBase; });
     el.querySelectorAll('.plot-wrap').forEach(w=>{ const d = w.querySelector('.plot-dl-btn[data-csv-base]'), c = w.querySelector('.plot-csv-btn'); if (d && c) c.dataset.csvNames = d.dataset.csvNames; });
   });
-  sizeNames(S);
+  if (S.res) sizeNames(S, sizeView(S).by);
 }
 // The CSVs, each named after the card (pre: "<name> - "); the standard's in one file
 // (xrd-peaks-model.js csvTables).
-const csvEntries = (S, pre)=> M.csvTables(pre, { files: files(S), procs: S.processed, fps: paramsAll(S), m: instrOf(S), norm: S.norm, std: S.std }, U);
+const csvEntries = (S, pre)=> M.csvTables(pre, { files: files(S), procs: S.processed, fps: paramsAll(S), asg: assignAll(S), m: instrOf(S), norm: S.norm, std: S.std }, U);
+
+/* ---- The sample's CIF (v575) ----
+   Its selector: none, the tab's CIFs (host.cifs: every Rietveld card's phases' and every
+   Scherrer card's samples', each once: xrd-peaks-model.js cifPool), and Add CIF…, which reads
+   one for the sample on show as the Rietveld card reads its phases (xrd-rv-model.js
+   readCifs). Its options made again as the card is drawn, as another card's change is
+   committed (xrd.js syncCifs) and as it is focused or pressed; under it, what the last CIF
+   read said (its refusal, until the next CIF chosen or read, or a state put back) and an
+   older version's note (readState's oldGroups). */
+function wireCif(S){
+  if (S.std) return;
+  const sel = S.$('Cif'), inp = S.$('CifInput');
+  ['focus', 'pointerdown'].forEach(t=> sel.addEventListener(t, ()=> syncCif(S)));
+  sel.addEventListener('change', ()=> onCif(S));
+  inp.addEventListener('change', ()=>{ const fl = [...inp.files]; inp.value = ''; if (fl.length) addCif(S, fl, files(S)[curIdx(S)]); });
+}
+function syncCif(S){
+  const sel = S.$('Cif');
+  if (!sel) return;
+  S.pool = M.cifPool(S.host.cifs());
+  const opts = H.cifOptionsHtml(S.pool, U), k = curIdx(S), at = files(S)[k] ? M.poolAt(S.pool, S.cifs[k]) : -1;
+  if (opts !== S.K.cif){ S.K.cif = opts; sel.innerHTML = opts; }
+  sel.value = at >= 0 ? String(at) : '';
+  sel.disabled = !files(S).length;
+  const note = (S.oldGroups ? H.OLD_GROUPS : '') + S.cifSaid;
+  if (note !== S.K.cifNote){ S.K.cifNote = note; S.$('CifNote').innerHTML = note; }
+}
+// A choice: none, one of the pool's, or Add CIF… (the selector set back to the sample's own
+// until one is read).
+function onCif(S){
+  const v = S.$('Cif').value, k = curIdx(S);
+  if (v === 'add'){ syncCif(S); S.$('CifInput').click(); return; }
+  if (!files(S)[k]) return;
+  M.setCif(S, k, v === '' ? null : S.pool[+v]);
+  S.cifSaid = '';
+  cifChanged(S);
+}
+// CIFs read (the first that reads, for the sample f on show as they were picked; one not read
+// said in a compact box under the selector, "Not added: …", as the Rietveld card says it).
+async function addCif(S, fl, f){
+  const { got, errs } = await readCifs(fl);
+  S.cifSaid = errs.length ? boxHtml('bad', notAddedLines(errs).map(esc)) : '';
+  const k = files(S).indexOf(f);
+  if (got.length && k >= 0){ M.setCif(S, k, { file: got[0].file, cif: got[0].text }); cifChanged(S); }
+  else syncCif(S);
+}
+// A sample's CIF changed: the views that show it, a step of the history.
+function cifChanged(S){ syncCif(S); renderTable(S); renderResults(S); S.host.commit(); }
 
 /* ---- The peaks by hand: reset, the add-peak mode, the plot's and the table's clicks ---- */
 function wirePeaks(S){
@@ -887,5 +982,6 @@ function restore(S, s){
   // (and the steps of the files left out, which come back with their entries)
   const stAll = st.concat(!S.std ? S.host.allFiles().filter(f=> f.included === false).map(f=> meanStep(f.x)) : []);
   M.takeState(S, M.readState(s, S.std, st, stAll), normOf(M.objOf(s).norm));
+  S.cifSaid = '';
   writeStoreToInputs(S); syncModeButtons(S);
 }

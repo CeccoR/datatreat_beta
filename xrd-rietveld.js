@@ -1800,7 +1800,8 @@ function lowIndexAxes(q){
 // xrd-cryst classify) the conventional indices h·M, so they match the a, c reported:
 // anatase's first line is (101), not the primitive cell's (100). The member of the Laue
 // orbit read is chosen as reflections() chooses it: fewest negative indices, then the
-// largest. null when the cell is its own conventional cell.
+// largest. null when the cell is its own conventional cell. (Also a phase's reflections as
+// the Scherrer card names them, xrd-rv-model.js phaseReflections: v575.)
 function tickLabels(list, ops, M){
   if (!M) return null;
   const laue = [];
@@ -5668,7 +5669,7 @@ function weightFractions(phases, scales, cov){
 // Sample displacement in mm from the refined `disp` (deg): Δ2θ = −(2s/R)·cosθ.
 function displacementMm(model, disp){ return -disp*D2R*model.radius/2; }
 
-export { buildModel, calc, autoRefine, fitSettings, shapeOf, getParams, tch, displacementMm,
+export { buildModel, calc, autoRefine, fitSettings, shapeOf, getParams, tch, displacementMm, tickLabels,
          addLine, HG2_FLOOR, K_SCHERRER, siteU, lowIndexPlanes, strainFormsAt, lpFactor,
          phaseSites, OCC_MAX, axialNodes, axialOf, axialOn, bgInvOn, KIND_GROUP, shapeNamed };
 // autoRefine's stages, each tested alone (tests/autorefine.test.mjs)

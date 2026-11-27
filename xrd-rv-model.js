@@ -12,10 +12,11 @@
 ========================================================= */
 import { parseCif, expandAtoms, structureCell, checkComposition, cellMass, metric, reflections } from './xrd-cryst.js';
 import { readXrdmlInstrumentText } from './xrd-instr.js';
-import { buildModel, calc, fitSettings, phaseSites, bgInvOn, shapeNamed } from './xrd-rietveld.js';
+import { buildModel, calc, fitSettings, phaseSites, bgInvOn, shapeNamed, tickLabels } from './xrd-rietveld.js';
 import { spaceGroupName, spaceGroupSymbol } from './xrd-sg.js';
 import { fixed, isFixed, isObj } from './db.js';
 import { MSG } from './xrd-math.js';
+import { decodeText } from './textdata.js';
 
 const PHASE_COLORS = ['#d4a72c', '#c77dff', '#ff8a65', '#7cc4ff', '#e05f8a', '#9ccc65'];
 
@@ -85,6 +86,25 @@ function prepOf(text, fileName){
   PREPS.set(k, q);
   if (PREPS.size > 32) PREPS.delete(PREPS.keys().next().value);
   return q;
+}
+/* CIF files read (fileList: File objects): each one's text, its encoding found as the text
+   files' are (textdata.js: UTF-16 too, which file.text(), UTF-8 alone, read as no CIF to
+   v493), and its phase (prepOf); one that cannot be read, its name and why. A file dropped
+   may be any (the pickers offer .cif alone): one not named so is read all the same, a CIF
+   under another name taken and anything else said (parseCif: "Not a CIF: …"), but not one
+   larger than any CIF of a phase, a pattern or an image. The Rietveld card's phases and,
+   from v575, a Scherrer card's samples' CIFs (to v574 the Rietveld card's own loop).
+   → { got: [{ text, file, prep }], errs: [[file, why]] } */
+async function readCifs(fileList){
+  const got = [], errs = [];
+  for (const file of fileList){
+    try {
+      if (!/\.cif$/i.test(file.name) && file.size > 4e6) throw new Error('not a CIF file (.cif).');
+      const text = decodeText(new Uint8Array(await file.arrayBuffer()));
+      got.push({ text, file: file.name, prep: prepOf(text, file.name) });
+    } catch(e){ errs.push([file.name, e.message]); }
+  }
+  return { got, errs };
 }
 // The cell a phase is refined in, as a key: a result refined in another (the file's, before
 // v426 re-expressed supercells and orthohexagonal cells) does not belong to the phase now.
@@ -501,13 +521,23 @@ const exactJson = v => JSON.stringify(v, (k, x)=> typeof x === 'number' && (!Num
 // The scan's 2θ range, low end first (the host turns a scan run downwards round, and
 // the engine takes either order).
 const scanRange = f => { const a = f.x[0], b = f.x[f.x.length-1]; return a <= b ? [a, b] : [b, a]; };
+/* A phase's reflections (prep: prepPhase's) over 2θ from x0 to x1 at the wavelength lam (Å),
+   in 2θ order, each its 2θ and its hkl: from the cell and the symmetry its CIF gives, each
+   orbit of the Laue group once, those systematically absent left out (xrd-cryst.js
+   reflections), named by the conventional cell's indices as the engine's ticks are
+   (xrd-rietveld.js tickLabels). The ticks before a refinement (tickRows) and, from v575, the
+   reflections a Scherrer card assigns a sample's peaks to (xrd-peaks-model.js). */
+function phaseReflections(prep, lam, x0, x1){
+  const dmin = lam/(2*Math.sin(Math.min(89.9, x1/2)*Math.PI/180));
+  const list = reflections(prep.cell, prep.ops, dmin), lab = tickLabels(list, prep.ops, prep.constraint && prep.constraint.basis);
+  return list.map((r, i)=> ({ tt: 2*Math.asin(lam/(2*r.d))*180/Math.PI, hkl: lab ? [lab[3*i], lab[3*i + 1], lab[3*i + 2]] : [r.h, r.k, r.l] }))
+    .filter(r=> r.tt >= x0 && r.tt <= x1);
+}
 function tickRows(f, list){
   // Before a refinement the ticks sit where the file's cells put them, at Kα1 (over the
   // scan's range, whichever way it ran).
   const ins = instrOf(f) || {}, lam = ins.lam1 || 1.540598, [x0, x1] = scanRange(f);
-  const dmin = lam/(2*Math.sin(Math.min(89.9, x1/2)*Math.PI/180));
-  return list.map(q=> ({ color: q.color, name: q.prep.name,
-    tt: reflections(q.prep.cell, q.prep.ops, dmin).map(r=> 2*Math.asin(lam/(2*r.d))*180/Math.PI).filter(t=> t >= x0 && t <= x1) }));
+  return list.map(q=> ({ color: q.color, name: q.prep.name, tt: phaseReflections(q.prep, lam, x0, x1).map(r=> r.tt) }));
 }
 // The engine's ticks (each reflection at Kα1 where the refined cell puts it), one
 // row per phase in the phases' order.
@@ -1054,11 +1084,11 @@ function nextInto(S, v){
   S.cellNext = c && typeof c.key === 'string' && Array.isArray(c.R) ? { key: c.key, R: c.R } : null;
 }
 
-export { PHASE_COLORS, prepPhase, textKey, prepOf, cellKey, MODES, MODE, siteList, listOf, depOf, defSettings, stdSettings, cleanSettings, migrateSettings, engineOf,
+export { PHASE_COLORS, prepPhase, textKey, prepOf, readCifs, cellKey, MODES, MODE, siteList, listOf, depOf, defSettings, stdSettings, cleanSettings, migrateSettings, engineOf,
   HOLD_KEYS, HOLD_DEFAULT, START_RULE, FIT_DEF, FITS, FIT, fitTxt, readFit, cleanFit, formulaOf,
   SIZE_KINDS, hklShow, hklPlain, hklRuns, plotRuns,
   instrOf, bytesHeld, LAB6_ID, irfOf, sameIrf, lastUnusable, payloadFor, resultRecord,
-  resultPhases, curvesFrom, exactJson, scanRange, tickRows, groupTicks,
+  resultPhases, curvesFrom, exactJson, scanRange, phaseReflections, tickRows, groupTicks,
   sizesOf, sizeKinds, sizeMarks, fitUsed, csvTables, rowsFor, fitShown, naOf, autoInvOf, fitRefusal, stateOf, readState, resultsOf,
   idOf, resKey, curveKey, allPhases, stdPhase, phasesFor, locked, newPhase, dropPhase, keepLoaded, holdWith, fitNoteText, modeTitle, settingsKeyOf, fitEntry,
   runOf, NO_TICK, nothingText, failText, notAddedLines, msgOf, instrNoteKind, instrMsgs, NO_INSTR, runEndText, progressStatus, progressTell, waitStopText, stoppedText, stdQuestion, stdFailText, refineTitle, stdRunView, ROW_TITLES, rowLock,

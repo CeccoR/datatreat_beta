@@ -7,11 +7,15 @@
    the size chart draws; a sample's settings, the card's state saved and read back (a
    project's to v510, in points, converted); the CSVs. And (v561) what the card's wiring
    works out: its fields, the plot's curves and marks, the Results' stack and the size
-   chart's layout, the changes to its state (below: THE CARD'S WIRING, WORKED OUT).
+   chart's layout, the changes to its state (below: THE CARD'S WIRING, WORKED OUT). And
+   (v575) each sample's CIF, its species, and its peaks assigned to its phase's reflections
+   (below: THE SAMPLES' CIFS), which the sizes by species and by reflection are drawn from.
    utils.js's helpers (maxArr, meanArr, stdArr, boxStats, fmtNum, csvLine, linspace,
    interpLinear), which need a page to load, are handed in (u: xrd-peaks.js U).
 ========================================================= */
 import { boxSmooth, boxWeights, meanStep, widthText, ptsText } from './smooth.js';
+import { prepOf, phaseReflections } from './xrd-rv-model.js';
+import { hklText } from './xrd-math.js';
 
 // Index of the grid point nearest to a 2θ, by bisection: an axis need not be even (a scan
 // with points left out, xrd-instr.js, or listed positions). Up to v484 it was taken as
@@ -337,8 +341,8 @@ function instrBetaOf(m, twoTheta){
 }
 /* The 2θ span of the standard's peaks, each end widened by that peak's FWHM: beyond
    it the instrumental width is extrapolated (the Caglioti curve, or the end peaks'
-   widths held), not measured. Within a FWHM of an end peak a sample peak is that
-   same reflection, as the peaks are matched across samples, and needs no warning. */
+   widths held), not measured. Within a FWHM of an end peak a sample peak is taken for
+   that same reflection, and needs no warning. */
 function stdSpanOf(m){
   if (!m || !m.pts.length) return null;
   const a = m.pts[0], b = m.pts[m.pts.length-1];
@@ -378,16 +382,18 @@ function sizeSummary(raw, corr, isStd, showCorr, { meanArr, stdArr, boxStats }){
   };
   return { isStd, showCorr, ...one(raw, 'raw'), ...one(corr, 'corr') };
 }
-// The classic crystallite sizes of a sample's kept peaks (pr: its processing, fp: its
-// settings, m: the standard's model or null), summarised (sizeSummary), with how many are
-// narrower than the instrument and how many lie beyond the standard's peaks (span).
-function sampleSizes(pr, fp, m, std, u){
+/* The classic crystallite sizes of a sample's kept peaks (pr: its processing, fp: its
+   settings, m: the standard's model or null), summarised (sizeSummary), with how many are
+   narrower than the instrument and how many lie beyond the standard's peaks (span). A
+   sample with a CIF (A: its assignment, sampleAssign's; v575), those assigned to its
+   reflections alone: the sizes of its species. */
+function sampleSizes(pr, fp, m, std, u, A = null){
   const showCorr = !!m;
   const raw = [], corr = [];
   let below = 0, outside = 0;
   const span = showCorr ? stdSpanOf(m) : null;
   if (pr && !std){
-    pr.peaks.filter(pk=>!pk.removed).forEach(pk=>{
+    (A ? A.rows.filter(r=> r.refl.length).map(r=> r.pk) : pr.peaks.filter(pk=>!pk.removed)).forEach(pk=>{
       const s = scherrerD(pk.fwhmClassic, pk.detPos, fp.K, fp.lambda);
       if (isFinite(s)) raw.push(s);
       if (showCorr){ const sc = sizeCorr(pk.fwhmClassic, pk.detPos, fp.K, fp.lambda, m); if (isFinite(sc)) corr.push(sc); }
@@ -397,58 +403,120 @@ function sampleSizes(pr, fp, m, std, u){
   }
   return { ...sizeSummary(raw, corr, std, showCorr, u), below, outside, span };
 }
-/* The reflections the samples share: their peaks matched across samples by
-   position, each position taken as a value whose uncertainty is the peak's FWHM. Two
-   are the same reflection when they lie within one sigma of each other, √(w₁² + w₂²)
-   — against a reflection already holding several, its mean position and mean FWHM.
-   A reflection holds at most one peak per sample; `common` are those every sample
-   has, `extra` the rest. procs: the samples' processings, fps: their settings (one per
-   sample), m: the standard's model or null. */
-function sizeReflections(procs, fps, m){
-  const idxs = fps.map((_, k)=> k).filter(k=> procs[k]);
-  if (!idxs.length) return { idxs, common: [], extra: [] };
-  const corrOn = !!m;
-  const all = [];
-  idxs.forEach(k=>{
-    const fp = fps[k];
-    procs[k].peaks.filter(pk=> !pk.removed).forEach(pk=>{
-      const raw = scherrerD(pk.fwhmClassic, pk.detPos, fp.K, fp.lambda);
-      if (!isFinite(raw)) return;
-      all.push({ k, pos: pk.detPos, w: pk.fwhmClassic, raw, corr: corrOn ? sizeCorr(pk.fwhmClassic, pk.detPos, fp.K, fp.lambda, m) : NaN });
-    });
+/* The crystallite sizes as box plots, by species (v575; to v574 one series, every sample's):
+   by sample, a box per sample with a CIF over its assigned peaks' sizes; by peak, a box per
+   reflection of a species over its samples' sizes there; each species a series in its
+   colour, and with a standard in use its corrected sizes a second beside it, lighter; the
+   mean ± the standard deviation written above each box. */
+// The species' colours, in the order the samples bring them (the first the chart's colour of
+// one series to v574), and the lighter one of the corrected sizes.
+const SPECIES_COLORS = ['#3aa0ff', '#ff7a59', '#5fcf6a', '#c77dff', '#ffd24a', '#e05f8a'];
+const lighter = c => '#' + [1, 3, 5].map(i=> Math.round(parseInt(c.slice(i, i + 2), 16)*0.55 + 255*0.45).toString(16).padStart(2, '0')).join('');
+// The series (sps: the species' names; rows: sizeRows', each with its species' index sp):
+// each species that has a box, and its corrected sizes where a row of it has them.
+function sizeSeries(rows, sps){
+  const out = [];
+  sps.forEach((name, i)=>{
+    const own = rows.filter(r=> r.sp === i), color = SPECIES_COLORS[i % SPECIES_COLORS.length];
+    if (own.some(r=> r.rawBox)) out.push({ k:'raw', sp: i, name, color });
+    if (own.some(r=> r.corrBox)) out.push({ k:'corr', sp: i, name: name + ' corr.', color: lighter(color) });
   });
-  all.sort((a,b)=> a.pos - b.pos);
-  const groups = [];
-  for (const q of all){
-    const g = groups[groups.length-1];
-    if (g && !g.by.has(q.k) && Math.abs(q.pos - g.pos) < Math.hypot(q.w, g.w)){
-      g.by.set(q.k, q);
-      const ms = [...g.by.values()];
-      g.pos = ms.reduce((s, r)=> s + r.pos, 0) / ms.length;
-      g.w   = ms.reduce((s, r)=> s + r.w, 0) / ms.length;
-    } else groups.push({ pos: q.pos, w: q.w, by: new Map([[q.k, q]]) });
-  }
-  return { idxs, common: groups.filter(g=> g.by.size === idxs.length), extra: groups.filter(g=> g.by.size < idxs.length) };
+  return out;
 }
-// By peak there is something to show from two samples sharing a reflection on.
-const byPeakOk = R => R.idxs.length >= 2 && R.common.length > 0;
-// One box per reflection, its points the samples' sizes there.
-const reflectionRows = (R, m, u) => R.common.map(g=>{
-  const ps = [...g.by.values()];
-  return { name: `2θ ${g.pos.toFixed(2)}°`, label: `${g.pos.toFixed(2)}°`, pos: g.pos, ps,
-           ...sizeSummary(ps.map(q=> q.raw), ps.map(q=> q.corr).filter(isFinite), false, !!m, u) };
-});
-/* Per-sample crystallite size as a box plot of its peaks' sizes — one box per sample,
-   two side by side when a standard is in use (size, and corrected) — with the mean ±
-   the standard deviation written above. */
-// The series (a standard in use: two), and where each box ends on top: its whisker, or an
-// outlier above it.
-const sizeSeries = rows => [{ k:'raw', name:'size', color:'#3aa0ff' }].concat(rows.some(r=> r.corrBox) ? [{ k:'corr', name:'size corr.', color:'#ff7a59' }] : []);
+// A row's own series (its species': size, then corrected), and where each box ends on top:
+// its whisker, or an outlier above it.
+const seriesOf = (SER, r)=> SER.filter(m=> m.sp === r.sp);
 const boxTop = b => Math.max(b.hi, ...b.out);
-const sizeTops = (rows, SER = sizeSeries(rows)) => rows.flatMap(r=> SER.map(m=> r[m.k+'Box']).filter(Boolean).map(boxTop)).filter(v=> isFinite(v) && v > 0);
+const sizeTops = (rows, SER) => rows.flatMap(r=> seriesOf(SER, r).map(m=> r[m.k+'Box']).filter(Boolean).map(boxTop)).filter(v=> isFinite(v) && v > 0);
 // The largest of some maxima, for a global normalisation: 1 only when there is
 // nothing above zero to normalise by (a floor of 1 left data below 1 unnormalised).
 function topOf(maxima){ const m = Math.max(-Infinity, ...maxima); return m > 0 ? m : 1; }
+
+/* ---- The samples' CIFs (v575) ----
+   Each sample of a card may be given a CIF, one or none: its species is the phase the CIF
+   reads as (xrd-rv-model.js prepOf, as the Rietveld card reads its phases; the species' name
+   the phase's), its reflections those of that phase's cell and symmetry over the pattern's
+   range at the sample's wavelength (the λ its sizes take: phaseReflections), and each of its
+   peaks is assigned to the reflections within a tolerance of its 2θ, half its FWHM and 0.1°
+   at least (a peak with no FWHM: 0.1°): one there, that one; several, all of them, their hkl
+   together, (110)/(101); none, unassigned. A sample's sizes and those by reflection take its
+   assigned peaks alone; a sample with no CIF has its peaks listed, not grouped, and is in
+   neither. To v574 the samples' peaks were matched with one another by their positions,
+   which reflections closer than a FWHM could swap. */
+// A sample's CIF as a state holds it, its file's name and its text; anything else, none.
+const cifEntry = v => v && typeof v === 'object' && typeof v.file === 'string' && typeof v.cif === 'string' ? { file: v.file, cif: v.cif } : null;
+// Its phase (prepOf's, kept by its text), or null: none, or one that does not read as a CIF.
+function phaseOfCif(q){
+  if (!q) return null;
+  try { return prepOf(q.cif, q.file); } catch(e){ return null; }
+}
+// The tolerance of a peak of FWHM w (°2θ), and its reflections within it, its ends included
+// (to 10⁻⁹°, a difference's rounding), in 2θ order (refl: phaseReflections').
+const ASSIGN = { frac: 0.5, floor: 0.1 };
+const assignTol = w => Math.max(ASSIGN.floor, Number.isFinite(w) && w > 0 ? ASSIGN.frac*w : 0);
+const peakRefl = (pk, refl)=>{ const tol = assignTol(pk.fwhmClassic) + 1e-9; return refl.filter(r=> Math.abs(r.tt - pk.detPos) <= tol); };
+// Their label: each one's hkl in brackets, '/' between them, "(110)/(101)"; none, ''.
+const reflLabel = rs => rs.map(r=> '(' + hklText(r.hkl) + ')').join('/');
+/* A sample's assignment: its phase (prep) and species (sp, its name), its reflections over
+   its pattern f's range at the wavelength lam (refl; reflOf: phaseReflections, which the
+   card keeps), and each kept peak of its processing pr, in their order, with its reflections
+   and their label (rows: { pk, refl, label }); null with no CIF (q), one that does not read
+   as one, or no processing. */
+function sampleAssign(f, pr, lam, q, reflOf = phaseReflections){
+  const prep = phaseOfCif(q);
+  if (!prep || !pr) return null;
+  const a = f.x[0], b = f.x[f.x.length - 1], refl = reflOf(prep, lam, Math.min(a, b), Math.max(a, b));
+  return { prep, sp: prep.name, refl, rows: pr.peaks.filter(pk=> !pk.removed).map(pk=>{ const rs = peakRefl(pk, refl); return { pk, refl: rs, label: reflLabel(rs) }; }) };
+}
+// The samples' species (A: their assignments), each once, in the samples' order.
+const speciesOf = A => [...new Set(A.filter(Boolean).map(a=> a.sp))];
+/* The size chart's rows (by: 'sample' or 'peak') from the samples' assignments (A), their
+   processings and settings and the standard's model (m), each with its species (sp: its
+   index among speciesOf's; species: its name). By sample, each sample with a CIF, its
+   species' sizes (sampleSizes); by peak, each reflection (its label) a species' peaks are
+   assigned to, in the species' order then in 2θ, its box over its samples' sizes there,
+   each sample's the mean of its peaks there (one, as a rule), each in ps ({ k, raw, corr }). */
+function sizeRows(by, fs, A, procs, fps, m, u){
+  const sps = speciesOf(A);
+  if (by !== 'peak') return fs.flatMap((f, k)=> A[k] ? [{ name: f.name, label: f.label, sp: sps.indexOf(A[k].sp), species: A[k].sp, ...sampleSizes(procs[k], fps[k], m, false, u, A[k]) }] : []);
+  const groups = new Map();
+  A.forEach((a, k)=>{
+    if (!a) return;
+    const fp = fps[k], own = new Map();
+    a.rows.forEach(r=>{
+      const raw = r.refl.length ? scherrerD(r.pk.fwhmClassic, r.pk.detPos, fp.K, fp.lambda) : NaN;
+      if (!isFinite(raw)) return;
+      if (!own.has(r.label)) own.set(r.label, { tt: r.refl[0].tt, raw: [], corr: [] });
+      const o = own.get(r.label), c = m ? sizeCorr(r.pk.fwhmClassic, r.pk.detPos, fp.K, fp.lambda, m) : NaN;
+      o.raw.push(raw);
+      if (isFinite(c)) o.corr.push(c);
+    });
+    own.forEach((o, hkl)=>{
+      const key = a.sp + '\n' + hkl;
+      if (!groups.has(key)) groups.set(key, { sp: sps.indexOf(a.sp), species: a.sp, hkl, tt: o.tt, ps: [] });
+      groups.get(key).ps.push({ k, raw: u.meanArr(o.raw), corr: o.corr.length ? u.meanArr(o.corr) : NaN });
+    });
+  });
+  const many = sps.length > 1;
+  return [...groups.values()].sort((g, h)=> g.sp - h.sp || g.tt - h.tt).map(g=> ({ name: `${g.species} ${g.hkl}`, label: many ? `${g.species} ${g.hkl}` : g.hkl,
+    sp: g.sp, species: g.species, hkl: g.hkl, ps: g.ps, ...sizeSummary(g.ps.map(q=> q.raw), g.ps.map(q=> q.corr).filter(isFinite), false, !!m, u) }));
+}
+/* The CIFs a sample can be given: those of the tab's cards (list, { file, cif }: every
+   Rietveld card's phases' and every Scherrer card's samples', in the cards' order: xrd.js
+   cifPool), each once (by its file's name and text), those that read as a CIF, each with its
+   phase's name and the text of its option (the name; with its file's where two share it). */
+function cifPool(list){
+  const seen = new Set(), out = [];
+  for (const v of list){
+    const q = cifEntry(v), key = q && q.file + '\n' + q.cif, prep = q && !seen.has(key) && phaseOfCif(q);
+    if (!prep) continue;
+    seen.add(key);
+    out.push({ ...q, name: prep.name });
+  }
+  return out.map(p=> ({ ...p, text: out.filter(o=> o.name === p.name).length > 1 ? `${p.name} (${p.file})` : p.name }));
+}
+// The pool's entry of a sample's CIF (q), or -1: none.
+const poolAt = (pool, q)=> q ? pool.findIndex(p=> p.file === q.file && p.cif === q.cif) : -1;
 
 /* ---- The settings ----
    Per-field mode: 'shared' | 'per'. Defaults: peak-search fields per-sample, rest shared.
@@ -501,10 +569,12 @@ function fileParams(pp, paramMode, shared){
   return { smoothW:g('smoothW'), snipW:g('snipW'), blOn:g('blOn') !== false, pkHeight:g('pkHeight'), pkProm:g('pkProm'), pkDist:g('pkDist'), K:g('K'), lambda:g('lambda') };
 }
 
-// The card's state as saved (c: its settings, its peaks added and removed by hand, what the
-// size chart is by, the normalisation, a project's conversion's note and points).
-function stateOf({ perParams, manualPeaks, removedPeaks, shared, paramMode, sizeBy, norm, stepNote, heldPts }){
+/* The card's state as saved (c: its settings, its peaks added and removed by hand, the
+   samples' CIFs and the note of an older version's matching (v575: none for the standard),
+   what the size chart is by, the normalisation, a project's conversion's note and points). */
+function stateOf({ std, perParams, manualPeaks, removedPeaks, cifs, oldGroups, shared, paramMode, sizeBy, norm, stepNote, heldPts }){
   return { perParams: perParams.map(q=>({...q})), manualPeaks: manualPeaks.map(a=>a.slice()), removedPeaks: removedPeaks.map(a=>a.slice()),
+    ...(std ? {} : { cif: cifs.map(cifEntry) }), ...(oldGroups ? { oldGroups: true } : {}),
     shared: {...shared}, paramMode: {...paramMode}, sizeBy, norm, ...(stepNote.length ? { stepNote: stepNote.slice() } : {}),
     ...(Object.keys(heldPts).length ? { heldPts: {...heldPts} } : {}) };
 }
@@ -518,7 +588,9 @@ function stateOf({ perParams, manualPeaks, removedPeaks, shared, paramMode, size
    read in) threw. The widths of a project to v510, in points, are converted (fromPts).
    st: the steps of the files included, stAll: those and the steps of the files left out
    (which come back with their entries). The normalisation is the card's to read (utils.js
-   normOf). */
+   normOf). The samples' CIFs (v575), each a file's name and text or none; a state of an
+   older version has none, and where it had samples to match peaks across (two or more), the
+   note that says so (oldGroups) until a CIF is chosen (setCif). */
 function readState(s, std, st, stAll){
   const obj = objOf;
   s = obj(s);
@@ -561,7 +633,9 @@ function readState(s, std, st, stAll){
   const manualPeaks = arr(s.manualPeaks, ()=> []).map(posOf);
   const removedPeaks = arr(s.removedPeaks, ()=> []).map(posOf);
   const sizeBy = s.sizeBy === 'peak' ? 'peak' : 'sample';
-  return { shared, paramMode, heldPts, perParams, stepNote, manualPeaks, removedPeaks, sizeBy };
+  const cifs = arr(std ? null : s.cif, ()=> null).map(cifEntry);
+  const oldGroups = !std && (s.oldGroups === true || (!('cif' in s) && Array.isArray(s.perParams) && n > 1));
+  return { shared, paramMode, heldPts, perParams, stepNote, manualPeaks, removedPeaks, cifs, oldGroups, sizeBy };
 }
 
 /* ---- The CSVs ---- */
@@ -583,16 +657,20 @@ function diffractoCols(f, pr, kp, mx, { fmtNum }){
     {h:`SNIP_background_${f.label} (${kp.blOn ? 'W=' + widthText(kp.snipW*SHOWN.snipW) + '°' : 'off'})`, v:pr.snip.map(v=>fmtNum(v,6))},
   ];
 }
-// Classic peak-search block: 2θ, rel. intensity, FWHM, crystallite size [, corrected by m].
-function peakCols(f, pr, kp, withCorr, withSig, m, { fmtNum }){
+/* Classic peak-search block: 2θ, a sample's species and hkl (sp; v575: A its assignment,
+   sampleAssign's, both empty with none; a peak of none, unassigned), rel. intensity, FWHM (the
+   standard's with its σ: sig), crystallite size [, corrected by the standard's model m:
+   withCorr]. */
+function peakCols(f, pr, kp, { withCorr, sig, m, sp, A }, { fmtNum }){
   const pks=pr.peaks.filter(pk=>!pk.removed);
   const maxH=Math.max(...pks.map(pk=>pk.height))||1;
   const cols=[
     {h:'Peak_2Theta_'+f.label,       v:pks.map(pk=>fmtNum(pk.pos,6))},
+    ...(sp ? [{h:'Peak_Species_'+f.label, v:pks.map(()=> A ? A.sp : '')}, {h:'Peak_hkl_'+f.label, v:A ? A.rows.map(r=> r.label || 'unassigned') : pks.map(()=> '')}] : []),
     {h:'Peak_RelIntensity_'+f.label, v:pks.map(pk=>fmtNum(pk.height/maxH,6))},
     {h:'Peak_FWHM_deg_'+f.label,     v:pks.map(pk=>isFinite(pk.fwhmClassic)?fmtNum(pk.fwhmClassic,5):'')},
     // The standard's: each width's counting uncertainty, the Caglioti fit's weights.
-    ...(withSig ? [{h:'Peak_FWHM_sigma_deg_'+f.label, v:pks.map(pk=>isFinite(pk.fwhmSig)?fmtNum(pk.fwhmSig,5):'')}] : []),
+    ...(sig ? [{h:'Peak_FWHM_sigma_deg_'+f.label, v:pks.map(pk=>isFinite(pk.fwhmSig)?fmtNum(pk.fwhmSig,5):'')}] : []),
     {h:'Peak_Size_nm_'+f.label,      v:pks.map(pk=>{const d=scherrerD(pk.fwhmClassic,pk.detPos,kp.K,kp.lambda);return isFinite(d)?fmtNum(d,3):'';})},
   ];
   if (withCorr) cols.push({h:'Peak_Size_corr_nm_'+f.label, v:pks.map(pk=>{const d=sizeCorr(pk.fwhmClassic,pk.detPos,kp.K,kp.lambda,m);return isFinite(d)?fmtNum(d,3):'';})});
@@ -600,23 +678,23 @@ function peakCols(f, pr, kp, withCorr, withSig, m, { fmtNum }){
 }
 // One sample's size columns, as the chart and the table give them.
 const SIZE_COLS = ['nm', 'std_nm', 'n', 'median_nm', 'Q1_nm', 'Q3_nm'];
-const sizeCsvHead = anyStd => ['Sample', ...SIZE_COLS.map(c=> 'Crystallite_size_' + c),
-  ...(anyStd ? SIZE_COLS.map(c=> 'Crystallite_size_corr_' + c) : [])];
+const sizeCsvHead = anyStd => [...SIZE_COLS.map(c=> 'Crystallite_size_' + c), ...(anyStd ? SIZE_COLS.map(c=> 'Crystallite_size_corr_' + c) : [])];
 function sizeCsvCells(st, k, { fmtNum }){
   const n = st[k+'N'], b = st[k+'Box'], num = v => isFinite(v) ? fmtNum(v, 2) : '';
   return [num(st[k+'Mean']), n > 1 ? num(st[k+'Std']) : '', String(n), b ? num(b.med) : '', b ? num(b.q1) : '', b ? num(b.q3) : ''];
 }
 /* The CSVs, each named after the card (pre: "<name> - "); the standard's in one file. The
-   card's files, their processings (procs) and settings (fps), the standard's model (m, or
-   null), the Results' normalisation. */
-function csvTables(pre, { files: fs, procs: processed, fps, m, norm, std }, u){
+   card's files, their processings (procs) and settings (fps), the samples' assignments
+   (asg: sampleAssign's, or null; v575), the standard's model (m, or null), the Results'
+   normalisation. */
+function csvTables(pre, { files: fs, procs: processed, fps, asg, m, norm, std }, u){
   const { maxArr, csvLine, fmtNum } = u;
   if (!fs.length || !processed.length) return [];
   if (std){
     // Everything about the standard in one file: diffractogram + peaks (normalised
     // against its own max, as it stands alone).
     const own = maxArr(processed[0].subtracted)||1;
-    return [{name:'standard.csv', text:wideCsv([...diffractoCols(fs[0], processed[0], fps[0], own, u), ...peakCols(fs[0], processed[0], fps[0], false, true, m, u)], u)}];
+    return [{name:'standard.csv', text:wideCsv([...diffractoCols(fs[0], processed[0], fps[0], own, u), ...peakCols(fs[0], processed[0], fps[0], { sig: true }, u)], u)}];
   }
   const anyStd = !!m;
   const all = fs.map((f,k)=>k);
@@ -628,29 +706,30 @@ function csvTables(pre, { files: fs, procs: processed, fps, m, norm, std }, u){
   // diffractograms.csv — every sample's refined/raw/smoothed/SNIP columns.
   { const cols=[]; all.forEach(k=>cols.push(...diffractoCols(fs[k], processed[k], fps[k], refinedNorm(k), u)));
     if (cols.length) entries.push({name:pre + 'diffractograms.csv', text:wideCsv(cols, u)}); }
-  // Crystallite size (classic) — per-sample summary: mean ± std, n, and the box the chart draws.
-  { let ct = csvLine(sizeCsvHead(anyStd));
+  // Crystallite size (classic) — per-sample summary: its species (v575; none, no CIF), its
+  // sizes' mean ± std, n, and the box the chart draws (a sample with a CIF, its species').
+  { let ct = csvLine(['Sample', 'Species', ...sizeCsvHead(anyStd)]);
     all.forEach(k=>{
-      const st = sampleSizes(processed[k], fps[k], m, std, u);
-      const row = [fs[k].label, ...sizeCsvCells(st, 'raw', u)];
+      const st = sampleSizes(processed[k], fps[k], m, std, u, asg[k]);
+      const row = [fs[k].label, asg[k] ? asg[k].sp : '', ...sizeCsvCells(st, 'raw', u)];
       if (anyStd) row.push(...sizeCsvCells(st, 'corr', u));
       ct += csvLine(row);
     });
     entries.push({name:pre + 'crystallite_size.csv', text:ct}); }
-  // crystallite_size_by_peak.csv — per reflection the samples share: its 2θ, the
-  // summary over the samples, then each sample's size there.
-  { const R = sizeReflections(processed, fps, m);
-    if (byPeakOk(R)){
-      const rows = reflectionRows(R, m, u);
-      let ct = csvLine(['Reflection_2theta_deg', ...sizeCsvHead(anyStd).slice(1), ...R.idxs.map(k=> 'Crystallite_size_nm_' + fs[k].label)]);
+  // crystallite_size_by_peak.csv — per reflection of a species (v575: its species and hkl;
+  // to v574 per reflection the samples shared, matched by position, its mean 2θ): the
+  // summary over its samples, then each sample's size there (the samples with a CIF).
+  { const rows = sizeRows('peak', fs, asg, processed, fps, m, u), by = all.filter(k=> asg[k]);
+    if (rows.length){
+      let ct = csvLine(['Species', 'hkl', ...sizeCsvHead(anyStd), ...by.map(k=> 'Crystallite_size_nm_' + fs[k].label)]);
       rows.forEach(r=>{
-        const own = R.idxs.map(k=>{ const q = r.ps.find(x=> x.k === k); return q ? fmtNum(q.raw, 2) : ''; });
-        ct += csvLine([fmtNum(r.pos, 3), ...sizeCsvCells(r, 'raw', u), ...(anyStd ? sizeCsvCells(r, 'corr', u) : []), ...own]);
+        const own = by.map(k=>{ const q = r.ps.find(x=> x.k === k); return q ? fmtNum(q.raw, 2) : ''; });
+        ct += csvLine([r.species, r.hkl, ...sizeCsvCells(r, 'raw', u), ...(anyStd ? sizeCsvCells(r, 'corr', u) : []), ...own]);
       });
       entries.push({name:pre + 'crystallite_size_by_peak.csv', text:ct});
     } }
-  // peaks.csv — classic peaks of every sample.
-  { const cols=[]; all.forEach(k=>{ if (processed[k].peaks.some(pk=>!pk.removed)) cols.push(...peakCols(fs[k], processed[k], fps[k], anyStd, false, m, u)); });
+  // peaks.csv — classic peaks of every sample, with its species and their hkl (v575).
+  { const cols=[]; all.forEach(k=>{ if (processed[k].peaks.some(pk=>!pk.removed)) cols.push(...peakCols(fs[k], processed[k], fps[k], { withCorr: anyStd, m, sp: true, A: asg[k] }, u)); });
     if (cols.length) entries.push({name:pre + 'peaks.csv', text:wideCsv(cols, u)}); }
   return entries;
 }
@@ -826,35 +905,36 @@ function stackOf(fs, curves, shown, norm, { maxArr }){
 }
 // A size box's label: its mean ± its standard deviation (the mean alone, with none).
 const sizeLab = (v,e)=> isFinite(e) ? `${v.toFixed(1)}±${e.toFixed(1)}` : v.toFixed(1);
-/* The size chart's layout, one box per row (rows: its samples or reflections; SER: its
-   series, size and corrected) in an svg W × H: the names (fit: utils.js barNames') under
-   it, the room the labels over the boxes need (measure(text): its width in px), the boxes'
-   half-width and offsets as the bars had them — capped at their sizes, shrinking to fit
-   the per-sample spacing so many samples don't overlap; a pair keeps its ±17 px offset
-   unless the slot is too narrow, then the two scale together — and the labels under the
-   chips in the corner (under: utils.js barChipYmax's bars). */
+/* The size chart's layout, one box per row, or a pair (rows: its samples or reflections;
+   SER: its series, each species' size and corrected, a row's its own species': seriesOf) in
+   an svg W × H: the names (fit: utils.js barNames') under it, the room the labels over the
+   boxes need (measure(text): its width in px), the boxes' half-width and offsets as the bars
+   had them — capped at their sizes, shrinking to fit the per-sample spacing so many samples
+   don't overlap; a pair keeps its ±17 px offset unless the slot is too narrow, then the two
+   scale together — and the labels under the chips in the corner (under: utils.js
+   barChipYmax's bars). */
 function barLayout(rows, SER, fit, measure, W, H){
   const n = rows.length, lab = (r, m)=> sizeLab(r[m.k+'Mean'], r[m.k+'Std']);
   let maxLbl=0; fit.labels.map(measure).forEach(w=>maxLbl=Math.max(maxLbl, w));
   const bottom = Math.round(26 + maxLbl*fit.sin);
   let maxValW=0;
-  rows.forEach(r=> SER.forEach(m=>{ if (r[m.k+'Box']) maxValW = Math.max(maxValW, measure(lab(r, m))); }));
+  rows.forEach(r=> seriesOf(SER, r).forEach(m=>{ if (r[m.k+'Box']) maxValW = Math.max(maxValW, measure(lab(r, m))); }));
   const mTop=15, gap=6, plotH=H-mTop-bottom, reserve=gap+maxValW+6;
   const frac = plotH>reserve ? (1-reserve/plotH) : 0.5;
-  const pxSlot = (W - 75)/(n + 1), anyCorr = SER.length > 1;
+  const pxSlot = (W - 75)/(n + 1), anyCorr = SER.some(m=> m.k === 'corr');
   const sc = Math.min(1, (pxSlot*0.8)/66);   // 66 = full paired span at hw16/dx17
   const hw = anyCorr ? 16*sc : Math.min(16, pxSlot*0.3), dx = anyCorr ? 17*sc : 0;
-  const offOf = mi => SER.length > 1 ? (mi ? dx : -dx) : 0;
+  const offOf = mi => anyCorr ? (mi ? dx : -dx) : 0;
   const under = [];
-  rows.forEach((r, k)=> SER.forEach((m, mi)=>{ const b = r[m.k+'Box']; if (b) under.push({ x:k+1, dx:offOf(mi), top:boxTop(b), w:measure(lab(r, m)) }); }));
+  rows.forEach((r, k)=> seriesOf(SER, r).forEach((m, mi)=>{ const b = r[m.k+'Box']; if (b) under.push({ x:k+1, dx:offOf(mi), top:boxTop(b), w:measure(lab(r, m)) }); }));
   return { n, bottom, mTop, gap, plotH, frac, hw, offOf, under };
 }
 // Its y range's top: over the tallest box, room for its label (frac: barLayout's), clear
 // of the chips (chipY: barChipYmax's).
 const barYmax = (tops, frac, chipY)=> Math.max(Math.max(...tops)*1.15, Math.max(...tops)/frac, chipY);
 /* Its downloads' names, after the card (pre: "<name> - "): its image by what it shows (by),
-   its CSVs never (v530), both, by sample and by peak (the second where there is one:
-   byPeakOk), whichever the chips show, a view alone (v528); to v529 the one on show. */
+   its CSVs never (v530), both, by sample and by peak (the second where a peak is assigned),
+   whichever the chips show, a view alone (v528); to v529 the one on show. */
 const sizeDlNames = (pre, by)=> ({ csv: ['crystallite_size.csv', 'crystallite_size_by_peak.csv'].map(x=> pre + x).join(','),
   svg: pre + (by === 'peak' ? 'XRPD_crystallite_size_by_peak.svg' : 'XRPD_crystallite_size.svg') });
 
@@ -899,21 +979,26 @@ const slotsOf = (S, key)=> S.std ? [] : [
   { key: key + ':params', arr:S.perParams, make: (v, f)=> v ? entryOf(objOf(v), f && f.x ? meanStep(f.x) : NaN, S.heldPts) : {...S.shared} },
   { key: key + ':manual', arr:S.manualPeaks, make: v=> v ? v.slice() : [] },
   { key: key + ':removed', arr:S.removedPeaks, make: v=> v ? v.slice() : [] },
+  { key: key + ':cif', arr:S.cifs, make: cifEntry },
 ];
-// A file added: its entries, the shared settings and no peak by hand.
-function addEntry(S){ S.perParams.push({...S.shared}); S.manualPeaks.push([]); S.removedPeaks.push([]); }
+// A file added: its entries, the shared settings, no peak by hand, no CIF.
+function addEntry(S){ S.perParams.push({...S.shared}); S.manualPeaks.push([]); S.removedPeaks.push([]); S.cifs.push(null); }
 // The standard's file replaced or taken away (fs: its files now): its own peaks go with it.
 function freshEntries(S, fs){
-  S.perParams = fs.map(()=> ({...S.shared})); S.manualPeaks = fs.map(()=> []); S.removedPeaks = fs.map(()=> []);
+  S.perParams = fs.map(()=> ({...S.shared})); S.manualPeaks = fs.map(()=> []); S.removedPeaks = fs.map(()=> []); S.cifs = fs.map(()=> null);
   S.panel.sel = S.panel.hov = null;
 }
 // Every file gone.
-function clearEntries(S){ S.processed=[]; S.perParams=[]; S.manualPeaks=[]; S.removedPeaks=[]; S.panel.sel=S.panel.hov=null; }
-/* A state read (readState's t) taken: every setting, the peaks by hand, the chart's choice,
-   the normalisation (norm, made valid by the card); nothing picked. */
+function clearEntries(S){ S.processed=[]; S.perParams=[]; S.manualPeaks=[]; S.removedPeaks=[]; S.cifs=[]; S.panel.sel=S.panel.hov=null; }
+// A sample's CIF chosen (k: its index; q: { file, cif }, or none): an older version's note
+// goes with the first one chosen (v575).
+function setCif(S, k, q){ S.cifs[k] = cifEntry(q); if (S.cifs[k]) S.oldGroups = false; }
+/* A state read (readState's t) taken: every setting, the peaks by hand, the samples' CIFs and
+   the note of an older version's matching, the chart's choice, the normalisation (norm, made
+   valid by the card); nothing picked. */
 function takeState(S, t, norm){
   Object.assign(S.shared, t.shared); Object.assign(S.paramMode, t.paramMode);
-  ({ heldPts: S.heldPts, perParams: S.perParams, stepNote: S.stepNote, manualPeaks: S.manualPeaks, removedPeaks: S.removedPeaks, sizeBy: S.sizeBy } = t);
+  ({ heldPts: S.heldPts, perParams: S.perParams, stepNote: S.stepNote, manualPeaks: S.manualPeaks, removedPeaks: S.removedPeaks, cifs: S.cifs, oldGroups: S.oldGroups, sizeBy: S.sizeBy } = t);
   S.norm = norm;
   S.panel.sel = S.panel.hov = null;
 }
@@ -925,10 +1010,11 @@ function showNext(panel, v){ if (v && Number.isFinite(v.sel)) panel.sel = v.sel;
 
 export { nearestIdx, computeBaseline, findPeaks, computeFWHM, fwhmSigma, fwhmGeom, smoothingOf, processingOf,
   cagAt, fitCaglioti, instrModelOf, instrBetaOf, stdSpanOf, scherrerD, sizeCorr, belowInstr, sizeSummary, sampleSizes,
-  sizeReflections, byPeakOk, reflectionRows, sizeSeries, boxTop, sizeTops, topOf,
+  lighter, sizeSeries, seriesOf, boxTop, sizeTops, topOf,
+  phaseOfCif, ASSIGN, assignTol, peakRefl, reflLabel, sampleAssign, speciesOf, sizeRows, cifPool, poolAt,
   modeDef, FIELD_DEF, SHOWN, sharedDef, FIELD_MIN, LEGACY, modeOf, objOf, entryOf, fileParams, stateOf, readState,
   csvTables,
   fieldInputs, guardsOf, TOGGLES, SIZE_ONLY, PEAK_SEARCH, numIn, fieldIn, takeInputs, widthHint, presetOf, procKeys,
   PEAK_BASE, PEAK_HOVER, PEAK_SEL, FWHM_BASE, FWHM_HOVER, FWHM_SEL, anaOf, nearestOf, markStyles, toggled, nudge,
   stackShown, stackOf, sizeLab, barLayout, barYmax, sizeDlNames,
-  switchMode, clearRemoved, dropPeak, slotsOf, addEntry, freshEntries, clearEntries, takeState, showsOf, showNext };
+  switchMode, clearRemoved, dropPeak, slotsOf, addEntry, freshEntries, clearEntries, setCif, takeState, showsOf, showNext };

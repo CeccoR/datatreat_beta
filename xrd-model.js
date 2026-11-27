@@ -164,12 +164,14 @@ export function migrate(U, s){
 // A kind's settings, the card's or kept while it is the other kind: an object, and the
 // Scherrer one's per-sample lists arrays (the file list keeps them aligned: slots), the
 // entries of the included files left out (gone: their places among the included) taken
-// out, so each file after them keeps its own.
+// out, so each file after them keeps its own; its samples' CIFs too where it has them
+// (v575: a state of an older version none, as keptSlots keeps it).
 export function keptState(U, k, v, gone){
   if (!U.isObj(v)) return null;
   if (k !== 'scherrer') return v;
   const arr = a => Array.isArray(a) ? a.filter((_, i)=> !gone.has(i)) : [];
-  return { ...v, shared: U.isObj(v.shared) ? v.shared : {}, perParams: arr(v.perParams), manualPeaks: arr(v.manualPeaks), removedPeaks: arr(v.removedPeaks) };
+  return { ...v, shared: U.isObj(v.shared) ? v.shared : {}, perParams: arr(v.perParams), manualPeaks: arr(v.manualPeaks), removedPeaks: arr(v.removedPeaks),
+    ...(Array.isArray(v.cif) ? { cif: arr(v.cif) } : {}) };
 }
 // A state as the restore takes it: of this version (v 2), or migrated.
 export const stateIn = (U, s0)=> U.isObj(s0) && s0.v === 2 ? s0 : migrate(U, U.isObj(s0) ? s0 : {});
@@ -199,10 +201,13 @@ export const cardIn = (U, src, gone)=> ({ states: Object.fromEntries(Object.entr
 // earlier version under 'k' + its key (heldAs: slots, in xrd.js).
 export const copyArr = v => Array.isArray(v) ? v.slice() : [];
 export const heldAs = sl => ({ ...sl, make: (v, f)=> sl.make(v === undefined && f && f.held ? f.held['k' + sl.key] : v, f) });
-// The per-sample slots of the Scherrer settings a Rietveld card keeps (s), under its key.
+// The per-sample slots of the Scherrer settings a Rietveld card keeps (s), under its key; its
+// samples' CIFs too where it has them (v575: a state of an older version has none, nor any
+// CIF, and keeps it so for its note: xrd-peaks-model.js readState).
 export const keptSlots = (key, s)=> [{ key: key + ':params', arr: s.perParams, make: v=> v ? {...v} : {...s.shared} },
   { key: key + ':manual', arr: s.manualPeaks, make: copyArr },
-  { key: key + ':removed', arr: s.removedPeaks, make: copyArr }];
+  { key: key + ':removed', arr: s.removedPeaks, make: copyArr },
+  ...(Array.isArray(s.cif) ? [{ key: key + ':cif', arr: s.cif, make: v=> v || null }] : [])];
 // A card's element ids by its kind.
 export const prefixOf = a => (a.type === 'scherrer' ? 'xrdA' : 'xrdR') + a.id;
 // A Rietveld state with what a run wrote for the patterns named (runPatch), put where it

@@ -2259,6 +2259,12 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 /* The Scherrer card's two actions under its parameters, side by side. */
 .xrd-pk-btns { display: flex; gap: 8px; }
 .xrd-pk-btns > .plot-action-btn { flex: 1 1 0; min-width: 0; }
+/* (v575) The notes under a sample's CIF, a compact box each (an older version's matching, a
+   CIF not read); a peak with no reflection, unassigned, and the rule the hkl follow, in the
+   notes' grey. */
+.xrd-cif-note:not(:empty) { display: grid; row-gap: 6px; margin-top: 10px; }
+.xrd-peak-wrap .xrd-unassigned { color: var(--muted); }
+.xrd-hkl-rule { margin: 4px 0 0; line-height: 1.5; }
 /* ===== XRPD instrumental standard: a window of its own, as wide as a card. Its head
    is a banner, as the figure composer's: it stays at the top, with the ×, while what
    is under it scrolls. ===== */

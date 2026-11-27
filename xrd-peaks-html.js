@@ -5,11 +5,13 @@
    whose patterns' steps differ, the size chart's chips and the note under it, each from
    plain values; and (v561, to v560 in xrd-peaks.js) the instructions, the card's markup
    (the samples' and the standard's) and its section of the Results, the table with no
-   peak, the legends of the Results' plots. utils.js's esc, X_SVG and NORM_OPTIONS,
-   modcharts.js's icons and snav.js's snavHtml, which need a page to load, are handed in
-   (u: xrd-peaks.js U).
+   peak, the legends of the Results' plots; and (v575) a sample's CIF: its selector's
+   options, the hkl in the table and the rule they follow, an older version's note.
+   utils.js's esc, X_SVG and NORM_OPTIONS, modcharts.js's icons and snav.js's snavHtml,
+   which need a page to load, are handed in (u: xrd-peaks.js U).
 ========================================================= */
-import { scherrerD, sizeCorr, belowInstr, cagAt } from './xrd-peaks-model.js';
+import { scherrerD, sizeCorr, belowInstr, cagAt, ASSIGN } from './xrd-peaks-model.js';
+import { barIdx } from './xrd-rv-html.js';
 import { boxHtml } from './alerts.js';
 
 // "mean ± std" (or just "mean" for n=1, "—" for none)
@@ -42,8 +44,10 @@ function stepNoteHtml(on, { X_SVG }){
    FWHM, size. With a standard in use (m, its model), the samples show the size both
    without and with the correction. fp: the pattern's settings (K, λ); picked: the 2θ of
    the peak picked, or null; st: a sample's sizes summarised (sampleSizes), its mean and
-   its warnings under the table. */
-function peakTableHtml(pks, { std, m, fp, picked, st }, { esc, X_SVG }){
+   its warnings under the table. A: a sample's assignment (v575: sampleAssign's, its rows
+   the peaks'; none, no CIF): each peak's hkl after its 2θ, the mean its species', and the
+   rule the hkl follow under it. */
+function peakTableHtml(pks, { std, m, fp, picked, st, A }, { esc, X_SVG }){
   // (only peaks of height 0 left — manual ones on the baseline — each 0 %, as peaks.csv
   // writes them: v568, a dash to v567; up to v484 0/0 printed NaN%)
   const maxH = Math.max(...pks.map(pk=>pk.height)), relOf = h => maxH >= 0 ? (h/(maxH || 1)*100).toFixed(1) + '%' : '—';
@@ -51,24 +55,34 @@ function peakTableHtml(pks, { std, m, fp, picked, st }, { esc, X_SVG }){
   const sizeCol = !std;
   // The table scrolls sideways in its own box when the screen is narrower than it;
   // the summary and warnings under it stay put.
-  let html='<div class="peak-scroll"><table><thead><tr><th>#</th><th>2θ (°)</th><th>Relative Intensity</th><th>FWHM (°)</th>'+(sizeCol?'<th>Crystallite size (nm)</th>':'')+(showCorr?'<th>Crystallite size corr. (nm)</th>':'')+'<th></th></tr></thead><tbody>';
+  let html='<div class="peak-scroll"><table><thead><tr><th>#</th><th>2θ (°)</th>'+(A?'<th>hkl</th>':'')+'<th>Relative Intensity</th><th>FWHM (°)</th>'+(sizeCol?'<th>Crystallite size (nm)</th>':'')+(showCorr?'<th>Crystallite size corr. (nm)</th>':'')+'<th></th></tr></thead><tbody>';
   pks.forEach((pk,i)=>{
     const fwhm = pk.fwhmClassic;
     const sizeRawCell = sizeCol ? `<td>${fmtCell(scherrerD(fwhm, pk.detPos, fp.K, fp.lambda))}</td>` : '';
     const below = showCorr && belowInstr(fwhm, pk.detPos, m);
     const corrCell = showCorr ? (below ? `<td title="Narrower than the instrumental width at this angle">⚠</td>` : `<td>${fmtCell(sizeCorr(fwhm, pk.detPos, fp.K, fp.lambda, m))}</td>`) : '';
     const sel = picked!=null && Math.abs(pk.pos-picked)<1e-9 ? ' selected' : '';
-    html+=`<tr class="peak-row${pk.manual?' manual-peak':''}${sel}" data-pos="${esc(pk.pos)}" data-det="${esc(pk.detPos)}"><td>${i+1}</td><td>${pk.pos.toFixed(3)}</td><td>${relOf(pk.height)}</td><td${std && isFinite(pk.fwhmSig) ? ` title="± ${pk.fwhmSig.toPrecision(2)}° (counting statistics)"` : ''}>${isFinite(fwhm)?fwhm.toFixed(3):'—'}</td>${sizeRawCell}${corrCell}<td style="text-align:center"><button class="peak-del is-danger idle-dim" data-det="${esc(pk.detPos)}" data-manual="${pk.manual?1:0}" title="Remove peak">${X_SVG(13)}</button></td></tr>`;
+    html+=`<tr class="peak-row${pk.manual?' manual-peak':''}${sel}" data-pos="${esc(pk.pos)}" data-det="${esc(pk.detPos)}"><td>${i+1}</td><td>${pk.pos.toFixed(3)}</td>${A ? hklCell(A.rows[i], esc) : ''}<td>${relOf(pk.height)}</td><td${std && isFinite(pk.fwhmSig) ? ` title="± ${pk.fwhmSig.toPrecision(2)}° (counting statistics)"` : ''}>${isFinite(fwhm)?fwhm.toFixed(3):'—'}</td>${sizeRawCell}${corrCell}<td style="text-align:center"><button class="peak-del is-danger idle-dim" data-det="${esc(pk.detPos)}" data-manual="${pk.manual?1:0}" title="Remove peak">${X_SVG(13)}</button></td></tr>`;
   });
   html+='</tbody></table></div>';
   if (!std){
-    html += `<div class="size-summary">Mean crystallite size: <b>${fmtMeanStd(st.rawMean, st.rawStd, st.rawN)} nm</b>`;
+    html += `<div class="size-summary">Mean crystallite size${A ? ', ' + esc(A.sp) : ''}: <b>${fmtMeanStd(st.rawMean, st.rawStd, st.rawN)} nm</b>`;
     if (st.showCorr) html += `<br>Instr.-corrected: <b>${fmtMeanStd(st.corrMean, st.corrStd, st.corrN)} nm</b>`;
     html += '</div>';
+    if (A) html += hklRuleHtml(A, fp.lambda, esc);
     if (st.below) html += belowInstrHtml(st.below);
     if (st.outside) html += outsideStdHtml(st.outside, st.span);
   }
   return html;
+}
+
+// A peak's hkl (r: its row of the assignment): its reflections' indices, the bars over a
+// negative one, their 2θ in its title; none there, unassigned.
+const hklCell = (r, esc)=> r.label ? `<td title="Calculated 2θ: ${r.refl.map(q=> q.tt.toFixed(3)).join(', ')}°">${barIdx(esc(r.label))}</td>` : '<td class="xrd-unassigned">unassigned</td>';
+// The rule the hkl follow, in grey under the table, and the peaks it leaves unassigned.
+function hklRuleHtml(A, lam, esc){
+  const un = A.rows.filter(r=> !r.label).length;
+  return `<p class="txt-meta xrd-hkl-rule">hkl: the reflections of ${esc(A.sp)} at λ ${lam} Å within ${ASSIGN.frac} FWHM of a peak's 2θ, ${ASSIGN.floor}° at least${un ? `; ${un} of ${A.rows.length} peaks unassigned, left out of its sizes` : ''}.</p>`;
 }
 
 /* The standard's Caglioti fit, in the right-hand column, as the Tauc cards give E_g:
@@ -109,20 +123,25 @@ function cagliotiHtml(m, nFiles){
   return { box: html, alert: neg ? `<div class="alert warn">⚠ The fitted FWHM² drops to zero inside the standard's range: there the curve is not physical, and no correction is made.</div>` : '' };
 }
 
-// The size chart's two chips, one at a time (by: the one on); with a single sample (n: the
-// samples processed) there is nothing to compare by peak: none. ok: a reflection is in every
-// sample (byPeakOk).
-const sizeChipsHtml = (n, ok, by)=> n < 2 ? '' : [['sample', 'by sample'], ['peak', 'by peak']].map(([k, t])=>
+// The size chart's two chips, one at a time (by: the one on); with no sample with a CIF (n:
+// those with one, v575; to v574 fewer than two samples) none. ok: a peak is assigned.
+const sizeChipsHtml = (n, ok, by)=> n < 1 ? '' : [['sample', 'by sample'], ['peak', 'by peak']].map(([k, t])=>
   `<button type="button" class="mode-chip plot-chip${by === k ? ' is-on' : ''}" data-size-by="${k}"`
-  + `${k === 'peak' && !ok ? ' disabled title="No reflection is found in every sample"' : ` title="Crystallite size ${t}"`}>${t}</button>`).join('');
-// What is left out by peak: the reflections not every sample has (R: sizeReflections'), and
-// whose they are (labels: the files').
-const sizeNoteHtml = (R, by, labels, { esc })=> by === 'peak' && R.extra.length
-  ? `Not in every sample, left out: ${R.extra.map(g=> `${g.pos.toFixed(2)}° (${[...g.by.keys()].map(k=> esc(labels[k])).join(', ')})`).join('; ')}.` : '';
+  + `${k === 'peak' && !ok ? ' disabled title="No peak is assigned to a reflection of its sample\'s CIF"' : ` title="Crystallite size ${t}"`}>${t}</button>`).join('');
+// What the chart leaves out: the samples with no CIF (labels: theirs; v575: to v574 the
+// reflections not in every sample, by peak).
+const sizeNoteHtml = (labels, { esc })=> labels.length ? `Not charted, no CIF: ${labels.map(esc).join(', ')}.` : '';
+/* The CIF selector's options (pool: xrd-peaks-model.js cifPool's): none, each CIF the tab
+   has, by its phase's name, its file in its title, and the one that reads another. */
+const cifOptionsHtml = (pool, { esc })=> '<option value="">none</option>'
+  + pool.map((q, i)=> `<option value="${i}" title="${esc(q.file)}">${esc(q.text)}</option>`).join('') + '<option value="add">Add CIF…</option>';
+// The note of a project of an older version whose peaks were matched across samples, in
+// the card until a CIF is chosen (xrd-peaks-model.js readState's oldGroups).
+const OLD_GROUPS = boxHtml('info', 'Opened from an older version: its peaks were matched across samples, which is no longer done. A sample\'s peaks are grouped by the reflections of the CIF chosen for it.');
 
 /* ---- The instructions: over the cards (PEAKS_INFO) and in the standard's window (STD_INFO);
    xrd-peaks.js gives them to xrd.js as before ---- */
-const PEAKS_INFO = `Per-sample view. Raw pattern (grey), smoothing (blue), SNIP baseline (orange) and detected peaks (green). The <b>smoothing</b> takes at each point the mean of the line through the points over a window w wide (°2θ) centred on it, a box convolution, cut short at the ends of the pattern; 0 is none. The <b>SNIP</b> (Statistics-sensitive Non-linear Iterative Peak-clipping) baseline iteratively clips each point downward toward the average of the curve on either side at decreasing distances, from half its width W (°2θ) down to one step, so the peaks are cut away and the slowly varying background is left; its box unticked, there is none, and the pattern is read from zero as it is. Both are widths on the 2θ axis, so that one setting treats alike patterns measured at different steps; each field shows beside its value the points it spans at the step of the pattern on show. Peaks are searched on the smoothed pattern with the baseline taken off: a peak must reach the minimum height and stand out by the minimum prominence (both in % of the highest), and two peaks closer than the minimum distance keep the taller. The FWHM is read where the profile crosses half its height, interpolated between points; the crystallite size is Scherrer's, D = Kλ / (β·cosθ). With an instrumental standard (<b>Instrumental standard…</b>), the instrument's width at each angle is taken off in quadrature, β² = β<sub>obs</sub>² − β<sub>instr</sub>², for the corrected size. <b>+ Add peak</b> places a peak by hand on the plot; the × in a row removes one. Use the <b>all / one</b> toggles to share a value across samples or set it per sample.`;
+const PEAKS_INFO = `Per-sample view. Raw pattern (grey), smoothing (blue), SNIP baseline (orange) and detected peaks (green). The <b>smoothing</b> takes at each point the mean of the line through the points over a window w wide (°2θ) centred on it, a box convolution, cut short at the ends of the pattern; 0 is none. The <b>SNIP</b> (Statistics-sensitive Non-linear Iterative Peak-clipping) baseline iteratively clips each point downward toward the average of the curve on either side at decreasing distances, from half its width W (°2θ) down to one step, so the peaks are cut away and the slowly varying background is left; its box unticked, there is none, and the pattern is read from zero as it is. Both are widths on the 2θ axis, so that one setting treats alike patterns measured at different steps; each field shows beside its value the points it spans at the step of the pattern on show. Peaks are searched on the smoothed pattern with the baseline taken off: a peak must reach the minimum height and stand out by the minimum prominence (both in % of the highest), and two peaks closer than the minimum distance keep the taller. The FWHM is read where the profile crosses half its height, interpolated between points; the crystallite size is Scherrer's, D = Kλ / (β·cosθ). With an instrumental standard (<b>Instrumental standard…</b>), the instrument's width at each angle is taken off in quadrature, β² = β<sub>obs</sub>² − β<sub>instr</sub>², for the corrected size. <b>+ Add peak</b> places a peak by hand on the plot; the × in a row removes one. Use the <b>all / one</b> toggles to share a value across samples or set it per sample. <b>CIF</b> gives the sample on show its species, one or none: a CIF of the tab's Rietveld cards or of its other samples, or one read by <b>Add CIF…</b>. Its peaks are named by the reflections of that phase's cell and symmetry at λ: those within half a peak's FWHM of its 2θ (0.1° at least), all of them where several fall there, unassigned where none does. The Results chart the sizes of the samples with a CIF, each species a series, by sample (its assigned peaks) or by peak (each reflection, over its samples); a sample with no CIF is listed but not charted.`;
 const STD_INFO = `A measured standard (large, strain-free crystallites — LaB₆, Si…) characterises the instrumental broadening β<sub>instr</sub>(2θ). It is analysed here on its own, always normalised to its highest peak (= 1), with parameters of its own. Its peaks' FWHM are fitted with the Caglioti function, FWHM² = U·tan²θ + V·tanθ + W, which gives the instrument's width at any angle: the samples' corrected sizes take it off in quadrature. One file at a time: a file dropped replaces the one there.`;
 
 /* ---- The card's markup (to v560 in xrd-peaks.js), and its section of the Results ----
@@ -138,6 +157,8 @@ const LEGEND = `<div class="legend">
 const BL_TITLE = 'Subtract a SNIP baseline (the background) before the peak search and the FWHM; unticked, none: the pattern is taken as it is, from zero';
 const CHIP_TITLE = "Switch all / one: to one, every sample starts from the common value; back to all, the common value is the shown sample's";
 const chip = (p, k, mode)=> `<button type="button" class="mode-chip" id="${p}Mode${k}" title="${CHIP_TITLE}">${mode}</button>`;
+// The sample's CIF (v575): its title, on its name and on its selector.
+const CIF_TITLE = "The sample's CIF, one or none: its species, whose reflections name its peaks and by which the Results chart its sizes";
 /* A width's field (the smoothing's, the SNIP's): its value in °2θ and, in the same box after
    it, muted, what it spans in points of the pattern on show (syncHints). The box is a
    label: a click on the points is one in the field. */
@@ -235,7 +256,11 @@ function sampleParamsHtml(p, { NORM_OPTIONS }){
                 </select>
                 <input type="text" inputmode="decimal" class="lambda-val" id="${p}Lambda" value="1.540598" readonly title="Wavelength (Å)">
               </div>
+              <label class="txt-label" for="${p}Cif" title="${CIF_TITLE}">CIF</label>
+              <select id="${p}Cif" class="pg-field" title="${CIF_TITLE}"></select>
             </div>
+            <input type="file" id="${p}CifInput" accept=".cif,.CIF" style="display:none">
+            <div id="${p}CifNote" class="xrd-cif-note"></div>
             <div id="${p}StepNote"></div>
             <div class="xrd-pk-btns">
               <button class="btn plot-action-btn" id="${p}AddPeak" title="Add a peak by clicking on the plot">+ Add peak</button>
@@ -285,8 +310,9 @@ function resHtml(p, { PLOT_DL_ICON }){
 const NO_PEAKS = '<p class="txt-meta xrd-no-peaks">No peaks found with current parameters.</p>';
 // The Results' stacked patterns' legend: those drawn (shown, their indices in fs), each in its colour.
 const stackLegendHtml = (fs, shown, { esc })=> shown.map(k=> `<span><i style="background:${esc(fs[k].color)}"></i>${esc(fs[k].label)}</span>`).join('');
-// The size chart's legend: its series (xrd-peaks-model.js sizeSeries), each its boxes' colour.
-const sizeLegendHtml = SER => SER.map(m=> `<span><i class="mk-box" style="background:${m.color}"></i>${m.name}</span>`).join('');
+// The size chart's legend: its series (xrd-peaks-model.js sizeSeries), each its boxes' colour,
+// named after its species (v575: a CIF's name, escaped).
+const sizeLegendHtml = (SER, { esc })=> SER.map(m=> `<span><i class="mk-box" style="background:${m.color}"></i>${esc(m.name)}</span>`).join('');
 
 export { fmtMeanStd, fmtPar, fmtCell, outsideStdHtml, belowInstrHtml, stepNoteHtml, peakTableHtml, cagliotiHtml, sizeChipsHtml, sizeNoteHtml,
-  PEAKS_INFO, STD_INFO, cardHtml, resHtml, NO_PEAKS, stackLegendHtml, sizeLegendHtml };
+  cifOptionsHtml, OLD_GROUPS, PEAKS_INFO, STD_INFO, cardHtml, resHtml, NO_PEAKS, stackLegendHtml, sizeLegendHtml };
