@@ -119,7 +119,7 @@ ID della mappa tra parentesi. Fase: 1 file illeggibile, 2 drop zone e testi, 3 c
 | G06 | Un nome: `the GC software's scale (k)`; GI13 via, i rischi nominati nelle righe di GC11 | fatto in v567 |
 | G07–G12 | × che non regge (GI07 GI08), righe ambra → warn compatto, "Suspicious" in un colore, "Method changed" una volta, campi rifiutati (C19) | fatto in v571 (G07: ogni box della card Integration compatto, senza ×) |
 | G13 | `Light-on time is before first injection` → `Light-on at or before the first injection: no point before light-on.` | fatto in v567 (vedi nota) |
-| G14 | GI35 → `Opened, to check:` + `{file}: saved by an older version without its GC table: …`, con la sua × | fatto in v567; v573: la × marca il file e regge (sotto) |
+| G14 | GI35 → `Opened, to check:` + `{file}: saved by an older version without its GC table: …`, con la sua × | fatto in v567; v573: la × marca il file e regge (sotto); v588: tolto, con la calibrazione senza tabella che non si apre più (compatibilità, CLAUDE.md) |
 | G15 | Results nascosta senza motivo → grigio `No rate to show: no sample's interval overlaps its injections.` sotto la card | fatto in v567 |
 
 Nota G13: la proposta diceva "at or after"; la condizione del codice (nessuna iniezione prima dell'accensione) è "at or before", ed è quella scritta.

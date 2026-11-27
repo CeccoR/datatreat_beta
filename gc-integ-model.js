@@ -1,10 +1,10 @@
 /* =========================================================
    GC — the Integration cards' calculations, which touch no page (gc-integ.js wires them to
    the cards; tests/integmodel.test.mjs calls them in Node): the method (the engine's, its
-   windows' edges the card's) as a project holds it and its key, the results' keys of every
-   version, a result as the store keeps it, the calibration (its unit, intercepts, files and
-   levels) as a project holds it; the raw chromatograms and a calibration's table read once
-   per file; the results held, taken from a state and saved, the states a result is written
+   windows' edges the card's) as a project holds it and its key, the results' keys (the
+   engine's id in each, v588), a result as the store keeps it, the calibration (its unit,
+   intercepts, files and levels) as a project holds it; the raw chromatograms and a
+   calibration's table read once per file; the results held, taken from a state and saved, the states a result is written
    into, what the job integrates (the files in view first), what a card's run has left; the
    pairs and files a card shows, their results under the method they come from, the
    standards' names, rows and lines, a gas's areas turned
@@ -31,11 +31,10 @@
    calibration (cal), the overview's gas and y (ovGas, ovY), what it shows (selName, selK)
    and Analysis's values kept (valuesKept).
 ========================================================= */
-import { DEFAULT_METHOD, readTcd, windowCurves, fitCalibration, transferK } from './gc-tcd.js';
+import { DEFAULT_METHOD, ENGINE_ID, readTcd, windowCurves, fitCalibration, transferK } from './gc-tcd.js';
 import { decodeText } from './textdata.js';
 import { looksTcd, stemOf } from './gc-pair.js';
 import { fixed } from './db.js';
-import { keepSeen } from './alerts.js';
 
 /* ---- The colours, the marks and the rules (pure: the module's, for every instance) ---- */
 export const PEAK_COLORS = ['#9b7bff', '#4cc9a0', '#e3b341', '#d95fd0'];
@@ -113,23 +112,6 @@ export const curveName = (gasOf, m, wr, as)=> windowName(gasOf, m.windows.find(w
 // (a stored result's null, JSON's NaN, read back as NaN, never as 0)
 export const deNull = (U, v)=> v === null ? NaN : Array.isArray(v) ? v.map(x=> deNull(U, x)) : U.isObj(v) ? Object.fromEntries(Object.entries(v).map(([k, x])=> [k, deNull(U, x)])) : v;
 export const methodKey = (U, m)=> U.exactKey(m.windows.map(w=> [w.key, w.from, w.to]).concat([JSON.stringify(m)]));
-/* A results' key as v544 wrote it (a project saved then): its method held the trapezoids
-   (`trapezoid`, and its fit's spikes.roundsTrapezoid), which no fit ever read, and the key
-   holds the method's JSON, so v545's key for the same file and windows differs. Read back
-   without them it is v545's key, and the results are found under it: nothing is fitted
-   again (the results themselves are the fit's: their `trap`, the trapezoids', dropped). */
-export function normKey(U, key){
-  const i = key.indexOf('|');
-  let a, m;
-  try { a = JSON.parse(key.slice(i + 1)); m = Array.isArray(a) && typeof a[a.length - 1] === 'string' ? JSON.parse(a[a.length - 1]) : null; } catch(e){ return key; }
-  const sp = U.isObj(m) && U.isObj(m.fit) && U.isObj(m.fit.spikes) ? m.fit.spikes : null;
-  if (i < 0 || !U.isObj(m) || !('trapezoid' in m || (sp && 'roundsTrapezoid' in sp))) return key;
-  delete m.trapezoid;
-  if (sp) delete sp.roundsTrapezoid;
-  a[a.length - 1] = JSON.stringify(m);
-  return key.slice(0, i + 1) + U.exactKey(a);
-}
-export const noTrap = (U, r)=>{ if (U.isObj(r) && U.isObj(r.gases)) Object.values(r.gases).forEach(x=>{ if (U.isObj(x)) delete x.trap; }); return r; };
 export const isDefault = (U, m)=> methodKey(U, m) === methodKey(U, methodIn(U, null));
 // (windows edited and not integrated yet: Integrate's to apply, v578)
 export const isPending = (U, C)=> methodKey(U, C.edit) !== methodKey(U, C.method);
@@ -143,31 +125,19 @@ export const compact = (U, r)=> r && deNull(U, JSON.parse(JSON.stringify(r, (k, 
    A file of it (v549): the standards' raw chromatograms (name, rawBytes: what is
    integrated, its results keyed by these bytes as any file's) and the GC software's table
    of the same injections (`table`: { name, rawBytes }), read for one thing only, each
-   injection's name; a level per chromatogram, typed by hand. A file of v544–v548's has no
-   table: kept as it is, its standards named by column until the table is dropped, which
-   its window says until its × marks the file seen (`seen`, alerts.js: v573; to v572 the ×
-   held while the window was open). */
+   injection's name; a level per chromatogram, typed by hand. A file with no table (saved by
+   v544–v548) is none, left out with its levels (v588; to v587 kept, its standards named by
+   column, which its window said). */
 export const blankLevel = ()=> ({ h2: null, o2: null, on: true });
 export function calIn(U, c){
   const s = U.isObj(c) ? c : {}, z = U.isObj(s.zero) ? s.zero : {};
-  const lv = v => U.num(v, null);
-  const files = Array.isArray(s.files) ? s.files.filter(f=> U.isObj(f) && f.rawBytes instanceof Uint8Array).map(f=> keepSeen({
+  const lv = v => U.num(v, null), held = f => U.isObj(f) && f.rawBytes instanceof Uint8Array;
+  const files = Array.isArray(s.files) ? s.files.filter(f=> held(f) && held(f.table)).map(f=> ({
     name: typeof f.name === 'string' && f.name ? f.name : 'calibration.csv', rawBytes: f.rawBytes,
     levels: Array.isArray(f.levels) ? f.levels.map(x=> U.isObj(x) ? { h2: lv(x.h2), o2: lv(x.o2), on: x.on !== false } : blankLevel()) : [],
-    ...(U.isObj(f.table) && f.table.rawBytes instanceof Uint8Array ? { table: { name: typeof f.table.name === 'string' && f.table.name ? f.table.name : 'calibration table.csv', rawBytes: f.table.rawBytes } } : {}), seen: f.seen })) : [];
+    table: { name: typeof f.table.name === 'string' && f.table.name ? f.table.name : 'calibration table.csv', rawBytes: f.table.rawBytes } })) : [];
   return { unit: U.oneOf(s.unit, UNITS), zero: { h2: z.h2 === true, o2: z.o2 === true }, files };
 }
-/* The calibration's files of card `id` in a state, marked by `mark` (alerts.js markSeen's
-   `put`, its window's ×): the state itself where none changed. */
-export const inCal = (U, id)=> (s, mark)=>{
-  if (!U.isObj(s) || !Array.isArray(s.cards)) return s;
-  const cards = s.cards.map(c=>{
-    if (!U.isObj(c) || c.id !== id || !U.isObj(c.cal) || !Array.isArray(c.cal.files)) return c;
-    const files = mark(c.cal.files);
-    return files === c.cal.files ? c : { ...c, cal: { ...c.cal, files } };
-  });
-  return cards.some((c, i)=> c !== s.cards[i]) ? { ...s, cards } : s;
-};
 export const calCopy = c => ({ unit: c.unit, zero: { ...c.zero }, files: c.files.map(f=> ({ ...f, levels: f.levels.map(l=> ({ ...l })) })) });
 
 /* ---- The raw chromatograms, read once per file (by its bytes) ---- */
@@ -199,8 +169,10 @@ export function tableOf(S, b){
   return t;
 }
 
-/* ---- The results ---- */
-export const keyOf = (U, rec, m)=> fileKey(U, rec) + '|' + methodKey(U, m);
+/* ---- The results ----
+   A file's under a method kept by its bytes, the engine's id (gc-tcd.js ENGINE_ID, v588) and
+   the method, a `|` between each. */
+export const keyOf = (U, rec, m)=> `${fileKey(U, rec)}|${ENGINE_ID}|${methodKey(U, m)}`;
 // (the job's own, as they come, over the store's)
 export const resultsAt = (S, key)=> (S.job && S.job.works.get(key)) || S.store.get(key) || null;
 /* A Stop holding a card's files (v582): every result there is then (the store's, the job's so
@@ -234,15 +206,17 @@ export function savedResults(U, S){
   usedKeys(U, S).forEach(k=>{ const v = S.store.get(k); if (v && v.some(Boolean)) out[k] = v; });
   return Object.keys(out).length ? out : null;
 }
-// A state's results taken in (RESTORED: an array of objects or nulls under each key),
-// merged with those held (a result held is never taken away). A key of v544's is read as
-// v545's (normKey), its results without their trapezoids.
+/* A state's results taken in (RESTORED: an array of objects or nulls under each key), merged
+   with those held (a result held is never taken away). Those of another engine, or of none (a
+   key of no engine's id: saved to v587), are not taken: their chromatograms are integrated
+   again, with the windows their card's results come from (v588; to v587 every result as it
+   was saved, v544's keys read as v545's). */
 export function loadResults(U, store, obj){
   if (!U.isObj(obj)) return;
-  for (const k0 of Object.keys(obj)){
-    const v = obj[k0], k = normKey(U, k0);
-    if (!Array.isArray(v)) continue;
-    const had = store.get(k), arr = v.map(x=> U.isObj(x) && U.isObj(x.gases) && Array.isArray(x.windows) ? noTrap(U, deNull(U, x)) : null);
+  for (const k of Object.keys(obj)){
+    const v = obj[k];
+    if (!Array.isArray(v) || k.split('|')[1] !== ENGINE_ID) continue;
+    const had = store.get(k), arr = v.map(x=> U.isObj(x) && U.isObj(x.gases) && Array.isArray(x.windows) ? deNull(U, x) : null);
     if (had && had.length === arr.length) store.set(k, had.map((x, i)=> x || arr[i]));
     else if (!had || !had.some(Boolean)) store.set(k, arr);
   }
@@ -347,12 +321,10 @@ export function stepK(S, C, d){
 }
 
 /* ---- Concentrations: the standards' line per gas, else the software's scale ---- */
-/* A standard's name (v549): its injection's in the table (its Analysis column), else
-   its injection's number; a file with no table (saved by v544–v548) by its column. */
+/* A standard's name (v549): its injection's in the table (its Analysis column), else (none
+   there, or a table no longer read) its injection's number. */
 export function stdName(S, f, j){
-  const t = f.table ? tableOf(S, f.table.rawBytes) : null;
-  if (!t || t.error) return `column ${j + 1}`;
-  const n = Array.isArray(t.names) && typeof t.names[j] === 'string' ? t.names[j].trim() : '';
+  const t = tableOf(S, f.table.rawBytes), n = !t.error && Array.isArray(t.names) && typeof t.names[j] === 'string' ? t.names[j].trim() : '';
   return n || `injection ${j + 1}`;
 }
 export function calRows(U, S, C){
@@ -365,7 +337,7 @@ export function calRows(U, S, C){
   return rows;
 }
 // (a standard's whole name: its injection's, its files' and its column)
-export const fullName = x => `${x.name} (${x.f.table ? `${x.f.table.name}, ` : ''}${x.f.name}, column ${x.j + 1})`;
+export const fullName = x => `${x.name} (${x.f.table.name}, ${x.f.name}, column ${x.j + 1})`;
 // The standards of gas g that its line takes: ticked, with a level and a fitted area.
 export const calPoints = (U, S, C, g)=> calRows(U, S, C).filter(x=> x.lv.on && fin(x.lv[g]) && x.r && x.r.gases && x.r.gases[g] && fin(x.r.gases[g].area));
 export function calFit(U, S, C, g){
@@ -782,14 +754,14 @@ export function takeDropped(S, name, bytes){
 /* The files dropped (`got`) and those waiting (`held`) paired: a table and raw
    chromatograms of one name (with and without _TCD, a browser's " (1)" aside: stemOf) a
    pair, added (`add`) when the table has as many injections as there are chromatograms (its
-   read primed); a table whose partner is a calibration file of v544–v548's (raw
-   chromatograms alone) names its standards (`named`); a file whose partner is not there
-   waits (`held`, not in the project). What is not loaded, and why, goes into `bad`; the
-   files loaded already, by name, into `dup` (v567: to v566 among `bad`). */
+   read primed); a file whose partner is not there waits (`held`, not in the project; v588: a
+   table no longer names the standards of a calibration file of v544–v548's, none being
+   kept). What is not loaded, and why, goes into `bad`; the files loaded already, by name,
+   into `dup` (v567: to v566 among `bad`). */
 export function pairDropped(S, cal, held, got, bad){
   const pool = [...held.filter(h=> !got.some(g=> g.name === h.name)), ...got], stem = x => stemOf(x.name).stem;
-  const loaded = new Set(cal.files.flatMap(f=> f.table ? [f.name, f.table.name] : [f.name]));
-  const add = [], named = [], dup = [];
+  const loaded = new Set(cal.files.flatMap(f=> [f.name, f.table.name]));
+  const add = [], dup = [];
   pool.forEach(x=>{ if (loaded.has(x.name)){ x.done = true; dup.push(x.name); } });
   // (a pair's counts: the table's injections, its rows with a date and a value as the
   // file list counts them, one a chromatogram)
@@ -803,24 +775,15 @@ export function pairDropped(S, cal, held, got, bad){
     prime(S, c.bytes, c.d);
     add.push({ name: c.name, rawBytes: c.bytes, levels: c.d.cols.map(blankLevel), table: { name: t.name, rawBytes: t.bytes } });
   });
-  pool.filter(x=> x.kind === 'table' && !x.done).forEach(t=>{
-    const fi = cal.files.findIndex((f, i)=> !f.table && !named.some(z=> z.fi === i) && stemOf(f.name).stem === stem(t));
-    if (fi < 0) return;
-    t.done = true;
-    const d = dataOf(S, cal.files[fi]), why = d.error ? `its raw chromatograms cannot be read: ${d.error}` : counts(t.t, d.cols.length);
-    if (why){ bad.push(`${t.name} + ${cal.files[fi].name}: ${full(why)}`); return; }
-    named.push({ fi, table: { name: t.name, rawBytes: t.bytes } });
-  });
   const wait = pool.filter(x=> !x.done);
   wait.forEach(x=> bad.push(x.kind === 'tcd'
     ? `${x.name}: raw chromatograms without their GC table: drop the table too, the same name without _TCD (.csv or .txt); this file waits here for it.`
     : `${x.name}: a GC table without its raw chromatograms: drop them too, the same name with _TCD; this file waits here for them.`));
-  return { add, named, held: wait, dup };
+  return { add, held: wait, dup };
 }
-// The calibration with the pairs added and the tables naming its files (pairDropped's).
-export function calWith(cal, add, named){
+// The calibration with the pairs added (pairDropped's).
+export function calWith(cal, add){
   const c = calCopy(cal);
-  named.forEach(({ fi, table })=>{ c.files[fi] = { ...c.files[fi], table }; });
   c.files.push(...add);
   return c;
 }
@@ -856,7 +819,7 @@ export function levelsOf(L){
 }
 
 /* ---- The card's state: saved and put back ---- */
-// (ovGas kept as v544 had it, a list: one gas now)
+// (ovGas a list of one gas, as every version from v544 writes it)
 // (and the windows as edited where they are not those applied: `edit`, v578)
 export const snapshotOf = (U, C)=> ({ method: clone(C.method), ...(isPending(U, C) ? { edit: clone(C.edit) } : {}), cal: calCopy(C.cal), ovGas: [C.ovGas], ovY: C.ovY });
 /* A state put back: the method its results come from, the windows as edited (a window an

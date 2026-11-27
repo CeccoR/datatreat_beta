@@ -3,7 +3,6 @@ import { Plot, svgEl, linkX, niceTicks } from './plot.js';
 import { plotWrap, chipRow, viewOf, setView, PLOT_DL_ICON } from './modcharts.js';
 import { cardInfo, fileSafe, nameDownloads } from './cards.js';
 import { isObj, oneOf, num } from './modkit.js';
-import { markSeen } from './alerts.js';
 import { integrateMany } from './gc-tcd-pool.js';
 import { snavHtml, snav } from './snav.js';
 import * as M from './gc-integ-model.js';
@@ -19,12 +18,14 @@ import * as H from './gc-integ-html.js';
 
    createInteg(ctx) is the instance's (one per GC tab), shared by its Integration cards:
    - the raw chromatograms read from their bytes (kept by them: readTcd once per file);
-   - the results, by the file's bytes and the method (`store`: a key `bytes|method` → a result
-     per chromatogram, null where none yet): a pure function of the two. Those of a method a
-     card's results come from (applied) are written into every state of the history that
-     holds the file (kit.patch) as they come, no step of their own, and saved with the
-     project (the module state's `integ`, the keys its cards use), so that a project
-     reopened, a tab woken or an undo never fits again;
+   - the results, by the file's bytes, the engine and the method (`store`: a key
+     `bytes|engine|method` → a result per chromatogram, null where none yet): a pure function
+     of the three. Those of a method a card's results come from (applied) are written into
+     every state of the history that holds the file (kit.patch) as they come, no step of their
+     own, and saved with the project (the module state's `integ`, the keys its cards use), so
+     that a project reopened, a tab woken or an undo never fits again; a project's results of
+     another engine, or of none (saved to v587), are not taken: its files are integrated as it
+     opens (v588, gc-integ-model.js loadResults);
    - the job: what no result is held for, integrated in the background (gc-tcd-pool.js), all
      of it in one lane of workers, the chromatograms in view first, with its progress and
      Stop on every Integration card, a card's Stop holding that card's files alone (v581). It
@@ -66,7 +67,7 @@ export const INTEG_INFO = H.integInfo(cardInfo(false, false));
      GAS, gasOf, C_FIT     the gases by key, a gas's words (another's drawn so), the fits' colour
      read, tabs            the raw chromatograms read and the calibrations' tables, by their
                            bytes (gc-integ-model.js dataOf, tableOf)
-     store                 the results: a key `bytes|method` → a result per chromatogram
+     store                 the results: a key `bytes|engine|method` → a result per chromatogram
      job, failed           what is being integrated ({ ac, groups (gc-integ-model.js
                            wanted's files), works (key → its results so far), left (key →
                            how many to go), carry, n, done, total, name (the file last done)
@@ -695,7 +696,6 @@ function exportEntries(S, C, n){
      held                  the files dropped waiting for their partner (not in the project),
                            let go as it closes
      stdNav, onKey         the standards' selector (snav.js), its keys' listener (while open)
-     warn                  the markup of its box of a calibration of v544–v548's, as drawn
 ========================================================= */
 function calWindow(S, C){
   const m = document.createElement('div');
@@ -703,12 +703,11 @@ function calWindow(S, C){
   m.style.display = 'none';
   m.innerHTML = H.calHtml(HU, C.p);
   S.ctx.layer.appendChild(m);
-  const W = { m, q: s => m.querySelector(s), from: null, isOpen: false, rowsNow: [], held: [], stdNav: null, onKey: null, warn: '' };
+  const W = { m, q: s => m.querySelector(s), from: null, isOpen: false, rowsNow: [], held: [], stdNav: null, onKey: null };
   W.onKey = e => onCalKey(S, C, W, e);
   const info = W.q('.instr-info'), instr = W.q('.xrd-std-instr');
   info.addEventListener('click', ()=>{ const o = instr.style.display === 'none'; instr.style.display = o ? '' : 'none'; info.classList.toggle('is-on', o); info.setAttribute('aria-expanded', String(o)); });
   m.addEventListener('click', e=>{ if (e.target === m || e.target.closest('.xrd-std-x')) closeCal(W); });
-  W.q('.gci-cal-warn').addEventListener('click', e=>{ if (e.target.closest('[data-action="gci-cal-dismiss-opened"]')) dismissCalWarn(S, C, W); });
   W.q('.gci-cal-side .gci-integ').addEventListener('click', ()=> press(S, C));
   setupDropzone(W.q('.gci-cal-dz'), W.q('.gci-cal-in'), list => onCalDrop(S, C, W, list));
   wireCalEdits(S, C, W);
@@ -738,9 +737,8 @@ function calChanged(S, C, W, levels){ C.valuesKept.clear(); draw(S, C, true); if
 
 /* The files dropped (v549), each told by what it holds and paired (gc-integ-model.js
    takeDropped, pairDropped): a pair loaded when its table has as many injections as there
-   are chromatograms; a file whose partner is not there waits (W.held) until it is dropped;
-   a table whose partner is a calibration file of v544–v548's names its standards. A file
-   whose bytes cannot be read (gone from the disk: utils.js NOT_READ) is said and left out,
+   are chromatograms; a file whose partner is not there waits (W.held) until it is dropped. A
+   file whose bytes cannot be read (gone from the disk: utils.js NOT_READ) is said and left out,
    not the rest of the drop (to v566 it ended the drop with no word). Each drop's alerts
    replace the last's. Standards taken in are integrated, a Stop before not holding them, as
    files dropped on the module are (gc.js: v569; to v568 they waited for Re-integrate, the
@@ -756,9 +754,9 @@ async function onCalDrop(S, C, W, list){
   const P = M.pairDropped(S, C.cal, W.held, got, bad);
   W.held = P.held;
   W.q('.gci-cal-alerts').innerHTML = H.dropAlertHtml(HU, bad, P.dup);
-  if (!P.add.length && !P.named.length) return;
-  if (P.add.length) C.calSel = M.calRows(U, S, C).length;
-  C.cal = M.calWith(C.cal, P.add, P.named);
+  if (!P.add.length) return;
+  C.calSel = M.calRows(U, S, C).length;
+  C.cal = M.calWith(C.cal, P.add);
   ensure(S, C);
   calChanged(S, C, W);
 }
@@ -855,9 +853,8 @@ function paintWindow(S, C, W){
   if (!W.isOpen) return;
   const was = focusedLevel(W), box = W.q('.gci-cal-table'), top = box.scrollTop, none = !C.cal.files.length;
   W.q('.gci-cal-files').innerHTML = H.calFilesHtml(HU, C.cal.files);
-  paintCalWarn(C, W);
   W.m.classList.toggle('gci-cal-none', none);
-  if (none){ W.rowsNow = []; C.calDrawn = null; W.q('.gci-cal-fits').innerHTML = ''; W.stdNav.update(); return; }
+  if (none){ noStds(C, W); return; }
   W.q('.gci-cal-unit-in').value = C.cal.unit;
   W.m.querySelectorAll('.gci-u').forEach(s=>{ s.textContent = `(${C.cal.unit})`; });
   const rows = W.rowsNow = M.calRows(U, S, C);
@@ -870,6 +867,15 @@ function paintWindow(S, C, W){
   W.stdNav.update();
   drawStd(S, C, W, true);
   paintFits(S, C, W);
+}
+/* No standards: nothing of those there were left in the window, hidden or not (v588: to v587
+   their rows, the plot of the one on show, its legend, line and notice, the run's words and the
+   gases' lines stayed under the drop zone, hidden), drawn anew with the next. */
+function noStds(C, W){
+  W.rowsNow = []; C.calDrawn = null; C.calPlots = { chrom: null, resid: null };
+  ['.gci-cal-levels tbody', 'svg.gci-chrom', 'svg.gci-resid', '.gci-cal-legend', '.gci-cal-fit', '.gci-cal-notice', '.gci-cal-status', '.gci-cal-fits'].forEach(s=>{ W.q(s).innerHTML = ''; });
+  W.q('.gci-cal-status')._html = '';
+  W.stdNav.update();
 }
 /* Its Integrate, the card's (one run, one swap: v578), under its words and progress: a
    failure, a Stop, the windows edited said as on the card; its standards' counts (to v577 a
@@ -887,20 +893,6 @@ function focusedLevel(W){
 function refocus(W, was){
   const f = W.m.querySelector('input' + was.k);
   if (f){ if (f.type === 'text'){ f.value = was.v; } f.focus({ preventScroll: true }); if (was.s != null) try { f.setSelectionRange(was.s, was.s); } catch(e){ /* not a text field */ } }
-}
-/* A calibration of v544–v548's, its raw chromatograms alone: said, its standards named
-   by column, until its table is dropped or its box's × marks the files seen, in the card's
-   calibration and in every state of the history that holds it (alerts.js markSeen, no step
-   of its own: undo and redo keep it, the project saves it). Drawn again only where it
-   changed: the window is drawn anew while the standards are integrated. */
-const calNotes = C => H.calNotes(HU, C.cal.files);
-function paintCalWarn(C, W){
-  const html = H.calWarnHtml(HU, calNotes(C));
-  if (W.warn !== html){ W.warn = html; W.q('.gci-cal-warn').innerHTML = html; }
-}
-function dismissCalWarn(S, C, W){
-  markSeen(S.kit, calNotes(C), 'opened', { put: M.inCal(U, C.a.id) });
-  paintCalWarn(C, W);
 }
 function paintFits(S, C, W){
   const fits = W.q('.gci-cal-fits');

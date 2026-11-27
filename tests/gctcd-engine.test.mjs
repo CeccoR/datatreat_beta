@@ -11,12 +11,20 @@
    the software's factor carried over (median of area/%mol); and the workers' pool
    (gc-tcd-pool.js) on worker_threads made to look like Web Workers: the results of one call
    each, in order, progress said, cancelled by an AbortSignal; files of their own times and
-   methods of their own in one call (v578). */
+   methods of their own in one call (v578). The engine's id (v588: ENGINE_ID, in the key of
+   every result a project saves) changed with the engine: gc-tcd.js and gc-tcd.worker.js
+   hashed beside the id in tests/golden/tcdengine.json, either file changed under the same id a
+   failure (npm run test:update writes the golden anew only with a new id). */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { createHash } from 'node:crypto';
 import { Worker as NodeWorker } from 'node:worker_threads';
 import * as G from '../gc-tcd.js';
 import { integrateMany } from '../gc-tcd-pool.js';
+
+const UPDATE = !!process.env.UPDATE_GOLDEN || process.env.npm_lifecycle_event === 'test:update';
+const ENGINE = new URL('./golden/tcdengine.json', import.meta.url);
 
 const near = (a, b, tol, what)=> assert.ok(Math.abs(a - b) <= tol, `${what}: ${a} vs ${b} (tolerance ${tol})`);
 const rel = (a, b, tol, what)=> assert.ok(Math.abs(a - b) <= tol*Math.abs(b), `${what}: ${a} vs ${b} (relative tolerance ${tol})`);
@@ -40,6 +48,20 @@ function synth({ h2 = 2000, o2 = 800, s310 = 300, stepH = -12, noise = 1, spikeA
   if (spikeAt != null) y[t.indexOf(spikeAt)] += 150;
   return { t, y };
 }
+
+/* v588: a project's results are kept under the engine's id (gc-integ-model.js keyOf), and those
+   of another id are integrated again as it opens: an engine changed under the same id would have
+   them taken as they were. The engine's files' text (line ends as LF), hashed: the same as the
+   golden's with the same id, or another with another id, never another under the same. */
+test('the engine\'s id changes with the engine: its files\' hash beside it (v588)', ()=>{
+  const text = ['gc-tcd.js', 'gc-tcd.worker.js'].map(f=> `${f}\n${fs.readFileSync(new URL('../' + f, import.meta.url), 'utf8').replace(/\r\n/g, '\n')}`).join('\n');
+  const got = { id: G.ENGINE_ID, sha256: createHash('sha256').update(text).digest('hex') };
+  assert.equal(typeof got.id, 'string');
+  const want = fs.existsSync(ENGINE) ? JSON.parse(fs.readFileSync(ENGINE, 'utf8')) : null;
+  if (want && got.sha256 !== want.sha256) assert.notEqual(got.id, want.id, 'gc-tcd.js or gc-tcd.worker.js changed: give gc-tcd.js a new ENGINE_ID, then npm run test:update');
+  if (UPDATE){ fs.writeFileSync(ENGINE, JSON.stringify(got, null, 1) + '\n'); return; }
+  assert.deepEqual(got, want, 'a new ENGINE_ID: npm run test:update writes its hash');
+});
 
 test('erfc and erfcx: scipy.special values, relative error within 1e-15 (1e-14 for erfcx below −1, 1e-13 for erfc past 4)', ()=>{
   const erfc = [[0, 1.0], [0.25, 0.7236736098317631], [0.5, 0.4795001221869535], [1, 0.15729920705028516], [2, 0.004677734981047266],

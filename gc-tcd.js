@@ -39,9 +39,14 @@ const EPS = 2.220446049250313e-16;      // np.finfo(float).eps
    (the numbers of reintegra_tcd.py v2.1, CFG and fit_picchi/_fit defaults)
 --------------------------------------------------------- */
 const deepFreeze = o =>{ if (o && typeof o === 'object' && !Object.isFrozen(o)){ Object.values(o).forEach(deepFreeze); Object.freeze(o); } return o; };
+/* The engine's id (v588), part of the key the app keeps each result under (gc-integ-model.js
+   keyOf): a project's result of another engine, or of none (saved to v587), is never taken, its
+   chromatogram integrated again as the project opens. A new one with any change to this file or
+   to gc-tcd.worker.js (tests/gctcd-engine.test.mjs holds their hash beside it). */
+export const ENGINE_ID = 'tcd-1';
 /* Frozen throughout: a variant is made from a copy, structuredClone(DEFAULT_METHOD). Its JSON
-   is part of the key the app keeps the results under (gc-integ.js methodKey): any change to
-   it, even of a setting no fit reads, fits every saved project again. */
+   is part of the key the app keeps the results under (gc-integ-model.js methodKey): any change
+   to it, even of a setting no fit reads, fits every saved project again. */
 export const DEFAULT_METHOD = deepFreeze({
   windows: [{ key: 'H2O2', from: 268, to: 326, baseDegree: 1,
     peaks: [{ name: 'H2', t: 287.3, gas: 'h2' }, { name: 'O2', t: 302.3, gas: 'o2' }, { name: 'S310', t: 310.2, gas: null }],

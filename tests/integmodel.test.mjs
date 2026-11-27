@@ -1,16 +1,20 @@
 /* GC's Integration cards: their calculations (gc-integ-model.js) and their words and markup
    that need no page (gc-integ-html.js), in Node: no browser (v560). The method as a project
-   holds it (windows' edges kept or refused, the engine's own settings) and its key, v544's
-   results' keys read as v545's, a result as the store keeps it (8 digits, NaN through JSON,
-   no parameters), the calibration read back (every value made valid); the raw chromatograms
+   holds it (windows' edges kept or refused, the engine's own settings) and its key, the
+   results' keys with the engine's id (v588), a result as the store keeps it (8 digits, NaN
+   through JSON, no parameters), the calibration read back (every value made valid, a file with
+   no table none, v588); the raw chromatograms
    and the calibration's tables read once per file; the results taken in (merged, a result
-   never taken away, malformed ones dropped) and saved, the states a result is written into;
+   never taken away, malformed ones and those of another engine or of none dropped) and saved,
+   the states a result is written into; an old project (v588: results of no engine's id and of
+   another's, a calibration of v544–v548 with no table) integrated again with the windows
+   applied, nothing of it taken, and one of this engine's (an undo's, a tab's) nothing;
    what the job integrates; the entries a card shows (pairs, a count that differs, raw
    chromatograms alone and paired, files left out, bytes not stored), their results under
    the method applied, never the windows edited (v578: to v577 the one before it, stale);
    what the job integrates first (the chromatograms in view, then a run's windows), what a
    card has left; the standards' names (the table's Analysis
-   column, its number, a column of v544–v548's), rows and lines; a gas's concentration by the
+   column, its number), rows and lines; a gas's concentration by the
    standards' line (%mol and ppm, through zero), by the GC software's scale (k) or none, and
    what Analysis takes of a sample, kept while nothing changes; the suspicious rule against a
    hand calculation (χ²ᵣ, a fit that did not converge, a column that ends early, an area out
@@ -19,7 +23,7 @@
    the points left out, the legend), the run overview (its points, axes and what a point
    says), the point nearest the pointer, the status line in every state, the alerts' facts,
    integration.csv and chromatogram.csv; the calibration window's files told by what they
-   hold and paired (waiting, refused, already loaded, an old calibration named), a level as
+   hold and paired (waiting, refused, already loaded), a level as
    typed, the thumbnails, a gas's line and its levels; the card's state saved and put back;
    every name in the markup escaped. Then 60 cases (random rows of every kind, a state of
    every version and malformed, results real and made up, v544's and malformed, then eight
@@ -29,13 +33,14 @@
    loaded, a file left out or unpaired, a state put back, showNext, clear; at each, the status
    line, the alerts, the selectors' names, the chromatogram's and the overview's plot calls,
    notices and legends, Peaks, Windows, the CSVs, the state, sig, what Analysis takes, the
-   results saved and, while it is open, the calibration window's files, warning, rows,
-   status, fit, lines and what a drop said) and four scenes (an old calibration named beside
-   standards added after it; methods changed, refused and reset; rows of every kind chosen,
+   results saved and, while it is open, the calibration window's files, rows,
+   status, fit, lines and what a drop said) and four scenes (an old calibration, of no table,
+   with standards added after it; methods changed, refused and reset; rows of every kind chosen,
    left out and unpaired; v578: windows edited, applied as Integrate applies them, a state
    with windows pending put back) as v559's gc-integ.js gave them, a window's edges pending
    until applied from v578 (a window edited, its results the method's applied; with no
-   standards, the calibration window its files and warning alone), run from its source on a
+   standards, the calibration window its files alone), the results of no engine's id and a
+   calibration's files of no table none from v588, run from its source on a
    page of stubs: their digests in tests/golden/integmodel.json (npm run
    test:update writes them anew after a change meant to alter them). utils.js's, modkit.js's,
    modcharts.js's, plot.js's and snav.js's helpers, which need a page to load, are taken
@@ -213,7 +218,7 @@ function instance(all, cards){
   return { S, card };
 }
 
-test('the method, its key and v544\'s; a result as the store keeps it; the calibration read back', ()=>{
+test('the method, its key and the results\' with the engine\'s id (v588); a result as the store keeps it; the calibration read back', ()=>{
   const m = M.methodIn(U, { windows: [{ key: 'H2O2', from: 270.4, to: 330 }, { key: 'X', from: 1, to: 2 }], trapezoid: 1 });
   assert.deepEqual([m.windows.length, m.windows[0].from, m.windows[0].to, 'trapezoid' in m], [1, 270.4, 330, false]);
   for (const bad of [null, 'x', { windows: 'x' }, { windows: [{ key: 'H2O2', from: 330, to: 270 }] }, { windows: [{ key: 'H2O2', from: '1', to: 300 }] }, { windows: [null, { key: 'H2O2', from: NaN, to: 300 }] }])
@@ -221,39 +226,27 @@ test('the method, its key and v544\'s; a result as the store keeps it; the calib
   assert.notEqual(M.methodKey(U, ALT_M), M.methodKey(U, DEF));
   assert.ok(M.isDefault(U, DEF) && !M.isDefault(U, ALT_M));
   assert.notEqual(M.clone(DEF), DEF); assert.ok(Object.isFrozen(G.DEFAULT_METHOD) && !Object.isFrozen(M.clone(DEF)));
-  // v544's key (its method's trapezoids) read as v545's; any other left as it is
-  const k = M.keyOf(U, { rawBytes: BYTES['run_TCD.csv'] }, DEF), i = k.indexOf('|'), a = JSON.parse(k.slice(i + 1)), mm = JSON.parse(a[a.length - 1]);
-  mm.trapezoid = { on: 1 }; mm.fit.spikes.roundsTrapezoid = 3; a[a.length - 1] = JSON.stringify(mm);
-  assert.equal(M.normKey(U, k.slice(0, i + 1) + U.exactKey(a)), k);
-  for (const x of [k, 'no bar', 'a|not json', 'b|[1,2]', 'c|["{\\"x\\":1}"]']) assert.equal(M.normKey(U, x), x);
+  // a result's key: its file's bytes, the engine's id, the method (v588: to v587 no engine's)
+  assert.equal(M.keyOf(U, { rawBytes: BYTES['run_TCD.csv'] }, DEF), `${PAGE.bytesKey(BYTES['run_TCD.csv'])}|${G.ENGINE_ID}|${M.methodKey(U, DEF)}`);
   // a result kept: 8 digits, NaN as JSON's null and back, no parameters, typed arrays plain
   const r = M.compact(U, { gases: { h2: { area: 1.234567891234, sd: NaN, params: [1, 2] } }, windows: [{ p: new Float64Array([1/3, 2]), chi2r: -0 }] });
   assert.deepEqual([r.gases.h2.area, Number.isNaN(r.gases.h2.sd), 'params' in r.gases.h2, r.windows[0].p], [1.2345679, true, false, [0.33333333, 2]]);
   assert.equal(M.compact(U, null), null);
-  assert.deepEqual(M.noTrap(U, { gases: { h2: { area: 1, trap: 2 }, o2: 5 } }), { gases: { h2: { area: 1 }, o2: 5 } });
   assert.deepEqual(M.deNull(U, [null, { a: null, b: [1, null] }]).map(x=> canon(x)), ['"#NaN"', '{"a":"#NaN","b":["#1","#NaN"]}']);
-  // the calibration: every value made valid
-  const c = M.calIn(U, { unit: 'ppm', zero: { h2: 1, o2: true }, files: [null, { name: '', rawBytes: BYTES['lone_TCD.csv'], levels: [{ h2: 0.1, o2: 'x', on: 0 }, 5, { o2: Infinity, on: false }], table: { name: 7, rawBytes: BYTES['run.csv'] } }, { rawBytes: [1] }, { name: 'n', rawBytes: BYTES['run.csv'], levels: 'x', table: { rawBytes: 'no' } }] });
+  /* the calibration: every value made valid; a file with no table, or a table of no bytes, none
+     (v588: to v587 kept with no table, as v544–v548 saved them, its standards named by column),
+     the mark its window's × left (`seen`) none */
+  const c = M.calIn(U, { unit: 'ppm', zero: { h2: 1, o2: true }, files: [null, { name: '', rawBytes: BYTES['lone_TCD.csv'], levels: [{ h2: 0.1, o2: 'x', on: 0 }, 5, { o2: Infinity, on: false }], table: { name: 7, rawBytes: BYTES['run.csv'] }, seen: ['opened'] }, { rawBytes: [1] },
+    { name: 'n', rawBytes: BYTES['run.csv'], levels: 'x', table: { rawBytes: 'no' } }, { name: 'old (1)_TCD.csv', rawBytes: BYTES['old (1)_TCD.csv'], levels: [{ h2: 0.05 }, { h2: 0.1 }] }] });
   assert.equal(canon(c), canon({ unit: 'ppm', zero: { h2: false, o2: true }, files: [
-    { name: 'calibration.csv', rawBytes: BYTES['lone_TCD.csv'], levels: [{ h2: 0.1, o2: null, on: true }, { h2: null, o2: null, on: true }, { h2: null, o2: null, on: false }], table: { name: 'calibration table.csv', rawBytes: BYTES['run.csv'] } },
-    { name: 'n', rawBytes: BYTES['run.csv'], levels: [] }] }));
+    { name: 'calibration.csv', rawBytes: BYTES['lone_TCD.csv'], levels: [{ h2: 0.1, o2: null, on: true }, { h2: null, o2: null, on: true }, { h2: null, o2: null, on: false }], table: { name: 'calibration table.csv', rawBytes: BYTES['run.csv'] } }] }));
   assert.deepEqual(M.calIn(U, 'x'), { unit: '%mol', zero: { h2: false, o2: false }, files: [] });
   const cc = M.calCopy(c); cc.files[0].levels[0].h2 = 9; cc.zero.h2 = true;
   assert.deepEqual([c.files[0].levels[0].h2, c.zero.h2, cc.files[0].rawBytes === c.files[0].rawBytes], [0.1, false, true]);
-  /* A file's marks of what its window said seen (v573: its box of a calibration of v544–v548's,
-     its × kept in the state; to v572 not kept): those that are one, once each, copied with it;
-     none, no `seen`. Marked in a state by its card's id (inCal, alerts.js markSeen's put). */
-  const sc = M.calIn(U, { files: [{ name: 's', rawBytes: BYTES['lone_TCD.csv'], seen: ['opened', 4, 'opened', 'x', null, 'opened:k'] }, { name: 't', rawBytes: BYTES['run.csv'], seen: 'opened' }] });
-  assert.deepEqual([sc.files.map(f=> f.seen), M.calCopy(sc).files[0].seen], [[['opened', 'opened:k'], undefined], ['opened', 'opened:k']]);
-  const st = { cards: [{ id: 1, cal: c }, { id: 2, cal: sc }, 7] }, mk = v => v.some(f=> f.name === 'n') ? v.map(f=> f.name === 'n' ? { ...f, seen: ['opened'] } : f) : v;
-  const st1 = M.inCal(U, 1)(st, mk);
-  assert.deepEqual([st1.cards[0].cal.files.map(f=> f.seen), st1.cards[1] === st.cards[1], st1.cards[2], c.files[1].seen], [[undefined, ['opened']], true, 7, undefined]);
-  const bare = { cards: 'x' };
-  assert.ok(M.inCal(U, 2)(st, mk) === st && M.inCal(U, 1)(bare, mk) === bare && M.inCal(U, 1)(null, mk) === null, 'none marked: the state itself');
   // the card's state saved and put back
   const { S, card } = instance([], []), C = card({ id: 1 });
   M.restoreCard(U, S, C, { method: ALT_M, cal: c, ovGas: ['co2', 'o2', 'h2'], ovY: 'area' });
-  assert.deepEqual([C.method.windows[0].from, C.ovGas, C.ovY], [270, 'h2', 'area'], 'v544\'s list: its first gas in the module\'s order');
+  assert.deepEqual([C.method.windows[0].from, C.ovGas, C.ovY], [270, 'h2', 'area'], 'a list of more than one: its first gas in the module\'s order');
   M.restoreCard(U, S, C, { method: ALT_M, cal: c, ovGas: ['co2', 'o2'], ovY: 'area' });
   assert.equal(canon(M.snapshotOf(U, C)), canon({ method: ALT_M, cal: M.calCopy(C.cal), ovGas: ['o2'], ovY: 'area' }));
   /* v578: the windows as edited, pending until Integrate: `edit` beside the method applied, in
@@ -288,10 +281,12 @@ test('the results taken in, saved and written into the states that hold their fi
   const { S, card } = instance(all, cards), C = card(cards[0]);
   const kRun = M.keyOf(U, all[0].mate, DEF), kLone = M.keyOf(U, all[1], DEF);
   assert.equal(M.fileKey(U, { name: 'x' }), 'name:x');
-  // malformed results dropped; a result held never taken away; a longer array replaces one with none
-  M.loadResults(U, S.store, { [kRun]: [null, { gases: {}, windows: [] }, { gases: 1, windows: [] }, 5], [kLone]: 'x', a: [{ gases: { h2: { area: null, trap: 1 } }, windows: [] }] });
+  /* malformed results dropped, JSON's null a NaN, a key of no engine's id none (v588); a result
+     held never taken away; a longer array replaces one with none */
+  const kEnd = M.keyOf(U, { rawBytes: BYTES['end_TCD.csv'] }, DEF);
+  M.loadResults(U, S.store, { [kRun]: [null, { gases: {}, windows: [] }, { gases: 1, windows: [] }, 5], [kLone]: 'x', [kEnd]: [{ gases: { h2: { area: null } }, windows: [] }], a: [{ gases: {}, windows: [] }] });
   assert.equal(canon(S.store.get(kRun)), canon([null, { gases: {}, windows: [] }, null, null]));
-  assert.ok(Number.isNaN(S.store.get('a')[0].gases.h2.area) && !('trap' in S.store.get('a')[0].gases.h2));
+  assert.deepEqual([Number.isNaN(S.store.get(kEnd)[0].gases.h2.area), S.store.has('a')], [true, false]);
   M.loadResults(U, S.store, { [kRun]: [{ gases: {}, windows: [1] }, { gases: { h2: {} }, windows: [] }, null, null] });
   assert.equal(canon(S.store.get(kRun)), canon([{ gases: {}, windows: [1] }, { gases: {}, windows: [] }, null, null]));
   M.loadResults(U, S.store, { [kRun]: [null, null] });
@@ -321,7 +316,7 @@ test('the results taken in, saved and written into the states that hold their fi
   assert.deepEqual(M.withResult(U, { files: [all[0]], integ: { a: 1 } }, fk, kRun, [2]).integ, { a: 1, [kRun]: [2] });
   assert.equal(M.withResult(U, states[3], fk, kRun, [2]), states[3]);
   // the card's raw chromatograms with its calibration's
-  C.cal = M.calIn(U, { files: [{ name: 's', rawBytes: BYTES['standards_TCD.csv'] }] });
+  C.cal = M.calIn(U, { files: [{ name: 's', rawBytes: BYTES['standards_TCD.csv'], table: { name: 'standards.csv', rawBytes: BYTES['standards.csv'] } }] });
   assert.deepEqual(M.tcdRecs(S, C).map(r=> r.name), ['run_TCD.csv', 'lone_TCD.csv', 'broken_TCD.csv', 's']);
   /* v578: the chromatograms in view first (the standard on show, then the card's), each its
      chromatogram on show first, then the rest in list order; a run's windows after the
@@ -343,7 +338,7 @@ test('the results taken in, saved and written into the states that hold their fi
   assert.deepEqual([M.leftUnder(U, S2, C2, DEF), M.leftUnder(U, S2, C2, ALT_M)], [20, 21]);
   recs.forEach(r=> S2.store.set(alt(r), new Array(M.dataOf(S2, r).cols.length).fill({ gases: {}, windows: [] })));
   assert.deepEqual([M.leftUnder(U, S2, C2, ALT_M), M.wanted(U, S2)], [0, []]);
-  C2.cal = M.calIn(U, { files: [C.cal.files[0], { name: 't', rawBytes: BYTES['standards_TCD.csv'] }] });
+  C2.cal = M.calIn(U, { files: [C.cal.files[0], { ...C.cal.files[0], name: 't' }] });
   assert.equal(M.leftUnder(U, S2, C2, DEF), 20, 'a file used twice counted once');
   // read once per file, by its bytes; a table read so too; primed
   const d = M.dataOf(S, all[0].mate);
@@ -353,6 +348,43 @@ test('the results taken in, saved and written into the states that hold their fi
   const b = new Uint8Array([1]); M.prime(S, b, { t: [], cols: [] }); assert.deepEqual(M.dataOf(S, { rawBytes: b }), { t: [], cols: [] });
   const t = M.tableOf(S, BYTES['standards.csv']);
   assert.deepEqual([t === M.tableOf(S, BYTES['standards.csv']), t.names.length, M.tableOf(S, null), M.tableOf(S, BYTES['nothing.csv']).error.slice(0, 10)], [true, 6, null, 'not a GC t']);
+});
+
+/* v588, CLAUDE.md's backward compatibility: an old project (synthetic: its results this engine's
+   own, made here) holding them under keys of no engine's id (as saved to v587) and of another
+   engine's, its card's windows applied and others edited, its calibration of v544–v548 (raw
+   chromatograms with no table, levels typed): nothing of them taken, the calibration none (the
+   window its drop zone alone), every chromatogram wanted again with the windows applied, not
+   those edited; integrated (the engine's results), saved and opened again (an undo, a tab woken,
+   the project reopened: the same keys), all taken, nothing wanted. */
+test('an old project: results of no engine\'s id or of another\'s integrated again with the windows applied, a calibration of no table none; one saved now taken, nothing integrated (v588)', ()=>{
+  const all = [ROWS[2](), ROWS[4]()], cards = [{ id: 1, type: 'integ' }], mini = all[0].mate, lone = all[1];
+  const state = { method: DEF, edit: ALT_M, ovGas: ['h2'], ovY: 'conc',
+    cal: { unit: '%mol', files: [{ name: 'old (1)_TCD.csv', rawBytes: BYTES['old (1)_TCD.csv'], levels: [{ h2: 0.05 }, { h2: 0.1 }, { o2: 0.02 }, { o2: 0.05 }] }] } };
+  const stamp = `|${G.ENGINE_ID}|`, kMini = M.keyOf(U, mini, DEF), kLone = M.keyOf(U, lone, DEF), kOld = M.keyOf(U, { rawBytes: BYTES['old (1)_TCD.csv'] }, DEF);
+  const lones = madeUp(rng(3), areas(truth(3, 0.2, 0.1)));
+  const old = { [kMini.replace(stamp, '|')]: MINI_RES, [kLone.replace(stamp, '|tcd-0|')]: lones, [kOld.replace(stamp, '|')]: madeUp(rng(4), STD.slice(0, 4).map(([h, o])=> [h*S_H2, o*S_O2])) };
+  assert.ok(Object.keys(old).every(k=> !k.includes(stamp)), 'no key of this engine\'s');
+  const open = saved =>{
+    const { S, card } = instance(all, cards), C = card(cards[0]);
+    M.loadResults(U, S.store, saved);
+    M.restoreCard(U, S, C, state);
+    return { S, C };
+  };
+  const { S, C } = open(old);
+  assert.deepEqual([S.store.size, C.cal.files.length, M.calRows(U, S, C).length, M.isPending(U, C), M.isDefault(U, C.method)], [0, 0, 0, true, true], 'nothing taken; the calibration none; its windows edited still');
+  const w = M.wanted(U, S);
+  assert.deepEqual(w.map(g=> [g.rec.name, g.key, g.miss]), [['mini_TCD.csv', kMini, [0, 1, 2]], ['lone_TCD.csv', kLone, [0, 1, 2]]], 'every chromatogram, the windows applied');
+  assert.deepEqual([M.progressOf(U, S, C).left, M.peaksOf(U, S, C, M.curOf(S, C))], [6, { wait: true }], 'nothing shown of what it held');
+  // integrated by the engine (the job's results, as gc-integ.js write keeps them): its values
+  S.store.set(kMini, MINI_RES); S.store.set(kLone, lones);
+  const v = M.peaksOf(U, S, C, M.curOf(S, C));
+  assert.deepEqual([v.rows.map(x=> x.x.area), M.wanted(U, S), M.progressOf(U, S, C).left], [[MINI_RES[0].gases.h2.area, MINI_RES[0].gases.o2.area], [], 0]);
+  // saved now, opened again: every result taken, nothing integrated
+  const now = M.savedResults(U, S);
+  assert.deepEqual(Object.keys(now), [kMini, kLone]);
+  const again = open(JSON.parse(JSON.stringify(now)));
+  assert.deepEqual([again.S.store.size, M.wanted(U, again.S), canon(M.resOf(U, again.S, again.C, mini).res) === canon(MINI_RES)], [2, [], true]);
 });
 
 /* v581: a Stop holds its own card's files alone (to v580 the instance's `halted`, every card's):
@@ -505,13 +537,13 @@ test('the entries, their results and names; the concentrations; what Analysis ta
   assert.equal(conv.h2.how, 'transfer'); near(conv.h2.f(1000), 1000/conv.h2.k, 1e-15, 'A/k');
   assert.match(M.convAll(U, S, C, es[2], M.resOf(U, S, C, es[2].tcd).res).h2.why, /too few injections above the threshold/);
   assert.match(M.convAll(U, S, C, es[4], []).o2.why, /^no standards for O₂, and no GC table for the GC software's scale \(k\)$/);
-  // the standards: their names (Analysis, its number where blank, a column without a table), rows and lines, in %mol and ppm
+  // the standards: their names (Analysis, its number where blank or where the table no longer reads), rows and lines, in %mol and ppm
   C.cal = M.calIn(U, { files: [{ name: 'standards_TCD.csv', rawBytes: BYTES['standards_TCD.csv'], table: { name: 'standards.csv', rawBytes: BYTES['standards.csv'] },
-    levels: [{ h2: 0.05 }, { h2: 0.1 }, { h2: 0.2 }, { o2: 0.02 }, { o2: 0.05 }, { o2: 0.1, on: false }] }, { name: 'old (1)_TCD.csv', rawBytes: BYTES['old (1)_TCD.csv'], levels: [] }] });
+    levels: [{ h2: 0.05 }, { h2: 0.1 }, { h2: 0.2 }, { o2: 0.02 }, { o2: 0.05 }, { o2: 0.1, on: false }] }, { name: 'old (1)_TCD.csv', rawBytes: BYTES['old (1)_TCD.csv'], table: { name: 'nothing.csv', rawBytes: BYTES['nothing.csv'] }, levels: [] }] });
   const rows = M.calRows(U, S, C);
-  assert.deepEqual(rows.map(x=> x.name), ['cal_H2_0.05%_001', 'cal_H2_0.1%_001', 'cal_H2_0.2%_001 <b>&', 'cal_O2_0.02%_001', 'injection 5', 'cal_O2_0.1%_001 and a long remark', 'column 1', 'column 2', 'column 3', 'column 4']);
+  assert.deepEqual(rows.map(x=> x.name), ['cal_H2_0.05%_001', 'cal_H2_0.1%_001', 'cal_H2_0.2%_001 <b>&', 'cal_O2_0.02%_001', 'injection 5', 'cal_O2_0.1%_001 and a long remark', 'injection 1', 'injection 2', 'injection 3', 'injection 4']);
   assert.equal(M.fullName(rows[1]), 'cal_H2_0.1%_001 (standards.csv, standards_TCD.csv, column 2)');
-  assert.equal(M.fullName(rows[6]), 'column 1 (old (1)_TCD.csv, column 1)');
+  assert.equal(M.fullName(rows[6]), 'injection 1 (nothing.csv, old (1)_TCD.csv, column 1)');
   const L = M.calFit(U, S, C, 'h2'), pts = rows.slice(0, 3).map(x=> ({ conc: x.lv.h2, area: x.r.gases.h2.area }));
   const mx = pts.reduce((s, p)=> s + p.conc, 0)/3, my = pts.reduce((s, p)=> s + p.area, 0)/3;
   const slope = pts.reduce((s, p)=> s + (p.conc - mx)*(p.area - my), 0)/pts.reduce((s, p)=> s + (p.conc - mx)**2, 0);
@@ -649,7 +681,7 @@ test('the status, the alerts\' facts, the CSVs; the calibration window\'s files 
   assert.deepEqual([T.kind, T.d.cols.length, Tb.bad, M.takeDropped(S, 'n.csv', BYTES['notext.csv']).bad, M.takeDropped(S, 'h.csv', BYTES['nothing.csv']).bad.slice(0, 40), M.takeDropped(S, 's.csv', BYTES['standards.csv']).kind],
     ['tcd', 6, 'b.csv: raw chromatograms that cannot be read: The time does not increase at line 2 (1 s).', 'n.csv: neither raw chromatograms nor a GC table: no injection date and H₂ or O₂ column under a header.', 'h.csv: neither raw chromatograms nor a G', 'table']);
   const take = names => names.map(n=> M.takeDropped(S, n, new Uint8Array(BYTES[n])));
-  // a lone file waits; its partner pairs it; counts that differ refused; already loaded; an old calibration named, a count that differs for it
+  // a lone file waits; its partner pairs it; counts that differ refused; already loaded
   let cal = M.calIn(U, null), bad = [], P = M.pairDropped(S, cal, [], take(['standards_TCD.csv']), bad);
   assert.deepEqual([P.add.length, P.held.map(x=> x.name), bad], [0, ['standards_TCD.csv'], ['standards_TCD.csv: raw chromatograms without their GC table: drop the table too, the same name without _TCD (.csv or .txt); this file waits here for it.']]);
   bad = []; P = M.pairDropped(S, cal, P.held, take(['standards.csv', 'stds2.csv', 'stds2_TCD.csv', 'old.csv']), bad);
@@ -657,22 +689,19 @@ test('the status, the alerts\' facts, the CSVs; the calibration window\'s files 
   assert.deepEqual(bad, ['stds2.csv + stds2_TCD.csv: 5 injections in the table, 6 chromatograms: they must be as many, a name for each chromatogram: nothing integrated.',
     'old.csv: a GC table without its raw chromatograms: drop them too, the same name with _TCD; this file waits here for them.']);
   assert.ok(S.read.has(P.add[0].rawBytes), 'its read primed');
-  cal = M.calWith(cal, P.add, P.named);
-  cal.files.push({ name: 'old (1)_TCD.csv', rawBytes: BYTES['old (1)_TCD.csv'], levels: [] });
-  bad = []; P = M.pairDropped(S, cal, [], take(['old (2).csv', 'standards.csv']), bad);
+  const was = cal;
+  cal = M.calWith(cal, P.add);
+  assert.deepEqual([cal.files.map(f=> f.name), was.files], [['standards_TCD.csv'], []], 'a copy, the pair added');
+  bad = []; P = M.pairDropped(S, cal, [], take(['old (2).csv', 'old (1)_TCD.csv', 'standards.csv']), bad);
   // (v567: those loaded already apart, an info of their own)
-  assert.deepEqual([bad, P.dup], [['old (2).csv + old (1)_TCD.csv: 3 injections in the table, 4 chromatograms: they must be as many, a name for each chromatogram: nothing integrated.'], ['standards.csv']]);
-  bad = []; P = M.pairDropped(S, cal, [], take(['old.csv']), bad);
-  assert.deepEqual([P.named.map(x=> [x.fi, x.table.name]), bad], [[[1, 'old.csv']], []]);
-  const named = M.calWith(cal, P.add, P.named);
-  assert.deepEqual([named.files[1].table.name, cal.files[1].table], ['old.csv', undefined]);
+  assert.deepEqual([bad, P.dup, P.add], [['old (2).csv + old (1)_TCD.csv: 3 injections in the table, 4 chromatograms: they must be as many, a name for each chromatogram: nothing integrated.'], ['standards.csv'], []]);
   // a level as typed
   assert.deepEqual(['0,05', ' 0.2 ', '', '-1', 'x', '0', '1e-2'].map(M.levelIn).map(String), ['0.05', '0.2', 'null', 'NaN', 'NaN', '0', '0.01']);
   // a thumbnail; a gas's line and its levels
   const d = M.dataOf(S, { rawBytes: BYTES['standards_TCD.csv'] });
   assert.equal(M.thumbPoints(d, 0, 258, 341.6, 72, 22).split(' ').length, 206, 'every other point, 258 s to 340 s');
   assert.equal(M.thumbPoints({ t: [1, 2], cols: [[1, NaN]] }, 0, 0, 3, 72, 22), '');
-  C.cal = named; C.cal.files[0].levels = [{ h2: 0.05, o2: null, on: true }, { h2: 0.1, o2: null, on: true }, { h2: 0.1, o2: null, on: true }, { h2: null, o2: 0.02, on: true }, { h2: null, o2: null, on: true }, { h2: null, o2: 0.1, on: true }];
+  C.cal = cal; C.cal.files[0].levels =[{ h2: 0.05, o2: null, on: true }, { h2: 0.1, o2: null, on: true }, { h2: 0.1, o2: null, on: true }, { h2: null, o2: 0.02, on: true }, { h2: null, o2: null, on: true }, { h2: null, o2: 0.1, on: true }];
   M.loadResults(U, S.store, { [M.keyOf(U, { rawBytes: BYTES['standards_TCD.csv'] }, DEF)]: madeUp(rng(9), STD.map(([h, o])=> [h*S_H2, o*S_O2])) });
   const Gh = M.calGasOf(U, S, C, 'h2'), lv = M.levelsOf(Gh.L);
   assert.deepEqual([Gh.xs, lv.map(([c, rs])=> [c, rs.length])], [[0.05, 0.1, 0.1], [['0.05', 1], ['0.1', 2]]]);
@@ -763,15 +792,12 @@ test('the markup: the instructions, the card\'s and the window\'s bodies, Window
   assert.equal(H.ovGasHtml(gasOf, ['h2', 'o2'], 'o2'), '<button type="button" class="mode-chip plot-chip gci-ov-chip" data-g="h2" aria-pressed="false" title="Show H₂ (one gas at a time)">H<sub>2</sub></button><button type="button" class="mode-chip plot-chip gci-ov-chip is-on" data-g="o2" aria-pressed="true" title="Show O₂ (one gas at a time)">O<sub>2</sub></button>');
   assert.ok(H.ovYHtml(HU, { mode: 'area', c: null, G: gasOf('h2') }).includes('title="No calibration of H₂ and no table to take a scale from" disabled>Conc.</button>'));
   assert.equal(H.overLegendHtml({ G: gasOf('h2'), bad: [false, true], table: [1], mode: 'area' }, '#f', '#b'), '<span><i class="gci-mk gci-mk-dot" style="color:#f"></i>H₂ fit</span><span><i class="gci-mk gci-mk-dot" style="color:#b"></i>suspicious</span><span><i class="gci-mk gci-mk-x"></i>GC table × k</span>');
-  // the window's files, warning, status, rows, fit, lines
+  // the window's files, status, rows, fit, lines (v588: no box of a calibration of no table, none being kept)
   assert.equal(H.dropAlertHtml(HU, []), '');
   assert.equal(H.dropAlertHtml(HU, ['a<b: why.'], ['c<']), PAGE.alertHtml('bad', 'Not loaded:', ['a&lt;b: why.']) + PAGE.alertHtml('info', 'Already loaded, not loaded again:', ['c&lt;.']));
-  const files = [{ name: 'f<1>', table: { name: 't&' } }, { name: 'g"' }];
-  assert.ok(H.calFilesHtml(HU, files).includes('<span class="xrd-std-name">t&amp; + f&lt;1&gt;</span>') && H.calFilesHtml(HU, files).includes('g&quot; <span class="txt-meta">(no table)</span>') && H.calFilesHtml(HU, files).includes('data-cal-del="1"'));
-  // (v573: its × marks its file seen, gc-integ.js dismissCalWarn; to v572 the box removed alone)
-  const OLD = 'g&quot;: saved by an older version without its GC table: its standards are named by column. Drop the table (the same name without _TCD) to name them.';
-  assert.equal(H.calWarnHtml(HU, H.calNotes(HU, files)), PAGE.alertHtml('warn', 'Opened, to check:', [OLD], 'gci-cal-dismiss-opened'));
-  assert.deepEqual([H.calWarnHtml(HU, H.calNotes(HU, [files[0], { ...files[1], seen: ['opened'] }])), H.calWarnHtml(HU, [])], ['', '']);
+  const files = [{ name: 'f<1>', table: { name: 't&' } }, { name: 'g"', table: { name: 'h>' } }];
+  assert.ok(H.calFilesHtml(HU, files).includes('<span class="xrd-std-name">t&amp; + f&lt;1&gt;</span>') && H.calFilesHtml(HU, files).includes('<span class="xrd-std-name">h&gt; + g&quot;</span>') && H.calFilesHtml(HU, files).includes('data-cal-del="1"'));
+  assert.ok(!cal.includes('gci-cal-warn') && !H.CAL_INFO.includes('named by column'), 'no box for it');
   /* The window's run line (v578: its Integrate the card's): the card's run, failure and windows;
      its standards' counts; stopped, nothing running, never "Integrating" (v569); all integrated,
      how many (to v577 a line beside the unit, "No standards…" with none: now nothing). */
@@ -842,7 +868,8 @@ export function caseOf(n){
   // (the case's open: at least one step in three)
   return { rows, results: int(1, 1e6), state, steps };
 }
-/* And four scenes: an old calibration named beside standards added after it; methods
+/* And four scenes: a calibration of v544–v548 (no table: none from v588; to v587 named by the
+   table dropped after) and standards added after it; methods
    changed, refused and reset (v578: edited, pending, the results the method's applied);
    rows of every kind chosen, left out and unpaired; windows edited, applied (Integrate's
    swap), a state put back with windows pending, applied again and reset (v578). */
@@ -864,13 +891,14 @@ export const allCases = ()=> [...Array.from({ length: 60 }, (_, n)=> caseOf(n)),
 const OPS = ['sel', 'inj', 'stepFile', 'stepK', 'gas', 'y', 'edge', 'edge', 'reset', 'open', 'open', 'close', 'drop', 'drop', 'level', 'level', 'level', 'row', 'unit', 'zero', 'del', 'load', 'include', 'unpair', 'restore', 'showNext', 'clear'];
 // (bytes named in a case's state, as a project holds them)
 export const withBytes = s => JSON.parse(JSON.stringify(s), (k, v)=> k === 'rawBytes' && typeof v === 'string' ? BYTES[v] : v);
-// The results put in: made up and the engine's, some v544's keys, some malformed.
+// The results put in: made up and the engine's, some under v544's keys (the method's trapezoids,
+// no engine's id: to v587 read as v545's, from v588 none), some malformed.
 // (a negative seed: every file's results, as they are)
 export function resultsOf(seed){
   const R = rng(Math.abs(seed)), out = resultsFor(R, seed < 0);
   if (seed < 0) return out;
   for (const k of Object.keys(out)) if (R.u() < 0.2){
-    const i = k.indexOf('|'), a = JSON.parse(k.slice(i + 1)), m = JSON.parse(a[a.length - 1]);
+    const i = k.indexOf('|'), a = JSON.parse(k.slice(k.indexOf('|', i + 1) + 1)), m = JSON.parse(a[a.length - 1]);
     m.trapezoid = { on: 1 }; m.fit.spikes.roundsTrapezoid = 3; a[a.length - 1] = JSON.stringify(m);
     out[k.slice(0, i + 1) + U.exactKey(a)] = out[k].map(x=> x && x.gases ? { ...x, gases: Object.fromEntries(Object.entries(x.gases).map(([g, v])=> [g, { ...v, trap: 1 }])) } : x); delete out[k];
   }
@@ -907,7 +935,7 @@ export function step(E, [op, a, b, x]){
     for (const name of a){ const t = M.takeDropped(S, name, new Uint8Array(BYTES[name])); if (t.bad) bad.push(t.bad); else got.push(t); }
     const P = M.pairDropped(S, C.cal, W.held, got, bad);
     W.held = P.held; W.alerts = H.dropAlertHtml(HU, bad, P.dup);
-    if (P.add.length || P.named.length){ if (P.add.length) C.calSel = M.calRows(U, S, C).length; C.cal = M.calWith(C.cal, P.add, P.named); calChanged(); }
+    if (P.add.length){ C.calSel = M.calRows(U, S, C).length; C.cal = M.calWith(C.cal, P.add); calChanged(); }
   }
   else if (op === 'level'){
     if (!W.open || !W.rows.length) return;
@@ -992,11 +1020,10 @@ export function outputs(E){
   return o;
 }
 // The calibration's window as paintWindow leaves it (its standard's plot, drawStd, as its CSV
-// takes it); with no standards, its files and warning alone (v578).
+// takes it); with no standards, its files alone (v578; v588: no box of a calibration of no table).
 function calOutputs(E){
   const { S, C, W } = E, o = {};
   o.files = H.calFilesHtml(HU, C.cal.files);
-  o.warn = H.calWarnHtml(HU, H.calNotes(HU, C.cal.files));
   if (!C.cal.files.length){ W.rows = []; C.calDrawn = null; o.alerts = W.alerts; return o; }
   const rows = W.rows = M.calRows(U, S, C);
   W.checked = row => row.lv.on;

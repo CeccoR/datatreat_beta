@@ -42,10 +42,9 @@
      integrated); each standard named by the table's Analysis column (a UTF-16 table; the
      .txt export's by number), in its row and in the selector over its chromatogram, drawn
      as the card's (row click, selector, arrows, ← →), its title's top on the plot frame's;
-     at 375 px nothing scrolls sideways. A calibration saved by v544–v548 (raw chromatograms
-     alone) opens as it was, nothing fitted again, named by column, said until the box's ×
-     marks its file seen (v573: no step, kept through undo and redo, the window opened again
-     and the project reopened); its table dropped names it.
+     at 375 px nothing scrolls sideways. (A calibration of v544–v548, raw chromatograms alone,
+     is none from v588: oldprojects.test.mjs.) With no standards, the drop zone alone, nothing of
+     the standards removed left in the window, hidden or not (v588).
    - No standards: the GC software's scale taken over (k = median of area/table value), said
      in an info alert in Integration (its message alone) and in the rate card, the file's k
      under its Peaks, the units said plainly, no superscript.
@@ -55,9 +54,10 @@
      standards dropped in the Calibration window integrated; stopped with standards left, the
      window says so.
    - The project saved and reloaded: pairs, method, calibration and results, nothing fitted
-     again; a method changed (a step) and undone, nothing fitted again; results coming in no
-     step. A project as v544 saved it (its method's trapezoids, its results' keys and their
-     trapezoid areas) opens with nothing fitted again. */
+     again (its results this engine's: v588); a method changed (a step) and undone, nothing
+     fitted again; results coming in no step. (A project of v544, or any whose results are of
+     no engine's id or another's, is integrated again as it opens from v588:
+     oldprojects.test.mjs.) */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -1069,86 +1069,6 @@ test('an integration that fails says why: a compact error in the card\'s status 
   } finally { await close(); }
 });
 
-test('a calibration saved by v544–v548 (raw chromatograms alone) opens as it was: its levels and rates, nothing fitted again, its standards named by column, said until its × (kept); its table dropped names them', async ()=>{
-  const { page, errors, csp, close } = await env.page();
-  try {
-    await openModule(page, 'gc');
-    await load(page, [table('run.csv', tableRows()), tcd('run_TCD.csv', areas())], 1);
-    await integrated(page);
-    let card = page.locator('#tab-gc .an-card').nth(0);
-    const m = page.locator('.gci-cal-modal');
-    await card.locator('.gci-cal').click(); await m.waitFor({ state: 'visible' });
-    await m.locator('.gci-cal-in').setInputFiles([calTable('std.csv'), stdTcd('std_TCD.csv')]);
-    await calDone(page);
-    for (const [i, [h, o]] of STD.entries()) for (const [g, v] of [['h2', h], ['o2', o]]) if (v){ const f = m.locator(`input[data-j="${i}"][data-g="${g}"]`); await f.fill(String(v)); await f.press('Enter'); await settle(page); }
-    await m.locator('.xrd-std-x').click(); await settle(page);
-    const rates = (await zip(page))['mean_rates.csv'][1];
-    const { obj } = await exportProject(page), st = obj.state, c0 = st.cards.find(c=> c.type === 'integ');
-    assert.equal(c0.cal.files[0].table.name, 'std.csv', 'v549 keeps the table');
-    // As v544–v548 saved it: the calibration's files their raw chromatograms alone.
-    const old = { ...st, cards: st.cards.map(c=> c === c0 ? { ...c, cal: { ...c.cal, files: c.cal.files.map(({ table: _t, ...f })=> f) } } : c) };
-    const n0 = await fitted(page);
-    await importProject(page, projectFile(env, 'v548.datatreat', { ...obj, title: 'Old v548', appVersion: 'v548', state: old }, { sign: true }));
-    await openProject(page, 'gc', 'Old v548');
-    await integrated(page);
-    assert.equal(await fitted(page), n0, 'nothing fitted again');
-    const cal = (await moduleState(page, 'gc')).cards.find(c=> c.type === 'integ').cal;
-    assert.deepEqual(cal.files.map(f=> [f.name, 'table' in f]), [['std_TCD.csv', false]], 'nothing added');
-    assert.deepEqual(cal.files[0].levels, c0.cal.files[0].levels, 'its levels as they were');
-    assert.deepEqual((await zip(page))['mean_rates.csv'][1], rates, 'the same rates');
-    // The window: its standards by column, their levels in their fields; the table missing said.
-    card = page.locator('#tab-gc .an-card').nth(0);
-    await card.locator('.gci-cal').click(); await m.waitFor({ state: 'visible' }); await settle(page);
-    assert.deepEqual(await m.locator('.gci-cal-levels tbody .gci-cal-name').allTextContents(), STD.map((_, j)=> `column ${j + 1}`));
-    assert.deepEqual(await m.locator('.gci-cal-levels tbody input[data-g="h2"]').evaluateAll(xs=> xs.map(x=> x.value)), ['0.05', '0.1', '0.2', '', '', '']);
-    assert.equal(await m.locator('.gci-csel .snav-name').textContent(), 'column 1');
-    assert.deepEqual(await m.locator('.xrd-std-row .xrd-std-name').allTextContents(), ['std_TCD.csv (no table)']);
-    const w = (await m.locator('.gci-cal-warn .alert.warn').innerText()).replace(/\s+/g, ' ');
-    assert.match(w, /^⚠ Opened, to check: std_TCD\.csv: saved by an older version without its GC table: its standards are named by column\. Drop the table \(the same name without _TCD\) to name them\.$/);
-    assert.match(await m.locator('.gci-cal-status').textContent(), /6 chromatograms integrated/);
-    assert.equal(await fitted(page), n0, 'nothing fitted with the window open');
-    // Its × (v573): the file marked seen in the card's calibration, no step of the history; kept
-    // through undo and redo (a step taken before it, the unit), as the window opens again, and in
-    // the project saved and opened again (to v572 the box removed alone, back at the next opening).
-    const warned = ()=> m.locator('.gci-cal-warn .alert').count(), unit = ()=> m.locator('.gci-cal-unit-in').inputValue();
-    await m.locator('.gci-cal-unit-in').selectOption('ppm'); await settle(page);
-    const h1 = await history(page, 'gc');
-    await m.locator('.gci-cal-warn .alert-dismiss').click(); await settle(page);
-    assert.equal(await warned(), 0, 'dismissed');
-    assert.deepEqual(await history(page, 'gc'), h1, 'no step of the history');
-    assert.deepEqual((await moduleState(page, 'gc')).cards.find(c=> c.type === 'integ').cal.files[0].seen, ['opened'], 'its file marked in the state');
-    await undo(page);
-    assert.deepEqual([await unit(), await warned()], ['%mol', 0], 'the unit undone: dismissed still');
-    await undo(page, true);
-    assert.deepEqual([await unit(), await warned()], ['ppm', 0], 'redone: dismissed still');
-    await undo(page);
-    await m.locator('.xrd-std-x').click(); await settle(page);
-    await card.locator('.gci-cal').click(); await m.waitFor({ state: 'visible' }); await settle(page);
-    assert.equal(await warned(), 0, 'the window opened again: dismissed still');
-    await m.locator('.xrd-std-x').click(); await settle(page);
-    await saveAs(page, 'Old v548 seen');
-    await page.locator('#tabBar .ptab.is-on .ptab-x').click(); await settle(page);
-    await openProject(page, 'gc', 'Old v548 seen');
-    await integrated(page);
-    card = page.locator('#tab-gc .an-card').nth(0);
-    await card.locator('.gci-cal').click(); await m.waitFor({ state: 'visible' }); await settle(page);
-    assert.deepEqual([await unit(), await warned()], ['%mol', 0], 'the project opened again: dismissed still');
-    assert.equal(await fitted(page), n0, 'nothing fitted');
-    // Its table dropped alone: it names them, one step; nothing else changes, nothing said.
-    const s1 = await steps(page);
-    await m.locator('.gci-cal-in').setInputFiles([calTable('std.csv')]); await settle(page);
-    assert.deepEqual(await m.locator('.gci-cal-levels tbody .gci-cal-name').allTextContents(), STD_NAMES);
-    assert.deepEqual(await m.locator('.gci-cal-alerts .alert, .gci-cal-warn .alert').count(), 0);
-    assert.equal(await steps(page), s1 + 1);
-    const cal2 = (await moduleState(page, 'gc')).cards.find(c=> c.type === 'integ').cal;
-    assert.deepEqual([cal2.files[0].table.name, cal2.files[0].levels], ['std.csv', c0.cal.files[0].levels]);
-    assert.equal(await fitted(page), n0, 'nothing fitted');
-    await m.locator('.xrd-std-x').click(); await settle(page);
-    assert.deepEqual((await zip(page))['mean_rates.csv'][1], rates, 'the same rates');
-    assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
-  } finally { await close(); }
-});
-
 test('no standards: the GC software\'s scale taken over (k, the median of area/table value), said in an info alert; the rates the table\'s', async ()=>{
   const { page, errors, csp, close } = await env.page();
   try {
@@ -1223,6 +1143,7 @@ test('the project: saved and reloaded with its pairs, method, calibration and re
     await saveAs(page, 'tcd-keep');
     const st = await moduleState(page, 'gc');
     assert.ok(st.integ && Object.keys(st.integ).length >= 2, 'the results in the state');
+    assert.ok(Object.keys(st.integ).every(k=> k.split('|')[1] === G.ENGINE_ID), 'kept under the engine\'s id (v588)');
     assert.ok(JSON.stringify(st.integ).length < 60000, 'compact');
     await page.reload(); await ready(page);
     await page.waitForSelector('#tab-gc.active'); await settle(page);
@@ -1235,45 +1156,6 @@ test('the project: saved and reloaded with its pairs, method, calibration and re
     assert.deepEqual([after.cards[0].cal.files[0].name, after.cards[0].cal.files[0].table.name], ['std_TCD.csv', 'std.csv'], 'the pair kept, its table too');
     assert.deepEqual((await zip(page))['mean_rates.csv'][1], rates, 'the same rates');
     assert.equal(await page.locator('#tab-gc .an-card').nth(0).locator('table.gci-values tbody tr').count(), 2, 'its curves and values drawn from the results');
-    assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
-  } finally { await close(); }
-});
-
-/* A project as v544 saved it: its card's method held the trapezoids (`trapezoid`, and its fit's
-   spikes.roundsTrapezoid: 3), the results' keys hold the method's JSON (so theirs differ from
-   v545's), and each result's gases a trapezoid area (`trap`). Made from v545's export, as v544
-   wrote them (the keys checked against v544's own engine once, by hand: the same strings). */
-const V544_TRAP = { h2: { left: [281, 283.6], right: [295, 300.5], valley: 'right' }, o2: { left: [295, 300.5], right: [304.8, 305.6] } };
-const v544Method = m => ({ windows: m.windows, trapezoid: V544_TRAP, ...Object.fromEntries(Object.entries(m).filter(([k])=> k !== 'windows')),
-  fit: { ...m.fit, spikes: { ...m.fit.spikes, roundsTrapezoid: 3 } } });
-function v544Key(k){
-  const i = k.indexOf('|'), a = JSON.parse(k.slice(i + 1));
-  a[a.length - 1] = JSON.stringify(v544Method(JSON.parse(a[a.length - 1])));
-  return k.slice(0, i + 1) + JSON.stringify(a);
-}
-test('a project saved by v544 (trapezoids in its method, its results\' keys and their areas) opens with nothing fitted again', async ()=>{
-  const { page, errors, csp, close } = await env.page();
-  try {
-    await openModule(page, 'gc');
-    await load(page, [table('old.csv', tableRows(1.1)), tcd('old_TCD.csv', areas())], 1);
-    await integrated(page);
-    const rates = (await zip(page))['mean_rates.csv'][1];
-    const { obj } = await exportProject(page), st = obj.state;
-    assert.ok(st.integ && Object.keys(st.integ).length === 1);
-    const [k] = Object.keys(st.integ), card0 = st.cards.find(c=> c.type === 'integ');
-    const old = { ...st, cards: st.cards.map(c=> c === card0 ? { ...c, method: v544Method(c.method) } : c),
-      integ: { [v544Key(k)]: st.integ[k].map(r=> r && { ...r, gases: Object.fromEntries(Object.entries(r.gases).map(([g, x])=> [g, { ...x, trap: x.area*0.97 }])) }) } };
-    assert.notEqual(v544Key(k), k, 'v544\'s key is not v545\'s');
-    const n0 = await fitted(page);
-    await importProject(page, projectFile(env, 'v544.datatreat', { ...obj, title: 'Old v544', appVersion: 'v544', state: old }, { sign: true }));
-    await openProject(page, 'gc', 'Old v544');
-    await integrated(page);
-    assert.equal(await fitted(page), n0, 'nothing fitted again');
-    const now = await moduleState(page, 'gc');
-    assert.deepEqual(Object.keys(now.integ), [k], 'its results under v545\'s key');
-    assert.ok(!JSON.stringify(now).includes('trap'), 'no trapezoid left in the state');
-    assert.equal(await page.locator('#tab-gc .an-card').nth(0).locator('table.gci-values tbody tr').count(), 2, 'its values drawn from the results');
-    assert.deepEqual((await zip(page))['mean_rates.csv'][1], rates, 'the same rates');
     assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
   } finally { await close(); }
 });
@@ -1722,10 +1604,18 @@ test('the calibration window (v578): with no standards the drop zone alone; its 
     assert.deepEqual(await history(page, 'gc'), h1, 'no step');
     assert.deepEqual([await m.locator('.gci-cal-status').textContent(), await integ(wbtn), await m.locator('.gci-cal-side > .rv-prog').isVisible()],
       ['Stopped: the results shown come from H₂-O₂ fit 268–326 s, not from these windows.', ['Integrate', false, true], false]);
-    // Its standards removed: the drop zone alone again.
+    // Its standards removed: the drop zone alone again, nothing of them left in the window, hidden
+    // or not (v588: to v587 their rows, plot and words stayed under it, hidden); undone, all back.
     await slow(page, 0);
     await m.locator('[data-cal-del="0"]').click(); await settle(page);
     assert.deepEqual(await visibleIn(m), ['dropzone xrd-std-dz gci-cal-dz']);
+    const left = ()=> m.evaluate(M=> [M.querySelectorAll('.gci-cal-levels tbody tr').length, M.querySelector('svg.gci-chrom').childElementCount + M.querySelector('svg.gci-resid').childElementCount,
+      ['.gci-cal-legend', '.gci-cal-fit', '.gci-cal-notice', '.gci-cal-status', '.gci-cal-fits'].map(s=> M.querySelector(s).innerHTML).join('')]);
+    assert.deepEqual(await left(), [0, 0, ''], 'nothing of them in the window');
+    await undo(page);
+    const back = await left();
+    assert.ok(back[0] === 6 && back[1] > 0, JSON.stringify(back));
+    assert.match(await m.locator('.gci-cal-status').textContent(), /the results shown come from H₂-O₂ fit 268–326 s, not from these windows\.$/i, 'its words again');
     assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
   } finally { await close(); }
 });

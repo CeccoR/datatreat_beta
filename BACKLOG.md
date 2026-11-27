@@ -279,7 +279,7 @@ was proposed; nothing here is in the code yet.
 
 ## General
 
-- **Backward compatibility under the rule (CLAUDE.md, v583 and v586: stages 1 and 2 of 4 done).**
+- **Backward compatibility under the rule (CLAUDE.md, v583, v586 and v588: stages 1 to 3 of 4 done).**
   An old project is opened by redoing the calculations with the current engine, from the
   parameters that still exist and the original data; no code is kept for old formats. An
   inventory of the code for old projects, made on v576 (outside the repository), staged it in
@@ -313,11 +313,22 @@ was proposed; nothing here is in the code yet.
   ticked, as new ones are, their values the defaults (no longer deduced from the values);
   keepSpectrum (DRS, EPR) gone, the readings kept by the bytes sharing the arrays; a DRS or GC
   reader that throws on a project's bytes keeps the data the project holds, said with why (to
-  v585 the file was left out). Left: stage 3 (GC Integration: the fits keyed by the engine, the
-  calibrations of v544–v548 without their table), stage 4 (Rietveld's results recomputed at
-  their refined parameters; with it the instruments' and results' messages saved as words
-  alone, xrd-rv-model.js msgOf, INSTR_INFO). Kept by decision: a DRS card's lines saved without
-  the `suggested` flag are the user's, not suggested again.
+  v585 the file was left out). Done in v588 (stage 3, GC Integration and Calibration): every
+  result is kept under the engine's id (gc-tcd.js ENGINE_ID, in its key beside the file's bytes
+  and the method; a test holds the engine's files' hash beside it, so that the engine cannot
+  change under the same id): a project's results of another engine, or of none (saved to v587,
+  v544's keys among them), are not taken, and its files are integrated again as it opens, with
+  the windows its results came from (windows edited stay pending); a project of this engine fits
+  nothing, nor do an undo, a redo or a tab woken. A calibration of v544–v548 (raw chromatograms
+  with no table) is none, its levels with it: the window shows its drop zone alone (its box
+  "saved by an older version without its GC table", the standards named by column and a table
+  naming them gone: normKey, noTrap, inCal, calNotes). With no standards the window keeps
+  nothing of those removed, hidden or not (v585 left their rows under the drop zone). Kept as
+  the current format: the overview's gas saved as a list of one (every version from v544 writes
+  it). Left: stage 4 (Rietveld's results recomputed at their refined parameters; with it the
+  instruments' and results' messages saved as words alone, xrd-rv-model.js msgOf, INSTR_INFO).
+  Kept by decision: a DRS card's lines saved without the `suggested` flag are the user's, not
+  suggested again.
 
 - **Warnings and errors, reviewed by kind.** The map of every message the app shows was
   made again from the code at v565 (331 entries) and the rules agreed (R1–R4: a kind for

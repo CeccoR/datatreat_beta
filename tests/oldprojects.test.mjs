@@ -12,10 +12,17 @@
    project from before the cards, the standard named among the samples, arrays an older version
    read, an instrument an older reader read; a Scherrer card's widths in points, the steps'
    note, no CIFs): a new project's cards, the arrays and the instrument read from the bytes,
-   the default widths, nothing said of the old ones. */
+   the default widths, nothing said of the old ones. v588: GC's Integration card (results of no
+   engine's id, to v587, and of another engine's, a calibration of v544–v548 with no table):
+   every chromatogram integrated again with the windows applied, the calibration none, nothing
+   said; an undo, a redo and the page reloaded integrate nothing. */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { start, openModule, loadFiles, settle, moduleState, exportProject, projectFile, importProject, openProject, download, readZip, banner, answer } from './helpers.mjs';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { start, openModule, loadFiles, settle, moduleState, exportProject, projectFile, importProject, openProject, download, readZip, banner, answer, undo, ready, until, saveAs, ROOT } from './helpers.mjs';
+
+const TCD = await import(pathToFileURL(path.join(ROOT, 'gc-tcd.js')).href);
 
 let env;
 before(async ()=>{ env = await start(); });
@@ -190,6 +197,88 @@ test('XRPD: a Scherrer card\'s widths in points, the steps\' note, no CIFs: the 
     assert.ok(['stepNote', 'heldPts', 'oldGroups', 'N', 'blWin'].every(k=> !(k in sc) && !(k in sc.shared)), 'the old fields none');
     assert.deepEqual([await page.locator('#xrdA1StepNote').count(), await page.innerHTML('#xrdA1CifNote')], [0, ''], 'nothing said in the card');
     assert.deepEqual(await csvs(page), csv, 'the CSVs of those files loaded now');
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+/* ---- GC's raw chromatograms (synthetic, as gctcd-ui.test.mjs draws them): the engine's own peak
+   model at known areas, a seeded noise, on 250–340 s; the GC table of the same injections, one
+   every 20 min; the standards' table (UTF-16, its Analysis column) ---- */
+const TT = Array.from({ length: 451 }, (_, i)=> (1250 + i)/5);
+const gcRuns = (k0, n)=> Array.from({ length: n }, (_, k)=> [0.05 + 0.01*(k + k0), 0.03 + 0.002*(k + k0)]);
+function tcdFile(name, rows){
+  const shape = (A, mu)=> ({ A, mu, sigma: 0.5, dmu: 0.35, fc: 0.25, tau1: 0.7, tau2: 4.0, w2: 0.06 });
+  let s = 7919*name.length;
+  const u = ()=>{ s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return (s + 0.5)/4294967296; }, z = ()=> Math.sqrt(-2*Math.log(u()))*Math.cos(2*Math.PI*u());
+  const ys = rows.map(([h, o])=>{ const P = [TCD.peakShape(TT, shape(h*40000, 287.0)), TCD.peakShape(TT, shape(o*12000, 302.0)), TCD.peakShape(TT, shape(300, 310.1))]; return TT.map((t, i)=> -5000 + 0.8*(t - 297) + TCD.step(t, -12, 305.6, 0.8) + P[0][i] + P[1][i] + P[2][i] + z()); });
+  const n = v => String(+v.toFixed(5)).replace('.', ',');
+  return { name, mimeType: 'text/csv', buffer: Buffer.from(TT.map((t, i)=> [n(t), ...ys.map(y=> n(y[i]))].join(';') + ';').join('\r\n') + '\r\n') };
+}
+const gcTable = (name, rows)=> ({ name, mimeType: 'text/csv', buffer: Buffer.from('Injection Date,H2 (A) [%Mol],O2 (A) [%Mol]\n'
+  + rows.map(([h, o], k)=>{ const m = 600 + 20*k; return `11/13/2026 ${Math.floor(m/60)}:${String(m % 60).padStart(2, '0')}:00,${h},${o}\n`; }).join('')) });
+const STD = [[0.05, 0], [0.1, 0], [0.2, 0], [0, 0.02], [0, 0.05], [0, 0.1]];
+const stdTable = name => ({ name, mimeType: 'text/csv', buffer: Buffer.from('﻿' + ['"Analysis";"Injection date";"H2 (B) [%Mol]";"O2 (B) [%Mol]";',
+  ...STD.map((_, k)=> `"cal_${k + 1}";10/29/2026 10:${String(10 + 5*k).padStart(2, '0')}:36 AM;0.00000;0.00000;`)].join('\r\n') + '\r\n', 'utf16le') });
+const fitted = page => page.evaluate(async ()=> (await import('./utils.js')).kept.made['gc-tcd'] || 0);
+const winTo = async (card, v)=>{ const f = card.locator('.gci-method input[data-k="w0:to"]'); await f.fill(String(v)); await f.press('Enter'); };
+const stateOf = card => card.locator('.gci-status').getAttribute('data-state');
+
+/* v588: an Integration card's project as older versions saved it, made here from one of now: its
+   results (areas made double, so that any taken would show) under keys of no engine's id (as to
+   v587) and of another engine's, its windows applied (to 328 s) and others edited (330 s), its
+   calibration of v544–v548 (raw chromatograms alone, levels typed). It opens with every
+   chromatogram of its files integrated again, once, with the windows applied (its CSVs those of
+   the same files integrated now, before the standards), the windows edited still pending, the
+   calibration none (its window the drop zone alone), nothing said; its results this engine's
+   from then on: an undo, a redo and the page reloaded integrate nothing. Fails on v586. */
+test('GC Integration: results of no engine\'s id and of another\'s integrated again with the windows applied, a calibration of no table none; then nothing integrated (v588)', async ()=>{
+  const { page, errors, close } = await env.page();
+  try {
+    await openModule(page, 'gc');
+    await loadFiles(page, 'gc', [gcTable('a.csv', gcRuns(0, 4)), tcdFile('a_TCD.csv', gcRuns(0, 4)), gcTable('bb.csv', gcRuns(4, 4)), tcdFile('bb_TCD.csv', gcRuns(4, 4))], 2);
+    const card = page.locator('#tab-gc .an-card').nth(0), m = page.locator('.gci-cal-modal');
+    await until(async ()=> await stateOf(card) === 'done', { timeout: 60000, what: 'the files integrated' });
+    await winTo(card, 328); await settle(page);
+    await page.waitForTimeout(650); await card.locator('.gci-integ').click();
+    await until(async ()=> await stateOf(card) === 'done', { timeout: 60000, what: 'Integrate' });
+    await settle(page);
+    const csv = await csvs(page);
+    await card.locator('.gci-cal').click(); await m.waitFor({ state: 'visible' });
+    await m.locator('.gci-cal-in').setInputFiles([stdTable('std.csv'), tcdFile('std_TCD.csv', STD)]);
+    await page.waitForFunction(()=> /^6 chromatograms integrated\.$/.test(document.querySelector('.gci-cal-modal .gci-cal-status').textContent), null, { timeout: 60000 });
+    for (const j of [0, 1, 2]){ const f = m.locator(`input[data-j="${j}"][data-g="h2"]`); await f.fill(String(STD[j][0])); await f.press('Enter'); await settle(page); }
+    await m.locator('.xrd-std-x').click(); await settle(page);
+    assert.notDeepEqual(await csvs(page), csv, 'the standards\' line taken');
+    await winTo(card, 330); await settle(page);
+    const n0 = await fitted(page), { obj } = await exportProject(page), st = obj.state, stamp = `|${TCD.ENGINE_ID}|`, keys = Object.keys(st.integ);
+    assert.ok(keys.length === 3 && keys.every(k=> k.includes(stamp + '[["H2O2",268,328],')), keys.join(' '));
+    const twice = rs => rs.map(r=> r && { ...r, gases: Object.fromEntries(Object.entries(r.gases).map(([g, x])=> [g, { ...x, area: 2*x.area }])) });
+    st.integ = Object.fromEntries(keys.map((k, i)=> [k.replace(stamp, i ? '|tcd-0|' : '|'), twice(st.integ[k])]));
+    const c0 = st.cards.find(c=> c.type === 'integ');
+    c0.cal.files = c0.cal.files.map(({ table: _t, ...f })=> f);
+    assert.ok(c0.cal.files[0].levels.some(l=> l.h2 === 0.1), 'its levels typed');
+    await importProject(page, projectFile(env, 'GC integ old.datatreat', { ...obj, title: 'GC integ old', state: st }, { sign: true }));
+    await openProject(page, 'gc', 'GC integ old');
+    const card2 = page.locator('#tab-gc .an-card').nth(0);
+    await until(async ()=> (await fitted(page)) >= n0 + 8, { timeout: 60000, what: 'its chromatograms integrated' });
+    await page.waitForTimeout(1000); await settle(page);
+    assert.equal(await fitted(page), n0 + 8, 'each chromatogram of its files once, no standard');
+    const s = await moduleState(page, 'gc'), integ = s.cards.find(c=> c.type === 'integ');
+    assert.ok(Object.keys(s.integ).length === 2 && Object.keys(s.integ).every(k=> k.includes(stamp + '[["H2O2",268,328],')), 'this engine\'s, the windows applied: ' + Object.keys(s.integ).join(' '));
+    assert.deepEqual([integ.method.windows[0].to, integ.edit.windows[0].to, integ.cal.files, await stateOf(card2)], [328, 330, [], 'pending'], 'the windows edited pending still; the calibration none');
+    assert.deepEqual(await csvs(page), csv, 'the CSVs of those files integrated now');
+    await card2.locator('.gci-cal').click(); await m.waitFor({ state: 'visible' }); await settle(page);
+    assert.deepEqual(await m.evaluate(M=> [M.classList.contains('gci-cal-none'), M.querySelectorAll('.xrd-std-row, .gci-cal-levels tbody tr, .alert').length]), [true, 0], 'the drop zone alone, nothing said');
+    await m.locator('.xrd-std-x').click(); await settle(page);
+    // an undo and a redo (the overview's gas, a step), then the project saved and the page
+    // reloaded: nothing integrated
+    await card2.locator('.gci-ov-chip[data-g="o2"]').click(); await settle(page);
+    await undo(page); await undo(page, true); await page.waitForTimeout(500);
+    assert.equal(await fitted(page), n0 + 8, 'undo and redo: nothing');
+    await saveAs(page, 'GC integ old');
+    await page.reload(); await ready(page);
+    await page.waitForSelector('#tab-gc.active'); await page.waitForTimeout(1000); await settle(page);
+    assert.deepEqual([await fitted(page), Object.keys((await moduleState(page, 'gc')).integ)], [0, Object.keys(s.integ)], 'reloaded: nothing');
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });

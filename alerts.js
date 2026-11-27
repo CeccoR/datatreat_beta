@@ -73,7 +73,7 @@ export const inKeys = keys => (s, mark)=> s && typeof s === 'object' ? keys.redu
    one of a state are told the same file (sameFile); put(state, mark), the state with its
    records marked, where `mark` gives a record or a list of them marked (the same where none
    is): inKeys(['files']), XRPD's inKeys(['files', 'std']), its standard's window
-   inKeys(['std']), GC's Calibration window gc-integ-model.js inCal }. */
+   inKeys(['std']) }. */
 export function markSeen(hist, notes, what, { same = sameFile, put = inKeys(['files']) } = {}){
   const add = new Map();
   for (const n of notesFor(notes, what)) for (const f of n.files) if (!seenFor(f, markOf(n))) add.set(f, new Set([...(add.get(f) || []), markOf(n)]));
