@@ -601,6 +601,13 @@ function entryOf(q){
   o.blOn = q.blOn !== false;
   return o;
 }
+/* A sample's own settings as it comes into a card: its shared values (shared), as an entry.
+   Every way in makes them here (v587): a file added, the standard's replaced, a file taken
+   back in with none, a card's state holding none for it (readState: a card made or switched
+   to with its files there), a Scherrer card's settings kept by one of the other kind (xrd.js,
+   xrd-model.js keptSlots). To v586 a card made with its files there had {blOn: true}, one
+   there before them the shared values: the same results, another state. */
+const newEntry = shared => entryOf(objOf(shared));
 // A file's params (pp: its own entry; respects per-field shared/per mode)
 function fileParams(pp, paramMode, shared){
   const g = k => paramMode[modeOf(k)]==='shared' ? shared[k] : (pp[k] ?? shared[k]);
@@ -620,7 +627,8 @@ function stateOf({ std, perParams, manualPeaks, removedPeaks, cifs, shared, para
 /* Every setting from the state s (the card's restore), each set whether the state holds
    it or not: a value it has none of, or one that is no number (a project read in may
    hold anything), the default; a sample's own number only where it is one (the shared
-   value otherwise), its baseline's box on unless the state says off. Up to v484 the
+   value otherwise), its baseline's box on unless the state says off; a sample it holds no
+   entry for, a new one's (newEntry: the shared values, v587). Up to v484 the
    shared values and the modes were merged over those in use: an undo past the box's
    untick, or a project without it, kept the box as it was left (the baseline off, the
    widths and sizes changed), and a list holding something else than lists (a project
@@ -637,7 +645,7 @@ function readState(s, std, n){
   for (const k in FIELD_MIN) shared[k] = numOf(sh, k) ?? SHARED_DEF[k];
   shared.blOn = sh.blOn !== false;
   for (const k in MODE_DEF) paramMode[k] = pm[k] === 'shared' || pm[k] === 'per' ? pm[k] : MODE_DEF[k];
-  const perParams = arr(s.perParams, ()=> ({})).map(q=> entryOf(obj(q)));
+  const perParams = arr(s.perParams, ()=> null).map(q=> q == null ? newEntry(shared) : entryOf(obj(q)));
   const posOf = a => Array.isArray(a) ? a.filter(Number.isFinite) : [];
   const manualPeaks = arr(s.manualPeaks, ()=> []).map(posOf);
   const removedPeaks = arr(s.removedPeaks, ()=> []).map(posOf);
@@ -979,16 +987,16 @@ function dropPeak(S, idx, det, manual){
 /* The per-sample arrays, for the file list to keep aligned with the included files (key:
    the card's). A file left out keeps its entry as it was. None: the standard's. */
 const slotsOf = (S, key)=> S.std ? [] : [
-  { key: key + ':params', arr:S.perParams, make: v=> v ? entryOf(objOf(v)) : {...S.shared} },
+  { key: key + ':params', arr:S.perParams, make: v=> v ? entryOf(objOf(v)) : newEntry(S.shared) },
   { key: key + ':manual', arr:S.manualPeaks, make: v=> v ? v.slice() : [] },
   { key: key + ':removed', arr:S.removedPeaks, make: v=> v ? v.slice() : [] },
   { key: key + ':cif', arr:S.cifs, make: cifEntry },
 ];
 // A file added: its entries, the shared settings, no peak by hand, no CIF.
-function addEntry(S){ S.perParams.push({...S.shared}); S.manualPeaks.push([]); S.removedPeaks.push([]); S.cifs.push(null); }
+function addEntry(S){ S.perParams.push(newEntry(S.shared)); S.manualPeaks.push([]); S.removedPeaks.push([]); S.cifs.push(null); }
 // The standard's file replaced or taken away (fs: its files now): its own peaks go with it.
 function freshEntries(S, fs){
-  S.perParams = fs.map(()=> ({...S.shared})); S.manualPeaks = fs.map(()=> []); S.removedPeaks = fs.map(()=> []); S.cifs = fs.map(()=> null);
+  S.perParams = fs.map(()=> newEntry(S.shared)); S.manualPeaks = fs.map(()=> []); S.removedPeaks = fs.map(()=> []); S.cifs = fs.map(()=> null);
   S.panel.sel = S.panel.hov = null;
 }
 // Every file gone.
@@ -1013,7 +1021,7 @@ export { nearestIdx, computeBaseline, findPeaks, computeFWHM, fwhmSigma, fwhmGeo
   cagAt, fitCaglioti, instrModelOf, instrBetaOf, stdSpanOf, scherrerD, sizeCorr, belowInstr, sizeSummary, sampleSizes,
   lighter, sizeSeries, seriesOf, boxTop, sizeTops, topOf,
   cifRef, cifIn, phaseOfCif, ASSIGN, assignTol, peakRefl, reflLabel, K2_TOL, kAlpha2Of, sampleAssign, speciesOf, sizeRows, cifPool, poolAt,
-  modeDef, FIELD_DEF, SHOWN, sharedDef, FIELD_MIN, WIDTHS, modeOf, objOf, entryOf, fileParams, stateOf, readState,
+  modeDef, FIELD_DEF, SHOWN, sharedDef, FIELD_MIN, WIDTHS, modeOf, objOf, entryOf, newEntry, fileParams, stateOf, readState,
   csvTables,
   fieldInputs, guardsOf, TOGGLES, SIZE_ONLY, PEAK_SEARCH, numIn, fieldIn, takeInputs, widthHint, presetOf, procKeys,
   PEAK_BASE, PEAK_HOVER, PEAK_SEL, FWHM_BASE, FWHM_HOVER, FWHM_SEL, anaOf, nearestOf, markStyles, toggled, nudge,

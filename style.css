@@ -1659,8 +1659,10 @@ button.an-add:focus-visible { outline: 2px solid var(--accent); outline-offset: 
    place; a button's own, drawn in the icon's box whatever its size), a line before the
    remove, red on hover as the row's × (.is-danger) and on the keyboard's focus; an item whose
    control is disabled greyed. Its row lit while it is open (the trace list's as before, the
-   others as their hover lights them, a file row of a standards' window by its border); a row
-   given the focus back by it ringed as the menu's items are. Laid over the page: nothing moves. */
+   others as their hover lights them, a file row of a standards' window by its border; v587
+   Iodometry's standards, the Custom cards' series and the composer's panels and divisions on
+   the darker panel's ground); a row given the focus back by it ringed as the menu's items
+   are. Laid over the page: nothing moves. */
 .an-menu-sep { height: 1px; margin: 3px 6px; background: var(--line); }
 .row-menu button { display: flex; align-items: center; gap: 10px; }
 .row-menu .rm-ic { flex: none; display: inline-flex; width: 15px; height: 15px; color: var(--muted); }
@@ -1673,8 +1675,9 @@ button.an-add:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .rv-cif.menu-on, tr.peak-row.menu-on { background: var(--panel); }
 .sess-row.menu-on { background: var(--line); }
 .xrd-std-row.menu-on { border-color: var(--accent); }
+:is(table.iodo-std tr, .fig-ser, .fig-panel, .fig-dgroup-h).menu-on { background: var(--panel2); border-radius: 6px; }
 .menu-on .idle-dim { opacity: 1; }
-:is(.file-row, .rv-cif, .xrd-std-row, tr.peak-row, .sess-row)[aria-haspopup="menu"]:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+:is(.file-row, .rv-cif, .xrd-std-row, tr.peak-row, .sess-row, table.iodo-std tr, .fig-ser, .fig-panel, .fig-dgroup-h)[aria-haspopup="menu"]:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 /* ===== The sample selector (snav.js, v545; v546): `‹ n/N ›` and the name with its
    down-arrow, in a line. The arrows and the count are one group of ONE fixed width in
    every module, as wide as `‹ 000/000 ›` needs (the count's pill 7ch of its 10px font,

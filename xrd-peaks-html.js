@@ -38,7 +38,8 @@ const belowInstrHtml = n => `<div class="alert warn">⚠ ${n} peak${n > 1 ? 's a
    the peak picked, or null; st: a sample's sizes summarised (sampleSizes), its mean and
    its warnings under the table. A: a sample's assignment (v575: sampleAssign's, its rows
    the peaks'; none, no CIF): each peak's hkl after its 2θ, the mean its species', and the
-   rule the hkl follow under it. */
+   rule the hkl follow under it. A row takes the focus and has a menu of its × (v587,
+   xrd-peaks.js wireRows). */
 function peakTableHtml(pks, { std, m, fp, picked, st, A }, { esc, X_SVG }){
   // (only peaks of height 0 left — manual ones on the baseline — each 0 %, as peaks.csv
   // writes them: v568, a dash to v567; up to v484 0/0 printed NaN%)
@@ -54,7 +55,7 @@ function peakTableHtml(pks, { std, m, fp, picked, st, A }, { esc, X_SVG }){
     const below = showCorr && belowInstr(fwhm, pk.detPos, m);
     const corrCell = showCorr ? (below ? `<td title="Narrower than the instrumental width at this angle">⚠</td>` : `<td>${fmtCell(sizeCorr(fwhm, pk.detPos, fp.K, fp.lambda, m))}</td>`) : '';
     const sel = picked!=null && Math.abs(pk.pos-picked)<1e-9 ? ' selected' : '';
-    html+=`<tr class="peak-row${pk.manual?' manual-peak':''}${sel}" data-pos="${esc(pk.pos)}" data-det="${esc(pk.detPos)}"><td>${i+1}</td><td>${pk.pos.toFixed(3)}</td>${A ? hklCell(A.rows[i], esc) : ''}<td>${relOf(pk.height)}</td><td${std && isFinite(pk.fwhmSig) ? ` title="± ${pk.fwhmSig.toPrecision(2)}° (counting statistics)"` : ''}>${isFinite(fwhm)?fwhm.toFixed(3):'—'}</td>${sizeRawCell}${corrCell}<td style="text-align:center"><button class="peak-del is-danger idle-dim" data-det="${esc(pk.detPos)}" data-manual="${pk.manual?1:0}" title="Remove peak">${X_SVG(13)}</button></td></tr>`;
+    html+=`<tr class="peak-row${pk.manual?' manual-peak':''}${sel}" data-pos="${esc(pk.pos)}" data-det="${esc(pk.detPos)}" tabindex="-1" aria-haspopup="menu"><td>${i+1}</td><td>${pk.pos.toFixed(3)}</td>${A ? hklCell(A.rows[i], esc) : ''}<td>${relOf(pk.height)}</td><td${std && isFinite(pk.fwhmSig) ? ` title="± ${pk.fwhmSig.toPrecision(2)}° (counting statistics)"` : ''}>${isFinite(fwhm)?fwhm.toFixed(3):'—'}</td>${sizeRawCell}${corrCell}<td style="text-align:center"><button class="peak-del is-danger idle-dim" data-det="${esc(pk.detPos)}" data-manual="${pk.manual?1:0}" title="Remove peak">${X_SVG(13)}</button></td></tr>`;
   });
   html+='</tbody></table></div>';
   if (!std){

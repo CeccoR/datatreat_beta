@@ -1,4 +1,4 @@
-import { esc, registerModule, keeper, objId, exactKey, csvNum, flashFieldInvalid, barNames, X_SVG, setupDropzone, nextColor, fitLinear, csvLine, fileLine, NOT_READ, bytesOf } from './utils.js';
+import { esc, registerModule, keeper, objId, exactKey, csvNum, flashFieldInvalid, barNames, X_SVG, setupDropzone, nextColor, fitLinear, csvLine, fileLine, NOT_READ, bytesOf, wireRowMenu, ctlMenu } from './utils.js';
 import { Plot, svgEl, axisReadout } from './plot.js';
 import { moduleKit, wideCsv, isObj, num } from './modkit.js';
 import { viewOf, setView, viewKey, swatchLegend } from './modcharts.js';
@@ -380,6 +380,8 @@ function makeCal(S){
   calEl.addEventListener('change', e=>{ if (e.target.id === 'iodoCalMode') sync(S); else if (e.target.matches('input[inputmode="decimal"]') && M.fieldNum(e.target.value) === undefined) flashFieldInvalid(e.target); });
   calEl.addEventListener('keydown', e=>{ if (e.key === 'Enter' && e.target.matches('input') && !cq(S, '[data-apply]').disabled){ e.preventDefault(); closeCal(S, true); } });
   calEl.addEventListener('click', e=> onCalClick(S, e));
+  // A standard's row: a menu of its × (v587, utils.js wireRowMenu).
+  wireRowMenu(S.stdBody, { rows: 'tr[data-i]', ...ctlMenu('[data-del]'), label: r => `Standard ${+r.dataset.i + 1}` });
 }
 function openCal(S){
   if (S.draft) return;

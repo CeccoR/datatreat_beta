@@ -306,8 +306,9 @@ test('the settings: a sample\'s own, a malformed state, the state saved and read
     perParams: [{ smoothW: 0.3, pkDist: 'a' }, 5, null], manualPeaks: [[30, 'x', null], 'q'], removedPeaks: { a: 1 }, sizeBy: 'peak', norm: 'weird' };
   assert.deepEqual(M.readState(bad, false, 2), { shared: { ...SH, K: 1e-6 }, paramMode: { ...PM, N: 'per', pkHeight: 'shared' },
     perParams: [{ smoothW: 0.3, blOn: true }, { blOn: true }], manualPeaks: [[30], []], removedPeaks: [[], []], cifs: [null, null], sizeBy: 'peak' });
+  // (a sample it holds no entry for, a new one's: the shared values, v587)
   for (const v of [null, 5, 'x', []]) assert.deepEqual(M.readState(v, false, 1),
-    { shared: SH, paramMode: PM, perParams: [{ blOn: true }], manualPeaks: [[]], removedPeaks: [[]], cifs: [null], sizeBy: 'sample' });
+    { shared: SH, paramMode: PM, perParams: [SH], manualPeaks: [[]], removedPeaks: [[]], cifs: [null], sizeBy: 'sample' });
   // The standard's: its own defaults, everything shared whatever the state says; no CIF.
   const std = M.readState({ paramMode: { N: 'per', pkHeight: 'per' }, perParams: [{}, {}], cif: [{ file: 'a', cif: 'b' }] }, true, 2);
   assert.deepEqual([std.shared.smoothW, Object.values(std.paramMode).every(v=> v === 'shared'), std.cifs], [0, true, [null, null]]);
@@ -346,6 +347,25 @@ test('an old project: widths in points, the steps\' note, no CIFs: the default w
 
 /* v575: a sample's CIF read back as a file's name and text (anything else none); kept while
    its card is a Rietveld one (xrd-model.js keptState, keptSlots), files left out alike. */
+/* v587: a sample's own settings as it comes into a card, made one way whatever the way in
+   (newEntry): a card made or switched to with its files there (readState, of a state holding no
+   entry for them) and a card there before its files (addEntry, as they are dropped) hold the
+   same state, the shared values; so do the standard's file replaced and a file taken back in
+   with none (a Scherrer card's settings a Rietveld card keeps: xrdmodel). To v586 the first had
+   {blOn: true}, the second the shared values: the same results, another state. */
+test('a sample\'s own settings as it comes into a card: the shared values, the same state whether the card was there before its files or made with them (v587)', ()=>{
+  const sh = { ...M.FIELD_DEF, K: 0.95, blOn: false };
+  const made = M.readState({ shared: sh }, false, 2).perParams;
+  const S = { std: false, shared: sh, perParams: [], manualPeaks: [], removedPeaks: [], cifs: [], panel: {} };
+  M.addEntry(S); M.addEntry(S);
+  assert.deepEqual([made, S.perParams], [[sh, sh], [sh, sh]], 'made with its files there, and there before them');
+  assert.ok(made[0] !== made[1] && made[0] !== sh, 'each its own');
+  M.freshEntries(S, [{}]);
+  assert.deepEqual([S.perParams, M.slotsOf(S, 'A1')[0].make(undefined), M.newEntry(sh)], [[sh], sh, sh]);
+  // (an entry the state holds read as before: its numbers, its box on unless off)
+  assert.deepEqual(M.readState({ shared: sh, perParams: [{ K: 1.1 }] }, false, 2).perParams, [{ K: 1.1, blOn: true }, sh]);
+});
+
 test('the CIFs read back; kept while the card is a Rietveld one', ()=>{
   const q = { file: 'SrTiO3.cif', cif: 'data_x' }, v = { perParams: [{}, {}, {}], manualPeaks: [[], [], []], removedPeaks: [[], [], []], shared: {}, paramMode: {}, sizeBy: 'peak', norm: 'global' };
   assert.deepEqual(M.readState({ cif: [q, { file: 1, cif: 'x' }, 'q', { ...q, extra: 1 }] }, false, 3).cifs, [q, null, null], 'cut to the files, a malformed one none, the rest dropped');
@@ -483,7 +503,10 @@ test('the fixture\'s samples and standard as the page analyses them: the CSVs, t
     + '<div class="pg-stat">Peaks: <b>7</b>, 2θ 22.85–77.56°</div>');
   assert.equal(cag.alert, '');
   const stdTable = H.peakTableHtml(T.proc.peaks.filter(pk=> !pk.removed), { std: true, m: null, fp: T.pr, picked: null, st: null }, U);
-  assert.equal(sha(asPage(stdTable)), '06803cc4a87466b39b94102841c641d5ef99d949');
+  // (v587: each row focusable, with a menu of its ×; the table otherwise as it was)
+  const MENU = ' tabindex="-1" aria-haspopup="menu"';
+  assert.equal(sha(asPage(stdTable.replaceAll(MENU, ''))), '06803cc4a87466b39b94102841c641d5ef99d949');
+  assert.equal(stdTable.match(/<tr class="peak-row[^>]*>/g).filter(t=> t.endsWith(MENU + '>')).length, 7);
   assert.deepEqual(cells(stdTable), [['1', '22.848', '17.2%', '0.159'], ['2', '32.536', '100.0%', '0.193'], ['3', '40.130', '29.0%', '0.219'], ['4', '46.671', '47.0%', '0.245'],
     ['5', '58.036', '35.9%', '0.292'], ['6', '68.127', '21.0%', '0.336'], ['7', '77.555', '12.0%', '0.384']]);
   assert.deepEqual(stdTable.match(/title="± [^"]*"/g), ['0.0062', '0.0025', '0.0055', '0.0055', '0.0072', '0.0088', '0.018'].map(v=> `title="± ${v}° (counting statistics)"`));
@@ -519,7 +542,7 @@ test('the fixture\'s samples and standard as the page analyses them: the CSVs, t
   const pks = S[0].proc.peaks.filter(pk=> !pk.removed);
   const t0 = H.peakTableHtml(pks, { std: false, m: null, fp: S[0].pr, picked: null, st: M.sampleSizes(S[0].proc, S[0].pr, null, false, U) }, U);
   const t1 = H.peakTableHtml(pks, { std: false, m, fp: S[0].pr, picked: null, st: M.sampleSizes(S[0].proc, S[0].pr, m, false, U) }, U);
-  assert.deepEqual([sha(asPage(t0)), sha(asPage(t1))], ['a7d21f4f5ca1f31ecea5c57d1e960a073789d80c', '982f38bbbf6da0a87b35f98f5f018b9b67485572']);
+  assert.deepEqual([sha(asPage(t0.replaceAll(MENU, ''))), sha(asPage(t1.replaceAll(MENU, '')))], ['a7d21f4f5ca1f31ecea5c57d1e960a073789d80c', '982f38bbbf6da0a87b35f98f5f018b9b67485572']);
   assert.deepEqual(cells(t1)[0], ['1', '22.770', '15.3%', '0.275', '29.5', '36.1']);
   assert.ok(t0.endsWith('<div class="size-summary">Mean crystallite size: <b>26.7 ± 2.3 nm</b></div>'));
   assert.ok(t1.endsWith('<div class="size-summary">Mean crystallite size: <b>26.7 ± 2.3 nm</b><br>Instr.-corrected: <b>42.4 ± 4.2 nm</b></div>'));
@@ -907,7 +930,7 @@ test('the state changed: a chip switched, peaks removed and placed, the per-samp
   M.takeState(Z, t, 'none');
   assert.ok(Z.shared === sh && Z.perParams === t.perParams && Z.manualPeaks === t.manualPeaks && Z.cifs === t.cifs);
   assert.deepEqual([Z.shared.pkHeight, Z.sizeBy, Z.norm, Z.manualPeaks, Z.cifs, Z.panel], [2, 'peak', 'none', [[30.5]], [Q], { sel: null, hov: null }]);
-  assert.deepEqual(M.stateOf(Z), { perParams: [{ blOn: true }], manualPeaks: [[30.5]], removedPeaks: [[]], cif: [{ file: 'a.cif', ref: 0 }], cifTexts: ['data_a'], shared: Z.shared, paramMode: M.modeDef(false), sizeBy: 'peak', norm: 'none' });
+  assert.deepEqual(M.stateOf(Z), { perParams: [{ ...M.FIELD_DEF, pkHeight: 2 }], manualPeaks: [[30.5]], removedPeaks: [[]], cif: [{ file: 'a.cif', ref: 0 }], cifTexts: ['data_a'], shared: Z.shared, paramMode: M.modeDef(false), sizeBy: 'peak', norm: 'none' });
   M.setCif(Z, 0, null);
   assert.deepEqual(M.stateOf(Z).cif, [null]);
   const P = { sel: null };

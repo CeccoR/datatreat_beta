@@ -285,6 +285,24 @@ test('an old project: an Urbach sample of no lines beside common ones, the defau
   assert.deepEqual([W.vlinesFor(0), W.vlinesFor(1)], [own, M.defaultLinesOf(U, M.URBACH, files[1])]);
 });
 
+/* v587: an Urbach card's common lines (an older version's, to v568) are no parameter any more:
+   not read (the panel's common set none, the state saved holds none), not counted as lines
+   placed. Its state with no flag and no lines of its samples' own is a new card's: restorePanel
+   says so, and the page suggests its lines as for a card added (tauc.js restoreState;
+   drspoints): the lines of a new card. To v586 kept and counted as placed: the default lines.
+   A Tauc card's common lines read as ever; a flag saved, as it says. */
+test('an old project: an Urbach card\'s common lines not read, its state of no lines a new card\'s (v587)', ()=>{
+  const files = [loaded('drs1.csv', drsCsv({ Eg: 3.2 })), loaded('drs2.csv', drsCsv({ Eg: 2.9, A: 45, seed: 4 }))], L = { v1: 2.5, v2: 2.7 }, T4 = { v1: 2, v2: 3, v3: 1.5, v4: 1.9 };
+  const W = panel('urbach', files), T = panel('tauc', files), N = panel('urbach', files);
+  assert.deepEqual([W.restore({ mode: 'shared', sharedVlines: L, per: [{}, {}] }), W.suggested, W.sharedVlines, W.snapshot().sharedVlines], [true, false, {}, {}]);
+  W.autoSuggestAll(); N.autoSuggestAll();
+  assert.deepEqual(W.snapshot(), N.snapshot(), 'suggested: a new card\'s lines');
+  assert.deepEqual([W.restore({ sharedVlines: L, per: [{ vlines: { v1: 2, v2: 2.8 } }, {}] }), W.suggested], [false, true], 'a sample\'s own lines: placed');
+  assert.deepEqual([W.restore({ sharedVlines: L, per: [{}, {}], suggested: false }), W.suggested], [false, false], 'a flag saved');
+  assert.deepEqual([T.restore({ sharedVlines: T4 }), T.suggested, T.sharedVlines], [false, true, T4], 'a Tauc card\'s common lines');
+  assert.deepEqual([T.restore({}), T.suggested], [true, false]);
+});
+
 /* v586: a file whose reader throws on its bytes as a project opens (made here by bytes no decoder
    takes): the spectrum the project holds, said with why, kept by its bytes (to v585 the throw
    left the file out). */

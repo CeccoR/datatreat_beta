@@ -657,17 +657,23 @@ export const fitPer = (P, files)=>{ if (P.per.length !== files.length) P.per = f
 const clonePer = p => ({...p, vlines: p && p.vlines ? {...p.vlines} : undefined});
 export const panelSnapshot = P =>({ mode: P.mode, shared: {...P.shared}, sharedVlines: {...P.sharedVlines}, per: P.per.map(clonePer), suggested: P.suggested });
 /* A card's settings put back (each value as paramsIn, linesIn and perIn take it: a
-   project read in may hold anything), the per-sample list then fitted to the files. */
+   project read in may hold anything), the per-sample list then fitted to the files. A spec
+   whose lines are each sample's own (Urbach) has no common set: one an older state holds (to
+   v568 an Urbach card's lines were common) is no parameter any more, not read (v587: to v586
+   kept, and counted as lines placed). → whether the state is a new card's: no lines placed
+   and no flag saying so (tauc.js restoreState suggests them, as for a card added). */
 export function restorePanel(U, spec, P, s0, files){
   const s = U.isObj(s0) ? s0 : {};
   P.mode = s.mode === 'per' ? 'per' : 'shared';   // older snapshots stored a per-field object
   P.shared = { ...spec.defaults, ...paramsIn(U, spec, s.shared) };
-  P.sharedVlines = linesIn(U, spec, s.sharedVlines);
+  P.sharedVlines = spec.ownLines ? {} : linesIn(U, spec, s.sharedVlines);
   P.per = Array.isArray(s.per) ? s.per.map(q=> perIn(U, spec, q)) : files.map(()=>({}));
   // A state with no flag: the lines it holds, the common ones or a sample's own, are the
   // user's, placed (kept, not suggested again); none, not placed yet.
-  P.suggested = s.suggested != null ? !!s.suggested : isFinite(P.sharedVlines.v1) || P.per.some(q=> U.isObj(q) && U.isObj(q.vlines));
+  const placed = isFinite(P.sharedVlines.v1) || P.per.some(q=> U.isObj(q) && U.isObj(q.vlines));
+  P.suggested = s.suggested != null ? !!s.suggested : placed;
   fitPer(P, files);
+  return s.suggested == null && !placed;
 }
 
 // The values of the parameters' fields (`raw(k)` a field's text), as they are taken:

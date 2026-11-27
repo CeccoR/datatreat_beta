@@ -521,3 +521,151 @@ test('v585: the Projects list: a row\'s menu of its buttons, Delete last and red
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });
+
+/* ---- v587: the lists left whose rows have a × of their own (utils.js wireRowMenu, ctlMenu) ----
+   XRPD's peaks table (a sample's card and the standard's window), Iodometry's standards, the
+   Custom cards' series and the figure composer's panels and divisions (a division's head where
+   the series has more than one): a row's menu of its ×, red, named by its row; opened, keyed and
+   closed as every list's, the item doing what the × does, through its handler. */
+test('v587: XRPD\'s peaks table: a row\'s menu of its ×, named by its peak; the item removes the peak as its × does; the keys; the standard\'s window\'s table', async ()=>{
+  const { page, errors, close } = await env.page();
+  const T = '#xrdA1PeakTableWrap', ROW = k => page.locator(`${T} tr.peak-row`).nth(k), n = ()=> page.locator(`${T} tr.peak-row`).count();
+  const removed = async ()=> (await moduleState(page, 'xrd')).cards.find(c=> c.id === 1).states.scherrer.removedPeaks;
+  try {
+    await load(page, 'xrd');
+    const n0 = await n(), h0 = (await history(page, 'xrd')).index, r0 = await removed();
+    assert.ok(n0 > 2, 'peaks found');
+    await ROW(1).locator('td').nth(1).click({ button: 'right' });
+    const want = await fromCtls(ROW(1), '.peak-del'), [num, tt] = await ROW(1).evaluate(r=> [r.cells[0].textContent, r.cells[1].textContent]);
+    assert.deepEqual([await shownItems(page), want], [want, [['menuitem', 'Remove peak', null, true, null]]], 'its ×, red');
+    assert.deepEqual([(await menuOf(page))[1], ...(await rowState(ROW(1)))], [`Peak ${num} at ${tt}°`, 'menu', 'true', true, -1]);
+    assert.equal(await ROW(1).evaluate(r=> r.classList.contains('selected')), false, 'not picked by the right button');
+    await item(page, 'Remove peak').click(); await settle(page);
+    const byMenu = await removed();
+    assert.deepEqual([await n(), (await history(page, 'xrd')).index, await onRow(ROW(1))], [n0 - 1, h0 + 1, true], 'removed, a step, the next row focused');
+    await page.keyboard.press('Control+z'); await settle(page);
+    assert.deepEqual([await n(), await removed()], [n0, r0], 'undone');
+    await ROW(1).locator('.peak-del').click(); await settle(page);
+    assert.deepEqual(await removed(), byMenu, 'as its × does');
+    await page.keyboard.press('Control+z'); await settle(page);
+    // The keys: the ContextMenu key on a row, Escape back to it; Shift+F10 and Enter.
+    await ROW(0).focus(); await page.keyboard.press('ContextMenu');
+    assert.equal(await opened(page), 1, 'the ContextMenu key');
+    await page.keyboard.press('Escape');
+    assert.deepEqual([await opened(page), await onRow(ROW(0))], [0, true]);
+    await page.keyboard.press('Shift+F10'); await page.keyboard.press('Enter'); await settle(page);
+    assert.deepEqual([await n(), await onRow(ROW(0))], [n0 - 1, true], 'Enter: removed, the row in its place focused');
+    // The standard's window's table: its rows' menu too; Escape closes the menu, not the window.
+    const W = '#xrdStdPeaks', SR = page.locator('#xrdStdAPeakTableWrap tr.peak-row');
+    await page.click('#xrdA1Std'); await page.waitForSelector(W, { state: 'visible' });
+    await page.setInputFiles(W + 'Files', env.fx.std);
+    await SR.first().waitFor(); await settle(page);
+    const s0 = await SR.count();
+    await SR.nth(0).locator('td').nth(1).click({ button: 'right' });
+    assert.deepEqual(await shownItems(page), [['menuitem', 'Remove peak', null, true, null]]);
+    await page.keyboard.press('Escape');
+    assert.deepEqual([await opened(page), await page.isVisible(W)], [0, true], 'Escape: the menu closed, the window open');
+    await SR.nth(0).click({ button: 'right' }); await item(page, 'Remove peak').click(); await settle(page);
+    assert.equal(await SR.count(), s0 - 1, 'the standard\'s peak removed');
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+test('v587: Iodometry\'s standards: a row\'s menu of its ×, red; the item removes the standard as its × does; Escape closes the menu, not the window', async ()=>{
+  const { page, errors, close } = await env.page();
+  const CAL = '.iodo-cal:not([style*="none"])', ROW = k => page.locator(`${CAL} .iodo-std tbody tr`).nth(k);
+  const vals = ()=> page.$$eval(`${CAL} .iodo-std tbody tr`, rs=> rs.map(r=> [...r.querySelectorAll('input')].map(i=> i.value)));
+  const S = [['0', '0.012'], ['1', '0.405'], ['2', '0.83']];
+  const fill = async ()=>{ for (let i = 0; i < 3; i++) for (const j of [0, 1]) await ROW(i).locator(`input[data-j="${j}"]`).fill(S[i][j]); await page.click(`${CAL} .iodo-cal-head h3`); };
+  try {
+    await load(page, 'iodo');
+    await page.click('#iodoCalBtn'); await page.waitForSelector(CAL);
+    await page.selectOption('#iodoCalMode', 'std');
+    await fill();
+    await ROW(1).locator('input[data-j="0"]').click({ button: 'right' });
+    assert.deepEqual(await shownItems(page), await fromCtls(ROW(1), '[data-del]'));
+    assert.deepEqual(await shownItems(page), [['menuitem', 'Remove standard 2', null, true, null]], 'its ×, red');
+    assert.equal(await item(page, 'Remove standard 2').getAttribute('title'), 'Remove this standard', 'its tooltip');
+    assert.deepEqual([(await menuOf(page))[1], ...(await rowState(ROW(1)))], ['Standard 2', 'menu', 'true', true, -1]);
+    await page.keyboard.press('Escape');
+    assert.deepEqual([await opened(page), await page.isVisible(CAL), await onRow(ROW(1))], [0, true, true], 'Escape: the menu closed, the window open, the focus on the row');
+    await page.keyboard.press('ContextMenu'); await page.keyboard.press('Enter'); await settle(page);
+    const byMenu = await vals();
+    assert.deepEqual([byMenu, await onRow(ROW(1))], [[S[0], S[2]], true], 'removed, the row in its place focused');
+    await page.click(`${CAL} [data-add-std]`); await fill();
+    await ROW(1).locator('[data-del]').click(); await settle(page);
+    assert.deepEqual(await vals(), byMenu, 'as its × does');
+    await page.click(`${CAL} [data-cancel]`);
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+test('v587: Custom\'s series: a row\'s menu of its ×, red, named by the series; the item takes it out of the plot as its × does, undone', async ()=>{
+  const { page, errors, close } = await env.page();
+  const ROW = k => page.locator('#fig1List .fig-ser').nth(k), n = ()=> page.locator('#fig1List .fig-ser').count();
+  try {
+    await load(page, 'fig');
+    await page.click('#figAddAn'); await page.click('.an-menu:not([hidden]) [data-kind="xy"]'); await settle(page);
+    await page.click('#fig1Add'); await page.waitForSelector('.fig-pick:not([style*="none"])');
+    await page.locator('.fig-pick:not([style*="none"]) input[data-file]').first().check();
+    await page.click('.fig-pick:not([style*="none"]) [data-done]'); await settle(page);
+    const n0 = await n(), s0 = await moduleState(page, 'fig'), h0 = (await history(page, 'fig')).index, name = await ROW(0).locator('.fig-ser-name').textContent();
+    assert.equal(n0, 2);
+    await ROW(0).locator('.fig-ser-name').click({ button: 'right' });
+    assert.deepEqual(await shownItems(page), await fromCtls(ROW(0), '.fig-ser-x'));
+    assert.deepEqual(await shownItems(page), [['menuitem', `Take ${name} out of the plot`, null, true, null]], 'its ×, red');
+    assert.deepEqual([(await menuOf(page))[1], ...(await rowState(ROW(0)))], [name, 'menu', 'true', true, -1]);
+    await item(page, 'out of the plot').click(); await settle(page);
+    const byMenu = await moduleState(page, 'fig');
+    assert.deepEqual([await n(), (await history(page, 'fig')).index, await onRow(ROW(0))], [n0 - 1, h0 + 1, true], 'taken out, a step, the row in its place focused');
+    await page.keyboard.press('Control+z'); await settle(page);
+    assert.deepEqual(await moduleState(page, 'fig'), s0, 'undone');
+    await ROW(0).locator('.fig-ser-x').click(); await settle(page);
+    assert.deepEqual(await moduleState(page, 'fig'), byMenu, 'as its × does');
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+test('v587: the figure composer: a panel\'s row and a division\'s head, a menu of their ×, red; each item as its ×; Escape closes the menu, not the composer', async ()=>{
+  const { page, errors, close } = await env.page();
+  const PANEL = k => page.locator('.fig-backdrop .fig-panel').nth(k), panels = ()=> page.locator('.fig-backdrop .fig-panel').count();
+  const HEAD = k => page.locator('.fig-backdrop .fig-dgroup-h').nth(k), drawn = ()=> page.evaluate(()=> document.querySelector('.fig-backdrop .fig-svg').innerHTML);
+  try {
+    await load(page, 'gc');
+    const plot = page.locator('#tab-gc svg[id$="SvgBar"]').first();
+    await plot.scrollIntoViewIfNeeded();
+    await plot.locator('xpath=ancestor::div[contains(@class,"plot-wrap")]').locator('button[title="Figure composer (advanced export)"]').click();
+    await page.waitForSelector('.fig-backdrop .fig-panel');
+    // A panel added; its row's menu. (each edit then a pause past the composer's history's
+    // 250 ms, so that it is a step of its own)
+    await page.click('.fig-backdrop [data-add-panel]'); await settle(page); await page.waitForTimeout(300);
+    assert.equal(await panels(), 2);
+    const two = await drawn();
+    await PANEL(1).locator('b').click({ button: 'right' });
+    assert.deepEqual(await shownItems(page), await fromCtls(PANEL(1), '[data-del-panel]'));
+    assert.deepEqual(await shownItems(page), [['menuitem', 'Remove panel', null, true, null]], 'its ×, red');
+    assert.deepEqual([(await menuOf(page))[1], ...(await rowState(PANEL(1)))], ['Panel 2', 'menu', 'true', true, -1]);
+    await page.keyboard.press('Escape');
+    assert.deepEqual([await opened(page), await page.locator('.fig-backdrop').count(), await onRow(PANEL(1))], [0, 1, true], 'Escape: the menu closed, the composer open');
+    await page.keyboard.press('Shift+F10'); await page.keyboard.press('Enter'); await settle(page); await page.waitForTimeout(300);
+    const byMenu = await drawn();
+    assert.deepEqual([await panels(), await onRow(PANEL(0))], [1, true], 'removed, the row in its place focused');
+    await page.keyboard.press('Control+z'); await settle(page);
+    assert.deepEqual([await panels(), await drawn()], [2, two], 'undone (the composer\'s history)');
+    await PANEL(1).locator('[data-del-panel]').click(); await settle(page);
+    assert.equal(await drawn(), byMenu, 'as its × does');
+    // A division added: each head's menu of its ×; one division alone, none.
+    const add = page.locator('.fig-backdrop [data-adddiv]').first();
+    await add.scrollIntoViewIfNeeded(); await add.click(); await settle(page);
+    const name = await HEAD(1).locator('[data-dk]').inputValue();
+    await HEAD(1).locator('.fig-fill').click({ button: 'right' });
+    assert.deepEqual(await shownItems(page), [['menuitem', 'Remove this division', null, true, null]], 'its ×, red');
+    assert.deepEqual([(await menuOf(page))[1], ...(await rowState(HEAD(1)))], [name, 'menu', 'true', true, -1]);
+    await item(page, 'Remove this division').click(); await settle(page);
+    assert.deepEqual([await page.locator('.fig-backdrop .fig-dgroup-h[aria-haspopup]').count(), await HEAD(0).getAttribute('tabindex')], [0, null], 'removed: one division, no × and no menu');
+    await HEAD(0).locator('.fig-fill').click({ button: 'right' });
+    assert.equal(await opened(page), 0, 'nothing to remove: no menu');
+    await page.keyboard.press('Escape');
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});

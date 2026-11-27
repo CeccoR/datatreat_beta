@@ -279,7 +279,7 @@ was proposed; nothing here is in the code yet.
 
 ## General
 
-- **Backward compatibility under the rule (CLAUDE.md, v583 and v586: stages 1 and 2 of 4 done).**
+- **Backward compatibility under the rule (CLAUDE.md, v583, v586 and v587: stages 1 and 2 of 4 done).**
   An old project is opened by redoing the calculations with the current engine, from the
   parameters that still exist and the original data; no code is kept for old formats. An
   inventory of the code for old projects, made on v576 (outside the repository), staged it in
@@ -317,7 +317,18 @@ was proposed; nothing here is in the code yet.
   calibrations of v544–v548 without their table), stage 4 (Rietveld's results recomputed at
   their refined parameters; with it the instruments' and results' messages saved as words
   alone, xrd-rv-model.js msgOf, INSTR_INFO). Kept by decision: a DRS card's lines saved without
-  the `suggested` flag are the user's, not suggested again.
+  the `suggested` flag are the user's, not suggested again. Done in v587, what v586 left: an
+  Urbach card's common lines (to v568) are no parameter any more, not read (tauc-model.js
+  restorePanel; to v586 kept and counted as lines placed), so a card saved with them and none of
+  its samples' own is a new card's state and its lines are suggested as it opens, as a card
+  added's (tauc.js restoreState, `fresh`; to v586 the default lines); a Scherrer card's sample of
+  no settings of its own gets the shared values whatever the way in (xrd-peaks-model.js
+  `newEntry`: a card made with its files there had `{blOn: true}`, one there before them the
+  shared values, the same results); an XRPD file is read again from its bytes whatever its name
+  (xrd-model.js readAgain and keptScans: the reader takes an XRDML measurement by what it holds,
+  so a file dropped as `.txt` or with no extension loads; to v586 one not named `.xrdml` or
+  `.xml` kept the arrays the project held), bytes that do not read keeping them, said as for any
+  file.
 
 - **Warnings and errors, reviewed by kind.** The map of every message the app shows was
   made again from the code at v565 (331 entries) and the rules agreed (R1–R4: a kind for
@@ -972,9 +983,20 @@ was proposed; nothing here is in the code yet.
   list's renderer closed it to v584), and a scroll closes it only where it moves its row: a
   scroll event comes a frame after its scroll, so a row scrolled into view by the press closed
   the menu as it opened. Each of the four lists asked for has actions on its rows, so each has
-  the menu. Left: other lists with a × on their rows have none yet, XRPD's peaks table (*Remove
-  peak*), Iodometry's calibration standards (*Remove this standard*), the composer's panels
-  (*Remove panel*): the same `wireRowMenu` and `ctlMenu` would give it them.
+  the menu. Done in v587, the lists left with a × on their rows (the same `wireRowMenu` and
+  `ctlMenu`, the × red, `is-danger`, where it was not): XRPD's peaks table (*Remove peak*, a
+  sample's card and the standard's window), Iodometry's calibration standards (*Remove standard
+  n*), a Custom card's series (*Take {series} out of the plot*), the composer's panels (*Remove
+  panel*) and divisions (*Remove this division*, a series of more than one). With them the
+  floating rule of a value refused (utils.js flashFieldInvalid) goes on a scroll only where it
+  moves its field, as the menu does (`movedSince`, shared: the offsets of the page and of the
+  boxes the row or field is in, not its box, which a refused field's shake moves); to v586 the
+  scroll that brought the field into view, its event a frame late, took it away at once
+  (gcnorm's refusals took their fields into view first). Left, with actions of their rows but
+  no ×: the composer's series rows (draw, legend, colour, fill: settings, as the trace list's
+  colour and name, which its menu leaves out), SEM's groups (the scale, Figure composer, an
+  empty one's Remove) and the pickers' own palettes (a × each, in a popup that a press outside
+  closes).
 - **A helper copied (v582's review, done in v584).** iodo-model.js had its own `width` (a line's
   fields up to its last not empty), textdata.js's to the character: it imports that one.
 - **A last cell empty read as a column missing (Custom; GC's alternative export; v582, done).**

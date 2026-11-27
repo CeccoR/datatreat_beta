@@ -48,10 +48,11 @@ export const calHtml = u => `
       </div>
       <div class="dt-modal-foot iodo-cal-foot"><button type="button" class="btn" data-cancel>Cancel</button><button type="button" class="btn primary" data-apply>Apply</button></div>
     </div>`;
-// The standards' rows: each its concentration and absorbance, and its ×.
-export const stdRowsHtml = (stds, u)=> stds.map((p, i)=> `<tr data-i="${i}"><td><input type="text" inputmode="decimal" data-j="0" aria-label="Concentration of standard ${i + 1}" value="${p[0] == null ? '' : u.esc(String(p[0]))}" autocomplete="off"></td>`
+// The standards' rows: each its concentration and absorbance, and its × (red as a removal's);
+// a row takes the focus and has a menu of its × (v587, iodo.js makeCal).
+export const stdRowsHtml = (stds, u)=> stds.map((p, i)=> `<tr data-i="${i}" tabindex="-1" aria-haspopup="menu"><td><input type="text" inputmode="decimal" data-j="0" aria-label="Concentration of standard ${i + 1}" value="${p[0] == null ? '' : u.esc(String(p[0]))}" autocomplete="off"></td>`
   + `<td><input type="text" inputmode="decimal" data-j="1" aria-label="Absorbance of standard ${i + 1}" value="${p[1] == null ? '' : u.esc(String(p[1]))}" autocomplete="off"></td>`
-  + `<td><button type="button" class="an-ic" data-del title="Remove this standard" aria-label="Remove standard ${i + 1}">${u.X_SVG(13)}</button></td></tr>`).join('');
+  + `<td><button type="button" class="an-ic is-danger" data-del title="Remove this standard" aria-label="Remove standard ${i + 1}">${u.X_SVG(13)}</button></td></tr>`).join('');
 // The standards' fit under them (L: the draft's line; n: the standards with both values);
 // none, an error (v567: to v566 a grey line): Apply is held back.
 export const calFitHtml = (draft, L, n, u)=> draft.mode !== 'std' ? '' : L

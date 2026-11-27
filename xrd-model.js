@@ -17,7 +17,7 @@
 ========================================================= */
 import { fixed, own } from './db.js';
 import { keepSeen } from './alerts.js';
-import { cifRef, cifIn } from './xrd-peaks-model.js';
+import { cifRef, cifIn, newEntry } from './xrd-peaks-model.js';
 
 /* A file's scans as read, kept by its bytes for every instance (the file's bytes are the
    same array in the tabs, their histories and their parked states): a tab woken, or an
@@ -28,8 +28,8 @@ const reread = new WeakMap();
 // v490 the first restore after a file was loaded, an undo, read it again).
 export const keepScans = (bytes, scans)=>{ reread.set(bytes, scans); };
 // The scans a pattern's file was read into, kept by its bytes (what the reading said of it,
-// xrd-html.js fileNotes); null where none are (no bytes, not an XRDML file: readAgain).
-export const keptScans = f => f.rawBytes && typeof f.rawBytes === 'object' && /\.(xrdml|xml)$/i.test(f.name || '') ? reread.get(f.rawBytes) || null : null;
+// xrd-html.js fileNotes); null where none are (no bytes).
+export const keptScans = f => f.rawBytes && typeof f.rawBytes === 'object' ? reread.get(f.rawBytes) || null : null;
 
 /* ---- A file read, and a state put back (pure: the module's, for every instance) ---- */
 // A scan run downwards (start above end) turned round: the plots, the peak search and
@@ -75,10 +75,12 @@ export const freshOf = (r, existing)=> r.pats.filter(q=> !(q.f.src && existing.h
    or do not read as that scan, is used as it was (said under the drop zone: xrd-html.js
    openedNote, fileNotes). The readings are kept by their bytes, so an undo does not read a
    file again. A pattern is its scan of the file (f.scan; the first, none given), so a file
-   of several gives its scans again, in their order. (reread: the module's, above) */
+   of several gives its scans again, in their order. (reread: the module's, above) Whatever
+   its name: the reader takes an XRDML measurement by what it holds (xrd.js readFile; v587: to
+   v586 a file not named .xrdml or .xml, loaded so, was not read again). */
 export function readAgain(U, f){
   const b = f.rawBytes;
-  if (!(b instanceof Uint8Array) || !/\.(xrdml|xml)$/i.test(f.name || '')) return fixedArrs(ascending({ ...f }));
+  if (!(b instanceof Uint8Array)) return fixedArrs(ascending({ ...f }));
   let all = reread.get(b);
   if (!all){
     try { all = U.scansOf(b); } catch (e){ all = [{ error: String(e && e.message || e) }]; }
@@ -155,10 +157,12 @@ export const copyArr = v => Array.isArray(v) ? v.slice() : [];
    it comes back to may be another (the card a Scherrer one again meanwhile, saved anew); it
    comes back into the pool (made where there is none). */
 const textsOf = s => Array.isArray(s.cifTexts) ? s.cifTexts : (s.cifTexts = []);
-export const keptSlots = (key, s)=> [{ key: key + ':params', arr: s.perParams, make: v=> v ? {...v} : {...s.shared} },
+export const keptSlots = (key, s)=> [{ key: key + ':params', arr: s.perParams, make: v=> v ? {...v} : newEntry(s.shared) },
   { key: key + ':manual', arr: s.manualPeaks, make: copyArr },
   { key: key + ':removed', arr: s.removedPeaks, make: copyArr },
   { key: key + ':cif', arr: s.cif, make: v=>{ const q = cifIn(v, s.cifTexts); return q && cifRef(q, textsOf(s)); }, out: v=> cifIn(v, s.cifTexts) }];
+// A file added: its entries in those settings, as a Scherrer card's own (xrd-peaks-model.js addEntry).
+export const keptAdd = s =>{ s.perParams.push(newEntry(s.shared)); s.manualPeaks.push([]); s.removedPeaks.push([]); s.cif.push(null); };
 /* A file left out holds its sample's CIF whole while the page has it (held, under its card's
    key: a reference to the text the card's samples share), and the state saved holds it as
    a sample's (v577; to v576 its text whole, one copy more in the state, the history's steps

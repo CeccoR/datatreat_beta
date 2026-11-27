@@ -193,6 +193,44 @@ test('a numeric field\'s value refused: its rule in red under it, floating, gone
   } finally { await close(); }
 });
 
+/* v587: the rule goes as a scroll moves its field, and only then (utils.js movedSince, the row
+   menu's own rule). A scroll event comes a frame after its scroll: a field brought into view as
+   its value is refused (here in the same task) sends one after the rule is up, which leaves it
+   (to v586 it took it away at once: gcnorm's refusals took their fields into view first); a
+   scroll of the page after it takes it away, and so does one of a box the field is in. */
+test('a value refused: its rule stays through the scroll that brought its field into view, and goes as a scroll moves the field (v587)', async ()=>{
+  const { page, errors, csp, close } = await env.page();
+  try {
+    await openModule(page, 'gc');
+    await loadFiles(page, 'gc', env.fx.files.gc);
+    const M = '#tab-gc .gcShared[data-f="m"]', was = await page.inputValue(M);
+    const refuse = ()=> page.evaluate(m=>{
+      const el = document.querySelector(m), y = window.scrollY;
+      el.scrollIntoView({ block: 'end' }); el.value = '0'; el.dispatchEvent(new Event('change'));
+      return [y !== window.scrollY, document.querySelectorAll('.field-rule-float').length];
+    }, M);
+    // (the page made long enough to scroll, the field out of view below)
+    await page.evaluate(()=>{ document.body.style.paddingBottom = '2000px'; window.scrollTo(0, document.documentElement.scrollHeight); });
+    await settle(page);
+    assert.deepEqual(await refuse(), [true, 1], 'scrolled into view, refused: its rule');
+    await settle(page);
+    assert.equal(await page.locator('.field-rule-float').count(), 1, 'the scroll\'s event a frame later: the rule stays');
+    assert.equal(await page.inputValue(M), was, 'the value put back');
+    await page.evaluate(()=> window.scrollBy(0, 30)); await settle(page);
+    assert.equal(await page.locator('.field-rule-float').count(), 0, 'a scroll of the page after it: gone');
+    // A box the field is in (its card, made one here), scrolled after the rule: gone too.
+    await page.evaluate(m=>{ const box = document.querySelector(m).closest('.card'); box.style.overflow = 'auto'; box.style.maxHeight = '300px'; window.scrollTo(0, document.documentElement.scrollHeight); }, M);
+    await settle(page);
+    assert.deepEqual(await refuse(), [true, 1]);
+    await settle(page);
+    assert.equal(await page.locator('.field-rule-float').count(), 1, 'its box\'s scroll too: the rule stays');
+    assert.ok(await page.evaluate(m=>{ const box = document.querySelector(m).closest('.card'), t = box.scrollTop; box.scrollTop = t + 20; return box.scrollTop !== t; }, M), 'the box scrolled');
+    await settle(page);
+    assert.equal(await page.locator('.field-rule-float').count(), 0, 'a box it is in scrolled: gone');
+    assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
+  } finally { await close(); }
+});
+
 /* A press of a pen (synthetic pointer events: pointerType 'pen', `button`) on `sel`, moved by
    (dx, dy) and let go, as a drag would be: what was lit while it was held (`lit`, a selector
    under the tab), and whether the element `moving` carried its class. pointerId 1, the mouse's:
