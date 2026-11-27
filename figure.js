@@ -1249,14 +1249,15 @@ const sel = (label, key, opts, cur, at, off)=>
 
 /* A number the figure works out for itself until you say otherwise: while the
    automatic switch is on the field shows what was chosen and cannot be typed in. It
-   shows autoVal, or, without one, what the drawing fills in (data-auto: the SEM
-   figure's afterRender). */
+   shows autoVal, if any, and what each drawing fills in (data-auto: each kind's
+   afterRender; the plots' from v580, to v579 their value as the sidebar was last built). */
 const autoNum = (label, key, autoKey, min, max, autoVal, at)=>
   `<label class="fig-row"><span>${label}</span>${valOf(at, autoKey)
-    ? (autoVal == null ? `<input type="text" data-auto="${key}" disabled title="Chosen automatically">`
-                       : `<input type="text" value="${autoVal}" disabled title="Chosen automatically">`)
+    ? `<input type="text" data-auto="${key}"${autoVal == null ? '' : ` value="${autoVal}"`} disabled title="Chosen automatically">`
     : numField(`data-${at||'k'}="${key}"`, valOf(at, key), min, max)}</label>`;
 
+// What the plots' automatic fields show (autoNum's data-auto), worked out at each drawing.
+const AUTO_SHOWN = { xStep: ()=> autoStepOf('x'), yStep: ()=> autoStepOf('y'), minorX: ()=> autoMinorsOf('x'), minorY: ()=> autoMinorsOf('y') };
 // How many minors each major interval automatically gets, for that field to show.
 function autoMinorsOf(axis){
   const { xOf, yOf } = computeRanges();
@@ -2492,11 +2493,44 @@ function wirePresetBar(){
   });
   presetBar.addEventListener('change', e=>{
     if (e.target.dataset.preset !== 'load') return;
+    const before = presetSel;
     presetSel = e.target.value;
     const snap = loadPresets()[presetSel];
-    if (snap){ applySettings(snap); pushUndo(); refresh(true); }
+    if (snap && !applyPreset(snap, e.target)) presetSel = before;
     renderPresetBar();
   });
+}
+/* A preset picked: applied, but for an axis's settings it would leave out of the ticks
+   (v580, FM.keepAxes), which keep their values before, each control flashed and why under
+   the last; a fault no setting of the axis's own lifts (the panels' ranges) leaves the
+   preset unapplied, its picker (sel) flashed. To v579 applied whole, the axis drawn with its
+   automatic ticks. False: not applied. */
+function applyPreset(snap, sel){
+  const was = beforeEdit();
+  applySettings(snap);
+  const back = FM.keepAxes(F, was.snap.scalars, ()=> newFaults(was));
+  if (!back){
+    const f = newFault(was);
+    backTo(was);
+    flashFieldInvalid(sel, FM.tickRefused(f, 'the preset not applied.'));
+    return false;
+  }
+  pushUndo(); refresh(true);
+  if (!back.length) return true;
+  const els = back.map(b=> groupField(b) || sel);
+  els[els.length - 1].scrollIntoView({ block: 'nearest' });
+  // (once the scroll's event has gone by: it closes the floating rule)
+  requestAnimationFrame(()=> els.forEach((el, i)=> flashFieldInvalid(el, i === els.length - 1 ? back.map(FM.presetRefused).join(' ') : '')));
+  return true;
+}
+// The control that shows a group of an axis's settings (FM.keepAxes): its field where set by
+// hand, else its automatic switch.
+function groupField({ ax, group }){
+  const A = ax.toUpperCase();
+  const at = group === 'step' ? [`data-k="${ax}Step"`, `data-k="${ax}StepAuto"`]
+    : group === 'minors' ? [`data-k="minor${A}"`, `data-k="minor${A}Auto"`] : [`data-rauto="${ax}"`];
+  for (const a of at){ const el = controlsEl.querySelector(`input[${a}]`); if (el) return el; }
+  return null;
 }
 
 /* ---- The sidebar's controls (v564: no longer one closure) ------------------------
@@ -2541,16 +2575,19 @@ function runControl(t){
    back to what it was, with no step in the history, and the control to what it showed,
    flashed, why under it (utils.js flashFieldInvalid). The step, the minors, the range, the
    log switch, sharing, a series shown, a panel added or removed, a series moved: whatever
-   the edit. To v579 it was taken and the axis drew its automatic ticks (v566). A fault the
-   data alone brings, or settings brought back (a project, the plot's memory, a preset), is
-   noted under the Ticks instead (noteTicks), the setting kept, and drawn again once the
-   range lets it. */
+   the edit; a preset, for the axis settings concerned (applyPreset). To v579 it was taken
+   and the axis drew its automatic ticks (v566). A fault the data alone bring, or settings
+   brought back (a project, the plot's memory, a card's figure), is noted under the Ticks
+   instead (noteTicks), the setting kept, and drawn again once the range lets it. */
 // The faults the open figure's settings by hand stand in.
 const faultsNow = ()=> FL.tickFaults(C, computeRanges());
 // The figure before an edit: its snapshot, and the keys of its faults.
 const beforeEdit = ()=> ({ snap: snapshot(), keys: new Set(faultsNow().map(f=> f.key)) });
-// A fault the edit since `was` brought, or undefined.
-const newFault = was => faultsNow().find(f=> !was.keys.has(f.key));
+// The faults the edit since `was` brought; the first, or undefined.
+const newFaults = was => faultsNow().filter(f=> !was.keys.has(f.key));
+const newFault = was => newFaults(was)[0];
+// What became of a number refused: what was typed and what is kept.
+const notTaken = (typed, kept)=> `${typed} not taken; ${kept} kept.`;
 // The control of the sidebar rebuilt that stands where `el` stood: the same data attributes.
 const twinOf = el => controlsEl.querySelector(el.tagName + [...el.attributes].filter(a=> a.name.startsWith('data-'))
   .map(a=> `[${a.name}="${CSS.escape(a.value)}"]`).join(''));
@@ -2570,7 +2607,7 @@ function refuseControl(was, t, rebuild){
   if (t.dataset.num && !rebuild){ applySnapshot(was.snap); t.value = t.defaultValue; }
   else { backTo(was); at = twinOf(t) || t; }
   flashFieldInvalid(at, FM.tickRefused(f, t.type === 'checkbox' ? (t.checked ? 'left unticked.' : 'left ticked.')
-    : `${typed} not taken; ${shownIn(at)} kept.`));
+    : notTaken(typed, shownIn(at))));
   return true;
 }
 // A button's or a drag's edit refused, if it brought a fault: true. `sel` finds what to
@@ -2643,19 +2680,29 @@ function beforeK(k, t){
   // ...and the minors on as many as are drawn, which on a log axis is not 4.
   if ((k === 'minorXAuto' || k === 'minorYAuto') && !t.checked)
     F[k === 'minorXAuto' ? 'minorX' : 'minorY'] = autoMinorsOf(k === 'minorXAuto' ? 'x' : 'y');
+  // ...and the step on the one drawn (v580: to v579 on the step kept, 0 the first time).
+  if ((k === 'xStepAuto' || k === 'yStepAuto') && !t.checked){ const a = autoStepOf(k[0]); F[k[0] + 'Step'] = a === '' ? 0 : a; }
   if (k === 'xLog' || k === 'yLog') FM.relogRanges(F, k[0], t.checked);
   if ((k === 'xAuto' || k === 'yAuto') && !t.checked) FM.handOver(F, k, computeRanges());
   return rebuild;
 }
 // A number typed for F[k], or null: refused by its field, or a range's bound its axis
-// cannot take (≤ 0 on a log axis), the field flashed and set back to the bound in force.
+// cannot take (≤ 0 on a log axis), or one not keeping the min below the max (v580), the
+// field flashed and set back to the bound in force.
 function numberK(k, t){
   let v = readNum(t); if (v === null) return null;
   if (/^[xy]m(in|ax)$/.test(k)){
     v = takenOf(k[0], v);
     if (v === null){ flashFieldInvalid(t); t.value = +shownOf(k[0], F[k]).toPrecision(6); return null; }
+    const end = k.endsWith('max') ? 1 : 0, why = FM.boundOrder(k[0], end, v, F[k[0] + (end ? 'min' : 'max')]);
+    if (why){ refuseBound(t, why); return null; }
   }
   return v;
+}
+// A bound refused for its order (FM.boundOrder): why under it, the field back to the bound in force.
+function refuseBound(t, why){
+  flashFieldInvalid(t, `${why}: ${notTaken(String(t.value).trim(), t.defaultValue)}`);
+  t.value = t.defaultValue;
 }
 // The range column's automatic switch: the figure's while sharing, else that of the group
 // the panel on show is scaled with (headed by rangeRoot).
@@ -2678,7 +2725,9 @@ function applyMan(t){
   let v = readNum(t); if (v === null) return null;
   v = takenOf(bag[0], v);
   if (v === null){ flashFieldInvalid(t); t.value = +shownOf(bag[0], cur[+t.dataset.end]).toPrecision(6); return null; }
-  cur[+t.dataset.end] = v;
+  const end = +t.dataset.end, why = FM.boundOrder(bag[0], end, v, cur[1 - end]);
+  if (why){ refuseBound(t, why); return null; }
+  cur[end] = v;
   F[bag][i] = cur;
   return false;
 }
@@ -3070,6 +3119,8 @@ function plotKind(plot, opts){
     // The plot's size, while the margins choose it, shown as they chose it.
     afterRender(){
       if (controlsEl && F.plotAuto) controlsEl.querySelectorAll('[data-auto-plot]').forEach(el=>{ el.value = lastInner[el.dataset.autoPlot]; });
+      // the automatic steps and minors as drawn (v580: to v579 as the sidebar was last built)
+      if (controlsEl) controlsEl.querySelectorAll('[data-auto]').forEach(el=>{ const f = AUTO_SHOWN[el.dataset.auto]; if (f) el.value = f(); });
       noteTicks();
     },
     controlsHtml,

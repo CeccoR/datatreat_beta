@@ -292,6 +292,39 @@ test('the ticks not drawn as set: each guard\'s fault, the drawing agreeing, the
   assert.deepEqual(faults(model({ minorYAuto: false, minorY: 4, series: [curve('n', [0, 1], [1e12, 1e12 + 0.008])] })).map(f=> f.code), ['fine']);
 });
 
+/* v580: a preset applied (figure-model.js keepAxes) keeps an axis's own settings where the
+   preset's would leave its ticks out, the step first, then the minors, then the range, each
+   only where the preset changed it; the rest of the preset stays; a fault none of them lifts
+   (the series moved by the preset into one panel) leaves it unapplied (null). */
+test('a preset\'s axis settings that would leave the ticks out kept as they were, the rest applied (v580)', ()=>{
+  const faults = F => L.tickFaults(ctx(F), L.computeRanges(ctx(F)));
+  const keys = F => new Set(faults(F).map(f=> f.key));
+  const scalars = F => JSON.parse(JSON.stringify(Object.fromEntries(Object.entries(F).filter(([k])=> k !== 'series' && k !== 'cats'))));
+  const run = (before, after)=>{ const was = keys(before); return FM.keepAxes(after, scalars(before), ()=> faults(after).filter(f=> !was.has(f.key))); };
+  const big = () => [curve('a', X50, X50.map(x => x * 1000))];
+  // the preset's step 0.1 on values up to 50000: the step automatic again, the preset's grid kept
+  const now = model({ series: big(), yStepAuto: false, yStep: 0.1, grid: { x: false, y: true, minor: false, dash: '2,3' } });
+  const back = run(model({ series: big() }), now);
+  assert.deepEqual(back.map(b=> [b.ax, b.group, b.fault.code, b.preset, b.kept]),
+    [['y', 'step', 'many', { yStep: 0.1, yStepAuto: false }, { yStep: 0, yStepAuto: true }]]);
+  assert.deepEqual([now.yStepAuto, now.yStep, now.grid.y], [true, 0, true]);
+  assert.deepEqual(faults(now), []);
+  assert.equal(FM.presetRefused(back[0]), 'Too many Y ticks for this range: the preset\'s step 0.1 not taken; the automatic step kept.');
+  // the same step, the preset's range by hand the culprit: the range before kept, the step the preset's
+  const small = () => [curve('s', X50, X50.map(x => x / 10))];
+  const ranged = model({ series: small(), yStepAuto: false, yStep: 0.1, yAuto: false, ymin: 0, ymax: 1e4, xlabel: 'Other (s)' });
+  const r = run(model({ series: small(), yStepAuto: false, yStep: 0.1 }), ranged);
+  assert.deepEqual(r.map(b=> b.group), ['range']);
+  assert.deepEqual([ranged.yAuto, ranged.yStep, ranged.xlabel], [true, 0.1, 'Other (s)']);
+  assert.equal(FM.presetRefused(r[0]), 'Too many Y ticks for this range: the preset\'s range not taken; the range before kept.');
+  // nothing the preset brings in: none put back
+  assert.deepEqual(run(model({ series: small() }), model({ series: small(), yStepAuto: false, yStep: 0.1 })), []);
+  // a fault no group of the axis lifts: the series the preset puts in one panel
+  const two = (p1)=> model({ rows: 2, panels: [panel(0, 0), panel(1, 0)], shareY: false, yStepAuto: false, yStep: 10,
+    series: [curve('lo', X50, X50.map(x => x / 5)), curve('hi', X50, X50.map(x => 3000 + x * 20), { panel: p1 })] });
+  assert.equal(run(two(1), two(0)), null);
+});
+
 test('the ranges: the data with its error bars and boxes, bars on zero, logs, sharing groups, manual ones', ()=>{
   const F = model({ series: [curve('a', [0, 1, 2], [1, 3, 2]), curve('b', [0, 1], [5, NaN], { panel: 1 })], panels: [panel(0, 0), panel(1, 0)], rows: 2 });
   const C = ctx(F);
