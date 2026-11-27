@@ -108,7 +108,12 @@ function write(S, key, arr){
 // A job whose every file left is still wanted goes on, the files wanted since after it; one
 // with a file no longer wanted (a run stopped, a file removed) gives way, what it did kept.
 function ensure(S, force){
-  if (force){ S.failed = ''; if (force === true) M.integCards(S).forEach(c=> c.halt(false)); else force.halted = false; }
+  if (force){
+    S.failed = '';
+    // (a card a Stop held shows the store's results again, another card's meanwhile among them: v582)
+    const held = force === true ? M.integCards(S).map(c=> c.halt(false)).some(Boolean) : hold(S, force, false);
+    if (held){ S.ctx.changed(); paint(S, true); }
+  }
   settle(S);
   let w = M.wanted(U, S);
   const j = S.job;
@@ -195,6 +200,8 @@ function paint(S, all){
                             history's, kit.hold }) or null; whether one was stopped (said);
                             whether a Stop holds its files (v581: its own; to v580 a Stop on
                             any card held every card's)
+     stopRes                while a Stop holds its files, their results then, the card's
+                            (gc-integ-model.js heldOf, v582), else null
      pressT, turnT          Integrate's last press and turn (utils.js quickPress)
      cal                    its calibration (gc-integ-model.js calIn)
      ovGas, ovY             the run overview's gas and y (view keys of the state)
@@ -215,7 +222,7 @@ function makeCard(S, a, el){
   const p = 'gc' + a.id;
   const C = {
     a, el, p, $: id => el.querySelector('#' + p + id),
-    method: M.methodIn(U, null), edit: M.methodIn(U, null), run: null, stopped: false, halted: false, pressT: -Infinity, turnT: -Infinity,
+    method: M.methodIn(U, null), edit: M.methodIn(U, null), run: null, stopped: false, halted: false, stopRes: null, pressT: -Infinity, turnT: -Infinity,
     cal: M.calIn(U, null), ovGas: 'h2', ovY: 'conc', selName: null, selK: 0, chrom: null, resid: null, over: null, ovPts: [],
     calSel: 0, calPlots: { chrom: null, resid: null }, calDrawn: null,
     W: null, valuesKept: new Map(), shownJ: null, fileNav: null, injNav: null, drawn: null, drag: null, hovK: -1, ovLook: null,
@@ -265,9 +272,9 @@ function cardApi(S, C){
   return {
     method: ()=> C.method,
     runMethod: ()=> C.run ? C.run.m : null,
-    // (a Stop holding its files, its own: v581)
+    // (a Stop holding its files, its own: v581; → whether it held them)
     halted: ()=> C.halted,
-    halt(on){ C.halted = on; },
+    halt: on => hold(S, C, on),
     inView: ()=> inView(S, C),
     settle(){ if (C.run && !M.leftUnder(U, S, C, C.run.m)) swap(S, C); },
     endRun(){ if (C.run) endRun(S, C); },
@@ -328,8 +335,19 @@ function press(S, C){
 // to v580 every card's of the tab).
 function stop(S, C){
   if (C.run){ endRun(S, C); C.stopped = true; }
-  if (M.leftUnder(U, S, C, C.method)) C.halted = true;
+  // (the cards below say so at once: v582, to v581 "not done yet" until results came in)
+  if (M.leftUnder(U, S, C, C.method)){ hold(S, C, true); S.ctx.changed(); }
   ensure(S);
+}
+/* Its files held by a Stop (on), with the results they have then, which stay the card's while
+   another card's run on (gc-integ-model.js heldOf, v582: to v581 that card's results shown on
+   this one as they came, the card stopped, then done); or let go (Integrate, files dropped),
+   the store's its results again. → whether they were held. */
+function hold(S, C, on){
+  const was = C.halted;
+  C.halted = on;
+  C.stopRes = on ? M.heldOf(U, S, C) : null;
+  return was;
 }
 function endRun(S, C){ const r = C.run; C.run = null; S.kit.release(r.mark); }
 /* The run done, every file and standard of the card integrated with the windows it took:
@@ -427,9 +445,11 @@ function drawChromPanel(S, chrom, D, vc, key){
   chrom.line(D.tt, D.yy, M.C_RAW, 1.2, undefined, { label: 'raw', key: 'raw' });
   const items = [[M.C_RAW, 'raw', '']], pc = { ci: 0 };
   D.curves.forEach(({ wr, c })=>{
-    if (c.base){ chrom.line(c.t, c.base, M.C_BASE, 1.1, '5,4', { label: `baseline (${wr.key})`, key: 'base ' + wr.key }); }
+    // (the window named as Windows names it, "H₂-O₂": v582, to v581 its key, "H2O2")
+    const n = M.curveName(S.gasOf, D.R.m, wr);
+    if (c.base){ chrom.line(c.t, c.base, M.C_BASE, 1.1, '5,4', { label: `baseline (${n})`, key: 'base ' + wr.key }); }
     // (the model under its peaks: each peak, on the baseline, drawn over it)
-    if (c.model) chrom.line(c.t, c.model, M.C_MODEL, 1.4, undefined, { label: `model (${wr.key})`, key: 'model ' + wr.key });
+    if (c.model) chrom.line(c.t, c.model, M.C_MODEL, 1.4, undefined, { label: `model (${n})`, key: 'model ' + wr.key });
     M.peakLines(S, wr, c, items, pc).forEach(l=> chrom.line(c.t, l.y, l.col, 1.3, l.dash, { label: l.name, key: 'peak ' + l.name }));
   });
   const dr = M.droppedOf(D.curves);
@@ -648,12 +668,12 @@ function paintAlerts(S, C){ C.$('Alerts').innerHTML = H.alertsHtml(HU, S.gasOf, 
    fit window) ---- */
 function exportEntries(S, C, n){
   const es = M.entriesOf(S), W = C.W;
-  if (!es.length) return W.isOpen && C.calDrawn ? [{ name: `${n} - standard_chromatogram.csv`, text: M.chromCsv(U, C.calDrawn) }] : [];
+  if (!es.length) return W.isOpen && C.calDrawn ? [{ name: `${n} - standard_chromatogram.csv`, text: M.chromCsv(U, S.gasOf, C.calDrawn) }] : [];
   const out = [{ name: `${n} - integration.csv`, text: M.integrationCsv(U, S, C, es) }];
   const d = C.drawn;
-  if (d && d.e && es.some(x=> x.name === d.e.name)) out.push({ name: `${n} - chromatogram.csv`, text: M.chromCsv(U, d) });
+  if (d && d.e && es.some(x=> x.name === d.e.name)) out.push({ name: `${n} - chromatogram.csv`, text: M.chromCsv(U, S.gasOf, d) });
   // (the standard on show in the calibration's window, while it is open: its plot's)
-  if (W.isOpen && C.calDrawn) out.push({ name: `${n} - standard_chromatogram.csv`, text: M.chromCsv(U, C.calDrawn) });
+  if (W.isOpen && C.calDrawn) out.push({ name: `${n} - standard_chromatogram.csv`, text: M.chromCsv(U, S.gasOf, C.calDrawn) });
   return out;
 }
 

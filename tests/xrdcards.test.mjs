@@ -15,7 +15,8 @@
      taken in or removed, or an undo, while it is folded, the same (21b, v569);
    - a card's kinds' menu closed by an undo or a redo; a kind picked for a card gone does
      nothing (22, v569); closed with its card closed from the keyboard, a scroll leaving it
-     closed (22b, v570). */
+     closed (22b, v570); by the keys as the row menu, the focus back on its anchor, and inside
+     the page short of its scrollbar (22c, v582). */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { start, openModule, loadFiles, settle, moduleState, history, undo, switchTab } from './helpers.mjs';
@@ -429,6 +430,52 @@ test('22b: a card\'s kinds\' menu closes with its card closed from the keyboard;
     assert.ok(m.y >= t.y + t.height - 1 || m.y + m.height <= t.y + 1, JSON.stringify([m, t]));
     await page.keyboard.press('Escape');
     assert.equal(await open(), 0);
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+/* ---- 22c (v582): the kinds' menu by the keys, inside the page short of its scrollbar ----
+   Its keys are the row menu's (utils.js menuKeys): open, the focus on its kind (the "+" bar's,
+   on its first), ↓ ↑ Home End round its kinds, ← → kept from the samples, Enter or Space pick,
+   Escape or Tab close it, the focus back on its anchor (to v581 Escape alone, the focus left on
+   the anchor, the arrows the page's). Placed inside the page's width, short of its scrollbar
+   (as the row menu, cards-model.js menuAt with the page's clientWidth: to v581 the window's
+   innerWidth, its right edge under the scrollbar). A browser that draws its scrollbars. */
+test('22c: the kinds\' menu by the keys, the focus back on its anchor; inside the page, short of its scrollbar', async ()=>{
+  const { page, errors, close } = await env.page({ scrollbars: true });
+  try {
+    await openModule(page, 'tauc');
+    await loadFiles(page, 'tauc', env.fx.files.tauc);
+    const open = ()=> page.locator('.an-menu:not([hidden])').count(), title = card('tauc', 1) + ' .an-type';
+    const focused = ()=> page.evaluate(t=>{ const a = document.activeElement; return a.closest('.an-menu') ? 'kind ' + a.dataset.kind : a === document.querySelector(t) ? 'title' : a.id || a.tagName; }, title);
+    const count = ()=> page.locator(card('tauc', 1) + ' .nav-count').first().textContent(), n0 = await count();
+    // The "+" bar from the keyboard: its first kind focused, the arrows round them, Escape back to "+".
+    await page.focus('#taucAddAn'); await page.keyboard.press('Enter');
+    assert.equal(await open(), 1);
+    const walk = [await focused()];
+    for (const k of ['ArrowDown', 'ArrowDown', 'ArrowUp', 'End', 'Home', 'ArrowRight']){ await page.keyboard.press(k); walk.push(await focused()); }
+    assert.deepEqual(walk, ['kind tauc', 'kind urbach', 'kind tauc', 'kind urbach', 'kind urbach', 'kind tauc', 'kind tauc']);
+    assert.equal(await count(), n0, '← → do not step the samples under the menu');
+    await page.keyboard.press('Escape');
+    assert.deepEqual([await open(), await focused()], [0, 'taucAddAn'], 'Escape: closed, the focus back on +');
+    // Enter on a kind: the card added.
+    await page.keyboard.press('Enter'); await page.keyboard.press('End'); await page.keyboard.press('Enter'); await page.waitForTimeout(500); await settle(page);
+    assert.deepEqual([await ids(page, 'tauc'), await open()], [[1, 2], 0]);
+    // A card's title: its own kind focused; Tab closes it, the focus on the title; Space picks.
+    await page.focus(title); await page.keyboard.press('Enter');
+    assert.equal(await focused(), 'kind tauc', 'its own kind focused');
+    await page.keyboard.press('Tab');
+    assert.deepEqual([await open(), await focused()], [0, 'title'], 'Tab: closed, the focus on its title');
+    await page.keyboard.press('Enter'); await page.keyboard.press('ArrowDown'); await page.keyboard.press('Space'); await settle(page);
+    assert.deepEqual([await open(), await page.textContent(title)], [0, 'Urbach Energy'], 'Space picks');
+    // Its anchor at the page's right edge: the menu inside the page by 8 px, short of the scrollbar.
+    const bar = await page.evaluate(()=> innerWidth - document.documentElement.clientWidth);
+    assert.ok(bar > 0, `a scrollbar drawn: ${bar} px`);
+    await page.evaluate(()=> Object.assign(document.getElementById('taucAddAn').style, { position: 'fixed', right: '0px', top: '200px', width: '40px' }));
+    await page.click('#taucAddAn');
+    const m = await page.locator('.an-menu:not([hidden])').boundingBox(), cw = await page.evaluate(()=> document.documentElement.clientWidth);
+    assert.ok(Math.abs(m.x + m.width - (cw - 8)) < 1, `its right edge 8 px short of the page's (${cw}), not of the window's: ${JSON.stringify(m)}`);
+    await page.keyboard.press('Escape');
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });

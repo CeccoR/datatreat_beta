@@ -376,6 +376,28 @@ test('a Stop holds its own card\'s files alone (v581)', ()=>{
   assert.ok(!('halted' in M.status(S)), 'no Stop of the instance\'s');
 });
 
+/* v582: two cards of the same windows, the first stopped part way: its results those it had at
+   its Stop (heldOf: copies, the job's so far among them), whatever the job and the store bring
+   for the second; still stopped, as many left, Analysis's values for its file still waiting;
+   let go (stopRes null), the store's (to v581 the store's all along, the card done at the
+   second's end). */
+test('a Stop holds its card\'s results as they were: another card of the same windows applies nothing to it (v582)', ()=>{
+  const all = [ROWS[2]()], cards = [{ id: 1, type: 'integ' }, { id: 2, type: 'integ' }];
+  const { S, card } = instance(all, cards), A = card(cards[0]), B = card(cards[1]);
+  const tcd = all[0].mate, key = M.keyOf(U, tcd, DEF), work = [MINI_RES[0], null, null];
+  S.job = { total: 6, done: 1, name: 'mini_TCD.csv', works: new Map([[key, work]]) };
+  A.halted = true; A.stopRes = M.heldOf(U, S, A);
+  assert.deepEqual([[...A.stopRes.keys()], A.stopRes.get(key), A.stopRes.get(key) === work], [[key], [MINI_RES[0], null, null], false], 'a copy of what it had');
+  work[1] = MINI_RES[1];
+  assert.deepEqual([M.resOf(U, S, A, tcd).res, M.resOf(U, S, B, tcd).res], [[MINI_RES[0], null, null], [MINI_RES[0], MINI_RES[1], null]], 'the job going on for B, not for A');
+  S.job = null; S.store.set(key, MINI_RES.slice());
+  assert.deepEqual([M.leftUnder(U, S, A, A.method), M.leftUnder(U, S, B, B.method)], [2, 0]);
+  assert.deepEqual([M.progressOf(U, S, A).state, M.progressOf(U, S, B).state], ['stopped', 'done']);
+  assert.deepEqual([M.valuesFor(U, S, A, all[0]).why, typeof M.valuesFor(U, S, B, all[0]).why], ['its integration was stopped before its end', 'object'], 'B\'s values from its results (each gas why the table)');
+  A.halted = false; A.stopRes = null;
+  assert.deepEqual([M.resOf(U, S, A, tcd).res, M.leftUnder(U, S, A, A.method), M.progressOf(U, S, A).state], [MINI_RES, 0, 'done'], 'let go: the store\'s');
+});
+
 test('the entries, their results and names; the concentrations; what Analysis takes; the suspicious rule', ()=>{
   const all = ROWS.map(f=> f()), cards = [{ id: 1, type: 'integ' }];
   all[8].included = false;
@@ -559,7 +581,7 @@ test('the status, the alerts\' facts, the CSVs; the calibration window\'s files 
   // integration.csv: every chromatogram's values; chromatogram.csv: the whole chromatogram, the model blank outside its window
   // (each row ending with the windows applied, v578: never those edited)
   const es = M.entriesOf(S), csv = M.integrationCsv(U, S, C, es).split('\n');
-  assert.equal(csv[0], 'File;Table;Injection;Injection date;H2 area;H2 area sd;H2 apex (s);H2 chi2r;H2 (%mol);H2 source;H2 table (%mol);H2 suspicious;O2 area;O2 area sd;O2 apex (s);O2 chi2r;O2 (%mol);O2 source;O2 table (%mol);O2 suspicious;Flags;H2O2 window from (s);H2O2 window to (s)');
+  assert.equal(csv[0], 'File;Table;Injection;Injection date;H2 area;H2 area sd;H2 apex (s);H2 chi2r;H2 (%mol);H2 source;H2 table (%mol);H2 suspicious;O2 area;O2 area sd;O2 apex (s);O2 chi2r;O2 (%mol);O2 source;O2 table (%mol);O2 suspicious;Flags;H2-O2 window from (s);H2-O2 window to (s)');
   assert.equal(csv.length, 1 + 12 + 11 + 2 + 2 + 3 + 1);
   assert.match(csv[1], /^run_TCD\.csv;run\.csv;1;2026-11-13 10:00:00;\d+\.\d{6};\d+\.\d{6};287\.\d{3};.*;268\.00;326\.00$/);
   assert.ok(csv.some(l=> /transfer \(k = /.test(l)));
@@ -569,8 +591,9 @@ test('the status, the alerts\' facts, the CSVs; the calibration window\'s files 
   const mini = instance([ROWS[2]()], cards), Cm = mini.card(cards[0]);
   M.loadResults(U, mini.S.store, { [M.keyOf(U, mini.S.ctx.all[0].mate, DEF)]: MINI_RES });
   const em = M.entriesOf(mini.S)[0], D = M.chromOf(U, { d: em.d, k: 0, R: M.resOf(U, mini.S, Cm, em.tcd) }, DEF);
-  const cc = M.chromCsv(U, { t: D.tt, y: D.yy, curves: D.curves, m: D.R.m }).split('\n');
-  assert.equal(cc[0], 'Time (s);TCD signal;model H2O2;baseline H2O2;H2 (on the baseline);O2 (on the baseline);S310 (on the baseline);residual H2O2;H2O2 window from (s);H2O2 window to (s)');
+  // (v582: each window named in ASCII as the legend names it, H2-O2; to v581 by its key, H2O2)
+  const cc = M.chromCsv(U, mini.S.gasOf, { t: D.tt, y: D.yy, curves: D.curves, m: D.R.m }).split('\n');
+  assert.equal(cc[0], 'Time (s);TCD signal;model (H2-O2);baseline (H2-O2);H2 (on the baseline);O2 (on the baseline);S310 (on the baseline);residual (H2-O2);H2-O2 window from (s);H2-O2 window to (s)');
   assert.equal(cc.length, 451 + 2);
   assert.match(cc[1], /^250\.0000;-?\d+\.\d{6};;;;;;;268\.00;326\.00$/);
   // the calibration window: a file told by what it holds
@@ -877,8 +900,9 @@ export function outputs(E){
     ch.push(callOf('line', [D.tt, D.yy, M.C_RAW, 1.2, 'undefined', 'raw', 'raw']));
     const items = [[M.C_RAW, 'raw', '']], pk = { ci: 0 };
     D.curves.forEach(({ wr, c })=>{
-      if (c.base) ch.push(callOf('line', [c.t, c.base, M.C_BASE, 1.1, '5,4', `baseline (${wr.key})`, 'base ' + wr.key]));
-      if (c.model) ch.push(callOf('line', [c.t, c.model, M.C_MODEL, 1.4, 'undefined', `model (${wr.key})`, 'model ' + wr.key]));
+      const nm = M.curveName(S.gasOf, D.R.m, wr);
+      if (c.base) ch.push(callOf('line', [c.t, c.base, M.C_BASE, 1.1, '5,4', `baseline (${nm})`, 'base ' + wr.key]));
+      if (c.model) ch.push(callOf('line', [c.t, c.model, M.C_MODEL, 1.4, 'undefined', `model (${nm})`, 'model ' + wr.key]));
       M.peakLines(S, wr, c, items, pk).forEach(l=> ch.push(callOf('line', [c.t, l.y, l.col, 1.3, String(l.dash), l.name, 'peak ' + l.name])));
     });
     const dr = M.droppedOf(D.curves);
@@ -905,9 +929,9 @@ export function outputs(E){
   o.method = [H.methodHtml(HU, S.gasOf, C.edit, M.intrusions(C.edit)), M.isDefault(U, C.edit)];
   if (W.open) o.cal = calOutputs(E);
   // what it gives gc.js: its CSVs, state, sig, Analysis's values, the results saved
-  const n = 'Card', out = !es.length ? (W.open && C.calDrawn ? [[`${n} - standard_chromatogram.csv`, M.chromCsv(U, C.calDrawn)]] : []) : [[`${n} - integration.csv`, M.integrationCsv(U, S, C, es)]];
-  if (es.length && C.drawn && C.drawn.e && es.some(y=> y.name === C.drawn.e.name)) out.push([`${n} - chromatogram.csv`, M.chromCsv(U, C.drawn)]);
-  if (es.length && W.open && C.calDrawn) out.push([`${n} - standard_chromatogram.csv`, M.chromCsv(U, C.calDrawn)]);
+  const n = 'Card', out = !es.length ? (W.open && C.calDrawn ? [[`${n} - standard_chromatogram.csv`, M.chromCsv(U, S.gasOf, C.calDrawn)]] : []) : [[`${n} - integration.csv`, M.integrationCsv(U, S, C, es)]];
+  if (es.length && C.drawn && C.drawn.e && es.some(y=> y.name === C.drawn.e.name)) out.push([`${n} - chromatogram.csv`, M.chromCsv(U, S.gasOf, C.drawn)]);
+  if (es.length && W.open && C.calDrawn) out.push([`${n} - standard_chromatogram.csv`, M.chromCsv(U, S.gasOf, C.calDrawn)]);
   o.csv = out.map(([k, t])=> [k, sha(t)]);
   o.state = M.snapshotOf(U, C);
   o.sig = U.exactKey([M.methodKey(U, C.method), M.calKey(U, C)]);

@@ -128,6 +128,23 @@ export function readXY(lines){
 
 // A line's fields up to the last that is not empty (a trailing separator adds none).
 export const width = r =>{ let n = r.length; while (n && r[n - 1] === '') n--; return n; };
+// Whether a line is a row of n columns: n fields or more, none past the n-th but empty
+// cells (v582: '2,5,' is a row of three as well as of two, its last cell empty).
+const fits = (r, n)=> width(r) <= n && n <= r.length;
+/* The width most of `rows` have, on a tie the wider: of the widths they reach (width), the
+   one the most of them are rows of (fits). A line whose last fields are empty counts for the
+   wider widths its fields reach too (v582: '1,5,7' over '2,5,' and '3,5,' is three columns;
+   to v581 the most common width alone, two, the first line then no row), but a width no line
+   reaches past its empty cells is none: a separator ending every line adds no column. 0 for
+   no rows. */
+export function commonWidth(rows){
+  let n = 0, most = 0;
+  for (const w of new Set(rows.map(width))){
+    const k = rows.filter(r=> fits(r, w)).length;
+    if (k > most || (k === most && w > n)){ n = w; most = k; }
+  }
+  return n;
+}
 // A whole number, then digits: the halves of a number its decimal ',' cut in two.
 const cut = (a, b)=> /^[+-]?\d+$/.test(a) && /^\d+([eE][+-]?\d+)?$/.test(b || '');
 /* A table under a header the module knows: `head(fields, sep)` gives the columns a line
@@ -163,8 +180,9 @@ export function readTable(lines, head, isRow){
 /* A table of columns, as the Figure module reads any file: under whatever lines come
    before it (a title), a header naming the columns or none, then rows of fields, some of
    them numbers (a column of names, as a bar chart's categories, is read as text). The
-   separator is the one under which the rows of the file's usual width (its most common
-   among the lines holding a number; on a tie the wider) hold the most numbers, on a tie
+   separator is the one under which the rows of the file's usual width (commonWidth: the
+   most common among the lines holding a number, a line ending in empty cells a row of the
+   wider widths its fields reach too; on a tie the wider) hold the most numbers, on a tie
    the first of SEPS: '350,5;0,523' holds two under ';' and under ',' two as well, 350 and
    523, so ';' (first); a field that is two numbers with a ';', a tab or spaces between
    them is a line read under the wrong separator, no row ('5;0' under ','). The data are
@@ -179,14 +197,10 @@ export function readTable(lines, head, isRow){
 const TWO = /^[+-]?[\d.,]+(e[+-]?\d+)?(;|\t| +)[+-]?[\d.,]+/i;
 export function readColumns(lines){
   const t = bestSep(lines, rows =>{
-    const ok = rows.map(r=> r.some(isNum) && !r.some(c=> TWO.test(c)));
-    const ws = new Map();
-    rows.forEach((r, i)=>{ if (ok[i]){ const w = width(r); ws.set(w, (ws.get(w) || 0) + 1); } });
-    let n = 0, most = 0;
-    ws.forEach((k, w)=>{ if (k > most || (k === most && w > n)){ n = w; most = k; } });
+    const ok = rows.map(r=> r.some(isNum) && !r.some(c=> TWO.test(c))), n = commonWidth(rows.filter((_, i)=> ok[i]));
     if (!n) return null;
     let score = 0, first = -1;
-    rows.forEach((r, i)=>{ if (ok[i] && width(r) === n){ score += r.filter(isNum).length; if (first < 0) first = i; } });
+    rows.forEach((r, i)=>{ if (ok[i] && fits(r, n)){ score += r.filter(isNum).length; if (first < 0) first = i; } });
     return { score, n, first, ok };
   });
   if (!t) return null;

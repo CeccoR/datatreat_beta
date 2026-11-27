@@ -171,6 +171,13 @@ test('the injection dates in every form, the two layouts, a file refused, raw ch
   // The alternative export: ppm as %mol, N₂ and the areas left, a name's column read for the calibration's window.
   const a = M.readGc(ALT_MAIN);
   assert.deepEqual([a.altExport, a.monthNames, a.injDates.length, a.gas.h2.slice(1, 3), a.gas.o2[3], a.gas.o2[4]], [true, true, 7, [0.141/1e4, 412.5/1e4], NaN, 150/1e4]);
+  // (v582: a last cell empty, not n.a., in most rows an empty cell: the columns as the header
+  // sets them; to v581 the data's width the most rows' up to their last cell not empty, the
+  // header set a cell off against it, no date read and the file refused)
+  const o2 = (t, ppm)=> ({ Hydrogen: 400 + t, Nitrogen: 200, ...(ppm ? { Oxygen: ppm } : {}) });
+  const e = M.readGc(alt([['13/Nov/26 14:13:01', o2(1)], ['13/Nov/26 14:43:01', o2(2, 99)], ['13/Nov/26 15:13:01', o2(3)], ['13/Nov/26 15:43:01', o2(4)]]).replace(/\tn\.a\.(?=\r\n)/g, '\t'));
+  assert.deepEqual([e.altExport, e.injDates.map(iso), e.gas.h2, e.gas.o2.map(v=> isNaN(v) ? 'x' : v)],
+    [true, ['2026-11-13T14:13:01', '2026-11-13T14:43:01', '2026-11-13T15:13:01', '2026-11-13T15:43:01'], [401, 402, 403, 404].map(v=> v/1e4), ['x', 99/1e4, 'x', 'x']], 'an empty last cell');
   const g = M.readGc(gammaU16(), true);
   assert.deepEqual([g.injDates.length, g.emptyRows, g.names.slice(0, 3), g.gas.h2[0]], [12, 1, ['inj_001', 'inj_002', 'inj_003'], 0.031]);
   assert.equal(M.readGc(DM, true).names, null, 'no column of names');
@@ -414,7 +421,8 @@ test('the cards\' markup, the parameter table and the alerts, every label escape
   // (v581: m or A chosen in the m column's header, its options the column's names; no "Normalize by" on the delay's row)
   assert.ok(t.includes('<option value="atm" selected>') && t.includes('<option value="m" selected>m (mg)</option><option value="A">A (cm²)</option>') && t.includes('class="gcDelayAuto" checked'));
   assert.ok(t.includes('<th rowspan="2"><div class="gc-th"><span><select class="gc-norm" aria-label="Normalize the rates by m or A"') && !t.includes('Normalize by'), 'in the header, accessible by its name');
-  assert.ok(t.includes('<col style="width:136px">'), 'its column wide enough for it');
+  // (v582: in a compact type, its column 132 px, the table's least width 1000 px: gcp.test.mjs; to v581 136 px at 1060)
+  assert.ok(t.includes('<col style="width:132px">') && /<select class="gc-norm"[^>]*font-size:11px/.test(t), 'its column wide enough for it, its type compact');
   assert.equal((t.match(/class="mode-chip gc-toggle"/g) || []).length, 6);
   assert.ok(t.includes('Light-on at or before the first injection: no point before light-on.'), 'light-on before the first injection: said');
   P.lightOnDates[0] = new Date(2026, 0, 1, 10, 1, 0);

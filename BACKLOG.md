@@ -192,7 +192,15 @@ was proposed; nothing here is in the code yet.
   applied, Integrate then applying the edit. v581 (the user's decisions, done): (1) the red rule
   and the warning name the window as Windows does (H₂-O₂); (2) a Stop holds its own card's files
   alone, another card's run on; (3) on a card with no result of its windows applied, an edit is
-  applied as it is (nothing to keep), the files loaded after it integrated with it.
+  applied as it is (nothing to keep), the files loaded after it integrated with it. Seen then,
+  done in v582: (4) two cards of the same windows, the first stopped: its files, which the
+  second wants, were integrated all the same and shown on it as they came, the card stopped,
+  then done; now a Stop holds the card's results as they are (gc-integ-model.js heldOf), the
+  card stays stopped and applies nothing of the other's run, the card under it says so at
+  once, and Integrate on it takes them (nothing fitted again); (5) the chromatogram's lines
+  ("model (H2O2)", its legend in the composer) name the window as Windows does, "H₂-O₂", and
+  the CSVs in ASCII, "model (H2-O2)", "H2-O2 window from (s)" (to v581 "model H2O2", "H2O2
+  window from (s)"); the state's and the results' keys stay "H2O2".
 - **Other gases from the raw chromatograms.** The Integration card fits H₂ and O₂ only (one
   window, 268–326 s, with the system peak at 310 s and the baseline step); N₂ and the
   others need windows of their own, as the Python's N₂ window (321–346 s, with the system
@@ -204,6 +212,12 @@ was proposed; nothing here is in the code yet.
   of a negative E_g. Whether that is a real consumption or an artefact (a leak, a drift of
   the baseline) is the user's call: a warning like DRS's, the bar hidden, or as it is.
   Decided for v567: no new message; left as it is until the user says.
+- **The parameter table's least width (v581, done in v582).** m's header a select of m or A
+  (v581) took the table from 1000 px to 1060, the parameters scrolling sideways below it. From
+  v582 its select is in a compact type (11 px) and the columns are shared again (m 132 px, the
+  others in proportion, Light-on's date field and every pill whole at 1000 px): 1000 px again.
+  Left: every column is at its least at 1000 px; a header in another language or a wider
+  select of another system (its arrow) would want more.
 - **Tables alone have no grip (v574, done in v581).** To v580, while no raw chromatograms and no
   pair were in the list, its files had no grip of their own (as v544 made it, its test "tables
   alone: no grip"), so two tables paired by their names and unpaired by hand could not be paired
@@ -231,9 +245,11 @@ was proposed; nothing here is in the code yet.
 - **The EPR list as GC's (v581, done).** A row a `.DTA` and its `.DSC`, both under File, each
   with its grip: a half waits in the list (to v580 refused), paired later by its name or by a
   grip whatever the names, swapped, unpaired; the row's menu's download a pair's two files (a
-  zip, as GC's pair rows). Left: a row's label kept where its first file headed a row whose
-  label was renamed; any other row made anew takes its `.DSC`'s title, so a label typed on the
-  second file of a pair is lost when it is unpaired (GC keeps a label a file).
+  zip, as GC's pair rows). Left then, done in v582: a label typed on the second file of a pair
+  was lost when it was unpaired, its row labelled anew by its `.DSC`'s title. Labels are kept a
+  file, as GC keeps them: a row's label its first file's, a second's kept on its entry in the
+  row's files (`{ name, bytes, label }`, saved with the project), given back as the pair is
+  split (epr-model.js labelIn).
 
 ## General
 
@@ -860,7 +876,32 @@ was proposed; nothing here is in the code yet.
   no selection of several rows, so an item acts on its row. Not in it: a row's colour and name
   (changed in place) and GC's Sample. Lists of files that are not the trace list have no menu:
   XRPD's standard window (its one file), the Rietveld card's phases (its CIFs), GC's
-  Calibration window's standards, and, files of no module, the Projects list.
+  Calibration window's standards, and, files of no module, the Projects list. Seen then, done
+  in v582: (1) the kinds' menu (cards.js) placed against the window's innerWidth, under its
+  scrollbar, and with Escape alone of the keys: now inside the page as the row menu
+  (cards-model.js menuAt, the page's clientWidth) and with the row menu's keys (utils.js
+  menuKeys: the arrows, Home, End, Enter, Space, Escape and Tab, the focus back on its anchor);
+  (2) on macOS a Ctrl+click on a grip (a row's, a file's) came as the primary button's press
+  and dragged, the menu then refused mid-drag: now it opens the menu and drags nothing (the
+  platform as the browser names it, navigator.userAgentData, else navigator.platform). Left:
+  the sample selector's list (snav.js `place`) is still placed against innerWidth and
+  innerHeight.
+- **A last cell empty read as a column missing (Custom; GC's alternative export; v582, done).**
+  textdata.js readColumns took a file's width as the most common among its lines up to their
+  last cell not empty: `x,a,b` over `1,5,7`, `2,5,` and `3,5,` read two columns, its first two
+  lines then taken for lines over the data (the header and the first row lost). GC's
+  alternative export set its header against its data's width the same way, so an Amount column
+  left empty (not n.a.) in most rows set every column a cell off and the file was refused. A
+  line whose last cells are empty is now a line of the wider widths its fields reach too
+  (textdata.js commonWidth), a separator ending every line still adding no column. DRS's and
+  GC's own readers (readTable, readXY) take their columns from the header: not affected.
+- **Presets named after an object's own property (v582, done).** The composer's presets
+  (figure.js, localStorage) were a plain object keyed by the names typed: one named `__proto__`
+  set the list's prototype and was lost on saving, one named `constructor` read the
+  prototype's where none was saved (a plot left on it, the preset deleted since, opened with
+  Save and Delete on). Read and written as own keys (db.js own, setOwn), as bug 23's maps. No
+  other object of the app is keyed by a name typed (the per-plot memory's keys hold a tab's id
+  and a `/`).
 - **The browser storage is shared with every page of the same origin.** On GitHub Pages
   the app lives at `ceccor.github.io/datatreat_beta/`, and every project published under
   `ceccor.github.io` is the same origin: any of them can read and write DataTreat's

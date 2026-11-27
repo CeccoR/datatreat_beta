@@ -2444,9 +2444,9 @@ h5.instr-math-head { margin-top: 14px; padding-top: 10px; border-top: 1px solid 
 .xrd-peak-wrap .peak-row.selected td:last-child, .peak-row.selected td:last-child { box-shadow: inset 0 2px 0 var(--sel-inset), inset 0 -2px 0 var(--sel-inset), inset -2px 0 0 var(--sel-inset); }
 
 /* ===== GC parameter table: grouped headers, all/one toggle, row↔plot interaction ===== */
-.gc-param-table { min-width: 1060px; }  /* scrolls in its overflow-x wrapper below this (860 to v500, before p; 1000 to v580, m's select) */
+.gc-param-table { min-width: 1000px; }  /* scrolls in its overflow-x wrapper below this (860 to v500, before p; 1060 in v581, m's select in the header's type) */
 /* On mobile the table already scrolls, so extra width is free room for the columns
-   (1060 → 1200). Kept right after the base rule so it wins (equal specificity). */
+   (1000 → 1200). Kept right after the base rule so it wins (equal specificity). */
 @media (max-width: 600px) { .gc-param-table { min-width: 1200px; } }
 /* Headers sit at the bottom left of their cells, on their fields: th and td share
    their 8 px padding, so a header starts where its field does; a field's name is on its

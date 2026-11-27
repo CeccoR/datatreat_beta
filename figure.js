@@ -1,6 +1,7 @@
 import { svgEl, niceRun, fmtTick, SUB_DROP, TILT_DY } from './plot.js';
 import { colorPickerUI, palettePickerUI, CP_PALETTES, X_SVG, tiltFits, flashFieldInvalid, numRule, dropGap, esc, saveBlob, boxHtml } from './utils.js';
 import { tabOf, TABS } from './tabs.js';
+import { own, setOwn } from './db.js';
 import * as FL from './figure-layout.js';
 import * as FM from './figure-model.js';
 import { clearDivColors, clearDivTex } from './figure-model.js';
@@ -1004,7 +1005,10 @@ function redo(){
 
 /* Named presets: a whole set of figure settings, saved to localStorage so it
    outlives the session and can be applied to any plot in any project. Holds the
-   same thing the per-plot memory does — everything but the data itself. */
+   same thing the per-plot memory does — everything but the data itself. Keyed by the
+   names typed, read and written as own keys (db.js own, setOwn, v582): a preset named
+   __proto__ set the list's prototype and was lost, one named constructor or toString read
+   the prototype's where none was saved. */
 const PRESET_KEY = 'dt-figure-presets';
 let presetSel = '';           // survives the control rebuild an apply triggers
 function loadPresets(){
@@ -1154,7 +1158,7 @@ function recallSettings(){
   applySettings(snap);
   if (snap && typeof snap.scalars.name === 'string') F.name = snap.scalars.name;
   // Only if that preset is still around: one deleted meanwhile names nothing.
-  presetSel = (snap && snap.preset && loadPresets()[snap.preset]) ? snap.preset : '';
+  presetSel = (snap && snap.preset && own(loadPresets(), snap.preset)) ? snap.preset : '';
 }
 
 /* A figure its module keeps (opts.figure: { load(), save(snap) }; the Figure module's plots,
@@ -1168,7 +1172,7 @@ function recallKept(){
     applySettings(snap);
     if (snap && typeof snap.scalars.name === 'string') F.name = snap.scalars.name;
   } catch(e){ F = buildModel(srcPlot, srcOpts); }
-  presetSel = (snap && snap.preset && loadPresets()[snap.preset]) ? snap.preset : '';
+  presetSel = (snap && snap.preset && own(loadPresets(), snap.preset)) ? snap.preset : '';
 }
 function saveKept(){
   const snap = settingsSnapshot();
@@ -1432,10 +1436,10 @@ const texPalettePicker = {
         const e = p.tex[k % p.tex.length];
         return `<span class="pp-tex">${fillPreview(texName(e), texInvOf(e), 14, 2)}</span>`;
       }).join('');
-      const own = i >= TEX_PALETTES.length;
+      const mine = i >= TEX_PALETTES.length;
       return `<div class="pp-row" data-idx="${i}"><span class="pp-name">${esc(p.name)}</span>
         <div class="pp-swatches">${tiles}</div>
-        ${own ? `<button type="button" class="pp-del" data-del="${i - TEX_PALETTES.length}" title="Delete this palette">&#10005;</button>` : ''}</div>`;
+        ${mine ? `<button type="button" class="pp-del" data-del="${i - TEX_PALETTES.length}" title="Delete this palette">&#10005;</button>` : ''}</div>`;
     }).join('');
     const scope = this.opts.scope ? `
       <div class="pp-scope">
@@ -2475,12 +2479,12 @@ function wirePresetBar(){
     if (act === 'saveas'){
       const name = (nameIn.value || '').trim();
       if (!name){ nameIn.focus(); return; }
-      presets[name] = settingsSnapshot();
+      setOwn(presets, name, settingsSnapshot());
       presetSel = name;
       nameIn.value = '';
     } else if (act === 'save'){
       if (!presetSel) return;
-      presets[presetSel] = settingsSnapshot();
+      setOwn(presets, presetSel, settingsSnapshot());
       btn.classList.add('is-saved');
       setTimeout(()=> btn.classList.remove('is-saved'), 700);
     } else if (act === 'del'){
@@ -2495,7 +2499,7 @@ function wirePresetBar(){
     if (e.target.dataset.preset !== 'load') return;
     const before = presetSel;
     presetSel = e.target.value;
-    const snap = loadPresets()[presetSel];
+    const snap = own(loadPresets(), presetSel);
     if (snap && !applyPreset(snap, e.target)) presetSel = before;
     renderPresetBar();
   });

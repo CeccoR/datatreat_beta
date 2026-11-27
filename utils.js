@@ -1010,13 +1010,14 @@ function wireListDownloads({ wrap, files }){
    landed under the row the line was over, the gap under the dragged row itself lit, and
    the one under the last row could not be reached.) The primary button alone, of any
    pointer, as a file's own grip (v569: to v568 any button, the right one too, moved the
-   row; v571: to v570 a mouse's alone, a pen's barrel button or eraser still moving it). */
+   row; v571: to v570 a mouse's alone, a pen's barrel button or eraser still moving it), but
+   a Ctrl+click on macOS, which is the right button's there (grips). */
 function wireListDrag(L){
   L.rows = [...L.wrap.querySelectorAll('.file-row')];
   L.rows.forEach(row=>{
     const handle = row.querySelector('.drag-handle');
     handle.addEventListener('pointerdown', e=>{
-      if (e.button !== 0) return;
+      if (!grips(e)) return;
       e.preventDefault();
       L.drag = { from: +row.dataset.i };
       row.classList.add('dragging');
@@ -1030,6 +1031,13 @@ function wireListDrag(L){
     handle.addEventListener('pointercancel', ()=>{ markGap(L, null); L.rows.forEach(r=> r.classList.remove('dragging')); L.drag = null; });
   });
 }
+/* A press that takes a grip (a row's, a file's): the primary button's, but a Ctrl+click on
+   macOS, the right button's there, which comes as the primary's with Ctrl held and then asks
+   for the menu: it opens the row's menu (v579) and drags nothing (v582: to v581 the drag
+   began, and the row's menu, asked for during a drag, did not open). macOS as the browser
+   names its platform (navigator.userAgentData, else navigator.platform). */
+const onMac = ()=> /^mac/i.test((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '');
+const grips = e => e.button === 0 && !(e.ctrlKey && onMac());
 const gapAt = (L, y)=> gapFor(dropGap(L.rows, y), L.drag.from);
 const markGap = ({ rows }, g)=> rows.forEach((r, k)=>{
   r.classList.toggle('drop-before', g != null && k === g);
@@ -1053,7 +1061,7 @@ function wirePartDrag(L){
   L.partEls.forEach(el=>{
     const g = el.querySelector('.fpart-grip');
     g.addEventListener('pointerdown', e=>{
-      if (e.button !== 0) return;
+      if (!grips(e)) return;
       e.preventDefault(); e.stopPropagation();
       L.fdrag = { el, from: partOf(el), paired: el.parentElement.querySelectorAll('.fpart').length > 1, x: e.clientX, y: e.clientY, moved: false };
       el.classList.add('fdragging'); L.wrap.classList.add('fdrag-on');
@@ -1183,18 +1191,25 @@ function wireRowMenu({ el, ac }){
   const signal = ac.signal;
   el.addEventListener('click', e=>{ const b = e.target.closest('[data-ctl]'); if (b) pickRowItem(b.dataset.ctl); });
   el.addEventListener('contextmenu', e=> e.preventDefault());
-  el.addEventListener('keydown', e=>{
-    if (e.key === 'Tab'){ e.preventDefault(); closeRowMenu(); return; }
-    const items = [...el.querySelectorAll('[data-ctl]')], to = menuKey(e.key, items.indexOf(document.activeElement), items.length);
-    if (to == null) return;
-    e.preventDefault(); e.stopPropagation();
-    items[to].focus({ preventScroll: true });
-  });
+  menuKeys(el, '[data-ctl]', closeRowMenu, signal);
   document.addEventListener('pointerdown', e=>{ if (!el.contains(e.target)) closeRowMenu(); }, { capture: true, signal });
-  document.addEventListener('keydown', e=>{ if (e.key === 'Escape'){ e.preventDefault(); e.stopPropagation(); closeRowMenu(); } }, { capture: true, signal });
   // (seen first, on the window's capture: the history's keys act once it is closed, utils.js)
   window.addEventListener('keydown', e=>{ if ((e.ctrlKey || e.metaKey) && /^[zy]$/i.test(e.key)) closeRowMenu(); }, { capture: true, signal });
   for (const t of ['scroll', 'resize', 'blur']) window.addEventListener(t, closeRowMenu, { capture: t === 'scroll', signal });
+}
+/* A menu's keys (the row menu's, v579; the kinds' menu's too, cards.js, v582): ↓ ↑ Home End
+   move the focus along its items shown (`sel`; filelist-model.js menuKey), Enter and Space
+   choose (the item's own click); Tab and Escape close it (`close`, which gives the focus back
+   to what opened it), Escape while it is shown. Its listeners come off with `signal`. */
+export function menuKeys(el, sel, close, signal){
+  el.addEventListener('keydown', e=>{
+    if (e.key === 'Tab'){ e.preventDefault(); close(); return; }
+    const items = [...el.querySelectorAll(sel)].filter(b=> !b.hidden), to = menuKey(e.key, items.indexOf(document.activeElement), items.length);
+    if (to == null) return;
+    e.preventDefault(); e.stopPropagation();
+    items[to].focus({ preventScroll: true });
+  }, { signal });
+  document.addEventListener('keydown', e=>{ if (e.key === 'Escape' && !el.hidden){ e.preventDefault(); e.stopPropagation(); close(); } }, { capture: true, signal });
 }
 // The row at i in a list (its last, past its end), given the focus.
 function focusRowAt(wrap, i){

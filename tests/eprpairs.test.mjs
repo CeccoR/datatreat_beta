@@ -7,7 +7,9 @@
    (a zip, as GC's pair rows give) and a half's one; the project saved and opened again with its
    rows as they were. Files named constructor, __proto__ and toString pair and plot as any
    other (bug 23: to v580 grouped in a plain object, such a pair was lost with no word, and
-   __proto__'s written onto every object's prototype). Every file made up. */
+   __proto__'s written onto every object's prototype). A label renamed kept a file, as GC
+   keeps it: the row's its first file's, a second's given back when the pair is split, through
+   undo and redo and the project saved (v582). Every file made up. */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { start, openModule, settle, moduleState, history, undo, download, readZip, tabLabels, saveAs, openProject, firstTop } from './helpers.mjs';
@@ -136,6 +138,34 @@ test('the row\'s menu: a pair\'s download its two files (a zip, as GC\'s pair ro
     assert.deepEqual(await names(page), ['a.DTA + a.DSC', 'lone.DTA']);
     assert.deepEqual(await boxes(page), [['warn', '⚠ Loaded, to check:', ALONE('lone.DTA')]]);
     assert.deepEqual(await lines(page), ['A']);
+    assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
+  } finally { await close(); }
+});
+
+/* v582: a label kept a file, as GC keeps one. A half renamed, then paired as a .DTA's second
+   by its grip: the row's label its .DTA's; split again, the half its own label back (to v581
+   lost, its row labelled anew by its .DSC's title). Through undo and redo, and a project saved
+   while it is paired. */
+async function relabel(page, i, v){ const l = page.locator(`#eprFileTableWrap .file-label[data-i="${i}"]`); await l.fill(v); await l.press('Enter'); await settle(page); }
+test('a label renamed kept a file: a pair split gives its second file its own back (v582)', async ()=>{
+  const { page, errors, csp, close } = await env.page();
+  try {
+    await openModule(page, 'epr');
+    const b = eprPair({ title: 'B', seed: 12 });
+    await drop(page, [bin('lone.DTA', b.dta), bin('x.DSC', b.dsc)], 2);
+    await relabel(page, 1, 'mine');
+    assert.deepEqual((await rowsOf(page)).map(r=> r.label), ['lone', 'mine']);
+    await dragFile(page, 'x.DSC', 'lone.DTA');
+    assert.deepEqual((await rowsOf(page)).map(r=> [r.files.join(' + '), r.label]), [['lone.DTA + x.DSC', 'B']], 'paired: the row\'s label its .DTA\'s');
+    await saveAs(page, 'labels');
+    await page.locator('#tabBar .ptab.is-on .ptab-x').click(); await settle(page);
+    await openProject(page, 'epr', 'labels');
+    await dragFile(page, 'x.DSC', null);
+    assert.deepEqual((await rowsOf(page)).map(r=> [r.files.join(' + '), r.label]), [['lone.DTA', 'lone'], ['x.DSC', 'mine']], 'split: each its own label back');
+    await undo(page);
+    assert.deepEqual((await rowsOf(page)).map(r=> r.label), ['B']);
+    await undo(page, true);
+    assert.deepEqual((await rowsOf(page)).map(r=> r.label), ['lone', 'mine'], 'redone');
     assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
   } finally { await close(); }
 });

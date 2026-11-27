@@ -26,7 +26,8 @@
    (gc-integ.js makeCard): its method (the one its results come from: applied), its windows
    as edited (edit: the same while nothing is pending, v578), its run (Integrate's: the
    windows it integrates, or null), whether one was stopped (stopped) and whether a Stop holds
-   its files (halted: its own, v581; to v580 the instance's, every card's), its
+   its files (halted: its own, v581; to v580 the instance's, every card's) with the results
+   they had then (stopRes, heldOf: v582), its
    calibration (cal), the overview's gas and y (ovGas, ovY), what it shows (selName, selK)
    and Analysis's values kept (valuesKept).
 ========================================================= */
@@ -98,6 +99,13 @@ export function methodIn(U, m, base = DEFAULT_METHOD){
   });
   return out;
 }
+/* A window's name (v578, gc-integ-html.js's to v581): by its gases' peaks, a hyphen between,
+   as shown (`as` 'txt': "H₂-O₂") or in a CSV's ASCII ('csv': "H2-O2", v582; to v581 the CSVs
+   and the chromatogram's lines named it by its key, "H2O2"); a window with no gas's peak, by
+   its key. A result's window (its key alone: the curves' wr) by method m's of that key
+   (curveName). The keys themselves, the state's and the results', stay as they are. */
+export const windowName = (gasOf, w, as = 'txt')=>{ const gs = (w.peaks || []).filter(pk=> pk.gas); return gs.length ? gs.map(pk=> gasOf(pk.gas)[as]).join('-') : w.key; };
+export const curveName = (gasOf, m, wr, as)=> windowName(gasOf, m.windows.find(w=> w.key === wr.key) || wr, as);
 // (a stored result's null, JSON's NaN, read back as NaN, never as 0)
 export const deNull = (U, v)=> v === null ? NaN : Array.isArray(v) ? v.map(x=> deNull(U, x)) : U.isObj(v) ? Object.fromEntries(Object.entries(v).map(([k, x])=> [k, deNull(U, x)])) : v;
 export const methodKey = (U, m)=> U.exactKey(m.windows.map(w=> [w.key, w.from, w.to]).concat([JSON.stringify(m)]));
@@ -191,6 +199,22 @@ export function tableOf(S, b){
 export const keyOf = (U, rec, m)=> fileKey(U, rec) + '|' + methodKey(U, m);
 // (the job's own, as they come, over the store's)
 export const resultsAt = (S, key)=> (S.job && S.job.works.get(key)) || S.store.get(key) || null;
+/* A Stop holding a card's files (v582): the results they have then under the windows applied
+   (the job's so far among them), each a copy, null where none: a key → results. While it holds
+   them they are the card's (resIn), whatever another card integrating the same files with the
+   same windows brings meanwhile: the card stays stopped and takes none of it (to v581 shown
+   as it came, the card stopped, then done), until Integrate on it or files dropped let it go. */
+export function heldOf(U, S, C){
+  const out = new Map();
+  tcdRecs(S, C).forEach(r=>{ const key = keyOf(U, r, C.method), res = resultsAt(S, key); out.set(key, res && res.slice()); });
+  return out;
+}
+// A card's results of a key: those a Stop holds (stopRes), else the job's as they come and the
+// store's (`stored`: the store's alone).
+function resIn(S, C, key, stored){
+  if (C.stopRes && C.stopRes.has(key)) return C.stopRes.get(key);
+  return stored ? S.store.get(key) || null : resultsAt(S, key);
+}
 export const integCards = S => S.ctx.cards().filter(a=> a.type === 'integ').map(a=> S.ctx.inst(a.id)).filter(Boolean);
 export function usedKeys(U, S){
   const out = new Set();
@@ -263,7 +287,7 @@ export function leftUnder(U, S, C, m){
     const key = keyOf(U, r, m), d = dataOf(S, r);
     if (seen.has(key) || d.error) return s;
     seen.add(key);
-    const have = S.store.get(key) || [];
+    const have = resIn(S, C, key, true) || [];
     return s + d.cols.reduce((n, _, j)=> n + (have[j] ? 0 : 1), 0);
   }, 0);
 }
@@ -300,7 +324,7 @@ export const curOf = (S, C)=>{ const es = entriesOf(S); return es.find(e=> e.nam
 export const aligned = e => !!(e && e.table && !e.d.error && e.rows === e.n);
 // The results of a file: under the method they come from (to v577, the windows changed and
 // the file not integrated again, the method's before them, said: no more, v578).
-export const resOf = (U, S, C, rec)=> ({ res: resultsAt(S, keyOf(U, rec, C.method)), m: C.method });
+export const resOf = (U, S, C, rec)=> ({ res: resIn(S, C, keyOf(U, rec, C.method)), m: C.method });
 // (the file's and the chromatogram's on show, its selectors' choice: a step of d, around)
 export function stepFile(S, C, d){
   const es = entriesOf(S), c = curOf(S, C), i = c ? es.findIndex(x=> x.name === c.name) : -1;
@@ -327,7 +351,7 @@ export function stdName(S, f, j){
 export function calRows(U, S, C){
   const rows = [];
   C.cal.files.forEach((f, fi)=>{
-    const d = dataOf(S, f), res = d.error ? null : resultsAt(S, keyOf(U, f, C.method));
+    const d = dataOf(S, f), res = d.error ? null : resIn(S, C, keyOf(U, f, C.method));
     const n = d.error ? 0 : d.cols.length;
     for (let j = 0; j < n; j++) rows.push({ f, fi, j, d, lv: f.levels[j] || blankLevel(), r: res && res[j], name: stdName(S, f, j) });
   });
@@ -377,7 +401,7 @@ export function valuesFor(U, S, C, f){
   const n = d.cols.length, rows = f.injDates.length;
   // (`integ`: the Integration card says it, which the card's alert names; gc-html.js srcAlertsHtml)
   if (n !== rows) return { why: `${plural(rows, 'injection')} in the table, ${plural(n, 'chromatogram')}`, integ: true };
-  const res = resultsAt(S, keyOf(U, tcd, C.method));
+  const res = resIn(S, C, keyOf(U, tcd, C.method));
   if (!res || res.some(x=> !x)) return { why: C.halted ? 'its integration was stopped before its end' : 'its integration is not done yet', waiting: true };
   const vk = U.exactKey([keyOf(U, tcd, C.method), calKey(U, C), Object.keys(f.gas).map(k=> [k, U.objId(f.gas[k])]), U.objId(res)]);
   if (C.valuesKept.has(vk)) return C.valuesKept.get(vk);
@@ -678,12 +702,12 @@ export function alertFacts(U, S, C){
    Each row ends with the windows its results come from (v578: the method applied, never
    windows edited and not integrated; to v577 none, and the windows changed, chromatogram.csv
    gave the previous method's model with no word of it, integration.csv no values). */
-const winHeads = m => m.windows.flatMap(w=> [`${w.key} window from (s)`, `${w.key} window to (s)`]);
+const winHeads = (gasOf, m)=> m.windows.flatMap(w=>{ const n = windowName(gasOf, w, 'csv'); return [`${n} window from (s)`, `${n} window to (s)`]; });
 const winCells = (U, m)=> m.windows.flatMap(w=> [U.fmtNum(w.from, 2), U.fmtNum(w.to, 2)]);
 // integration.csv: every chromatogram's values (the run overview's).
 export function integrationCsv(U, S, C, es){
   const gs = Object.keys(S.GAS), gasOf = S.gasOf, win = winCells(U, C.method);
-  let t = U.csvLine(['File', 'Table', 'Injection', 'Injection date', ...gs.flatMap(g=> [`${gasOf(g).csv} area`, `${gasOf(g).csv} area sd`, `${gasOf(g).csv} apex (s)`, `${gasOf(g).csv} chi2r`, `${gasOf(g).csv} (%mol)`, `${gasOf(g).csv} source`, `${gasOf(g).csv} table (%mol)`, `${gasOf(g).csv} suspicious`]), 'Flags', ...winHeads(C.method)]);
+  let t = U.csvLine(['File', 'Table', 'Injection', 'Injection date', ...gs.flatMap(g=> [`${gasOf(g).csv} area`, `${gasOf(g).csv} area sd`, `${gasOf(g).csv} apex (s)`, `${gasOf(g).csv} chi2r`, `${gasOf(g).csv} (%mol)`, `${gasOf(g).csv} source`, `${gasOf(g).csv} table (%mol)`, `${gasOf(g).csv} suspicious`]), 'Flags', ...winHeads(gasOf, C.method)]);
   es.forEach(e=>{
     if (e.d.error) return;
     const res = resOf(U, S, C, e.tcd).res || [], conv = convAll(U, S, C, e, res), J = judge(S, e, res);
@@ -700,19 +724,21 @@ export function integrationCsv(U, S, C, es){
   return t;
 }
 // A chromatogram drawn (drawPair's `drawn`, its method `m`): the whole of it, its model and
-// parts and its residuals, these blank outside the fit window.
-export function chromCsv(U, d){
+// parts and its residuals, these blank outside the fit window; each window's named in ASCII,
+// as the legend names it ("model (H2-O2)": v582, to v581 "model H2O2").
+export function chromCsv(U, gasOf, d){
   const at = new Map(), cols = [], heads = [];
   const put = (h, xs, ys)=>{ const m = new Map(); xs.forEach((x, i)=> m.set(x, ys[i])); cols.push(m); heads.push(h); };
   d.curves.forEach(({ wr, c })=>{
-    if (c.model) put(`model ${wr.key}`, c.t, c.model);
-    if (c.base) put(`baseline ${wr.key}`, c.t, c.base);
+    const n = curveName(gasOf, d.m, wr, 'csv');
+    if (c.model) put(`model (${n})`, c.t, c.model);
+    if (c.base) put(`baseline (${n})`, c.t, c.base);
     Object.entries(c.peaks || {}).forEach(([name, cv])=> put(`${name} (on the baseline)`, c.t, c.base ? cv.map((v, i)=> v + c.base[i]) : cv));
-    if (c.residual) put(`residual ${wr.key}`, c.t, c.residual);
+    if (c.residual) put(`residual (${n})`, c.t, c.residual);
   });
   d.t.forEach((x, i)=> at.set(x, d.y[i]));
   const win = winCells(U, d.m);
-  let ct = U.csvLine(['Time (s)', 'TCD signal', ...heads, ...winHeads(d.m)]);
+  let ct = U.csvLine(['Time (s)', 'TCD signal', ...heads, ...winHeads(gasOf, d.m)]);
   d.t.forEach(x=>{ ct += U.csvLine([U.fmtNum(x, 4), U.fmtNum(at.get(x), 6), ...cols.map(m=> m.has(x) ? U.fmtNum(m.get(x), 6) : ''), ...win]); });
   return ct;
 }
@@ -789,7 +815,7 @@ export function levelIn(text){
   return v !== null && !(fin(v) && v >= 0) ? NaN : v;
 }
 // How many of the standards' chromatograms are not integrated with the card's method.
-export const stdsLeft = (U, S, C)=> C.cal.files.reduce((s, f)=>{ const r = resultsAt(S, keyOf(U, f, C.method)); return s + (r ? r.filter(x=> !x).length : dataOf(S, f).error ? 0 : dataOf(S, f).cols.length); }, 0);
+export const stdsLeft = (U, S, C)=> C.cal.files.reduce((s, f)=>{ const r = resIn(S, C, keyOf(U, f, C.method)); return s + (r ? r.filter(x=> !x).length : dataOf(S, f).error ? 0 : dataOf(S, f).cols.length); }, 0);
 // A thumbnail's polyline of a standard's chromatogram over the windows (range lo–hi), or ''.
 export function thumbPoints(d, j, lo, hi, W, H){
   const t = d.t, y = d.cols[j], xs = [], ys = [];
@@ -837,7 +863,7 @@ export function restoreCard(U, S, C, s0){
    applied as they are (v581; to v580 pending all the same, the files loaded after them
    integrated with the windows before). → whether applied. */
 export function takeEdit(U, S, C, m){
-  const none = !tcdRecs(S, C).some(r=> (resultsAt(S, keyOf(U, r, C.method)) || []).some(Boolean));
+  const none = !tcdRecs(S, C).some(r=> (resIn(S, C, keyOf(U, r, C.method)) || []).some(Boolean));
   C.edit = methodIn(U, m);
   if (none) C.method = clone(C.edit);
   return none;

@@ -19,7 +19,7 @@
    level of D, not a closure inside createDeck (to v561 one of 515 lines): what a listener
    holds is what it is handed.
 ========================================================= */
-import { X_SVG, esc } from './utils.js';
+import { X_SVG, esc, menuKeys } from './utils.js';
 import * as M from './cards-model.js';
 import * as H from './cards-html.js';
 
@@ -34,7 +34,10 @@ export const cardInfo = (several, results) => `Each analysis card can be renamed
    card, a card's title to change its kind. The anchor again or a click anywhere else
    closes it, so does Escape; the anchor stays lit while it is open. A menu of our own
    rather than a <select>: the title's capitals would carry into a native list, which
-   some systems draw with the select's own styling. */
+   some systems draw with the select's own styling. Its keys are the row menu's (v582,
+   utils.js menuKeys: to v581 Escape alone): open, the focus on its kind (else its first),
+   ↓ ↑ Home End along its kinds shown, Enter or Space pick, Escape or Tab close it, the
+   focus given back to its anchor from inside it, as the row menu gives it to its row. */
 // (in `layer`: the module's instance's, which is in the page while its instance is. Its
 // listeners on the document and the window come off with destroy.) Its state K: the menu
 // (el), its listeners' controller, the anchor it is open from, what a pick does, centred.
@@ -53,18 +56,22 @@ function kindMenu(kinds, layer){
     closeIn(node){ if (K.anchor && node.contains(K.anchor)) closeMenu(K); } };
 }
 // (an anchor no longer in the page closes it, whatever took it away: to v569 a scroll then
-// put it at the window's top left, v570)
+// put it at the window's top left, v570; inside the window short of its scrollbars, as the
+// row menu: v582, to v581 the window's whole width and height, a scrollbar's under it)
 function placeMenu(K){
   if (!K.anchor.isConnected){ closeMenu(K); return; }
-  const r = K.anchor.getBoundingClientRect(), w = K.el.offsetWidth, h = K.el.offsetHeight;
-  const at = M.menuAt(r, w, h, window.innerWidth, window.innerHeight, K.centred);
+  const r = K.anchor.getBoundingClientRect(), w = K.el.offsetWidth, h = K.el.offsetHeight, page = document.documentElement;
+  const at = M.menuAt(r, w, h, page.clientWidth, page.clientHeight, K.centred);
   K.el.style.left = at.left + 'px';
   K.el.style.top = at.top + 'px';
 }
 function closeMenu(K){
+  const a = K.anchor, back = !!a && K.el.contains(document.activeElement);
   K.el.hidden = true;
-  if (K.anchor){ K.anchor.classList.remove('cp-anchored'); K.anchor.setAttribute('aria-expanded', 'false'); }
   K.anchor = K.pick = null;
+  if (!a) return;
+  a.classList.remove('cp-anchored'); a.setAttribute('aria-expanded', 'false');
+  if (back && a.isConnected) a.focus({ preventScroll: true });
 }
 function openMenu(K, a, onPick, { current, centre } = {}){
   if (K.anchor === a){ closeMenu(K); return; }
@@ -75,6 +82,8 @@ function openMenu(K, a, onPick, { current, centre } = {}){
   a.classList.add('cp-anchored');
   a.setAttribute('aria-expanded', 'true');
   placeMenu(K);
+  const c = K.el.querySelector('.is-current:not([hidden])') || K.el.querySelector('[data-kind]:not([hidden])');
+  if (c && !K.el.hidden) c.focus({ preventScroll: true });
 }
 function wireMenu(K, signal){
   const el = K.el;
@@ -88,9 +97,7 @@ function wireMenu(K, signal){
   document.addEventListener('pointerdown', e=>{
     if (!el.hidden && !el.contains(e.target) && !K.anchor.contains(e.target)) closeMenu(K);
   }, { capture: true, signal });
-  document.addEventListener('keydown', e=>{
-    if (e.key === 'Escape' && !el.hidden){ e.stopPropagation(); closeMenu(K); }
-  }, { capture: true, signal });
+  menuKeys(el, '[data-kind]', ()=> closeMenu(K), signal);
   window.addEventListener('scroll', ()=>{ if (!el.hidden) placeMenu(K); }, { capture: true, signal });
   window.addEventListener('resize', ()=>{ if (!el.hidden) placeMenu(K); }, { signal });
 }

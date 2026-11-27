@@ -8,7 +8,8 @@
    fitting, with a note (v580). Its width for every series takes what each series' own field
    takes (v569, v570), bars saved wider than their slot open at 1 (v570), lines saved thinner
    than 0.2 at 0.2 (v571), and its grips and the colour picker take a mouse's primary button
-   alone (v570); an export that fails says why in a compact error in its footer (v571). */
+   alone (v570); an export that fails says why in a compact error in its footer (v571). Its
+   presets are kept by the names typed as any other name, __proto__ and constructor too (v582). */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { start, openModule, loadFiles, download, settle, keep } from './helpers.mjs';
@@ -289,6 +290,43 @@ test('plots composer: a preset whose step does not fit applied but for the step,
     await page.keyboard.press('Control+z'); await settle(page);
     assert.equal(await page.locator('.fig-backdrop input[data-g="y"]').isChecked(), false, 'Ctrl+Z: the preset taken back');
     assert.equal(await page.locator('.fig-backdrop input[data-k="yStepAuto"]').isChecked(), true);
+    assert.deepEqual(errors, []);
+    assert.deepEqual(await csp(), []);
+  } finally { await close(); }
+});
+
+/* v582: the presets are kept by the names typed, read and written as own keys (db.js own,
+   setOwn): one named __proto__ is saved, listed and applied as any other (to v581 it set the
+   list's prototype, lost on saving); one named constructor deleted on another plot is no longer
+   the plot's preset when it opens again (to v581 the list's prototype's constructor read for it,
+   its Save and Delete still on). */
+test('plots composer: presets named __proto__ and constructor kept, listed, applied and deleted as any other (v582)', async ()=>{
+  const { page, errors, csp, close } = await env.page();
+  try {
+    const presets = ()=> page.evaluate(()=>{ const o = JSON.parse(localStorage.getItem('dt-figure-presets')); return [Object.keys(o).sort(), Object.getPrototypeOf(o) === Object.prototype]; });
+    const bar = ()=> page.evaluate(()=>{ const q = s => document.querySelector(`.fig-backdrop [data-preset="${s}"]`); return [[...q('load').options].map(o=> o.value), q('load').value, q('save').disabled, q('del').disabled]; });
+    await composeLine(page, ys20);
+    await tick(page, 'data-g="y"');
+    for (const name of ['__proto__', 'constructor']){
+      await page.fill('.fig-backdrop [data-preset="name"]', name);
+      await page.click('.fig-backdrop [data-preset="saveas"]'); await settle(page);
+    }
+    assert.deepEqual(await presets(), [['__proto__', 'constructor'], true], 'both saved, the list\'s prototype untouched');
+    assert.deepEqual(await bar(), [['', '__proto__', 'constructor'], 'constructor', false, false]);
+    await closeComposer(page);
+    // Another plot: __proto__ applied; constructor deleted.
+    await page.evaluate(()=> import('./figure.js').then(f=> f.openFigureEditor({ _stored: [{ type: 'line', xs: [0, 1, 2], ys: [1, 3, 2], label: 'other', color: '#3aa0ff' }] }, { name: 'other' })));
+    await page.waitForSelector('.fig-backdrop .fig-svg path');
+    assert.equal(await page.locator('.fig-backdrop input[data-g="y"]').isChecked(), false);
+    await page.selectOption('.fig-backdrop [data-preset="load"]', '__proto__'); await settle(page);
+    assert.deepEqual([await page.locator('.fig-backdrop input[data-g="y"]').isChecked(), (await bar()).slice(1)], [true, ['__proto__', false, false]], '__proto__ applied');
+    await page.selectOption('.fig-backdrop [data-preset="load"]', 'constructor'); await settle(page);
+    await page.click('.fig-backdrop [data-preset="del"]'); await settle(page);
+    assert.deepEqual(await presets(), [['__proto__'], true]);
+    await closeComposer(page);
+    // The first plot again, left on constructor: no preset now.
+    await composeLine(page, ys20);
+    assert.deepEqual(await bar(), [['', '__proto__'], '', true, true], 'constructor gone: none');
     assert.deepEqual(errors, []);
     assert.deepEqual(await csp(), []);
   } finally { await close(); }

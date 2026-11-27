@@ -614,7 +614,8 @@ test('the Integration card: its two selectors, the chromatogram over its residua
     assert.ok(png.buf.readUInt32BE(20)/2 > box.h, `the image as tall as the two: ${png.buf.readUInt32BE(20)/2} px for ${box.h}`);
     const cz = await download(page, ()=> card.locator('.gci-pair .plot-csv-btn').click());
     const crows = parseCsv(cz.buf.toString('utf8').replace(/^\uFEFF/, ''), ';');
-    assert.ok(cz.name.endsWith('chromatogram.csv') && ['Time (s)', 'TCD signal', 'model H2O2', 'residual H2O2'].every(h=> crows[0].includes(h)), crows[0].join(' | '));
+    // (v582: each window named in ASCII as the legend names it, H2-O2; to v581 by its key, H2O2)
+    assert.ok(cz.name.endsWith('chromatogram.csv') && ['Time (s)', 'TCD signal', 'model (H2-O2)', 'baseline (H2-O2)', 'residual (H2-O2)', 'H2-O2 window from (s)'].every(h=> crows[0].includes(h)) && !crows[0].some(h=> h.includes('H2O2')), crows[0].join(' | '));
     assert.equal(crows.length - 1, T.length, 'the whole chromatogram');
     await card.locator('.gci-pair .plot-tool-btn[title="Figure composer (advanced export)"]').click();
     await page.waitForSelector('.fig-backdrop .fig-svg path');
@@ -622,6 +623,8 @@ test('the Integration card: its two selectors, the chromatogram over its residua
     let gr = await groups();
     assert.equal(gr.length, 2, 'two panels');
     assert.ok(gr[0].includes('raw') && gr[1].includes('residual') && !gr[0].includes('residual'), JSON.stringify(gr));
+    // (v582: the window's lines named as Windows names it, H₂-O₂; to v581 by its key, "model (H2O2)")
+    assert.ok(gr[0].includes('model (H₂-O₂)') && gr[0].includes('baseline (H₂-O₂)') && !gr.flat().some(n=> n.includes('H2O2')), JSON.stringify(gr));
     assert.deepEqual(await page.$$eval('.fig-backdrop .fig-panel input[data-pk="ylabel"]', xs=> xs.map(x=> x.value)), ['TCD signal', 'Residual'], 'each its own Y title');
     await page.locator('.fig-backdrop [data-del-panel="1"]').click();
     gr = await groups();
@@ -939,7 +942,7 @@ test('the calibration window (v549): a GC table and its raw chromatograms, both 
     assert.equal(await m.locator('.gci-cal-pair .plot-tool-btn[title="Zoom area"]').count(), 1);
     const cz = await download(page, ()=> m.locator('.gci-cal-pair .plot-csv-btn').click());
     const crows = parseCsv(cz.buf.toString('utf8').replace(/^﻿/, ''), ';');
-    assert.ok(cz.name.endsWith(' - standard_chromatogram.csv') && ['Time (s)', 'TCD signal', 'model H2O2', 'residual H2O2'].every(h=> crows[0].includes(h)), `${cz.name}: ${crows[0].join(' | ')}`);
+    assert.ok(cz.name.endsWith(' - standard_chromatogram.csv') && ['Time (s)', 'TCD signal', 'model (H2-O2)', 'residual (H2-O2)'].every(h=> crows[0].includes(h)), `${cz.name}: ${crows[0].join(' | ')}`);
     assert.equal(crows.length - 1, T.length);
     assert.ok(Math.abs(num(crows[101][1]) - stdY('std_TCD.csv', 5)[100]) < 1e-3, 'the standard on show\'s');
     // CLAUDE.md: the plot on the left, the table on the right: Standards' top (its letters') on
@@ -1336,7 +1339,7 @@ test('a window edited (v578): not integrated, pending, said in grey, Integrate h
     const z1 = await zip(page);
     for (const f of ['integration.csv', 'chromatogram.csv', 'gc_raw.csv', 'mean_rates.csv']) assert.deepEqual(z1[f], z0[f], f);
     for (const f of ['integration.csv', 'chromatogram.csv']){
-      assert.deepEqual(z1[f][0].slice(-2), ['H2O2 window from (s)', 'H2O2 window to (s)'], f);
+      assert.deepEqual(z1[f][0].slice(-2), ['H2-O2 window from (s)', 'H2-O2 window to (s)'], f);
       assert.ok(z1[f].slice(1).every(r=> r.slice(-2).join() === '268.00,326.00'), `${f}: the windows applied`);
     }
     // Back to the windows applied: nothing pending, quiet; a step.
@@ -1472,8 +1475,12 @@ test('Stop (v578): Integrate stopped part way keeps everything as it was, its re
 
 /* v581: a Stop holds its own card's files alone (to v580 every Integration card's of the tab):
    two cards integrating the same files, the first stopped, the second's run on, every
-   chromatogram integrated once; the first said stopped meanwhile, done at its end. */
-test('Stop (v581): a card\'s Stop holds its own files alone; another Integration card\'s run on', async ()=>{
+   chromatogram integrated once. v582: the first stays stopped to the end and applies nothing,
+   its results those it had at its Stop (its words, integration.csv and the Production Rate card
+   under it the same), none of what the second's run brought (to v581 shown as they came, the
+   card done at its end); Integrate on it then takes them, nothing fitted again. */
+const cardCsv = async (page, name)=> readZip((await download(page, ()=> page.click('.proj-csv'))).buf).find(e=> e.name.endsWith(` - ${name}`)).data.toString('utf8');
+test('Stop (v581, v582): a card\'s Stop holds its own files alone, applying nothing; another Integration card\'s run on', async ()=>{
   const { page, errors, csp, close } = await env.page();
   try {
     await openModule(page, 'gc');
@@ -1488,9 +1495,20 @@ test('Stop (v581): a card\'s Stop holds its own files alone; another Integration
     const n1 = await fitted(page);
     assert.ok(n1 < 2*N, `stopped part way: ${n1}`);
     assert.deepEqual([await c1.locator('.gci-status').getAttribute('data-state'), await c2.locator('.gci-status').getAttribute('data-state')], ['stopped', 'running'], 'the first stopped, the second running');
+    const said = await c1.locator('.gci-status').textContent(), csv1 = await cardCsv(page, 'integration.csv'), rate = await cs.nth(1).locator('.gc-src').textContent();
+    assert.match(said, /^Stopped: \d+ chromatograms? not integrated\.$/);
+    assert.ok(rate.includes(': its integration was stopped before its end'), 'the card under it says so at once: ' + rate);
     await until(async ()=> (await fitted(page)) === 2*N, { timeout: 60000, what: 'the second card\'s files integrated' });
-    await integrated(page);
+    await until(async ()=> (await c2.locator('.gci-status').getAttribute('data-state')) === 'done', { what: 'the second card done' });
+    await settle(page);
     assert.equal(await fitted(page), 2*N, 'every chromatogram once');
+    assert.deepEqual([await c1.locator('.gci-status').getAttribute('data-state'), await c2.locator('.gci-status').getAttribute('data-state'), await c1.locator('.gci-status').textContent()],
+      ['stopped', 'done', said], 'the first still stopped, saying as much, the second done');
+    assert.deepEqual([await cardCsv(page, 'integration.csv'), await cs.nth(1).locator('.gc-src').textContent()], [csv1, rate], 'its results those of its Stop, the card under it the same');
+    // Integrate on it: the second's results taken, nothing fitted again.
+    await c1.locator('.gci-integ').click(); await settle(page); await integrated(page);
+    assert.deepEqual([await fitted(page), await c1.locator('.gci-status').getAttribute('data-state')], [2*N, 'done']);
+    assert.notEqual(await cardCsv(page, 'integration.csv'), csv1, 'its results now the run\'s');
     assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
   } finally { await close(); }
 });
@@ -1607,7 +1625,7 @@ test('the calibration window (v578): with no standards the drop zone alone; its 
     assert.deepEqual([await m.locator('.gci-cal-status').textContent(), await integ(wbtn)], ['The results shown come from H₂-O₂ fit 268–326 s, not from these windows.', ['Integrate', false, true]]);
     const c1 = await stdCsv(m);
     assert.deepEqual(c1, c0, 'its CSV as it was');
-    assert.ok(c1[0].slice(-2).join() === 'H2O2 window from (s),H2O2 window to (s)' && c1.slice(1).every(r=> r.slice(-2).join() === '268.00,326.00'), 'the windows applied');
+    assert.ok(c1[0].slice(-2).join() === 'H2-O2 window from (s),H2-O2 window to (s)' && c1.slice(1).every(r=> r.slice(-2).join() === '268.00,326.00'), 'the windows applied');
     // Integrate here: the standard in view first; the window and the card at once, one step.
     await m.locator('.gci-cal-levels tbody tr').nth(3).locator('td').first().click(); await settle(page);
     const inView = await m.locator('svg.gci-chrom').evaluate(s=> Array.from(s._plot._stored.find(e=> e.key === 'raw').ys.slice(0, 4)));

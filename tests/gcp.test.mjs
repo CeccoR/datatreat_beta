@@ -12,9 +12,10 @@
      1 atm, a number in every unit; the most the fields take (1e300 atm) kept through the
      history;
    - p in its unit in gc_info.csv after T, in mean_rates.csv before it (T the last column);
-   - the table at the least width it is laid out for, 1000 px, and at 1300: each header's
-     pill beside its name and nothing over its cell, p's name, pill and unit level with the
-     others', the date field whole. */
+   - the table at the least width it is laid out for, 1000 px (v582: 1060 in v581, m's select
+     in the header's type), and at 1300: each header's pill beside its name and nothing over
+     its cell, p's name, pill and unit level with the others', m's select whole, in its compact
+     type, the date field whole. */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { start, openModule, loadFiles, settle, moduleState, history, download, readZip, parseCsv, undo } from './helpers.mjs';
@@ -228,10 +229,10 @@ const layout = page => page.evaluate(()=>{
     dateOver: dc.scrollWidth > dc.clientWidth || dc.firstElementChild.scrollWidth > dc.clientWidth - 16 + 0.5,
     level: { name: top(p) - top(q), pill: box(chip(p)).top - box(chip(q)).top, height: box(p).height - box(q).height },
     unit: mid(sel) - mid(chip(p)),
-    mPill: Math.round((box(chip(m)).top - box(chip(p)).top)*2)/2, norm: mid(ns) - mid(chip(m)),
+    mPill: Math.round((box(chip(m)).top - box(chip(p)).top)*2)/2, norm: mid(ns) - mid(chip(m)), normFont: getComputedStyle(ns).fontSize,
   };
 });
-test('p: the table at 1300 px and at 1060 px, the least width it is laid out for', async ()=>{
+test('p: the table at 1300 px and at 1000 px, the least width it is laid out for', async ()=>{
   const { page, errors, close } = await env.page();
   try {
     await openModule(page, 'gc');
@@ -245,13 +246,15 @@ test('p: the table at 1300 px and at 1060 px, the least width it is laid out for
     assert.deepEqual(l.level, { name: 0, pill: 0, height: 0 }, 'p\'s name and pill level with Q\'s');
     assert.ok(Math.abs(l.unit) <= 1.5, `the unit's box on the pill's middle: ${l.unit}`);
     assert.ok(Math.abs(l.norm) <= 1.5 && l.mPill === 0, `m's select on its pill's middle, its pill level with p's: ${JSON.stringify(l)}`);
-    // At 1060 px (the least width style.css gives it, v581: 1000 to v580, before m's select)
-    // the names on two lines where they must, every pill still beside its name and on their
-    // last line, level with m's select, which cannot wrap; the date field whole.
+    // At 1000 px (the least width style.css gives it, v582: 1060 in v581, m's select in the
+    // header's type) the names on two lines where they must, every pill still beside its name
+    // and on their last line, level with m's select, which cannot wrap, in its compact type;
+    // the date field whole.
     await page.setViewportSize({ width: 900, height: 900 });
     await settle(page);
     l = await layout(page);
-    assert.equal(l.width, 1060);
+    assert.equal(l.width, 1000);
+    assert.equal(l.normFont, '11px', 'm\'s select in its compact type');
     assert.deepEqual(l.over, []);
     assert.ok(!l.dateOver, 'the date field whole');
     assert.deepEqual(l.level, { name: 0, pill: 0, height: 0 }, 'p\'s name and pill level with Q\'s');

@@ -151,14 +151,16 @@ export const resHtml = (a, u)=> `
    above; none with no sample. Its fields' wiring is gc.js's (wireParamTable). */
 export function paramTableHtml(P, files, u){
   if (!files.length) return '';
-  // Sample 10 | m 136 px | Q 12.5 | T 10 | p 13.5 | Light-on 22.5 | start 10 | end 10 |
-  // warnings 11.5 (%, of what m leaves: a fixed table layout scales them to it, m kept): at
-  // the table's least width, 1060 px (style.css's .gc-param-table min-width), each header's
-  // pill beside its name (the name on two lines where it must), m's select whole, which
-  // cannot be (v581: to v580 m 9 % and 1000 px, the others as now), and the date field
-  // whole. At 860 px, the least width to v500, Q's pill already ran over its cell, and the
-  // date field by a few px; with p's column, every pill would.
-  const cg = `<colgroup><col style="width:10%"><col style="width:136px"><col style="width:12.5%"><col style="width:10%"><col style="width:13.5%"><col style="width:22.5%"><col style="width:10%"><col style="width:10%"><col style="width:11.5%"></colgroup>`;
+  // Sample 8.4 | m 132 px | Q 13.3 | T 10.65 | p 14.4 | Light-on 23.85 | start 10.25 | end
+  // 10.25 | warnings 8.9 (%, of what m leaves: a fixed table layout scales them to it, m kept):
+  // at the table's least width, 1000 px (style.css's .gc-param-table min-width), each header's
+  // pill beside its name (the name on two lines where it must), m's select whole in its compact
+  // type (which cannot wrap; 4 px to spare for another system's select), and the date field
+  // whole (v582: to v581 m 136 px, its select in the header's type, at 1060 px, Sample 10, Q
+  // 12.5, T 10, p 13.5, Light-on 22.5, start and end 10, warnings 11.5; to v580 m 9 % at 1000
+  // px, its name a word). At 860 px, the least width to v500, Q's pill already ran over its
+  // cell, and the date field by a few px; with p's column, every pill would.
+  const cg = `<colgroup><col style="width:8.4%"><col style="width:132px"><col style="width:13.3%"><col style="width:10.65%"><col style="width:14.4%"><col style="width:23.85%"><col style="width:10.25%"><col style="width:10.25%"><col style="width:8.9%"></colgroup>`;
   const shareState = mode => mode==='all' ? 'on'  : 'off';   // shared "All" row cell
   const cellState  = mode => mode==='all' ? 'ro'  : 'on';    // per-sample row cell
   // Column order: Sample | m | Q | T | p | Light-on | [Interval: start end] | warnings.
@@ -170,9 +172,10 @@ export function paramTableHtml(P, files, u){
   /* The m column is the area A where the card normalises by it (NORM, v540): its own
      values, all/one and field (data-f "a"), the masses kept as they were. The choice in
      its header (v581: to v580 "Normalize by" on the delay's row), a select in the header's
-     own type as p's unit is, its options the column's names. */
+     own type as p's unit is, its options the column's names; in a compact type (11 px, v582:
+     to v581 the header's 12 px, the table then 1060 px at least). */
   const isA = P.normBy === 'A', nf = isA ? 'a' : 'm', nMode = isA ? P.aMode : P.mMode, nShared = isA ? P.aShared : P.mShared, nOf = isA ? aOf : mOf;
-  const normSel = `<select class="gc-norm" aria-label="Normalize the rates by m or A" title="What the rates are divided by, for every sample of this card: the photocatalyst's mass m (µmol g⁻¹ h⁻¹) or, for a film, its area A (µmol cm⁻² h⁻¹), each kept apart; a sample with none (its field empty): not normalised (µmol h⁻¹)" style="width:auto;margin:-3px 0;padding:0 2px;border-radius:5px;font:inherit;color:inherit">${
+  const normSel = `<select class="gc-norm" aria-label="Normalize the rates by m or A" title="What the rates are divided by, for every sample of this card: the photocatalyst's mass m (µmol g⁻¹ h⁻¹) or, for a film, its area A (µmol cm⁻² h⁻¹), each kept apart; a sample with none (its field empty): not normalised (µmol h⁻¹)" style="width:auto;margin:-3px 0;padding:0 2px;border-radius:5px;font:inherit;font-size:11px;color:inherit">${
     PER.map(v=> `<option value="${v}"${v === P.normBy ? ' selected' : ''}>${NORM[v].col}</option>`).join('')}</select>`;
   const unitSel = `<select class="gc-unit" aria-label="Unit of p" title="The unit p is shown and written in: switching it converts the values, not the pressure (Torr: mmHg)" style="width:auto;margin:-3px 0;padding:0 2px;border-radius:5px;font:inherit;color:inherit">${
     Object.keys(P_UNITS).map(un=> `<option value="${un}"${un === P.pUnit ? ' selected' : ''}>${un}</option>`).join('')}</select>`;

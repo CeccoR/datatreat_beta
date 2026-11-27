@@ -168,29 +168,45 @@ export function rowName(files){
 }
 // A row's label as it starts: as its .DSC names it (TITL, from v532), else its name's stem.
 export const labelOf = (files, r = readRow(files))=> r.title || stemOf(rowName(files));
-/* A row's record made of its files (regroup): the spectrum they read as, or none; named,
-   labelled and coloured (`color`) anew, but where `base`, the record its first file headed,
-   gives them: its colour and whether it is included, and its label where that was renamed
-   (not its own files' label as it started). */
-export function rowRec(files, base, color){
-  const fs = ordered(files), r = readRow(fs), rec = { name: rowName(fs), label: labelOf(fs, r), color, rawFiles: fs };
+/* A file's label renamed, in the records `was` (v582, as GC keeps a label a file: its pair's
+   second its own record, gc-model.js rowFiles): the label of the row it headed where that was
+   renamed (not its files' label as it started), else the one its entry in a row's files keeps
+   as that row's second; none, null. A row's label is its first file's. */
+function labelIn(was, name){
+  for (const r of was){
+    const fs = rowFiles(r), k = fs.findIndex(f=> f.name === name);
+    if (k > 0) return typeof fs[k].label === 'string' ? fs[k].label : null;
+    if (!k) return r.label !== labelOf(fs) ? r.label : null;
+  }
+  return null;
+}
+/* A row's record made of its files (regroup): the spectrum they read as, or none; named and
+   labelled anew, not coloured yet (regroup colours it), but where `base`, the record its first
+   file headed, gives them: its colour and whether it is included. Each file its label renamed
+   (labelIn): the first file's the row's, a second's kept on its entry ({ name, bytes, label }),
+   so that the pair split gives it back (v582: to v581 a second file's label renamed was lost,
+   the row it headed again labelled anew). */
+const entry = (f, l)=>{ if (l != null) return { ...f, label: l }; if (!('label' in f)) return f; const { label: _l, ...g } = f; return g; };
+function rowRec(files, was){
+  const fs = ordered(files), r = readRow(fs), own = fs.map(f=> labelIn(was, f.name)), base = was.find(x=> rowFiles(x)[0].name === fs[0].name);
+  const rawFiles = fs.map((f, k)=> entry(f, k ? own[k] : null));
+  const rec = { name: rowName(fs), label: own[0] != null ? own[0] : labelOf(fs, r), color: null, rawFiles };
   if (base){
     rec.color = base.color;
-    if (base.label !== labelOf(rowFiles(base))) rec.label = base.label;
     if (base.included === false){ rec.included = false; rec.held = base.held; }
   }
   return r.b ? keepSpectrum({ ...rec, b: r.b, a: r.a, rescaled: r.rescaled }) : rec;
 }
 /* The rows given anew (arrays of files): the list's records (`all`, in place) made of them. A
    row of the files a record has (by their names, in the list's order) is that record as it
-   is; any other a new one (rowRec), from the record whose first file is its first; one that
-   none gives its colour coloured `colorOf(the records coloured)`, in order (utils.js
-   nextColor: one no other row wears). */
+   is; any other a new one (rowRec), from the records before; one that none gives its colour
+   coloured `colorOf(the records coloured)`, in order (utils.js nextColor: one no other row
+   wears). */
 export function regroup(all, rows, colorOf){
   const was = all.slice(), names = fs => ordered(fs).map(f=> f.name).join('\n');
   const out = rows.filter(r=> r.length).map(fs=>{
-    const k = names(fs), head = ordered(fs)[0];
-    return was.find(r=> names(rowFiles(r)) === k) || rowRec(fs, was.find(r=> rowFiles(r)[0].name === head.name) || null, null);
+    const k = names(fs);
+    return was.find(r=> names(rowFiles(r)) === k) || rowRec(fs, was);
   });
   out.forEach(r=>{ if (!r.color) r.color = colorOf(out.filter(x=> x.color)); });
   all.splice(0, all.length, ...out);

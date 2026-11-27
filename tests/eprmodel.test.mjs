@@ -179,6 +179,37 @@ test('the rows: a half waiting, paired by a file\'s grip whatever its name, swap
   assert.equal(M.readNote({ rescaled: false, rawFiles: [file('m.DTA', null), file('m.DSC', null)], name: 'm' }), 'm.DSC: no microwave frequency (MWFQ): plotted on the field measured, not at 9.5 GHz; no g axis.');
 });
 
+/* v582: a label renamed kept a file, as GC keeps one (a pair's second its own record): a row's
+   label is its first file's; a second file's renamed label is kept on its entry while it is
+   paired, and given back when the pair is split (to v581 it was lost, the file's row labelled
+   anew by its .DSC). */
+test('a label renamed kept a file: the pair split gives each file back its own (v582)', ()=>{
+  const a = pairBytes('A'), b = pairBytes('B'), all = [];
+  const step = rows => M.regroup(all, rows, list => '#' + list.length);
+  const names = ()=> all.map(r=> r.rawFiles.map(x=> x.name).join(' + ')), labels = ()=> all.map(r=> r.label);
+  step(autoPair([], [file('lone.DTA', b.dta), file('x.DSC', b.dsc), file('a.DTA', a.dta), file('a.DSC', a.dsc)], M.sideOf));
+  assert.deepEqual([names(), labels()], [['lone.DTA', 'x.DSC', 'a.DTA + a.DSC'], ['lone', 'B', 'A']]);
+  // the half x.DSC renamed, then paired as the second of lone.DTA: the row's label its first file's
+  all[1].label = 'mine';
+  step(dropPart(all.map(M.rowFiles), { i: 1, p: 0 }, { i: 0, p: 0 }));
+  assert.deepEqual([names(), labels(), all[0].rawFiles.map(x=> x.label)], [['lone.DTA + x.DSC', 'a.DTA + a.DSC'], ['B', 'A'], [undefined, 'mine']], 'kept on its entry');
+  // swapped into the other pair: its label goes with it; the pair's label typed on its first file
+  all[1].label = 'first';
+  step(dropPart(all.map(M.rowFiles), { i: 0, p: 1 }, { i: 1, p: 1 }));
+  assert.deepEqual([names(), labels(), all[1].rawFiles.map(x=> x.label)], [['lone.DTA + a.DSC', 'a.DTA + x.DSC'], ['A', 'first'], [undefined, 'mine']]);
+  // split: each file its own label back, a file never renamed its own as it starts
+  step(dropPart(all.map(M.rowFiles), { i: 1, p: 1 }, null));
+  step(dropPart(all.map(M.rowFiles), { i: 0, p: 1 }, null));
+  assert.deepEqual([names(), labels()], [['lone.DTA', 'a.DSC', 'a.DTA', 'x.DSC'], ['lone', 'A', 'first', 'mine']]);
+  assert.ok(all.every(r=> r.rawFiles.every(x=> !('label' in x))), 'a row\'s first file\'s label the row\'s alone');
+  // an entry's label that is no text (a project edited by hand): none of its own
+  step([[file('a.DTA', a.dta), file('x.DSC', b.dsc)], [file('lone.DTA', b.dta), file('a.DSC', a.dsc)]]);
+  assert.deepEqual([labels(), all[0].rawFiles[1].label], [['first', 'A'], 'mine']);
+  all[0].rawFiles = [all[0].rawFiles[0], { ...all[0].rawFiles[1], label: 5 }];
+  step(dropPart(all.map(M.rowFiles), { i: 0, p: 1 }, null));
+  assert.deepEqual(labels(), ['first', 'B', 'A'], 'x.DSC labelled by its .DSC');
+});
+
 test('a spectrum kept by its bytes; a file and a card as a project holds them; the state', ()=>{
   const bytes = new Uint8Array([1, 2, 3]), rawFiles = [{ name: 'a.DSC', bytes: new Uint8Array(1) }, { name: 'a.DTA', bytes }];
   const a = M.keepSpectrum({ b: [1, 2, 3], a: [4, 5, 6], rawFiles }), b = M.keepSpectrum({ b: [1, 2, 3], a: [4, 5, 6], rawFiles });

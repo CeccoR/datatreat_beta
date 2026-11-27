@@ -14,7 +14,7 @@
    words (gasOf) where they say a gas, and the cards' own instructions (cards.js cardInfo)
    where they end with them.
 ========================================================= */
-import { UNITS, CHI2_HIGH, sig, plural, fin, fitMarks, fullName, thumbPoints, levelsOf } from './gc-integ-model.js';
+import { UNITS, CHI2_HIGH, sig, plural, fin, fitMarks, fullName, thumbPoints, levelsOf, windowName } from './gc-integ-model.js';
 import { boxHtml, notesFor } from './alerts.js';
 
 /* ---- The instructions ---- */
@@ -91,10 +91,10 @@ const runHtml = (p, cls)=> `<div id="${p}Status" class="txt-meta rv-status ${cls
 /* ---- Windows: the fit windows' edges, with the peaks' nominal places ---- */
 /* A window's and its peaks' names as shown (v578: to v577 their keys, "H2O2", "H2"): a peak of
    a gas by the gas's words (gasOf(g).txt, its subscript: H₂), another as it is (S310); a window
-   by its gases', a hyphen between ("H₂-O₂"), else its key. The keys themselves, the state's
-   and the CSVs', stay as they are. */
+   by its gases', a hyphen between ("H₂-O₂"), else its key (gc-integ-model.js windowName, v582:
+   the chromatogram's lines and the CSVs name it so too). The keys themselves, the state's,
+   stay as they are. */
 const peakName = (gasOf, pk)=> pk.gas ? gasOf(pk.gas).txt : pk.name;
-const windowName = (gasOf, w)=>{ const gs = (w.peaks || []).filter(pk=> pk.gas); return gs.length ? gs.map(pk=> peakName(gasOf, pk)).join('-') : w.key; };
 /* (m: the method shown; warn: its windows' intrusions (gc-integ-model.js intrusions), a
    compact warning under them (v571: to v570 an amber line); refused: a window's edges not
    taken, { wi, text }, its rule in red under that window (v571, ALERTS-REVIEW.md C19, G11: to

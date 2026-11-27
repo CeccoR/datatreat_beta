@@ -12,7 +12,9 @@
    Ctrl+Shift+Z close it before they act (xrdcards 22's kinds' menu, the same), and so does
    the list drawn again; inside the window at its edges; the browser's own menu held back on
    the rows alone, and in a name field being typed in left to it; a right-click while a row is
-   dragged by its grip does nothing. Every file made up. */
+   dragged by its grip does nothing. On macOS (its platform emulated) a Ctrl+click on a grip,
+   a row's or a file's, opens the menu and drags nothing (v582); elsewhere Ctrl and the primary
+   button drag as ever. Every file made up. */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -308,6 +310,56 @@ test('a right-click while a row is dragged by its grip does nothing; the drag go
     await page.mouse.up();
     await settle(page);
     assert.deepEqual([await names(), (await history(page, 'xrd')).index, await opened(page)], [[...n0.slice(1), n0[0]], h0 + 1, 0], 'the drag done, as without the right button');
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+/* v582: on macOS a Ctrl+click is the right button's: it comes as the primary button's press,
+   Ctrl held, then asks for the menu (contextmenu, dispatched here: Chromium on another system
+   asks for none). On a grip, a row's or a file's own, it opens the row's menu and drags
+   nothing (to v581 the drag began, and the menu, asked for during it, did not open: the row
+   then moved with the pointer). The platform emulated as the browser names it
+   (navigator.userAgentData, navigator.platform); on another, Ctrl and the primary button
+   drag as ever. */
+const asMac = (page, on)=> page.evaluate(on=>{
+  for (const [k, v] of [['platform', on ? 'MacIntel' : 'Linux x86_64'], ['userAgentData', { platform: on ? 'macOS' : 'Linux', brands: [], mobile: false }]])
+    Object.defineProperty(Navigator.prototype, k, { get: ()=> v, configurable: true });
+}, on);
+async function ctrlClick(page, grip, to){
+  const g = await grip.boundingBox(), x = g.x + g.width/2, y = g.y + g.height/2;
+  await page.keyboard.down('Control');
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await grip.evaluate((el, [x, y])=> el.dispatchEvent(new PointerEvent('contextmenu', { bubbles: true, cancelable: true, clientX: x, clientY: y, ctrlKey: true })), [x, y]);
+  await page.mouse.move(x, to, { steps: 8 });
+  await page.mouse.up();
+  await page.keyboard.up('Control');
+  await settle(page);
+}
+test('macOS: a Ctrl+click on a grip, a row\'s or a file\'s, opens the row\'s menu and drags nothing (v582)', async ()=>{
+  const { page, errors, close } = await env.page();
+  try {
+    await load(page, 'xrd');
+    const names = ()=> page.$$eval(`${W('xrd')} tr.file-row td.fname`, ts=> ts.map(t=> t.textContent));
+    const n0 = await names(), h0 = (await history(page, 'xrd')).index, far = async ()=>{ const r = await row(page, 'xrd', 2).boundingBox(); return r.y + r.height*0.8; };
+    // Another system: Ctrl and the primary button on a grip drag the row, as ever.
+    await asMac(page, false);
+    await ctrlClick(page, row(page, 'xrd', 0).locator('.drag-handle'), await far());
+    const n1 = [...n0.slice(1), n0[0]];
+    assert.deepEqual([await names(), (await history(page, 'xrd')).index, await opened(page)], [n1, h0 + 1, 0], 'dragged, the menu asked for mid-drag not opened');
+    // macOS: the menu, the row where it was.
+    await asMac(page, true);
+    await ctrlClick(page, row(page, 'xrd', 0).locator('.drag-handle'), await far());
+    assert.deepEqual([await opened(page), await names(), (await history(page, 'xrd')).index], [1, n1, h0 + 1], 'the menu open, the row where it was, no step');
+    assert.equal(await row(page, 'xrd', 0).evaluate(r=> r.classList.contains('menu-on') && !r.classList.contains('dragging')), true);
+    await page.keyboard.press('Escape');
+    // A file's own grip (EPR's list, a .DTA and its .DSC): the same.
+    await load(page, 'epr');
+    const parts = ()=> page.$$eval(`${W('epr')} tr.file-row`, trs=> trs.map(tr=> [...tr.querySelectorAll('.fname-text')].map(e=> e.textContent).join(' + ')));
+    const p0 = await parts(), e0 = (await history(page, 'epr')).index, r1 = await row(page, 'epr', 1).boundingBox();
+    await ctrlClick(page, row(page, 'epr', 0).locator('.fpart-grip').last(), r1.y + r1.height/2);
+    assert.deepEqual([await opened(page), await parts(), (await history(page, 'epr')).index], [1, p0, e0], 'the menu open, the file in its row, no step');
+    await page.keyboard.press('Escape');
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });

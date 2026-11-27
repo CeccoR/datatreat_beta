@@ -22,7 +22,7 @@
    each parameter's all/one mode and shared value; what the rates are normalised by (normBy,
    m or A), p's unit, the injection delay, and the gases each section draws (gasSel).
 ========================================================= */
-import { textLines, readTable, parseNum, width } from './textdata.js';
+import { textLines, readTable, parseNum, width, commonWidth } from './textdata.js';
 import { readTcd } from './gc-tcd.js';
 import { looksTcd } from './gc-pair.js';
 import { fixed } from './db.js';
@@ -193,11 +193,10 @@ export function altColumns(fields, rows, h){
   const below = rows.slice(h + 1), dated = r => r.some(c=> dateFields(c)), first = below.findIndex(dated);
   const gasLine = first < 0 ? null : below.slice(0, first).reverse().find(r=> r.some(c=> ALT_GAS[cellName(c)]));
   if (!gasLine) return null;
-  // The data's width: the most common among the lines with a date (on a tie the wider).
-  const ws = new Map();
-  let n = 0, most = 0;
-  below.slice(first).filter(dated).forEach(r=>{ const w = width(r); ws.set(w, (ws.get(w) || 0) + 1); });
-  ws.forEach((k, w)=>{ if (k > most || (k === most && w > n)){ n = w; most = k; } });
+  // The data's width: the most common among the lines with a date, on a tie the wider
+  // (textdata.js commonWidth: a line whose last cells are empty a line of the wider widths
+  // its fields reach too, v582; to v581 its own alone, the columns then set a cell off).
+  const n = commonWidth(below.slice(first).filter(dated));
   // Each header line's cell over data column d, by the right ends.
   const o1 = width(fields) - n, og = width(gasLine) - n, date = at - o1, gas = {};
   if (date < 0 || date >= n) return null;

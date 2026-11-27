@@ -47,18 +47,22 @@ function serve(root = ROOT){
 }
 
 /* ---- One test file's environment: the server, the browser, the fixtures ----
-   env.page() opens the app in a fresh context (its own IndexedDB and localStorage). */
+   env.page() opens the app in a fresh context (its own IndexedDB and localStorage);
+   env.page({ scrollbars: true }) in a browser that draws its scrollbars, as a desktop's does
+   (Playwright's headless Chromium hides them: the page's width is then the window's), launched
+   the first time it is asked for. */
 export async function start(){
   const srv = process.env.DT_BASE ? { base: process.env.DT_BASE.replace(/\/$/, ''), close: async ()=>{} } : await serve();
   // A browser that cannot start (Chromium not installed: npx playwright install chromium)
   // closes the server, whose open handle would keep the test file, and npm test, running.
-  let browser, fx;
+  let browser, fx, bars = null;
   try { browser = await chromium.launch({ headless: !process.env.DT_HEADED }); fx = writeFixtures(); }
   catch(e){ if (browser) await browser.close().catch(()=>{}); await srv.close(); throw e; }
+  const barsBrowser = async ()=> bars || (bars = await chromium.launch({ headless: !process.env.DT_HEADED, ignoreDefaultArgs: ['--hide-scrollbars'] }));
   return {
     base: srv.base, browser, fx,
-    page: opts => openApp(browser, srv.base, opts),
-    async close(){ await browser.close().catch(()=>{}); await srv.close(); fx.remove(); },
+    page: async opts => openApp(opts && opts.scrollbars ? await barsBrowser() : browser, srv.base, opts),
+    async close(){ await browser.close().catch(()=>{}); if (bars) await bars.close().catch(()=>{}); await srv.close(); fx.remove(); },
   };
 }
 

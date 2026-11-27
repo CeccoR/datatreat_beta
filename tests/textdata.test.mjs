@@ -4,7 +4,8 @@
    found per file: the DRS spectrum and the GC export of the fixtures written in every dialect
    read back to the same numbers as the files the tests load; a GC export with ',' as both
    separator and decimal mark is not read. The Figure module's tables (readColumns, v527): any
-   columns, a header or none, text columns, a title over them; a header's names and units. */
+   columns, a header or none, text columns, a title over them; a header's names and units; a
+   last cell empty in some rows an empty cell, not a column missing (v582). */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { textEncoding, decodeText, textLines, splitFields, parseNum, isNum, readXY, readTable, readColumns, nameUnit } from '../textdata.js';
@@ -205,4 +206,18 @@ test('Figure: a table of columns in each dialect, its header or none, text colum
   assert.equal(read('no numbers here\nat all\n'), null);
   assert.deepEqual(['Wavelength (nm)', 'Abs [a.u.]', 'E / eV', 'Abs', '(nm)'].map(nameUnit),
     [{ name: 'Wavelength', unit: 'nm' }, { name: 'Abs', unit: 'a.u.' }, { name: 'E', unit: 'eV' }, { name: 'Abs', unit: '' }, { name: '(nm)', unit: '' }]);
+});
+
+/* v582: a row whose last cells are empty ('2,5,') is a row of the columns its fields reach, its
+   last cell empty: to v581 the file was as wide as most rows are up to their last cell not empty,
+   so 'x,a,b' over '1,5,7', '2,5,', '3,5,' read two columns, its first two lines taken for
+   lines over the data (the header lost, the first row with it). A separator ending every line
+   still adds no column. */
+test('Figure: a last cell empty in the final rows is an empty cell, not a column missing (v582)', ()=>{
+  const read = t => readColumns(textLines(t));
+  assert.deepEqual(read('x,a,b\n1,5,7\n2,5,\n3,5,'), { sep: ',', n: 3, head: ['x', 'a', 'b'], titles: null, rows: [['1', '5', '7'], ['2', '5', ''], ['3', '5', '']] });
+  assert.deepEqual(read('x;a;b\r\n1;5,5;\r\n2;6;\r\n3;7;8\r\n'), { sep: ';', n: 3, head: ['x', 'a', 'b'], titles: null, rows: [['1', '5,5', ''], ['2', '6', ''], ['3', '7', '8']] }, 'the first rows: neither lost nor taken for the header');
+  assert.deepEqual(read('t\ty\tz\n1\t2\t\n2\t3\t\n3\t4\t\n4\t5\t9\n'), { sep: '\t', n: 3, head: ['t', 'y', 'z'], titles: null, rows: [['1', '2', ''], ['2', '3', ''], ['3', '4', ''], ['4', '5', '9']] });
+  assert.deepEqual(read('x;y;\n1;2;\n3;4;\n'), { sep: ';', n: 2, head: ['x', 'y'], titles: null, rows: [['1', '2'], ['3', '4']] }, 'a separator ending every line: no column');
+  assert.deepEqual(read('x,y\n1,2\n3,4,\n5,6\n'), { sep: ',', n: 2, head: ['x', 'y'], titles: null, rows: [['1', '2'], ['3', '4'], ['5', '6']] }, 'one line ending with it: none either');
 });
