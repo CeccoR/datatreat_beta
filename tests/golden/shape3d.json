@@ -36,15 +36,15 @@
   "calls": 35363
  },
  "boxrod": {
-  "digest": "2bb9c48a2173038712eab2416282237b720e05612765c8173329dd2c14d8d7ff",
+  "digest": "8dd07e8f92ef015dda95071464e01af7d458f37206506d11b0e831671d8ccde5",
   "calls": 79937
  },
  "degenerate": {
-  "digest": "263138a140042e39ff98aec798629308a6029c887ad4aa95c2ece02f18c79ebe",
+  "digest": "9350bc27c9e381db499a1eec7ce952a2157dba7b0b0d7dd653c004a7297d82fc",
   "calls": 47948
  },
  "five": {
-  "digest": "4d44e49b5ee0386b9e021543a01e35d544ed32fc93ec37980866965aea0cdae7",
+  "digest": "1277dda292b72dea16d1297b3d2e14f2fcadd842ffb35c0963abcaede496d86f",
   "calls": 166187
  },
  "noframe": {

@@ -557,18 +557,22 @@ function cifCell(b){
   const noAngle = ['alpha','beta','gamma'].filter(k => !(cell[k] > 0 && cell[k] < 180));
   return { cell, noAngle };
 }
-// The group's names and its operations (a magnetic CIF's: cifMagneticOps), each once.
+// The group's names and its operations (a magnetic CIF's: cifMagneticOps), each once. A
+// symbol or name written blank (' ', as some programs write P1) is none, the next tag read
+// (named; v568: to v567 an H-M symbol so was a group of no name, and with operations listed
+// the file was refused, without them its note read "operations for :").
 // → { hm, hall, itNumber, ops, magName, parent }.
 function cifSymmetry(b, warnings){
-  const hm = item(b, '_space_group_name_h-m_alt', '_symmetry_space_group_name_h-m', '_space_group_name_h-m');
-  const hall = item(b, '_space_group_name_hall', '_symmetry_space_group_name_hall');
+  const named = (...tags) => tags.map(t => item(b, t)).find(v => v != null && String(v).trim()) ?? null;
+  const hm = named('_space_group_name_h-m_alt', '_symmetry_space_group_name_h-m', '_space_group_name_h-m');
+  const hall = named('_space_group_name_hall', '_symmetry_space_group_name_hall');
   const itn = num(item(b, '_space_group_it_number', '_symmetry_int_tables_number'));
   const itNumber = itn >= 1 && itn <= 230 ? Math.round(itn) : null;
   const opsCol = column(b, XYZ_TAGS[0]) || column(b, XYZ_TAGS[1]);
   const read = col => { const out = []; for (const s of col || []){ if (isNull(s)) continue; try { out.push(readSymop(s)); } catch(e){ warnings.push(e.message + ' It is ignored.'); } } return out; };
   let [ops] = symopsOf([read(opsCol)]);
-  const magName = item(b, '_space_group_magn_name_bns', '_space_group_magn_number_bns', '_space_group_magn_name_og', '_space_group_magn_number_og');
-  const parent = item(b, '_parent_space_group_name_h-m_alt', '_parent_space_group_it_number');
+  const magName = named('_space_group_magn_name_bns', '_space_group_magn_number_bns', '_space_group_magn_name_og', '_space_group_magn_number_og');
+  const parent = named('_parent_space_group_name_h-m_alt', '_parent_space_group_it_number');
   cifMagneticOps(b, ops, { read, magName, warnings });
   ops = uniqueOps(ops);
   return { hm, hall, itNumber, ops, magName, parent };

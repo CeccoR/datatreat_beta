@@ -8,7 +8,10 @@
      box, utils.js);
    - a card an undo or a redo brings back (closed by its ×, or added) brought into view, in
      every module with cards (XRPD, DRS, GC, EPR); not on a tab switch nor a project opened
-     (N1). */
+     (N1);
+   - a Scherrer card zoomed and folded, unfolded after another card's arrow stepped the
+     sample: the new sample at its full range, as when stepped unfolded (21, v568; to v567 at
+     the zoom the card had on the other); with nothing stepped, the zoom kept. */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { start, openModule, loadFiles, settle, moduleState, history, undo, switchTab } from './helpers.mjs';
@@ -108,6 +111,41 @@ const on = { box: true, win: false, state: true }, off = { box: false, win: true
 const inStep = page => page.evaluate(async ()=>{
   const u = await import('./utils.js'), h = u.getModuleHistory('xrd');
   return u.stateKey(u.getModuleState('xrd')) === u.stateKey(h.states[h.index]);
+});
+
+// A plot's view and its full range (plot.js keeps the plot on its svg).
+const viewOf = (page, id)=> page.evaluate(id=>{ const p = document.getElementById(id)._plot; return { x: [p.xmin, p.xmax], home: [p._origXmin, p._origXmax] }; }, id);
+const zoomTo = (page, id, x0, x1)=> page.evaluate(([id, x0, x1])=>{ const p = document.getElementById(id)._plot; p.xmin = x0; p.xmax = x1; p._refresh(); }, [id, x0, x1]);
+
+test('21: a Scherrer card folded while zoomed, the sample stepped by another card: unfolded at the full range', async ()=>{
+  const { page, errors, close } = await env.page();
+  try {
+    await openModule(page, 'xrd');
+    await loadFiles(page, 'xrd', env.fx.files.xrd);
+    const label = ()=> page.locator('#xrdA1CurrentLabel').textContent();
+    // Unfolded: a step draws the next sample whole (as v567 did).
+    await zoomTo(page, 'xrdA1Svg', 30, 35);
+    await page.click('#xrdR2Next'); await settle(page);
+    let v = await viewOf(page, 'xrdA1Svg');
+    assert.deepEqual(v.x, v.home, 'stepped unfolded: the full range');
+    // Folded with nothing stepped: the zoom kept.
+    await zoomTo(page, 'xrdA1Svg', 30, 35);
+    await foldBtn(page, 'xrd', 1); await foldBtn(page, 'xrd', 1);
+    assert.deepEqual((await viewOf(page, 'xrdA1Svg')).x, [30, 35], 'nothing changed: the zoom kept');
+    // Folded, the Rietveld card's arrow steps the sample: unfolded, the new one whole.
+    const was = await label();
+    await foldBtn(page, 'xrd', 1);
+    await page.click('#xrdR2Next'); await settle(page);
+    await foldBtn(page, 'xrd', 1);
+    assert.notEqual(await label(), was, 'another sample on show');
+    v = await viewOf(page, 'xrdA1Svg');
+    assert.deepEqual(v.x, v.home, 'stepped folded: the full range, not the zoom on the other sample');
+    // And zoomed on it again, folded and unfolded: kept.
+    await zoomTo(page, 'xrdA1Svg', 40, 45);
+    await foldBtn(page, 'xrd', 1); await foldBtn(page, 'xrd', 1);
+    assert.deepEqual((await viewOf(page, 'xrdA1Svg')).x, [40, 45]);
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
 });
 
 test('5b: the baseline box undone and redone, step by step, in all / one and in the standard\'s window', async ()=>{

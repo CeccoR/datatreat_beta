@@ -98,6 +98,40 @@ test('the peak search, the half-maximum FWHM and the marker, the width\'s counti
   assert.deepEqual([M.nearestIdx([40, 30, 20, 10], 26), M.nearestIdx([10, 11, 15, 16], 13.2), M.nearestIdx([10, 11, 15, 16], 12.9)], [1, 2, 1]);
 });
 
+/* v568: the minimum distance on an uneven axis at its local step (2), and a minimum of 0
+   honoured (29). The mean step (to v567) took 15 points of 0.01° for 0.3° where a stretch is
+   left out (the mean twice that step), and 23 points of 0.1° (2.3°) where the points are
+   sparser than the mean; an even axis keeps the mean step's points (its results v567's:
+   21000 searches on axes made as a file's are, rounded to 4 and 6 decimals too, compared
+   with v567's findPeaks, Object.is equal). A removal with a minimum of 0 took the peaks
+   within 0.1° (0.3°'s tolerance) with it. */
+test('the minimum distance at the local step of an uneven axis; a minimum distance of 0 (v568)', ()=>{
+  const pos = pks => pks.map(pk=> +pk.pos.toFixed(2));
+  // Points left out between 20° and 40°: two peaks 0.2° apart, under 0.3°: the taller alone.
+  const gap = [...axis(10, 0.01, 1001), ...axis(40, 0.01, 1001)];
+  const yg = gap.map(t=> gauss(t, 15, 1000, 0.05) + gauss(t, 15.2, 500, 0.05) + gauss(t, 45, 800, 0.05));
+  assert.deepEqual(pos(M.findPeaks(gap, yg, 5, 3, 0.3, U)), [15, 45], 'dense beside the gap: 0.2° is under 0.3°');
+  assert.deepEqual(pos(M.findPeaks(gap, yg, 5, 3, 0.1, U)), [15, 15.2, 45], 'and over 0.1°');
+  // Dense to 12°, sparse after: two peaks 1° apart, over 0.3°: both.
+  const two = [...axis(10, 0.001, 2001), ...axis(12.1, 0.1, 280)];
+  const ys = two.map(t=> gauss(t, 30, 1000, 0.5) + gauss(t, 31, 600, 0.5));
+  assert.deepEqual(pos(M.findPeaks(two, ys, 5, 3, 0.3, U)), [30, 31], 'sparse: 1° is over 0.3°');
+  assert.deepEqual(pos(M.findPeaks(two, ys, 5, 3, 1.05, U)), [30], 'and under 1.05°');
+  // An even axis whose positions are written to 4 decimals: a grid still, its mean step's points.
+  const rounded = axis(10, 0.0131303, 3001).map(t=> +t.toFixed(4)), yr = rounded.map(t=> gauss(t, 15, 1000, 0.1) + gauss(t, 15.3, 500, 0.1));
+  assert.deepEqual(pos(M.findPeaks(rounded, yr, 5, 3, 0.3, U)), [15, 15.3]);
+  // A minimum distance of 0: peaks 0.05° apart both found, and a removal takes its own alone.
+  const x = axis(10, 0.01, 2001), y = x.map(t=> gauss(t, 15, 1000, 0.02) + gauss(t, 15.05, 800, 0.02) + gauss(t, 25, 600, 0.02));
+  const pr = { ...DEF, smoothW: 0, blOn: false, pkDist: 0 }, f = { x, y }, sm = M.smoothingOf(x, y, pr);
+  const all = M.processingOf(f, sm, pr, [], [], U).peaks;
+  assert.deepEqual(pos(all), [15, 15.05, 25]);
+  const one = M.processingOf(f, sm, pr, [], [all[0].detPos], U).peaks;
+  assert.deepEqual(one.map(pk=> pk.removed), [true, false, false], 'the one removed alone');
+  // (a minimum of 0.3°: its tolerance, 0.1°, as before; none given, 0.3°'s)
+  assert.deepEqual(M.processingOf(f, sm, { ...pr, pkDist: 0.3 }, [], [all[0].detPos + 0.05], U).peaks.map(pk=> [+pk.pos.toFixed(2), pk.removed]), [[15, true], [25, false]]);
+  assert.deepEqual(M.processingOf(f, sm, { ...pr, pkDist: undefined }, [], [all[0].detPos + 0.05], U).peaks.map(pk=> pk.removed), [true, true, false]);
+});
+
 test('a pattern processed as the card does: the smoothing and baseline, the peaks, those added and removed by hand', ()=>{
   const x = axis(20, 0.02, 1501), y = x.map(t=> gauss(t, 30, 800, 0.4) + gauss(t, 40, 400, 0.6) + 200 - 2*t);
   const f = { x, y };
@@ -366,7 +400,7 @@ test('the words: the warnings under the table, the step note, the chips, the not
   const st = { rawMean: 20, rawStd: 2, rawN: 3, showCorr: true, corrMean: NaN, corrStd: NaN, corrN: 0, below: 2, outside: 1, span: [29, 51, 30, 50] };
   const pk = { pos: 32, detPos: 32, height: 0, fwhmClassic: 0.3 };
   const t = H.peakTableHtml([pk], { std: false, m: null, fp: { K: 0.9, lambda: 1.540598 }, picked: null, st }, { ...U, X_SVG: n => `[x${n}]` });
-  assert.ok(t.includes('<td>—</td>'), 'heights all 0: no relative intensity');
+  assert.equal(cells(t)[0][2], '0.0%', 'heights all 0: 0 %, as peaks.csv writes them (v568; a dash to v567)');
   assert.ok(t.endsWith('<br>Instr.-corrected: <b>— nm</b></div>' + H.belowInstrHtml(2) + H.outsideStdHtml(1, st.span)));
   assert.ok(t.includes('<button class="peak-del is-danger idle-dim" data-det="32" data-manual="0" title="Remove peak">[x13]</button>'));
   // With the standard: the corrected size, ⚠ where the peak is narrower than the instrument.

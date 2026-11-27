@@ -9,10 +9,16 @@
    C: while the standard refines, its window closed, every Rietveld card's "Instrumental
    standard…" says so (a card added meanwhile, after Home and back, another project opened
    and the XRPD tab shown again, nothing asked: v518, that card undone and redone, an undo
-   stopped at the run's start), and stops saying so when the run ends or is stopped. */
+   stopped at the run's start), and stops saying so when the run ends or is stopped.
+   D (v568): Settings… on a card with no phase, its window built (its start, its Refinement
+   settings: 17, to v567 empty), and built again when an undo takes the phases away (to v567
+   the removed phase's rows stayed); a result whose statistics are missing (χ² null, as a NaN
+   or ∞ comes back from JSON; no stats) restored with a dash for them (16, to v567 the restore
+   threw); a project whose Rietveld phases are no list restored whole, with no phase (18, to
+   v567 it stopped halfway). */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { start, openModule, loadFiles, moduleState, until, settle, banner } from './helpers.mjs';
+import { start, openModule, loadFiles, moduleState, until, settle, banner, undo } from './helpers.mjs';
 
 let env;
 before(async ()=>{ env = await start(); });
@@ -316,6 +322,59 @@ test('C: the standard refining, its window closed: every card\'s Instrumental st
     await idleNow('xrdR2Std', 'stopped');
     await page.keyboard.press('Escape');
     assert.equal(await page.evaluate(async ()=> (await import('./utils.js')).moduleBusy('xrd')), null);
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+test('D: Settings… with no phase; a result without its statistics; phases that are no list', async ()=>{
+  const { page, errors, close } = await env.page();
+  try {
+    await openModule(page, 'xrd');
+    await loadFiles(page, 'xrd', env.fx.files.xrd.slice(0, 2));
+    const body = ()=> page.evaluate(()=>{
+      const b = [...document.querySelectorAll('.rvs-box')].find(x=> x.closest('.modal-backdrop').style.display === 'flex');
+      return b ? { secs: b.querySelectorAll('[data-sec]').length, starts: b.querySelectorAll('[data-start]').length, fits: b.querySelectorAll('[data-fit-row]').length } : null;
+    });
+    // No phase: its window built, the start and the Refinement settings in it.
+    await page.click(P + 'Settings');
+    const none = await body();
+    assert.ok(none && none.secs === 0 && none.starts === 2 && none.fits > 0, 'built with no phase: ' + JSON.stringify(none));
+    await page.keyboard.press('Escape');
+    // A phase added, its window open, the addition undone: its rows gone with it.
+    await page.setInputFiles(P + 'CifInput', env.fx.cif);
+    await page.waitForSelector(P + 'PhaseList input[data-on]');
+    await page.click(P + 'Settings');
+    assert.equal((await body()).secs, 1, 'the phase\'s rows');
+    await undo(page);
+    assert.deepEqual(await body(), { ...none }, 'undone: no phase\'s rows, the rest there');
+    await page.keyboard.press('Escape');
+    await undo(page, true);
+    // A result with χ² null, one with no statistics: restored, a dash for each number missing.
+    // (the state edited in the page: its Rietveld card's results and phases, the Scherrer card's height)
+    const put = (page, { results, phases, height })=> page.evaluate(async ({ results, phases, height })=>{
+      const u = await import('./utils.js'), s = structuredClone(u.getModuleState('xrd')), rv = s.cards.find(c=> c.id === 2).states.rietveld;
+      if (results) rv.results = results;
+      if (phases !== undefined){ rv.phases = phases; s.cards.find(c=> c.id === 1).states.scherrer.shared.pkHeight = height; }
+      try { u.restoreModuleState('xrd', s); u.redrawAll(); } catch(e){ return 'threw: ' + e.message; }
+      return 'ok';
+    }, { results, phases, height });
+    const fit = ()=> page.$$eval(P + 'Results .pg-stat b', bs=> bs.slice(0, 3).map(b=> b.textContent));
+    assert.equal(await put(page, { results: { 's00.xrdml': { params: { 'p1.scale': 1 }, stats: { Rwp: 0.12, Rexp: 0.05, chi2: null }, phases: [1], at: 1 } } }), 'ok');
+    await settle(page);
+    assert.deepEqual(await fit(), ['12.00%', '5.00%', '—']);
+    assert.equal(await put(page, { results: { 's00.xrdml': { params: { 'p1.scale': 1 }, phases: [1], at: 2 } } }), 'ok');
+    await settle(page);
+    assert.deepEqual(await fit(), ['—', '—', '—']);
+    // Phases that are no list: the project restored whole, the card with no phase.
+    const before = await moduleState(page, 'xrd');
+    for (const [i, junk] of ['x', 5, {}].entries()){
+      assert.equal(await put(page, { phases: junk, height: 7 + i }), 'ok', JSON.stringify(junk));
+      await settle(page);
+      const st = await moduleState(page, 'xrd');
+      assert.deepEqual([st.files.map(f=> f.name), st.cards.map(c=> c.id), st.cards.find(c=> c.id === 2).states.rietveld.phases, st.cards.find(c=> c.id === 1).states.scherrer.shared.pkHeight],
+        [before.files.map(f=> f.name), [1, 2], [], 7 + i], JSON.stringify(junk));
+      assert.equal(await page.locator(P + 'PhaseList input[data-on]').count(), 0);
+    }
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });

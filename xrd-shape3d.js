@@ -74,11 +74,13 @@ export function readTheme(el, colorOpt){
     const c = rgbOf(getComputedStyle(e).backgroundColor);
     if (c && c[3] > 0.5){ under = c; break; }
   }
+  // The solid's colour given: a token, var(--x) with or without its fallback (taken where the
+  // token has no value, as CSS takes it; v568, to v567 left out), or a colour.
+  const colorIn = c => { const v = /^var\(\s*(--[^,\s)]+)\s*(?:,([\s\S]*))?\)$/.exec(c);
+    return v ? tok(v[1], '') || colorIn(String(v[2] ?? '').trim()) : c.startsWith('--') ? tok(c, '') : c; };
   let solid = null;
   const co = String(colorOpt || '').trim();
-  if (co.startsWith('--')) solid = rgbOf(tok(co, ''));
-  else if (co.startsWith('var(')) solid = rgbOf(tok(co.slice(4, -1).split(',')[0].trim(), ''));
-  else if (co) solid = rgbOf(co);
+  if (co) solid = rgbOf(colorIn(co));
   if (!solid) solid = rgbOf(tok('--accent', '#ffb454')) || [255, 180, 84, 1];
   const text = rgbOf(tok('--text', light ? '#1a2327' : '#dfe8ea')) || [223, 232, 234, 1];
   return themeFrom({ light, text, muted: tok('--muted', light ? '#56676f' : '#7f97a0'), under, bg, solid, font: cs.fontFamily || 'sans-serif' });

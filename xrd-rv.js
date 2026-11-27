@@ -191,9 +191,10 @@ function cardState(host, root, o){
     cellV: null, cellKeyShown: '', cellNext: null, sideRaf: 0,
     pressT: -Infinity, turnT: -Infinity,   // Refine's last press and turn (quick)
     stdTitle: '', stdShown: '',            // Instrumental standard…'s own title, and the run it shows
-    // The settings window (makeSettings): its body as last built (its key), a body being
-    // rebuilt, the Refinement section's note when an entry was not taken.
-    setModal: null, setBody: null, setKey: '', rebuilding: false, fitNote: null, fitsHere: null, modesHere: null, holdsHere: null, onSetKey: null,
+    // The settings window (makeSettings): its body as last built (its key: null, none; a
+    // card with no phase builds one of key ''), a body being rebuilt, the Refinement
+    // section's note when an entry was not taken.
+    setModal: null, setBody: null, setKey: null, rebuilding: false, fitNote: null, fitsHere: null, modesHere: null, holdsHere: null, onSetKey: null,
   };
 }
 /* What xrd.js holds of the card. refresh: after any change to the files, the card follows
@@ -1007,11 +1008,13 @@ function wireSettings(S){
 }
 const setOpen = S => S.setModal.style.display === 'flex';
 const phaseOf = (S, id) => M.allPhases(S).find(q=> q.id === id);
-// Open while a run goes on too, to see what it refines: read only then (syncSettings).
+// Open while a run goes on too, to see what it refines: read only then (syncSettings). Its
+// body built anew (no key: to v567 '', the key of no phase, which left the window of a card
+// with none empty).
 function openSettings(S){
   if (setOpen(S)) return;
   S.setModal.style.display = 'flex'; S.$('Settings').classList.add('is-on');
-  S.setKey = ''; S.fitNote = null; renderSettings(S);
+  S.setKey = null; S.fitNote = null; renderSettings(S);
   // (capture, and stopped there: a window under this one, the standard's, closes on its own Escape)
   document.addEventListener('keydown', S.onSetKey, { capture: true, signal: S.ac.signal });
   S.setModal.querySelector('.modal-box').focus();

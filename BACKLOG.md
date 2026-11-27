@@ -799,16 +799,6 @@ was proposed; nothing here is in the code yet.
   field refused, set back to 3). Proposed: the field's range a bar's where every series is a
   bar (and, with lines and bars together, the value cut to each one's range, or the field
   for the lines alone). Left as it is meanwhile (a visible change).
-- **A CIF whose space-group symbol is blank but quoted (found in v565, as v564 has it).** A
-  symbol written as `_symmetry_space_group_name_H-M ' '` (a blank between quotes, as some
-  programs write P1) is read as a name: with symmetry operations listed, `parseCif`'s check
-  of a centred symbol takes the first letter of the empty symbol and throws a TypeError, so
-  the file is refused with "Cannot read properties of undefined (reading 'toUpperCase')"
-  instead of being read (checked on v564 in Node: parseCif and prepPhase on such a file
-  with its operations x, y, z and −x, −y, −z); with none listed, the file is read but the
-  note says "The CIF lists no symmetry operations for : …" and the symbol counts as named
-  (the no-operations test then runs on it). Proposed: a blank symbol (as a blank Hall
-  symbol or name) read as none. Left as it is meanwhile (a visible change).
 - **A card's kinds' menu left open through an undo (found in v562, as v561 has it).** A
   card's title opens the kinds' menu; Ctrl+Z (or Ctrl+Y) while it is open loads the step
   without closing it, and a kind then picked in it switches the record the menu was opened

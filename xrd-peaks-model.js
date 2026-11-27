@@ -102,7 +102,13 @@ function peakProminence(y, idx){
   return h - Math.max(leftBase, rightBase);
 }
 
-// Find peaks with height + prominence thresholds and min-distance NMS
+/* Find peaks with height + prominence thresholds and min-distance NMS. The minimum distance
+   (°2θ): on an even axis as many of its steps; on an uneven one (points left out, listed
+   positions that are no grid) measured on the axis itself, at its local step (v568; to
+   v567 at the mean step there too, so that it was shorter where the points are denser than
+   the mean and longer where they are sparser). Even: every point within a quarter step of
+   the grid the mean step makes, as listed positions written to a few decimals are (the
+   mean step then measures every distance to under half a step: the results are v567's). */
 function findPeaks(x, y, minHeightPct, minPromPct, minDistDeg, { maxArr }){
   const mx = maxArr(y);
   if (!mx) return [];
@@ -110,6 +116,8 @@ function findPeaks(x, y, minHeightPct, minPromPct, minDistDeg, { maxArr }){
   const minP = mx * minPromPct   / 100;
   const step = x.length > 1 ? (x[x.length-1]-x[0])/(x.length-1) : 1;
   const minDistPts = minDistDeg / step;
+  let even = true;
+  for (let i = 1; even && i < x.length; i++) even = Math.abs(x[i] - x[0] - i*step) <= 0.25*Math.abs(step);
   const candidates = [];
   for (let i=1; i<y.length-1; i++){
     if (y[i]>y[i-1] && y[i]>=y[i+1] && y[i]>=minH){
@@ -125,6 +133,11 @@ function findPeaks(x, y, minHeightPct, minPromPct, minDistDeg, { maxArr }){
     out.push(c);
     // Closer than the minimum distance, not merely within its rounding: a peak
     // 0.315° away stays with a 0.3° minimum.
+    if (!even){
+      for (let j=c.idx-1; j>=0 && Math.abs(x[j] - c.pos) < minDistDeg; j--) used[j]=1;
+      for (let j=c.idx+1; j<y.length && Math.abs(x[j] - c.pos) < minDistDeg; j++) used[j]=1;
+      continue;
+    }
     const lo = Math.max(0, Math.ceil(c.idx-minDistPts));
     const hi = Math.min(y.length-1, Math.floor(c.idx+minDistPts));
     for (let j=lo; j<=hi; j++) if (Math.abs(j - c.idx) < minDistPts) used[j]=1;
@@ -236,10 +249,12 @@ function processingOf(f, sm, pr, manual, removed, u){
   // Apply persistent removals (matched by detected position, with a small tolerance) to
   // the detected peaks: a manual one goes by its own ×, out of manualPeaks. (To v473 they
   // took the manual ones too: one placed by a removed peak, as to put it back by hand,
-  // was hidden as it was added, and removing a peak by a manual one hid both.)
+  // was hidden as it was added, and removing a peak by a manual one hid both.) A minimum
+  // distance of 0 is one (v568; to v567 taken as 0.3°: a removal hid the peaks within 0.1°
+  // of it too): the removed position alone, as it was detected.
   const rem = removed || [];
-  const remTol = Math.min(0.1, (pr.pkDist || 0.3) * 0.45);
-  peaks.forEach(pk=>{ pk.removed = !pk.manual && rem.some(v=>Math.abs(v-pk.detPos) < remTol); });
+  const remTol = Math.min(0.1, (pr.pkDist ?? 0.3) * 0.45);
+  peaks.forEach(pk=>{ pk.removed = !pk.manual && rem.some(v=> v === pk.detPos || Math.abs(v-pk.detPos) < remTol); });
 
   // SNIP baseline and the half-maximum FWHM.
   peaks.forEach(pk=>{

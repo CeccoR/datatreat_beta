@@ -226,6 +226,37 @@ test('a pass of the stages, and the detection\'s tests: the scale\'s significanc
   assert.equal(D2.outWarn[1], `rutile: not detected — its scale is not above 3 esd once the cells and widths are refined (2.0 esd). Leaving it out raises χ² by 20 for its 4 parameters (fitting noise gives about 4; a BIC would keep it above ${(4*Math.log(N) + 10).toFixed(0)}): more than noise gives, too little to tell.`);
 });
 
+/* v568: the own-intensity test's put-back compares χ²_ν, as its warning says (6; to v567 the χ²
+   totals, which a fit with fewer parameters has higher by about their number from the noise
+   alone); a phase beside its twin alone (two populations of one structure) left out by the
+   own-intensity test, its twin named (5; to v567 "…lies under 's peaks"). */
+test('the own-intensity test: put back by χ²_ν doubled; beside its twin alone, the twin named', ()=>{
+  // a pass without the phase (k = 1, 4 parameters fewer): χ²_ν c; with it, χ²_ν just under c/2,
+  // or just over: its χ² total more than doubled both times
+  const m = modelOf(ONE(), [ph(SRT, 1), ph(RUT, 2)]), A = setup(m, { irf: IRF }), D0 = R.detection(A, R.placePeaks(A)), pass = R.stagePass(A, D0);
+  const res0 = pass.res, c = res0.stats.chi2, N = res0.stats.N, P = res0.stats.P;
+  const own = ratio => ({ ...D0, out: new Set([1]), outWarn: ['x', 'y'], keptOwn: new Map(),
+    ownOut: { k: 1, idx: 1, chi: c/ratio*(N - P - 4), chi2: c/ratio, sig: 1, why: 'why', out: 1 } });
+  const Dn = own(1.999);
+  assert.ok(R.chiTotal(res0) > 2*Dn.ownOut.chi, 'the χ² total more than doubled');
+  assert.equal(R.putBackOwn(A, Dn, res0), false, 'χ²_ν not doubled: kept out');
+  assert.deepEqual([[...Dn.out], Dn.outWarn, Dn.keptOwn.size], [[1], ['x', 'y'], 0]);
+  const Dy = own(2.001);
+  assert.equal(R.putBackOwn(A, Dy, res0), true, 'χ²_ν more than doubled: put back');
+  const b = Dy.keptOwn.get(1);
+  assert.deepEqual([[...Dy.out], Dy.outWarn, b.why, b.without], [[], ['x'], 'why', c]);
+  assert.ok(b.without > 2*b.chi2, 'the warning\'s χ²_ν, more than twice');
+  // two populations of one SrTiO3, the second (sharp) where the data have none of it, both
+  // scales significant: left out by the own-intensity test, its twin named
+  const m2 = modelOf(ONE(), [ph(SRT, 1), ph(SRT, 2)]), A2 = setup(m2, { irf: IRF }), D2 = R.detection(A2, R.placePeaks(A2)), pass2 = R.stagePass(A2, D2);
+  const [q1, q2] = m2.phases, v = m2.v.slice();
+  v[q1.iScale] += v[q2.iScale]; v[q2.iScale] = 0.2*v[q1.iScale]; v[q2.iYs] = 0.2*v[q1.iYs]; m2.v = v;
+  const sure = { ...pass2.res, params: { ...pass2.res.params, 'p1.scale': 1, 'p2.scale': 1 }, esd: { ...pass2.res.esd, 'p1.scale': 0.01, 'p2.scale': 0.01 } };
+  assert.equal(R.leaveOutNext(A2, D2, sure), true);
+  assert.deepEqual([...D2.out], [1]);
+  assert.match(D2.outWarn[0], /^SrTiO3: not detected — 0 % of its calculated intensity lies under the other phases' peaks \(its twin SrTiO3, the same structure, not weighed against it\), and at its lines clear of theirs \(100 % of it\) the pattern shows -?\d+ ± \d+ % of the intensity calculated: not told from none\.$/);
+});
+
 test('from the last result: each parameter\'s group, a result of other phases, what changed and what is held', ()=>{
   const m = modelOf(STO_IRF(), [ph(SRT, 1, { profile: 'lognormal', strain: 'aniso', faults: '111:1/6<112>', adp: 'site', occ: ['Sr1'], po: '100' })], { instr: INSTR_SOL });
   const group = n => R.paramGroup(m, m.index[n]);

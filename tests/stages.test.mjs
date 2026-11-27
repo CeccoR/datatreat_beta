@@ -217,7 +217,7 @@ test('buildModel: v564\'s models of 40 settings (instruments, scans reversed, ma
 // The worker, its module run in Node: `self` a stand-in that keeps what it posts.
 let posted = null, handler = null;
 globalThis.self = { addEventListener: (t, f)=> { if (t === 'message') handler = f; }, postMessage: m => posted.push(structuredClone(m)) };
-await import('../xrd-rietveld.worker.js');
+const W = await import('../xrd-rietveld.worker.js');
 const worker = data => run(()=> { posted = []; handler({ data }); return posted; });
 
 test('refineHeld, freeShapeRun, bodyShapeOf, measureWidths and summarise: v564\'s refinements, shapes, widths and worker messages', ()=>{
@@ -257,6 +257,23 @@ test('refineHeld, freeShapeRun, bodyShapeOf, measureWidths and summarise: v564\'
   assert.equal(std.value.at(-1).type, 'result');
   assert.ok(all.value.at(-1).res.table.some(r=> r.name === 'stephens_anisotropy_rms_1e-6'));
   assert.match(two.value.at(-1).res.warnings.join('|'), /rutile: not detected/);
+});
+
+/* v568: the free shape's line against the isotropic size gives the search's ΔBIC (its keep
+   test's), which the line's title says is under −10 where the per-line check fired (28; to
+   v567 the ΔBIC of the fit after the search, refined again, which could stand above −10
+   beside that title); a shape kept by ΔBIC before v523's keep test, which has no keep: its
+   fit's, as before. */
+test('the free shape against the isotropic size: the search\'s ΔBIC, which its title is about', ()=>{
+  // the fit's own: (4900 − 5000)/2.5 + 6·ln 2001 = −40 + 45.6
+  const info = { chi2Iso: 5000, chi2: 4900, Piso: 20, P: 26, N: 2001, chi2redIso: 2.5, keep: { G: 30, need: 20, k: 5, flagged: true, dBIC: -12.4 } };
+  const own = (info.chi2 - info.chi2Iso)/info.chi2redIso + (info.P - info.Piso)*Math.log(info.N);
+  const line = i => { const S = { table: [] }, lines = []; W.isoCompareLine(S, 'SrTiO3', lines, i); return [lines[0].value, S.table[0].value, lines[0].title]; };
+  const [v, row, title] = line(info);
+  assert.deepEqual([v, row], ['ΔBIC -12', -12.4]);
+  assert.match(title, /as the fit misses some lines \(the per-line check\) its ΔBIC is under −10 too/);
+  assert.deepEqual(line({ ...info, keep: { ...info.keep, flagged: false } }).slice(0, 2), ['ΔBIC -12', -12.4]);
+  assert.deepEqual(line({ ...info, keep: undefined }).slice(0, 2), [`ΔBIC ${own.toFixed(0)} (shape supported: under −10)`, own]);
 });
 
 // Every digest of the cases named so far against the golden file (written by npm run test:update).

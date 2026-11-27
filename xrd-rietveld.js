@@ -4740,19 +4740,24 @@ function putBackWeak(A, D, res){
    is there carries intensity no other can take: in crowded patterns of broad lines
    (two or three phases of 6–15 nm, 5–50 wt %), where none of its lines stands clear,
    leaving it out multiplied χ² by 2.8–300, the others taking up 24–53 % of it. It is
-   put back, its own-intensity test waived (keptOwn), when χ² more than doubles and
-   the rise is over a quarter of its Σ w·y_p² (what leaving it out would cost if they
-   took none of it): a quarter is the geometric middle of the 13 % left by the absent
+   put back, its own-intensity test waived (keptOwn), when χ²_ν more than doubles and
+   the rise of χ² is over a quarter of its Σ w·y_p² (what leaving it out would cost if
+   they took none of it): a quarter is the geometric middle of the 13 % left by the absent
    and the 47 % by the present. Up to v426 it stayed out: a present phase of 30–50 wt %
-   was lost in all 7 runs of four such samples (χ²_ν 37–313). The doubling is a ratio
-   of χ² totals: where noise is most of χ² (600 counts at the top) a present phase must
-   add more than that noise, and 2 of 11 such phases stayed out (χ² ×1.3, ×1.7); at ten
-   times the counts the absent candidates' ratios stayed at 1.006–1.16. */
+   was lost in all 7 runs of four such samples (χ²_ν 37–313). The doubling is a ratio of
+   χ²_ν, the misfit per degree of freedom, which a fit with fewer parameters is compared
+   by (its χ² total is higher by about its parameters fewer from the noise alone): where
+   noise is most of χ² (600 counts at the top) a present phase must add more than that
+   noise, and 2 of 11 such phases stayed out (χ² ×1.3, ×1.7); at ten times the counts the
+   absent candidates' ratios stayed at 1.006–1.16. (Those ratios are of χ² totals, which
+   it compared to v567 while the warning said χ²_ν: the two differ by the share of the
+   points the phase's parameters take, a few in thousands.) The rise is a χ² total, as
+   Σ w·y_p² is. */
 function putBackOwn(A, D, res){
   if (!D.ownOut) return false;
   const w = D.ownOut; D.ownOut = null;
   const rise = chiTotal(res) - w.chi;
-  if (D.out.size === w.out && chiTotal(res) > OWN_KEEP*w.chi && rise > OWN_SHARE*w.sig){
+  if (D.out.size === w.out && res.stats.chi2 > OWN_KEEP*w.chi2 && rise > OWN_SHARE*w.sig){
     D.out.delete(w.k); D.outWarn.splice(w.idx, 1); D.keptOwn.set(w.k, { chi2: w.chi2, without: res.stats.chi2, why: w.why });
     setParams(A.model, searchStart(A, D));
     A.stages.length = D.nSearch;
@@ -4769,8 +4774,12 @@ function ownDrop(A, live, res, keptOwn){
   const ev = ownEvidence(model, model.v, res.stats.chi2);
   const weak = live.filter(k=> !ev[k].own && !keptOwn.has(k)).sort((a, b)=> ev[a].alone - ev[b].alone || ev[b].under - ev[a].under);
   if (!(weak.length && weak.length < live.length)) return null;
+  // (beside its twins alone, the same structure, which are not weighed against it: named as
+  // such, v568; to v567 the name was empty, "…lies under 's peaks")
   const k = weak[0], e = ev[k], others = live.filter(j=> j !== k && !twins(model.phases[k], model.phases[j])).map(nm).join(', ');
-  return { k, why: `${Math.round(e.under*100)} % of its calculated intensity lies under ${others}'s peaks, and ${!(e.alone > 0)
+  const tw = live.filter(j=> j !== k && twins(model.phases[k], model.phases[j])).map(nm);
+  const under = others ? `${others}'s peaks` : `the other phases' peaks (its twin${tw.length > 1 ? 's' : ''} ${tw.join(', ')}, the same structure, not weighed against it)`;
+  return { k, why: `${Math.round(e.under*100)} % of its calculated intensity lies under ${under}, and ${!(e.alone > 0)
     ? 'none of its lines stands clear of theirs'
     : e.alone < 0.05 ? `its lines clear of theirs hold only ${(e.alone*100).toFixed(1)} % of it (under 5 %)`
     : !Number.isFinite(e.alpha) ? `its lines clear of theirs (${Math.round(e.alone*100)} % of it) have too few points (${e.pts}) to fit its intensity there`

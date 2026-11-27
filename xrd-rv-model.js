@@ -672,11 +672,12 @@ function stateOf(c){
 /* A state read back (restore, unless a step during a run keeps the card's): the phases,
    each with its settings made valid (or migrated from a project of v428 or older) and
    its CIF read (one that is not read is left out), the standard's own settings and the
-   phase chosen, the start, the Refinement settings and the next id. A state whose phases
-   are no list throws, before anything is read. */
+   phase chosen, the start, the Refinement settings and the next id. Phases that are no list
+   are none (v568; to v567 they threw, and a project holding them stopped halfway through
+   its restore). */
 function readState(s, std){
   // A project of v428 or older has the options without the flags (migrateSettings).
-  const phases = (s.phases || []).flatMap(q=>{ try { return [{ id: q.id, cif: q.cif, file: q.file, color: q.color,
+  const phases = (Array.isArray(s.phases) ? s.phases : []).flatMap(q=>{ try { return [{ id: q.id, cif: q.cif, file: q.file, color: q.color,
     ...(q.on ? cleanSettings(q, std ? stdSettings() : defSettings()) : migrateSettings(q, s.refineB)), prep: prepOf(q.cif, q.file),
     off: q.off && typeof q.off === 'object' ? Object.fromEntries(Object.keys(q.off).filter(k=> q.off[k]).map(k=> [k, true])) : {} }]; } catch(e){ return []; } });
   const out = { phases };
@@ -954,8 +955,7 @@ const snapshotOf = S => stateOf({ phases: S.phases, std: S.std, lab6: S.lab6, pi
   results: S.results, view: S.res ? { sizeBy: S.sizeBy, resNorm: S.resNorm } : null });
 /* A state put back into the card (xrd-rv.js restore; keep: a step of the history while a run
    goes on here or waits, which keeps what the run takes as it starts and the patterns it has
-   written over the state's results). A state whose phases are no list throws, before
-   anything is changed. U: { normOf } (utils.js). */
+   written over the state's results). U: { normOf } (utils.js). */
 function restoreInto(U, S, s, keep){
   if (!keep){
     const t = readState(s, S.std);
@@ -965,7 +965,9 @@ function restoreInto(U, S, s, keep){
     // (a note on an entry not taken is about the settings before)
     S.fit = t.fit; S.fitNote = null;
     S.nextId = t.nextId;
-    S.setKey = '';
+    // (the settings' body built anew: to v567 '', the key of no phase, which left a body
+    // open on the phases undone)
+    S.setKey = null;
   }
   S.sel = Number.isInteger(s.sel) ? s.sel : null;
   S.results = resultsOf(s);

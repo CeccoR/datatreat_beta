@@ -36,11 +36,13 @@ function modelsLine(m, std, tried){
 // The settings in a line: what Refine will refine.
 const summaryOf = (p, std) => modelsLine(engineOf(p, std), std);
 // What a result refined a phase with (its models, the free shape it kept, its texture's
-// axis); the settings' line for a result of v428 or older, which has no models.
+// axis: none for a phase not detected, left out with its texture unrefined — v568, to v567
+// listed); the settings' line for a result of v428 or older, which has no models.
 function refinedOf(q, r, std){
   const md = r.models && r.models[q.id];
   if (!md) return summaryOf(q, std);
-  const kept = !!(r.shapes && r.shapes[q.id]), t = r.textures && r.textures[q.id];
+  const out = Array.isArray(r.detected) && !r.detected.map(String).includes(String(q.id));
+  const kept = !!(r.shapes && r.shapes[q.id]), t = !out && r.textures && r.textures[q.id];
   const hkl = t && t.hkl ? (Array.isArray(t.hkl) ? t.hkl.join('') : String(t.hkl)) : null;
   return modelsLine({ size: md.size !== false, shape: kept ? md.shape : false, profile: md.profile, strain: md.strain || 'iso', faults: md.faults,
     adp: md.adp, occ: md.occ, po: hkl }, std, md.shape && !kept ? md.shape : null);
@@ -291,10 +293,12 @@ function resultsHtml({ r, std, shown, n, any, irf, stale }){
   const cifWarn = shown.flatMap(q=> q.prep.warnings.map(w=> warnNote(`${esc(q.prep.name)}: ${esc(w)}`))).join('');
   if (!r || !r.params) return (n ? `<div class="rv-note rv-wide">Not refined yet. <b>Refine</b> starts from the CIF's cell${std ? ' (the certified one, held fixed)' : ''}, finds where the pattern's peaks are, and refines step by step.</div>`
     : `<div class="rv-note rv-wide">${any ? 'No phase ticked for this pattern: tick one in the list.' : 'No phase: add one from a CIF, dropped on Phases beside the pattern or selected with a click there.'}</div>`) + cifWarn;
-  const s = r.stats || {};
-  let html = group('Fit', `<div class="pg-stat" title="R_wp: the weighted residual; R_exp: what the counting statistics alone would give">R<sub>wp</sub>: <b>${(s.Rwp*100).toFixed(2)}%</b></div>`
-    + `<div class="pg-stat">R<sub>exp</sub>: <b>${(s.Rexp*100).toFixed(2)}%</b></div>`
-    + `<div class="pg-stat" title="χ² = Σw(y − y_c)²/(N − P), the reduced χ²: (R_wp/R_exp)²">χ²: <b>${(s.chi2).toFixed(2)}</b></div>`);
+  // (a number missing — a NaN or ∞ come back from JSON as null, a project's result without
+  // its statistics — a dash, as the CSV leaves its cell empty: v568; to v567 null threw)
+  const s = r.stats || {}, f2 = v => Number.isFinite(v) ? v.toFixed(2) : '—', pct = v => Number.isFinite(v) ? (v*100).toFixed(2) + '%' : '—';
+  let html = group('Fit', `<div class="pg-stat" title="R_wp: the weighted residual; R_exp: what the counting statistics alone would give">R<sub>wp</sub>: <b>${pct(s.Rwp)}</b></div>`
+    + `<div class="pg-stat">R<sub>exp</sub>: <b>${pct(s.Rexp)}</b></div>`
+    + `<div class="pg-stat" title="χ² = Σw(y − y_c)²/(N − P), the reduced χ²: (R_wp/R_exp)²">χ²: <b>${f2(s.chi2)}</b></div>`);
   (r.phaseResults || []).forEach(q=>{
     html += group(esc(q.name), q.lines.map(l=> `<div class="pg-stat"${l.title ? ` title="${esc(l.title)}"` : ''}>${barIdx(esc(l.label))}: <b>${barIdx(esc(l.value))}</b></div>`).join(''), q.phase);
   });

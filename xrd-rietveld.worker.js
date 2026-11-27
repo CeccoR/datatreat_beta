@@ -518,13 +518,17 @@ function solidFrame(sh){
   }
   return frame;
 }
-// The shape against the isotropic size: ΔBIC, and the keep test that kept it.
-function isoCompareLine(S, nm, lines, info){
-  const dChi = info.chi2 - info.chi2Iso, dBIC = dChi/Math.max(1, info.chi2redIso) + (info.P - info.Piso)*Math.log(info.N);
+/* The shape against the isotropic size: ΔBIC, and the keep test that kept it. The ΔBIC is
+   the search's, the keep test's (info.keep.dBIC), which the title's "under −10" is about
+   (v568; to v567 the fit's after the search, refined again by central differences or a
+   free minimum taking the held frame's place, which could stand above −10 beside it). A
+   result kept by ΔBIC before v523's keep test has none: its fit's. */
+export function isoCompareLine(S, nm, lines, info){
+  const kp = info.keep;
+  const dBIC = kp && Number.isFinite(kp.dBIC) ? kp.dBIC : (info.chi2 - info.chi2Iso)/Math.max(1, info.chi2redIso) + (info.P - info.Piso)*Math.log(info.N);
   // (A shape is reported only when kept: by v523's keep test, info.keep, its gain over
   // the threshold of its Laue class, or before by ΔBIC under −10; one rejected is in the
   // warnings.)
-  const kp = info.keep;
   lines.push({ label: 'vs isotropic', value: kp ? `ΔBIC ${dBIC.toFixed(0)}` : `ΔBIC ${dBIC.toFixed(0)} (shape supported: under −10)`,
     title: `${info.carried ? 'The last result’s search (this refinement started from it, the shape not searched again): ' : ''}${kp ? `Kept: its gain over the isotropic size, ${kp.G.toFixed(1)} χ²_ν, is over the ${kp.need.toFixed(1)} its Laue class needs (χ² of ${kp.k + 1} degrees of freedom at 99.9 % + 2: the deformations of a sphere the class lets the pattern see)${kp.flagged ? ', and as the fit misses some lines (the per-line check) its ΔBIC is under −10 too' : ''}. ` : ''}χ² ${info.chi2Iso.toFixed(0)} → ${info.chi2.toFixed(0)} with ${info.P - info.Piso} more parameters; BIC with χ² divided by the isotropic fit's χ²_ν (${info.chi2redIso.toFixed(2)}), so that a misfit of the model is not counted as evidence.${Number.isFinite(info.dBICheld) ? ` Orientation free: ΔBIC ${info.dBICfree.toFixed(0)}; held on the lattice: ${info.dBICheld.toFixed(0)}.` : ''} Between solids of as many parameters a difference under 14 is within what noise gives (35 where the fit misses some lines: the bootstrap of the free-shape research's family comparison). The sizes depend on the solid (a spheroid's polar axis reads 4/3 as much as a disc's thickness: the column length along the axis is ¾ of the one, all of the other)` });
   row(S, nm, 'shape_dBIC', dBIC, NaN);

@@ -283,11 +283,12 @@ test('the labels: the words, the bars over minus signs, the places kept from fra
   const was = new Map(first.map(it => [it.slot, M.labelOffset(it)])), again = items();
   M.placeLabels(again, M.labelObstacles(heads), fixed, 300, 300, was);
   assert.deepEqual(again.map(it => [it.x, it.y]), first.map(it => [it.x, it.y]), 'the same places again');
-  // nowhere on the canvas at all: straight out from its tip, clamped (one wider than the
-  // canvas has its right end on it, its start off it)
+  // nowhere on the canvas at all: straight out from its tip, clamped; one wider (taller) than
+  // the canvas from its left (top) edge, its start on it (7, v568; to v567 its right end on
+  // it, its start cut off: [-103, 152], [129, -3])
   const wide = [{ slot: 0, w: 400, hgt: 14, tip: [150, 150], out: [0, 1] }, { slot: 1, w: 60, hgt: 300, tip: [150, 150], out: [1, 0] }];
   M.placeLabels(wide, [], [], 300, 300, null);
-  assert.deepEqual(wide.map(it => [it.x, it.y]), [[-103, 152], [129, -3]]);
+  assert.deepEqual(wide.map(it => [it.x, it.y]), [[3, 152], [129, 3]]);
   assert.deepEqual([{ x: 0, w: 40, tip: [50] }, { x: 60, w: 40, tip: [50] }, { x: 30, w: 40, tip: [50] }].map(M.labelAlign), [1, 0, 0.5]);
 });
 
@@ -454,4 +455,24 @@ test('the view\'s events and the page it follows, as v563\'s shapeView took them
   const want = JSON.parse(fs.readFileSync(GOLDEN_VIEW, 'utf8'));
   assert.deepEqual(Object.keys(got), Object.keys(want));
   for (const n of VIEW_CASES) assert.deepEqual(got[n], want[n], n);
+});
+
+/* v568, last (the colour cache of readTheme, made on the page of its first call, is the
+   cases' above to make): the solid's colour given as var(--x, fallback), its fallback taken
+   where --x has no value (8; to v567 left out, the accent drawn); an esd of 0, which has no
+   cone, not said (9; to v567 "±0°"). */
+test('the solid\'s colour by var() with its fallback; an esd of 0 not said', async ()=>{
+  const { readTheme } = await import('../xrd-shape3d.js');
+  const page = fakePage();
+  install(page, 1);
+  const el = page.document.createElement('div'), solid = c => readTheme(el, c).solid;
+  const GREEN = [63, 163, 77, 1], PHASE2 = [90, 176, 255, 1], ACCENT = [255, 180, 84, 1];
+  assert.deepEqual([solid('var(--nope, #3fa34d)'), solid('var( --nope ,rgb(200, 60, 60))'), solid('var(--nope, var(--phase2, #000))')], [GREEN, [200, 60, 60, 1], PHASE2], 'no value: the fallback');
+  assert.deepEqual([solid('var(--phase2, #3fa34d)'), solid('var(--phase2)'), solid('--phase2'), solid('#3fa34d')], [PHASE2, PHASE2, PHASE2, GREEN], 'a value: the token\'s');
+  assert.deepEqual([solid('var(--nope)'), solid('var(--nope, notacolor)'), solid(undefined)], [ACCENT, ACCENT, ACCENT], 'none: the accent');
+  // An esd of 0: on its axis no ±, off it the angle alone; the screen reader's words alike.
+  const m = M.buildModel({ type: 'box', dims: [8, 5, 3], frame: I3, cell: I3,
+    dirs: [{ label: '[100]', vec: [1, 0, 0], esd: 0, off: 0 }, { label: '[010]', vec: [0, 1, 0], axis: [0.1, 0.995, 0], esd: 0, off: 5.7 }, { label: '[001]', vec: [0, 0, 1], esd: 2, off: 0 }] });
+  assert.deepEqual(m.dirs.map(d => { const t = M.labelTexts(d); return [t.tail, t.sub, d.cones.length]; }), [['', '', 0], ['', 'axis 5.7° off', 0], [' ±2.0°', '', 2]]);
+  assert.match(M.describeSolid(m, ''), /Directions: \[100\]; \[010\] the axis 5\.7° off it; \[001\] ±2\.0°\. Drag/);
 });

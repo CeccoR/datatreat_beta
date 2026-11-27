@@ -712,13 +712,16 @@ export function millerRuns(label){
   }
   return out;
 }
+// A direction's esd as its label and the screen reader's words say it: none for an esd of
+// 0, which has no cone (v568; to v567 "±0°").
+const pmOf = d => d.esd > 0 ? `±${fmtDeg(d.esd)}°` : '';
 /* A direction's label in words: its indices (millerRuns), then on its axis its esd beside
    it; off it, the axis's angle from it and its esd under it (sub: the cone is the axis's);
    across a body of revolution none, the turn about the axis being free. */
 export function labelTexts(d){
-  const runsL = millerRuns(d.label);
-  const tail = d.about ? '' : !d.det ? ' not determined' : offShown(d) ? '' : ` ±${fmtDeg(d.esd)}°`;
-  const sub = d.about ? 'free about the axis' : offShown(d) ? `axis ${fmtOff(d.off)}° off, ±${fmtDeg(d.esd)}°` : '';
+  const runsL = millerRuns(d.label), pm = pmOf(d);
+  const tail = d.about ? '' : !d.det ? ' not determined' : offShown(d) || !pm ? '' : ' ' + pm;
+  const sub = d.about ? 'free about the axis' : offShown(d) ? `axis ${fmtOff(d.off)}° off${pm && ', ' + pm}` : '';
   return { runsL, tail, sub };
 }
 /* A label to place (placeLabels), from its head h, its words (labelTexts, each run's
@@ -885,9 +888,11 @@ export function placeLabels(items, obstacles, fixed, Wd, Ht, prev){
         for (const o of placed){ c += near(b, it.w, it.hgt, o); if (c >= pc) break; }
         if (c < pc){ pc = c; pick = b; }
       }
-      // Nowhere on the canvas at all (a label wider than it): straight out, kept on it.
+      // Nowhere on the canvas at all (a label wider than it): straight out, kept on it; one
+      // wider (taller) than the canvas from its left (top) edge, its start on it (v568; to
+      // v567 its end, the start cut off past the edge).
       if (!pick){
-        pick = { x: clamp(it.tip[0] + it.out[0] * 9 - it.w / 2, MG, Wd - MG - it.w), y: clamp(it.tip[1] + it.out[1] * 9 - it.hgt / 2, MG, Ht - MG - it.hgt) };
+        pick = { x: Math.max(MG, clamp(it.tip[0] + it.out[0] * 9 - it.w / 2, MG, Wd - MG - it.w)), y: Math.max(MG, clamp(it.tip[1] + it.out[1] * 9 - it.hgt / 2, MG, Ht - MG - it.hgt)) };
         pc = 1e6;
       }
       at[i] = pick;
@@ -949,7 +954,7 @@ export function viewFromState(state){
 // gives them, and the keys.
 export function describeSolid(m, caption){
   const what = caption || `${TYPE_NAMES[m.type]} ${m.raw.map(v => Number.isFinite(v) && v > 0 ? fmtNm(v) : '∞').join(' × ')} nm`;
-  const ds = m.dirs.map(d => d.label + ' '
-    + (d.about ? 'free about the axis' : !d.det ? 'not determined' : offShown(d) ? `the axis ${fmtOff(d.off)}° off it, ±${fmtDeg(d.esd)}°` : `±${fmtDeg(d.esd)}°`)).join('; ');
+  const ds = m.dirs.map(d => { const pm = pmOf(d);
+    return d.label + (d.about ? ' free about the axis' : !d.det ? ' not determined' : offShown(d) ? ` the axis ${fmtOff(d.off)}° off it${pm && ', ' + pm}` : pm && ' ' + pm); }).join('; ');
   return `Crystallite shape in 3D: ${what}${ds ? '. Directions: ' + ds : ''}. Drag or use the arrow keys to rotate, Home to reset.`;
 }

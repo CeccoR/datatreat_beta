@@ -43,9 +43,9 @@ function stepNoteHtml(on, { X_SVG }){
    the peak picked, or null; st: a sample's sizes summarised (sampleSizes), its mean and
    its warnings under the table. */
 function peakTableHtml(pks, { std, m, fp, picked, st }, { esc, X_SVG }){
-  // (only peaks of height 0 left — manual ones on the baseline — none has a relative
-  // intensity: a dash; up to v484 0/0 printed NaN%)
-  const maxH = Math.max(...pks.map(pk=>pk.height)), relOf = h => maxH > 0 ? (h/maxH*100).toFixed(1) + '%' : '—';
+  // (only peaks of height 0 left — manual ones on the baseline — each 0 %, as peaks.csv
+  // writes them: v568, a dash to v567; up to v484 0/0 printed NaN%)
+  const maxH = Math.max(...pks.map(pk=>pk.height)), relOf = h => maxH >= 0 ? (h/(maxH || 1)*100).toFixed(1) + '%' : '—';
   const showCorr = !!m && !std;
   const sizeCol = !std;
   // The table scrolls sideways in its own box when the screen is narrower than it;

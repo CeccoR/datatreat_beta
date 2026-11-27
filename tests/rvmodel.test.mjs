@@ -69,6 +69,24 @@ test('a phase from its CIF: SrTiO3, the built-in LaB6; one read kept for the sam
   assert.notEqual(M.prepOf(SRT, 'lru-b.cif'), b, 'the oldest of 33: read anew');
 });
 
+/* v568: a CIF whose H-M symbol is written blank (' ', or '' before another tag) names no group,
+   nor does a blank Hall symbol or magnetic name (27; to v567 a group of no name: with
+   operations listed the file was refused, "Cannot read properties of undefined (reading
+   'toUpperCase')", without them its note read "operations for :"). */
+test('a CIF whose H-M symbol is blank: read as one that gives none', ()=>{
+  const cif = (hm, ops) => `data_x\n_cell_length_a 3.905\n_cell_length_b 3.905\n_cell_length_c 3.905\n_cell_angle_alpha 90\n_cell_angle_beta 90\n_cell_angle_gamma 90\n${hm}`
+    + (ops ? "loop_\n_symmetry_equiv_pos_as_xyz\n'x, y, z'\n'-x, -y, -z'\n" : '')
+    + 'loop_\n_atom_site_label\n_atom_site_type_symbol\n_atom_site_fract_x\n_atom_site_fract_y\n_atom_site_fract_z\nSr1 Sr 0 0 0\nTi1 Ti 0.5 0.5 0.5\nO1 O 0.5 0.5 0\nO2 O 0.5 0 0.5\nO3 O 0 0.5 0.5\n';
+  const B = 'No displacement parameter for Sr1, Ti1, O1, O2, O3: B = 0.5 Å² assumed.';
+  const read = (hm, ops)=>{ const q = M.prepPhase(cif(hm, ops), 'blank.cif'); return [q.sg, q.sgFrom, q.order, q.warnings, q.notes]; };
+  assert.deepEqual(read("_symmetry_space_group_name_H-M ' '\n", true), ['Pm-3m', 'atoms', 48, [B], ['2 operations in the file; the structure has 48']], 'with its operations: read');
+  assert.deepEqual(read("_symmetry_space_group_name_H-M ' '\n", false), ['Pm-3m', 'atoms', 48, [B], []], 'without: no note of a group');
+  assert.deepEqual(read("_space_group_name_H-M_alt ''\n_symmetry_space_group_name_H-M 'P m -3 m'\n", false),
+    ['Pm-3m', 'cif', 48, [B, 'The CIF lists no symmetry operations for P m -3 m: the atoms are taken as they are (P1), so the cell is filled only if they are all listed.'], []], 'the next tag\'s symbol');
+  // (a Hall symbol or a magnetic group's name written blank alike: no group named, no note)
+  assert.deepEqual(read("_space_group_name_Hall ' '\n_space_group_magn_name_BNS ' '\n", false), ['Pm-3m', 'atoms', 48, [B], []]);
+});
+
 test('the settings made valid, a v428 project\'s migrated, the engine\'s options from them', ()=>{
   assert.deepEqual(M.defSettings(), DEF);
   assert.deepEqual(M.stdSettings(), STD);
@@ -293,8 +311,10 @@ test('the state saved and read back: a v428 sample\'s, the standard\'s with a CI
   assert.equal(round(stdS, true), stdWant('site', 1));
   assert.equal(round({ ...stdS, pick: 9, std: undefined }, true), stdWant('overall', 0));
   assert.equal(round({}, false), '{"phases":[],"start":"cif","hold":' + JSON.stringify(HOLD_DEFAULT) + ',"fit":{},"nextId":1,"sel":null,"results":{},"sizeBy":"sample"}');
-  // Phases that are no list: thrown before anything is read, as the restore threw.
-  for (const phases of ['abc', 5, {}]) assert.throws(()=> M.readState({ phases }, false), TypeError);
+  // Phases that are no list: none, the rest read (18, v568; to v567 they threw, and a project
+  // holding them stopped halfway through its restore).
+  for (const phases of ['abc', 5, {}, null]) assert.equal(round({ phases, start: 'last', nextId: 4 }, false), '{"phases":[],"start":"last","hold":' + JSON.stringify(HOLD_DEFAULT) + ',"fit":{},"nextId":4,"sel":null,"results":{},"sizeBy":"sample"}');
+  assert.deepEqual(M.readState({ phases: 'x' }, true).phases, []);
   assert.deepEqual(M.resultsOf({ results: 'x' }), {});
 });
 
@@ -370,6 +390,12 @@ test('the words: indices barred, formulae, what a phase is refined with, the ins
     H.refinedOf(sto, { models: { 1: { shape: 'box' } } }, false), H.refinedOf(sto, {}, false)],
   ['free shape: box · WPPM, one size · microstrain anisotropic (Stephens) · B per site · occupancy of Sr1 · preferred orientation (110)',
     'isotropic size (a free box searched, not kept) · Lorentzian · microstrain isotropic · B from the CIF', 'isotropic size · Lorentzian · microstrain isotropic · B from the CIF']);
+  // A phase not detected (left out, its texture unrefined): no texture listed (4, v568; to v567
+  // "preferred orientation (110)", the engine's result holding its axis at r = 1); detected, or a
+  // result without `detected` (v428's), listed.
+  const tx = { models: { 1: { size: true, profile: 'lorentz', strain: 'iso', adp: 'cif' } }, textures: { 1: { hkl: [1, 1, 0], r: 1, spec: [1, 1, 0] } } };
+  assert.deepEqual([H.refinedOf(sto, { ...tx, detected: [2] }, false), H.refinedOf(sto, { ...tx, detected: [1] }, false), H.refinedOf(sto, tx, false), H.refinedOf(sto, { ...tx, detected: ['1'] }, false)],
+    ['isotropic size · Lorentzian · microstrain isotropic · B from the CIF', ...Array(3).fill('isotropic size · Lorentzian · microstrain isotropic · B from the CIF · preferred orientation (110)')]);
   assert.equal(H.instrLine(null), '');
   assert.equal(H.instrLine(M.instrOf(pattern('s00.xrdml', xrdml(0)))), ' Kα₁ 1.540598 Å, Kα₂ 1.544426 Å (×0.5) · R 240 mm — ⚠ No goniometer radius in the file: 240 mm assumed (the specimen displacement in mm depends on it); No divergence slit in the file: a fixed slit is assumed');
   assert.equal(H.instrLine({ lam1: 1.5406, lam2: 1.5444, ratio: 0.5, anode: 'Cu', radius: 240, divergence: { type: 'Fixed', deg: 0.25 }, soller: { incident: 0.04 }, filter: { material: 'Ni' }, monochromator: true,
@@ -574,10 +600,11 @@ test('the state saved and put back (every value made valid, a run\'s kept throug
   const R = card(false, { fitNote: 'n', setKey: 'k' });
   M.restoreInto(U, R, JSON.parse(JSON.stringify({ ...snap, sel: 1.5, sizeBy: 'x', resNorm: 'none', fit: { maxIter: 9, bad: 1 }, hold: ['cell', 'x'], start: 'last' })), false);
   assert.deepEqual([R.phases.map(x=> [x.id, x.prep === prep, x.off]), R.sel, R.sizeBy, R.resNorm, R.fit, R.hold, R.startFrom, R.fitNote, R.setKey, R.nextId],
-    [[[1, true, { 's00.xrdml': true }]], null, 'sample', 'none', { maxIter: 9 }, ['cell'], 'last', null, '', 2]);
+    [[[1, true, { 's00.xrdml': true }]], null, 'sample', 'none', { maxIter: 9 }, ['cell'], 'last', null, null, 2]);
   assert.ok(Object.isFrozen(R.results['s00.xrdml']));
-  assert.throws(()=> M.restoreInto(U, R, { phases: 5 }, false), /flatMap/, 'phases that are no list throw');
-  assert.equal(R.phases.length, 1, 'before anything is changed');
+  // Phases that are no list: none, the rest put back (18, v568; to v567 a throw).
+  M.restoreInto(U, R, { phases: 5, start: 'last', results: { 's00.xrdml': { a: 1 } }, sizeBy: 'peak' }, false);
+  assert.deepEqual([R.phases, R.startFrom, R.results, R.sizeBy], [[], 'last', { 's00.xrdml': { a: 1 } }, 'peak']);
   // A step while a run goes on: its phases and settings kept, the patterns it wrote over the state's.
   const W = card(false, { phases: [q], fit: { maxIter: 5 }, wrote: { 's01.xrdml': { mine: 1 } }, setKey: 'k' });
   M.restoreInto(U, W, { phases: [], fit: {}, results: { 's00.xrdml': { a: 1 }, 's01.xrdml': { theirs: 1 } }, sel: 1, sizeBy: 'peak' }, true);
@@ -652,6 +679,13 @@ test('the card\'s markup: its frame, its section of the Results, its settings wi
   assert.match(noIrf, /No instrumental profile \(refine the standard first/);
   assert.match(H.resultsHtml({ r: { ...r, irf: null }, std: false, shown: [], n: 1, any: 1, irf: irf({}), stale: stale(true) }), /this pattern was refined before the standard was/);
   assert.match(H.resultsHtml({ r: { ...r, irf: null, irfRefused: true }, std: true, shown: [], n: 1, any: 1, irf: irf({}), stale: stale(true) }), /The samples take this profile/);
+  // A number missing (a NaN or ∞ through JSON is null; a project's result without its
+  // statistics): a dash, as the CSV leaves its cell empty (16, v568; to v567 null threw, and so
+  // did a result with no stats, the draw stopping there and the restore with it).
+  const fit = h => [...h.matchAll(/<div class="pg-stat"[^>]*>[^<]*<sub>[^<]*<\/sub>: <b>([^<]*)<\/b>|<div class="pg-stat"[^>]*>χ²: <b>([^<]*)<\/b>/g)].map(m=> m[1] ?? m[2]);
+  const st = stats => H.resultsHtml({ r: { ...r, stats }, std: false, shown: [], n: 1, any: 1, irf: irf({}), stale: stale(false) });
+  assert.deepEqual([fit(st({ Rwp: 0.1234, Rexp: 0.05, chi2: null })), fit(st(undefined)), fit(st({ Rwp: null, Rexp: 'x', chi2: Infinity })), fit(st({ Rwp: 0.1234, Rexp: 0.05, chi2: 6.1 }))],
+    [['12.34%', '5.00%', '—'], ['—', '—', '—'], ['—', '—', '—'], ['12.34%', '5.00%', '6.10']]);
 });
 
 /* ---- Cases as v558's xrd-rv.js gave them ----

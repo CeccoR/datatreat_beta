@@ -108,6 +108,10 @@ export function createPeakAnalysis(host, root, o){
      norm                 the Results' normalisation
      panel                selection/hover state of the peak table and plot: { sel, hov }
      ana, stack           the plot (the pattern on show) and the Results' stacked patterns
+     fullView             the plot's next drawing at its full range: the sample on show
+                          changed while the card was folded (show), as it is drawn when
+                          that happens unfolded (v568; to v567 the card unfolded drew the
+                          new sample at the zoom it had on the other)
      K                    each view's key or markup as last drawn (ana: the plot's, step:
                           the step note's, table, cag: the Caglioti box's, stack, stackLeg:
                           its legend's, size: the size chart's, chips, note: its note's)
@@ -133,7 +137,7 @@ function makeState(host, root, o){
     processed: [], manualPeaks: [], removedPeaks: [], perParams: [],
     paramMode: { ...M.modeDef(std) }, shared: { ...M.sharedDef(std) },
     sizeBy: 'sample', stepNote: [], heldPts: {}, norm: 'global',
-    panel: { sel:null, hov:null }, ana: null, stack: null,
+    panel: { sel:null, hov:null }, ana: null, stack: null, fullView: false,
     K: { ana: '', step: '', table: '', cag: '', stack: '', stackLeg: '', size: '', chips: '', note: '' },
     cardName: '', hoverRaf: null, nav: null, A: null,
   };
@@ -150,7 +154,7 @@ function apiOf(S){
     clear(){ M.clearEntries(S); },
     refresh: preserveView => refresh(S, preserveView),
     // Another sample on show (the cards share it).
-    show(){ setAddMode(S, false); S.panel.sel = S.panel.hov = null; writeStoreToInputs(S); updateView(S); renderTable(S); },
+    show(){ setAddMode(S, false); S.panel.sel = S.panel.hov = null; writeStoreToInputs(S); if (S.host.hidden()) S.fullView = true; updateView(S); renderTable(S); },
     /* The card folded by its arrow, the standard's window closed: a peak being placed is
        left, as by + Add peak again (its button off, the guide gone). Up to v499 it stayed
        on, unseen, until the next key dropped it: a card unfolded again had it still on. */
@@ -450,7 +454,8 @@ function updateView(S, preserveView){
   if (!fs.length || !S.processed.length) return;
   const k = Math.min(curIdx(S), fs.length - 1);
   if (S.host.hidden()) return;
-  drawAnalysisInto(S, k, preserveView);
+  drawAnalysisInto(S, k, preserveView && !S.fullView);
+  S.fullView = false;
 }
 // Recolour the plot's peak vlines AND their FWHM markers from the selection/hover
 // (matched by shared _value = peak position: xrd-peaks-model.js markStyles).
