@@ -9,7 +9,8 @@
    migrated (the standard among the samples, left out, the sample on show); a kind's
    settings and the entries of the files left out; the files read, those lost and their
    places, the sample on show; the cards' records and their settings by kind; the slots, a
-   held entry read; a run's results and instruments patched into a state (a card's, the
+   held entry read; (v577) a file left out's CIF by its card's pool in the state saved, read
+   back whole; a run's results and instruments patched into a state (a card's, the
    standard's, nothing new); what it shows and is given back; the patterns a drop loads; the
    markup escaped. Then 40 cases (random files of synthetic scans dropped twice, a state put
    back as it was, migrated, with no bytes, moved, left out, malformed; a run's results
@@ -168,6 +169,34 @@ test('the cards\' states: slots, a run\'s results patched in, what it shows', ()
   assert.equal(M.isKind('rietveld'), true); assert.equal(M.isKind('toString'), false); assert.equal(M.clone({ a: [1] }).a[0], 1);
 });
 
+/* v577: a file left out holds its sample's CIF whole while the page has it, and in the state
+   saved by its card's pool, as a sample in use does (to v576 whole there too: one copy more for
+   each such file): heldOut puts it in the pool of its card's Scherrer settings (the text added
+   where the pool lacks it, a pool made where there is none), readsOf reads it back whole. A
+   card whose settings hold no CIFs (an older version's), or no card of its key: whole, as
+   before; a state of v576 (whole) read as it is; a place in no pool, none. */
+test('a file left out: its sample\'s CIF by its card\'s pool in the state saved, read back whole; v576\'s as it is (v577)', ()=>{
+  const STO = 'data_SrTiO3\n_cell_length_a 3.905\n', BTO = 'data_BaTiO3\n_cell_length_a 4.0\n', s = { file: 'S.cif', cif: STO }, b = { file: 'B.cif', cif: BTO };
+  const f = (name, held)=> ({ name, x: [1, 2], y: [3, 4], ...(held ? { included: false, held } : {}) });
+  const page = [f('a'), f('b', { 'A1:params': { w: 1 }, 'A1:cif': s, 'A2:cif': b, 'A3:cif': s, 'A4:cif': s }), f('c', { 'A1:cif': null, 'A2:cif': s })];
+  const cards = ()=> [{ id: 1, type: 'scherrer', states: { scherrer: { cif: [{ file: 'S.cif', ref: 0 }], cifTexts: [STO] } } },
+    { id: 2, type: 'rietveld', states: { rietveld: {}, scherrer: { cif: [null] } } }, { id: 3, type: 'scherrer', states: { scherrer: { perParams: [] } } }];
+  const st = { v: 2, files: page.map(x=> ({ ...x })), cards: cards() }, held = page[1].held;
+  M.heldOut(U, st.files, st.cards);
+  assert.deepEqual(st.files.map(x=> x.held), [undefined, { 'A1:params': { w: 1 }, 'A1:cif': { file: 'S.cif', ref: 0 }, 'A2:cif': { file: 'B.cif', ref: 0 }, 'A3:cif': s, 'A4:cif': s },
+    { 'A1:cif': null, 'A2:cif': { file: 'S.cif', ref: 1 } }], 'by the pool; no CIFs in the card\'s settings, or no card: whole');
+  assert.deepEqual(st.cards.map(c=> c.states.scherrer.cifTexts), [[STO], [BTO, STO], undefined], 'a text added where the pool lacks it, a pool made');
+  assert.ok(page[1].held === held && held['A1:cif'] === s, 'the page\'s own untouched');
+  // Read back: each whole, as the page had it; the state's own untouched.
+  const R = M.readsOf(U, st);
+  assert.deepEqual(R.reads.map(r=> r.held), page.map(x=> x.held));
+  assert.deepEqual(st.files[1].held['A1:cif'], { file: 'S.cif', ref: 0 });
+  // A state of v576: whole, read as it is; a place in no pool (or of no text), none.
+  assert.deepEqual(M.readsOf(U, { v: 2, files: page, cards: cards() }).reads.map(r=> r.held), page.map(x=> x.held));
+  const bad = M.readsOf(U, { v: 2, files: [f('d', { 'A1:cif': { file: 'S.cif', ref: 3 }, 'A2:cif': { file: 'S.cif', ref: 0 }, 'A5:cif': { file: 'S.cif', ref: 0 } })], cards: cards() });
+  assert.deepEqual(bad.reads[0].held, { 'A1:cif': null, 'A2:cif': null, 'A5:cif': { file: 'S.cif', ref: 0 } });
+});
+
 test('the markup: the standard\'s window and file, its alerts, the drop\'s, a restore\'s, escaped', ()=>{
   const w = H.stdModalHtml('xrdStdPeaks', 'Instrumental <b>standard</b>', 'INFO', HU);
   for (const s of ['aria-labelledby="xrdStdPeaksTitle"', 'id="xrdStdPeaksTitle">Instrumental <b>standard</b>', 'id="xrdStdPeaksDz"', 'id="xrdStdPeaksFiles"', 'class="xrd-std-alerts"', 'class="xrd-std-file"', 'class="xrd-std-body"', '>INFO</div>']) assert.ok(w.includes(s), s);
@@ -288,7 +317,12 @@ function dropCase(S, c, names){
 const notesOf = (S, lost)=> PAGE.notesHtml(H.fileNotes(S.all, S.std, M.keptScans, HU), w=> 'xrd-dismiss-' + w, { opened: lost ? [lost] : [] });
 const fileOut = f => f && [f.name, f.label, f.color, dg(f.x), dg(f.y), f.varMul ? dg(f.varMul) : null, f.src, f.scan, f.meas, f.included, f.held, f.rawBytes];
 // The state the module saves (its cards with their kinds' settings: a panel's its own as restored).
-const stateOf = S => ({ v: 2, files: S.all.map(f=> ({ ...f })), std: S.std ? { ...S.std } : null, stdRv: S.stdRv, curIdx: S.curIdx, cards: S.cards.map(a=>{ const st = M.otherStates(a); st[a.type] = M.clone(a.own); return { ...saved(a), states: st }; }) });
+// (v577: a file left out holding a sample's CIF, its text in its card's pool: heldOut)
+function stateOf(S){
+  const s = { v: 2, files: S.all.map(f=> ({ ...f })), std: S.std ? { ...S.std } : null, stdRv: S.stdRv, curIdx: S.curIdx, cards: S.cards.map(a=>{ const st = M.otherStates(a); st[a.type] = M.clone(a.own); return { ...saved(a), states: st }; }) };
+  M.heldOut(U, s.files, s.cards);
+  return s;
+}
 function restoreCase(S, s0){
   const s = M.stateIn(U, s0), R = M.readsOf(U, s);
   S.all = R.reads.filter(Boolean);

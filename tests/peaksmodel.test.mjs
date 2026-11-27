@@ -32,7 +32,10 @@
    checked so) and added 20 whose steps choose CIFs; v576 wrote 10 of those 20 anew (the
    CIFs' pool, the peaks at Kα2), checked field by field against v575's. And (v576) a peak at
    a reflection's Kα2 alone, named so and out of the sizes; the CIFs' texts saved once each;
-   the names under the size chart by peak, the hkl alone.
+   the names under the size chart by peak, the hkl alone. And (v577) which peak is at Kα2: the
+   nearest line within its tolerance a reflection's Kα2, a taller peak below at its λ; a resolved
+   Kα2 peak whose valley stands above half its height, a cell smaller than its CIF's, a partner
+   removed or not taller.
    utils.js's, snav.js's and modcharts.js's helpers, which need a page to load, are taken
    from their source as they stand there. */
 import { test } from 'node:test';
@@ -582,21 +585,79 @@ test('a peak at a reflection\'s Kα2 alone: named so, out of the sizes, the rule
   assert.ok(t.includes(`<td title="Calculated 2θ at Kα2: ${A.rows[7].k2[0].tt.toFixed(3)}°">(332) Kα2</td>`) && t.includes(`<td title="Calculated 2θ: ${A.rows[6].refl[0].tt.toFixed(3)}°">(332)</td>`));
   assert.deepEqual(cells(t).map(r=> r[5]), pks.map(pk=> H.fmtCell(M.scherrerD(pk.fwhmClassic, pk.detPos, fp.K, fp.lambda))), 'each its size in the table, as ever');
   const rule = t.match(/<p class="txt-meta xrd-hkl-rule">(.*)<\/p>$/)[1];
-  assert.equal(rule, 'hkl: the reflections of SrTiO3 at λ 1.540598 Å within 0.5 FWHM of a peak\'s 2θ, 0.1° at least; 4 of 8 peaks only at a reflection\'s Kα2 (λ 1.544426 Å), named so and left out of its sizes, as each repeats its Kα1 peak.');
+  assert.equal(rule, 'hkl: the reflections of SrTiO3 at λ 1.540598 Å within 0.5 FWHM of a peak\'s 2θ, 0.1° at least; 4 of 8 peaks at a reflection\'s Kα2 (λ 1.544426 Å), the nearest line within their tolerance, with a taller peak below at that reflection\'s λ: named so and left out of its sizes, as each repeats its Kα1 peak.');
   assert.ok(!/[!—]|v\d{3}/.test(rule));
   const one = { ...A, rows: A.rows.map((r, i)=> i === 1 ? { ...r, k2: [], label: '' } : i % 2 ? { ...r, refl: r.k2, k2: [], label: r.label.replace(' Kα2', '') } : r).slice(0, 4) };
   assert.match(H.peakTableHtml(pks.slice(0, 4), { std: false, m: null, fp, picked: null, st, A: one }, U), /0\.1° at least; 1 of 4 peaks unassigned, left out of its sizes\.<\/p>$/, 'none at Kα2: the rule as it was');
   const mix = { ...A, rows: A.rows.slice(0, 3).concat({ ...A.rows[3], k2: [], label: '' }) };
-  assert.match(H.peakTableHtml(pks.slice(0, 4), { std: false, m: null, fp, picked: null, st, A: mix }, U), /; 1 of 4 peaks unassigned, left out of its sizes; 1 of 4 peaks only at a reflection's Kα2 \(λ 1\.544426 Å\), named so and left out of its sizes, as it repeats its Kα1 peak\.<\/p>$/);
+  assert.match(H.peakTableHtml(pks.slice(0, 4), { std: false, m: null, fp, picked: null, st, A: mix }, U), /; 1 of 4 peaks unassigned, left out of its sizes; 1 of 4 peaks at a reflection's Kα2 \(λ 1\.544426 Å\), the nearest line within its tolerance, with a taller peak below at that reflection's λ: named so and left out of its sizes, as it repeats its Kα1 peak\.<\/p>$/);
   // peaks.csv: the hkl, Kα2 with them.
   const pk = M.csvTables('', { files: [f], procs: [pr], fps: [fp], asg: [A], m: null, norm: 'global', std: false }, U).find(e=> e.name === 'peaks.csv').text;
   assert.deepEqual(col(pk, pk.split('\n')[0].split(';').indexOf('Peak_hkl_h')), A.rows.map(r=> r.label));
   // λ the Kα mean: the Kα2 too; a Kα2 itself or a λ of one's own: none, the peaks named at λ alone.
-  assert.equal(run(1.541838).A.rows.pop().label, '(332) Kα2');
+  // (v577: those with a partner, a Kα1 peak named at that λ; (421)'s and (332)'s Kα1 peaks are
+  // not, beyond its tolerance of the line at the Kα mean)
+  const mean = run(1.541838).A;
+  assert.deepEqual([mean.lam2, mean.rows.map(r=> r.label)], [1.544426, ['(331)', '(331) Kα2', '(420)', '(420) Kα2', '', '(421)', '', '']]);
   for (const lam of [1.544426, 1.5]){
     const B = run(lam).A;
     assert.deepEqual([B.lam2, B.refl2, B.rows.some(r=> r.k2.length || /Kα2/.test(r.label))], [NaN, [], false], 'λ ' + lam);
   }
+});
+
+/* v577: which peak is at a reflection's Kα2: one whose nearest line within its tolerance is a
+   reflection's Kα2, with a peak below it, taller, assigned to that reflection at λ (its
+   partner); any other, its lines at λ alone. The fixture's perovskite from 100° to 140°
+   (PEROV_HI, (411) among its lines), at Cu Kα1. */
+const K2_LAM = 1.540598;
+const hiPat = o =>{ const sc = readXrdmlScanText(new Uint8Array(xrdml(0, { lo: 100, hi: 140, n: 3078, refl: PEROV_HI, ...o }))); return { name: 'h.xrdml', label: 'h', x: sc.x, y: sc.y, varMul: sc.varMul }; };
+const hiRun = (f, removed = [])=>{ const fp = { ...DEF, lambda: K2_LAM }, pr = M.processingOf(f, M.smoothingOf(f.x, f.y, fp), fp, [], removed, U); return { fp, pr, A: M.sampleAssign(f, pr, K2_LAM, STO) }; };
+// The rule in grey under its table.
+const hklRule = ({ fp, pr, A })=> H.peakTableHtml(pr.peaks.filter(pk=> !pk.removed), { std: false, m: null, fp, picked: null, st: M.sampleSizes(pr, fp, null, false, U, A), A }, U).match(/<p class="txt-meta xrd-hkl-rule">(.*)<\/p>$/)[1];
+const HI_HKL = ['(400)', '(410)/(322)', '(411)/(330)', '(411)/(330) Kα2', '(331)', '(331) Kα2', '(420)', '(420) Kα2', '(421)', '(421) Kα2', '(332)', '(332) Kα2'];
+const hklOf = rs => rs.map(r=> r.hkl.join(''));
+
+/* (b) (411)'s Kα2 peak: the valley between it and its Kα1 peak above half its height, it is
+   measured so wide that its tolerance reaches (411)'s line at λ; its nearest line (411)'s Kα2,
+   its Kα1 peak below and taller: "(411)/(330) Kα2", out of the sizes (to v576 named by the
+   line at λ and sized, its sample's and its reflection's). */
+test('a resolved Kα2 peak whose valley stands above half its height: its tolerance reaching its line at λ, named at Kα2 all the same, out of the sizes (v577)', ()=>{
+  const f = hiPat({}), R = hiRun(f), { fp, pr, A } = R;
+  assert.deepEqual(A.rows.map(r=> r.label), HI_HKL);
+  const [p1, p2] = [A.rows[2].pk, A.rows[3].pk], valley = Math.min(...pr.subtracted.slice(p1.idx, p2.idx + 1));
+  assert.ok(valley > p2.height/2 && p2.fwhmClassic > 2*p1.fwhmClassic, `the valley ${valley} over half ${p2.height}; FWHM ${p2.fwhmClassic} against ${p1.fwhmClassic}`);
+  assert.deepEqual([hklOf(M.peakRefl(p2, A.refl)), hklOf(A.rows[3].refl), hklOf(A.rows[3].k2), p1.height > p2.height], [['411', '330'], [], ['411', '330'], true], 'its line at λ within its tolerance; named at Kα2');
+  assert.ok(Math.abs(A.rows[3].k2[0].tt - p2.detPos) < Math.abs(M.peakRefl(p2, A.refl)[0].tt - p2.detPos), 'its Kα2 line the nearer');
+  // Out of the sizes: by sample the Kα1 peaks' alone, by peak (411)/(330) its Kα1 peak's.
+  const k1 = A.rows.filter(r=> r.refl.length).map(r=> r.pk), st = M.sampleSizes(pr, fp, null, false, U, A);
+  assert.deepEqual([k1.length, st.rawVals], [7, k1.map(pk=> M.scherrerD(pk.fwhmClassic, pk.detPos, fp.K, fp.lambda))]);
+  const by = M.sizeRows('peak', [f], [A], [pr], [fp], null, U).find(r=> r.label === '(411)/(330)');
+  assert.deepEqual([by.rawN, by.rawMean], [1, M.scherrerD(p1.fwhmClassic, p1.detPos, fp.K, fp.lambda)]);
+  const t = H.peakTableHtml(pr.peaks.filter(pk=> !pk.removed), { std: false, m: null, fp, picked: null, st, A }, U);
+  assert.ok(t.includes(`<td title="Calculated 2θ at Kα2: ${A.rows[3].k2.map(q=> q.tt.toFixed(3)).join(', ')}°">(411)/(330) Kα2</td>`));
+  assert.equal(hklRule(R), 'hkl: the reflections of SrTiO3 at λ 1.540598 Å within 0.5 FWHM of a peak\'s 2θ, 0.1° at least; 5 of 12 peaks at a reflection\'s Kα2 (λ 1.544426 Å), the nearest line within their tolerance, with a taller peak below at that reflection\'s λ: named so and left out of its sizes, as each repeats its Kα1 peak.');
+});
+
+/* A genuine Kα2 peak, (420)'s, named so with its partner; its partner removed by hand, or not
+   taller, unassigned (to v576 "(420) Kα2" all the same). */
+test('a genuine Kα2 peak named so with its partner, a taller peak below at its reflection\'s λ; with none, unassigned (v577)', ()=>{
+  const f = hiPat({}), { pr, A } = hiRun(f), [p1, p2] = [A.rows[6].pk, A.rows[7].pk];
+  assert.deepEqual([A.rows[7].label, hklOf(A.rows[7].k2), hklOf(A.rows[6].refl), p1.detPos < p2.detPos && p1.height > p2.height], ['(420) Kα2', ['420'], ['420'], true]);
+  const its = B => B.rows.filter(r=> r.pk.detPos === p2.detPos).map(r=> [r.label, r.refl.length, r.k2.length]);
+  assert.deepEqual(its(hiRun(f, [p1.detPos]).A), [['', 0, 0]], 'its partner removed by hand');
+  assert.deepEqual(its(M.sampleAssign(f, { peaks: pr.peaks.map(pk=> pk === p1 ? { ...pk, height: p2.height/2 } : pk) }, K2_LAM, STO)), [['', 0, 0]], 'its partner not taller');
+});
+
+/* (a) The same perovskite with a cell 0.18 % smaller than its CIF's: its Kα1 peaks from (411) on
+   fall on their lines' Kα2 alone, no partner below: unassigned (to v576 "(hkl) Kα2"); (400),
+   within its tolerance of its line at λ too, though nearer its Kα2, named by it. */
+test('a Kα1 peak of a cell smaller than its CIF\'s on its line\'s Kα2, no partner: unassigned, not named at Kα2 (v577)', ()=>{
+  const R = hiRun(hiPat({ a: 3.898 })), { A } = R, rows = A.rows;
+  assert.deepEqual(rows.map(r=> r.label), ['(400)', '(410)/(322)', ...Array(10).fill('')]);
+  assert.ok(rows.slice(2).every(r=> !r.refl.length && !r.k2.length && !M.peakRefl(r.pk, A.refl).length), 'none at λ');
+  assert.deepEqual([2, 4, 6, 8, 10].map(i=> hklOf(M.peakRefl(rows[i].pk, A.refl2))), [['411', '330'], ['331'], ['420'], ['421'], ['332']], 'each Kα1 peak on its line\'s Kα2');
+  assert.ok(Math.abs(M.peakRefl(rows[0].pk, A.refl2)[0].tt - rows[0].pk.detPos) < Math.abs(rows[0].refl[0].tt - rows[0].pk.detPos), '(400) nearer its Kα2, no partner: named at λ');
+  assert.equal(hklRule(R), 'hkl: the reflections of SrTiO3 at λ 1.540598 Å within 0.5 FWHM of a peak\'s 2θ, 0.1° at least; 10 of 12 peaks unassigned, left out of its sizes.');
 });
 
 /* v576: the samples' CIFs saved once each. A state holds each distinct text once (cifTexts) and
@@ -922,7 +983,15 @@ test('the card\'s markup: the samples\' and the standard\'s, the Results\' secti
    the 20, the state's CIFs in its pool (cif: { file, ref }, cifTexts), the same read back
    (58 states), and a peak unassigned to v575 named "(hkl) Kα2" at a reflection's Kα2 (11
    tables, their rule saying so; 18 peaks.csv, its hkl): nothing else (sizes, charts, the
-   other CSVs) changed. */
+   other CSVs) changed. v577 wrote 8 of the 20 anew (the peaks at Kα2: peakRow), checked field
+   by field against v576's: in 22 tables and 29 peaks.csv, a Kα1 peak on a line's Kα2 with no
+   partner below (a cell smaller than its CIF's, or the tetragonal CIF given a cubic pattern: at
+   (110), (111), (211)) unassigned again (11 tables), and a faint peak placed by hand above
+   (200), so wide that its tolerance takes (200)'s line at λ and at Kα2, named "(200) Kα2" (the
+   nearer, the (200) peak below and taller) and left out of the sizes (12 steps of 4 cases:
+   there the size chart and both size CSVs too), the rule's words where some are at Kα2;
+   nothing else (the states, the plots, the fields, the CIFs' selector, the other CSVs)
+   changed. */
 // The patterns: the fixture's, shorter (one at another step, one labelled with markup), and a standard.
 const casePat = (k, n, label, color)=>{ const sc = readXrdmlScanText(new Uint8Array(xrdml(k, { n }))); return { name: 's' + k + '.xrdml', label, color, x: sc.x, y: sc.y, ...(sc.varMul ? { varMul: sc.varMul } : {}) }; };
 export const CASE_PATS = [casePat(0, 900, 's0', '#3aa0ff'), casePat(1, 900, 's1', '#ff7a59'), casePat(2, 700, 'S<2> & "b"', 'red<"'), casePat(5, 900, 's5', '#5fcf6a'), casePat(11, 900, 's11', '#d4a72c')];

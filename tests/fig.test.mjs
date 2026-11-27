@@ -25,7 +25,9 @@
    theirs; the Data card's table across the card, as tall as a Plot card's chart, with no
    list of series beside it, the series' names typed over in place in the line over their
    columns (one name with the trace list's, both ways); the page scrolling on at the table's
-   end and outside it; the scrollbars of the theme. */
+   end and outside it; the scrollbars of the theme.
+   v577: a box plot's box of one value, or of values all alike, at least its mean's cross tall
+   in its colour, in the card's plot and in its figure composer. */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -589,6 +591,33 @@ test('Custom v534: the page scrolls past the table\'s end and outside it; the sc
     assert.notEqual(await page.$eval('#fig1List', e=> getComputedStyle(e).scrollbarColor), dark[0], 'a list\'s too');
     await page.evaluate(async ()=> (await import('./utils.js')).applyTheme('dark', false));
     assert.equal((await bars())[0], dark[0]);
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+/* v577: a box of one value, or of values all alike (its quartiles one), drawn at least its
+   mean's cross tall about its middle in its series' colour (plot.js minBox, as XRPD's sizes
+   from v576; to v576 a box of no height, its lines alone), in the card's plot and in its
+   figure composer. */
+test('Custom box plot: a series of one value and one of values all alike seen in their colours, in the plot and the composer (v577)', async ()=>{
+  const { page, errors, close } = await env.page();
+  try {
+    await openModule(page, 'fig');
+    await loadFiles(page, 'fig', [env.fx.put('flat.csv', 'x,flat\n1,5\n2,5\n3,5\n4,5\n'), env.fx.put('one.csv', 'x,one\n1,7\n')]);
+    await addCard(page, 'box');
+    await pick(page, 1, [['flat', 'flat'], ['one', 'one']]);
+    const st = await page.$eval('#fig1Svg', s=> s._plot._stored.filter(e=> e.type === 'box').map(e=> ({ label: e.label, q: [e.q1, e.q3], color: e.color, minBox: e.minBox })));
+    assert.deepEqual(st.map(b=> [b.label, b.q, b.minBox]), [['flat', [5, 5], true], ['one', [7, 7], true]]);
+    // The plot's boxes, each in its series' colour, and their heights (px); the composer's, outlined
+    // (its legend's swatches not).
+    const colors = st.map(b=> b.color), plot = await page.$$eval('#fig1Svg rect', (rs, colors)=> rs.filter(r=> colors.includes(r.getAttribute('fill'))).map(r=> [r.getAttribute('fill'), +r.getAttribute('height')]), colors);
+    assert.deepEqual(plot.map(b=> b[0]), colors);
+    assert.ok(plot.every(b=> b[1] >= 6.9), 'the plot\'s boxes at least the cross tall: ' + JSON.stringify(plot));
+    await page.locator('#tab-fig .an-card').first().locator('button[title="Figure composer (advanced export)"]').click();
+    await page.waitForSelector('.fig-backdrop .fig-svg rect');
+    const fig = await page.$$eval('.fig-backdrop .fig-svg rect[stroke]', rs=> rs.map(r=> +r.getAttribute('height')));
+    assert.ok(fig.length === 2 && fig.every(h=> h >= 4.9), 'the composer\'s boxes at least the cross tall: ' + JSON.stringify(fig));
+    await page.keyboard.press('Escape'); await settle(page);
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });
