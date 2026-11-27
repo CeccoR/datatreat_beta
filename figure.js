@@ -2,6 +2,8 @@ import { svgEl, niceTicks, fmtTick, SUB_DROP, TILT_DY } from './plot.js';
 import { colorPickerUI, palettePickerUI, CP_PALETTES, X_SVG, tiltFits, flashFieldInvalid, dropGap, esc, saveBlob } from './utils.js';
 import { tabOf, TABS } from './tabs.js';
 import * as FL from './figure-layout.js';
+import * as FM from './figure-model.js';
+import { clearDivColors, clearDivTex } from './figure-model.js';
 import { PX_MM, PT_PX, SIDES, SUP_K, newAxes, markerShape, lightShade, contrastInk,
   divsOf, divName, divColor, divTexture, divInv, divOfBar } from './figure-layout.js';
 
@@ -34,7 +36,9 @@ import { PX_MM, PT_PX, SIDES, SUP_K, newAxes, markerShape, lightShade, contrastI
    The plots' figure: what it draws, and where (the ranges, the ticks, the margins and
    the tilt of the X names, each panel's scales and marks, the axes' numbers and titles,
    the legends), is worked out in figure-layout.js, plain functions the tests run in
-   Node; drawFigure, below, paints it into the svg in named stages.
+   Node; drawFigure, below, paints it into the svg in named stages. What the sidebar's
+   fields and buttons do to the figure is worked out in figure-model.js (v564), the same
+   way; wireControls, below, reads them and redraws.
 ========================================================= */
 
 // (PX_MM, CSS px per mm at the nominal 96 dpi, and PT_PX, per typographic point: figure-layout.js)
@@ -1967,12 +1971,8 @@ function controlsHtml(){
   </section>`;
 }
 
-// True if placing panel `i` at r,c with the given span would sit on another panel.
-// Panels tile a table: they may leave holes, but they must never overlap.
-function overlaps(i, r, c, rs, cs){
-  return F.panels.some((q, k)=> k !== i &&
-    r < q.r + q.rs && q.r < r + rs && c < q.c + q.cs && q.c < c + cs);
-}
+// (a panel that would sit on another: figure-model.js overlaps)
+const overlaps = (i, r, c, rs, cs)=> FM.overlaps(F, i, r, c, rs, cs);
 
 // Keep every panel inside the current grid after rows/cols change, and collapse
 // any span that a shrunken grid turned into an overlap.
@@ -2110,10 +2110,8 @@ function spreadByScope(list, scope, put){
   } else list.forEach((s, i)=> put(s, i));
 }
 
-// A division with no colour of its own draws in the series' — which is what "one
-// colour per series" means once the divisions are there. Same for its texture.
-const clearDivColors = s=>{ if (s.divs) s.divs = s.divs.map(d=> ({ ...d, color: null })); };
-const clearDivTex = s=>{ if (s.divs) s.divs = s.divs.map(d=> ({ ...d, texture: null, texInv: null })); };
+// (a division with no colour or fill of its own, drawn in the series': figure-model.js
+// clearDivColors, clearDivTex)
 
 /* Spread a palette over the figure. A bar series read by division takes the whole run
    across its divisions — the series itself is told apart by its texture — and every
@@ -2486,397 +2484,339 @@ function wirePresetBar(){
   });
 }
 
-/* Settings that change the shape of the sidebar itself. */
-const SHOWS_MORE = new Set(['xAuto','yAuto','shareX','shareY','legendMode','legendFrame',
-  'xStepAuto','yStepAuto','minorXAuto','minorYAuto','catRotAuto','xLog','yLog']);
-
-/* A manual range is held in the axis's own terms — the logarithms, on a log axis — so
-   switching the scale carries it across: the same bounds, the other way of placing
-   them. One a log axis cannot take (≤ 0) gives way to the automatic range. */
-function relogRanges(ax, on){
-  const conv = v => on ? (v > 0 ? Math.log10(v) : NaN) : Math.pow(10, v);
-  const pair = r => r && r.map(conv).every(isFinite) ? r.map(conv) : null;
-  const g = pair([F[ax + 'min'], F[ax + 'max']]);
-  if (g) [F[ax + 'min'], F[ax + 'max']] = g; else F[ax + 'Auto'] = true;
-  const man = F[ax + 'Man'];
-  for (const k of Object.keys(man)){
-    const r = pair(man[k]);
-    if (r) man[k] = r;
-    else { delete man[k]; if (F.panels[k]) F.panels[k][ax + 'Auto'] = true; }
-  }
-}
-
+/* ---- The sidebar's controls (v564: no longer one closure) ------------------------
+   One listener of each kind on the sidebar's box, for the composer's life. What a field
+   does to the figure is worked out in figure-model.js; here a field is read (a number
+   refused flashes and goes back), the figure redrawn and the step recorded. */
 function wireControls(){
-  const numKeys = new Set(['wmm','hmm','dpi','rows','cols','xmin','xmax','ymin','ymax','xStep','yStep','minorX','minorY','legendCols','legendGap','legendFrameAlpha','plotW','plotH','catRot']);
-  const dlNum = new Set(['rot','off','dec','size']);
-
-  /* Routes one control to the model and says whether the sidebar has to be rebuilt.
-     Numeric fields (data-num) reach this from 'change', i.e. on blur or Enter, so a
-     half-typed value never redraws and a rebuild can never steal the caret; every
-     other control reaches it from 'input' and stays immediate. */
-  const applyControl = t=>{
-    let rebuild = false;
-    if (t.dataset.k){
-      const k = t.dataset.k;
-      if (k === 'axSel'){ axSel = t.value === 'all' ? 'all' : +t.value; refresh(true); return null; }
-      if (k === 'palScope'){ F.palScope = t.value; applyPalette(); pushUndo(); refresh(true); return null; }
-      if (k === 'rangePanel'){ F.rangePanel = +t.value; refresh(true); return null; }
-      // Which panel the Range column is about: nothing in the model changes, only
-      // what the column shows, so it rebuilds and stops there.
-      if (k === 'xPanel' || k === 'yPanel'){ F[k] = +t.value; F.rangePanel = +t.value; refresh(true); return null; }
-      // Turning an auto range off must hand you the range you are looking at, not
-      // the model's placeholder 0..1, so the bounds are read while auto still holds.
-      if (k === 'plotAuto' && !t.checked){ F.plotW = lastInner.w; F.plotH = lastInner.h; rebuild = true; }
-      if (k === 'plotAuto' && t.checked) rebuild = true;
-      // Off, the tilt opens on the one the figure was drawn with.
-      if (k === 'catRotAuto' && !t.checked) F.catRot = lastCatRot;
-      // ...and the minors on as many as are drawn, which on a log axis is not 4.
-      if ((k === 'minorXAuto' || k === 'minorYAuto') && !t.checked)
-        F[k === 'minorXAuto' ? 'minorX' : 'minorY'] = autoMinorsOf(k === 'minorXAuto' ? 'x' : 'y');
-      if (k === 'xLog' || k === 'yLog') relogRanges(k[0], t.checked);
-      if ((k === 'xAuto' || k === 'yAuto') && !t.checked){
-        const r = computeRanges(), i = (k === 'xAuto' ? F.xPanel : F.yPanel) | 0;
-        if (k === 'xAuto'){ const [a, z] = r.xOf[i] || r.xOf[0] || [0, 1]; F.xmin = a; F.xmax = z; }
-        else { const [a, z] = r.yOf[i] || r.yOf[0] || [0, 1]; F.ymin = a; F.ymax = z; }
-      }
-      if (numKeys.has(k)){
-        let v = readNum(t); if (v === null) return null;
-        if (/^[xy]m(in|ax)$/.test(k)){
-          v = takenOf(k[0], v);
-          if (v === null){ flashFieldInvalid(t); t.value = +shownOf(k[0], F[k]).toPrecision(6); return null; }
-        }
-        F[k] = v;
-      }
-      else F[k] = t.type === 'checkbox' ? t.checked : t.value;
-      if (k === 'rows' || k === 'cols'){ F[k] = Math.max(1, Math.round(F[k] || 1)); rebuild = true; }
-      // Keys that decide which controls are on show have to redraw the sidebar, not
-      // just the figure — the fields they reveal or lock are part of their effect.
-      if (SHOWS_MORE.has(k)) rebuild = true;
-    } else if (t.dataset.rauto){
-      const X = t.dataset.rauto === 'x';
-      const shared = X ? F.shareX : F.shareY;
-      const sel = Math.min(Math.max(0, (X ? F.xPanel : F.yPanel) | 0), F.panels.length - 1);
-      // The panel at the head of the group this one is scaled with.
-      const i = shared ? sel : rangeRoot(sel, X ? 'shareXWith' : 'shareYWith');
-      if (shared){
-        // Same as the figure-wide switch: hand over the range on screen, so turning
-        // it off starts from what is drawn rather than from a placeholder.
-        const r = computeRanges();
-        if (!t.checked){
-          const [a, z] = (X ? r.xOf[i] : r.yOf[i]) || [0, 1];
-          if (X){ F.xmin = a; F.xmax = z; } else { F.ymin = a; F.ymax = z; }
-        }
-        F[X ? 'xAuto' : 'yAuto'] = t.checked;
-      } else {
-        const p = F.panels[i]; if (!p) return null;
-        if (!t.checked && !F[X ? 'xMan' : 'yMan'][i]){
-          const r = computeRanges();
-          F[X ? 'xMan' : 'yMan'][i] = ((X ? r.xOf[i] : r.yOf[i]) || [0, 1]).slice();
-        }
-        p[X ? 'xAuto' : 'yAuto'] = t.checked;
-      }
-      rebuild = true;
-    } else if (t.dataset.ak){
-      const v = t.type === 'checkbox' ? t.checked : t.value;
-      for (const pi of axTargets()){
-        const p = F.panels[pi]; if (!p) continue;
-        (p.axes || (p.axes = newAxes()))[t.dataset.side][t.dataset.ak] = v;
-      }
-    } else if (t.dataset.man){
-      const bag = t.dataset.man;
-      const selP = Math.min(Math.max(0, (bag === 'xMan' ? F.xPanel : F.yPanel) | 0), F.panels.length - 1);
-      const i = rangeRoot(selP, bag === 'xMan' ? 'shareXWith' : 'shareYWith');
-      const r = computeRanges();
-      const cur = F[bag][i] || (bag === 'xMan' ? (r.xOf[i] || [0,1]).slice() : (r.yOf[i] || [0,1]).slice());
-      let v = readNum(t); if (v === null) return null;
-      v = takenOf(bag[0], v);
-      if (v === null){ flashFieldInvalid(t); t.value = +shownOf(bag[0], cur[+t.dataset.end]).toPrecision(6); return null; }
-      cur[+t.dataset.end] = v;
-      F[bag][i] = cur;
-    } else if (t.dataset.all){
-      // One control, applied to every series at once.
-      const k = t.dataset.all, v = t.value;
-      if (k === 'show') F.series.forEach(s=>{ s.show = t.checked; });
-      else if (k === 'inLegend') F.series.forEach(s=>{ s.inLegend = t.checked; });
-      else if (v === '') return null;
-      else if (k === 'width'){ const w = readNum(t); if (w === null) return null; F.series.forEach(s=>{ s.width = w; }); }
-      else if (k === 'dash') F.series.forEach(s=>{ s.dash = (v === 'solid' ? '' : v); });
-      else F.series.forEach(s=>{ s.marker = v; });
-      rebuild = true;
-    } else if (t.dataset.g){
-      F.grid[t.dataset.g] = t.type === 'checkbox' ? t.checked : t.value;
-    } else if (t.dataset.dl){
-      const k = t.dataset.dl;
-      if (dlNum.has(k)){ const v = readNum(t); if (v === null) return null; F.dataLabels[k] = v; }
-      else F.dataLabels[k] = t.type === 'checkbox' ? t.checked : t.value;
-      if (k === 'on') rebuild = true;         // the rest of the section appears/hides
-    } else if (t.dataset.f){
-      if (t.dataset.f === 'family'){ F.font.family = t.value; }
-      else { const v = readNum(t); if (v === null) return null; F.font[t.dataset.f] = v; }
-    } else if (t.dataset.pk){
-      const i = +t.dataset.p, p = F.panels[i]; if (!p) return null;
-      const k = t.dataset.pk;
-      if (k === 'title' || k === 'ylabel'){ p[k] = t.value; }
-      else {
-        // Try the new position/span; if it would land on another panel, keep the
-        // old value and put it back in the field.
-        const want = (k === 'r' || k === 'c') ? Math.max(0, (parseInt(t.value, 10) || 1) - 1)
-                                              : Math.max(1, parseInt(t.value, 10) || 1);
-        const cand = { r:p.r, c:p.c, rs:p.rs, cs:p.cs, [k]: want };
-        cand.rs = Math.min(cand.rs, F.rows - cand.r);
-        cand.cs = Math.min(cand.cs, F.cols - cand.c);
-        if (cand.r < F.rows && cand.c < F.cols && !overlaps(i, cand.r, cand.c, cand.rs, cand.cs)){
-          p.r = cand.r; p.c = cand.c; p.rs = cand.rs; p.cs = cand.cs;
-        } else {
-          rebuild = true;   // reject: re-render the controls so the field snaps back
-        }
-      }
-    } else if (t.dataset.bark){
-      const [i, j] = t.dataset.bark.split(':').map(Number);
-      const s = F.series[i]; if (!s) return null;
-      // Held by the category, so every series standing on that sample reads it.
-      F.catNames = { ...F.catNames, [s.xs[j]]: t.value };
-    } else if (t.dataset.dk){
-      const [i, k] = t.dataset.dk.split(':').map(Number);
-      const s = F.series[i]; if (!s) return null;
-      // Every division holds its own name, the first one included; the series' name
-      // is another thing (divName).
-      s.divs = divsOf(s).slice();
-      s.divs[k] = { ...s.divs[k], name: t.value };
-    } else if (t.dataset.share){
-      const p = F.panels[+t.dataset.p]; if (!p) return null;
-      p[t.dataset.share] = t.value === '' ? null : +t.value;
-      rebuild = true;
-    } else if (t.dataset.sk){
-      const s = F.series[+t.dataset.s]; if (!s) return null;
-      const k = t.dataset.sk;
-      if (k === 'show') s.show = t.checked;
-      else if (k === 'inLegend') s.inLegend = t.checked;
-      else if (k === 'width'){ const v = readNum(t); if (v === null) return null; s.width = v; }
-      else if (k === 'label'){ s.label = s.rename = t.value; }
-      else s[k] = t.value;
-    } else return null;
-    return rebuild;
-  };
-
-  /* Not while the composer closes either: the focused field, thrown away with it, fires
-     one last 'change' (after Enter, the value it committed, once more) when the model
-     is already let go, and writing into it threw (to v485). */
-  const run = t=>{
-    if (rebuilding || !F || !t.isConnected) return;
-    const rebuild = applyControl(t);
-    if (rebuild === null) return;
-    // Echo the committed value back with a decimal point, so a comma typed by hand
-    // is accepted but never left standing in the field.
-    if (t.dataset.num && !rebuild){
-      const v = parseFloat(String(t.value).replace(',', '.'));
-      if (isFinite(v)){ t.value = String(v); t.defaultValue = t.value; }   // the value to go back to
-    }
-    pushUndo();
-    refresh(rebuild);
-  };
-
   // Live for everything that is a single decisive act; deferred to 'change' for the
   // fields you type a number into, so the figure follows the value you confirmed.
-  controlsEl.addEventListener('input', e=>{ if (!e.target.dataset.num) run(e.target); });
-  controlsEl.addEventListener('change', e=>{ if (e.target.dataset.num) run(e.target); });
+  controlsEl.addEventListener('input', e=>{ if (!e.target.dataset.num) runControl(e.target); });
+  controlsEl.addEventListener('change', e=>{ if (e.target.dataset.num) runControl(e.target); });
   // Enter commits without leaving the field.
   controlsEl.addEventListener('keydown', e=>{
-    if (e.key === 'Enter' && e.target.dataset.num){ e.preventDefault(); run(e.target); }
+    if (e.key === 'Enter' && e.target.dataset.num){ e.preventDefault(); runControl(e.target); }
   });
   controlsEl.addEventListener('change', e=>{ if (e.target.tagName === 'SELECT') refresh(false); });
-  controlsEl.addEventListener('click', e=>{
-    const rb = e.target.closest('[data-rich-act]');
-    if (rb){
-      const key = rb.dataset.for;
-      const input = controlsEl.querySelector(`input[data-rich="${key}"]`);
-      // Where the caret was before the button took focus, so an insert lands there.
-      const insertAt = (text, wrap)=>{
-        const a = input.selectionStart ?? input.value.length;
-        const b = input.selectionEnd ?? a;
-        const sel = input.value.slice(a, b);
-        const ins = wrap ? `${wrap}{${sel}}` : text;
-        input.value = input.value.slice(0, a) + ins + input.value.slice(b);
-        // Wrapping an empty selection leaves the caret inside the braces, ready to type.
-        const caret = a + ins.length - (wrap && !sel ? 1 : 0);
-        input.focus(); input.setSelectionRange(caret, caret);
-        F[key] = input.value;
-        pushUndo(); refresh(false);
-      };
-      if (rb.dataset.richAct === 'chars') charPicker.open(rb, ch=> insertAt(ch, null));
-      else insertAt(null, rb.dataset.richAct);
-      return;
-    }
-    if (e.target.closest('[data-restore]')){
-      restoreNames();
-      pushUndo(); refresh(true);
-      return;
-    }
-    const alignB = e.target.closest('[data-align-btn]');
-    if (alignB){
-      alignPicker.open(alignB, code=>{ F.align = code; pushUndo(); refresh(true); });
-      return;
-    }
-    const inkB = e.target.closest('.color-swatch[data-inksw]');
-    if (inkB){
-      colorPickerUI.open(inkB, F.inkColor, color=>{ F.inkColor = color; pushUndo(); refresh(false); });
-      return;
-    }
-    const fillB = e.target.closest('[data-fill]');
-    if (fillB){
-      const [si, dk] = fillB.dataset.fill.split(':').map(Number);
-      const s0 = F.series[si];
-      if (!s0) return;
-      const cur = dk == null
-        ? { texture: s0.texture || 'solid', inv: !!s0.texInv }
-        : { texture: divTexture(s0, dk), inv: divInv(s0, dk) };
-      fillPicker.open(fillB, cur, st=>{
-        if (dk == null){
-          s0.texture = st.texture; s0.texInv = st.inv;
-          clearDivTex(s0);
-          F.texPalette = null;    // picked by hand: stop re-spreading a set over it
-        } else {
-          s0.divs = divsOf(s0).slice();
-          s0.divs[dk] = { ...s0.divs[dk], texture: st.texture, texInv: st.inv };
-        }
-        pushUndo();
-        refresh(false);
-        // The buttons carry a picture of the fill, so they are redrawn where they
-        // stand rather than by rebuilding the row out from under the open panel.
-        syncSwatches();
-      });
-      return;
-    }
-    const spal = e.target.closest('[data-spal]');
-    if (spal){
-      const s = F.series[+spal.dataset.spal]; if (!s) return;
-      palettePickerUI.open(spal, colors=>{
-        paletteOnSeries(s, colors);
-        F.palette = null;     // one series coloured by hand: stop re-spreading over it
-        pushUndo(); refresh(true);
-      }, { colors: ()=> divsOf(s).map((_, k)=> divColor(s, k)) });
-      return;
-    }
-    const stexpal = e.target.closest('[data-stexpal]');
-    if (stexpal){
-      const s = F.series[+stexpal.dataset.stexpal]; if (!s) return;
-      texPalettePicker.open(stexpal, tex=>{
-        texPaletteOnSeries(s, tex);
-        F.texPalette = null;  // one series textured by hand: stop re-spreading over it
-        pushUndo(); refresh(true);
-      }, { textures: ()=> divsOf(s).map((_, k)=> texEntry(divTexture(s, k), divInv(s, k))) });
-      return;
-    }
-    const dsw = e.target.closest('.color-swatch[data-dsw]');
-    if (dsw){
-      const [i, k] = dsw.dataset.dsw.split(':').map(Number);
-      const s = F.series[i]; if (!s) return;
-      colorPickerUI.open(dsw, divColor(s, k), color=>{
-        // The first division IS the series' colour, so re-colouring it re-colours the
-        // series — anything else would leave the row's own swatch saying otherwise.
-        if (k === 0) s.color = color;
-        else { s.divs = divsOf(s).slice(); s.divs[k] = { ...s.divs[k], color }; }
-        F.palette = null;
-        pushUndo(); refresh(false);
-      });
-      return;
-    }
-    const sw = e.target.closest('.color-swatch');
-    if (sw){
-      const i = +sw.dataset.sw, s = F.series[i]; if (!s) return;
-      colorPickerUI.open(sw, s.color, color=>{
-        // Under "palette by panel" the panels are meant to read alike, so a colour is
-        // a property of a position within a panel, not of one series: every series
-        // holding that position in its own panel takes the new colour too.
-        for (const t of samePositionSeries(i)){
-          t.color = color;
-          // A bar reaches this swatch only where colour says series rather than
-          // division, so its divisions take the colour with it.
-          if (t.kind === 'bar') clearDivColors(t);
-        }
-        F.palette = null;         // hand-picked: stop re-applying a palette over it
-        pushUndo(); refresh(false);
-      });
-      return;
-    }
-    if (e.target.closest('.fig-pal')){
-      palettePickerUI.open(e.target.closest('.fig-pal'),
-        colors=>{ applyPalette(colors); pushUndo(); refresh(true); },
-        {
-          // Only the composer spreads a palette two ways, so only it offers the choice.
-          scope: F.palScope,
-          onScope: v=>{
-            F.palScope = v; applyPalette(); pushUndo(); refresh(true);
-            palettePickerUI.reanchor(controlsEl.querySelector('.fig-pal'));
-          },
-          // Divisions are a bar chart's affair, so the choice is offered there only.
-          byDiv: barMode() ? F.palByDiv : null,
-          onByDiv: v=>{
-            F.palByDiv = v;
-            // Off, the divisions have no colours of their own — with or without a
-            // palette to spread, which is what makes the switch show at once.
-            if (!v) F.series.forEach(s=>{ if (s.kind === 'bar') clearDivColors(s); });
-            applyPalette(); pushUndo(); refresh(true);
-            palettePickerUI.reanchor(controlsEl.querySelector('.fig-pal'));
-          },
-          colors: ()=> F.series.flatMap(s=> s.kind === 'bar' && F.palByDiv
-            ? divsOf(s).map((_, k)=> divColor(s, k)) : [s.color]),
-        });
-      return;
-    }
-    const texpalB = e.target.closest('[data-texpal]');
-    if (texpalB){
-      texPalettePicker.open(texpalB, tex=>{ applyTexPalette(tex); pushUndo(); refresh(true); }, {
-        scope: F.texScope,
-        onScope: v=>{
-          F.texScope = v; applyTexPalette(); pushUndo(); refresh(true);
-          texPalettePicker.reanchor(controlsEl.querySelector('[data-texpal]'));
-        },
-        byDiv: F.texByDiv,
-        onByDiv: v=>{
-          F.texByDiv = v;
-          if (!v) F.series.forEach(s=>{ if (s.kind === 'bar') clearDivTex(s); });
-          applyTexPalette(); pushUndo(); refresh(true);
-          texPalettePicker.reanchor(controlsEl.querySelector('[data-texpal]'));
-        },
-        textures: texturesInUse,
-      });
-      return;
-    }
-    const divB = e.target.closest('[data-adddiv], [data-deldiv]');
-    if (divB){
-      const done = divB.dataset.adddiv !== undefined
-        ? addDiv(+divB.dataset.adddiv)
-        : delDiv(...divB.dataset.deldiv.split(':').map(Number));
-      if (!done) return;
-      redealPalettes();
-      pushUndo(); refresh(true);
-      return;
-    }
-    const addB = e.target.closest('[data-add-panel]');
-    const delB = e.target.closest('[data-del-panel]');
-    if (addB){
-      // Drop the new panel in the first free cell, growing the grid if needed.
-      const taken = new Set();
-      F.panels.forEach(p=>{ for (let r=p.r;r<p.r+p.rs;r++) for (let c=p.c;c<p.c+p.cs;c++) taken.add(r+','+c); });
-      let spot = null;
-      for (let r = 0; r < F.rows && !spot; r++) for (let c = 0; c < F.cols && !spot; c++) if (!taken.has(r+','+c)) spot = [r,c];
-      if (!spot){ F.rows += 1; spot = [F.rows-1, 0]; }
-      F.panels.push(newPanel(spot[0], spot[1]));
-      distributeSeries();
-      redealPalettes();
-      pushUndo(); refresh(true);
-    } else if (delB){
-      const i = +delB.dataset.delPanel;
-      if (F.panels.length <= 1) return;
-      F.panels.splice(i, 1);
-      // (a separate plot's series go with their panel: linked panels, buildModel)
-      F.series = F.series.filter(s=> !(s.sep && s.panel === i));
-      F.series.forEach(s=>{ if (s.panel === i) s.panel = 0; else if (s.panel > i) s.panel--; });
-      redealPalettes();
-      pushUndo(); refresh(true);
-    }
+  controlsEl.addEventListener('click', onControlsClick);
+}
+
+/* Not while the composer closes either: the focused field, thrown away with it, fires
+   one last 'change' (after Enter, the value it committed, once more) when the model
+   is already let go, and writing into it threw (to v485). */
+function runControl(t){
+  if (rebuilding || !F || !t.isConnected) return;
+  const rebuild = applyControl(t);
+  if (rebuild === null) return;
+  // Echo the committed value back with a decimal point, so a comma typed by hand
+  // is accepted but never left standing in the field.
+  if (t.dataset.num && !rebuild){
+    const v = parseFloat(String(t.value).replace(',', '.'));
+    if (isFinite(v)){ t.value = String(v); t.defaultValue = t.value; }   // the value to go back to
+  }
+  pushUndo();
+  refresh(rebuild);
+}
+
+/* Routes one control to the model and says whether the sidebar has to be rebuilt (null:
+   nothing to record, the control refused or done with already). Numeric fields
+   (data-num) reach this from 'change', i.e. on blur or Enter, so a half-typed value never
+   redraws and a rebuild can never steal the caret; every other control reaches it from
+   'input' and stays immediate. A control is known by its data attribute, tried in this
+   order: the figure's own setting (k), a range column's automatic switch (rauto), the
+   panels' axes (ak), a range by hand (man), every series at once (all), the grid (g), the
+   data labels (dl), the font (f), a panel (pk), a category's name (bark), a division's
+   (dk), a panel's sharing (share), a series (sk). */
+const CONTROLS = [['k', applyK], ['rauto', applyRauto], ['ak', applyAk], ['man', applyMan], ['all', applyAll], ['g', applyGrid],
+  ['dl', applyDataLabels], ['f', applyFont], ['pk', applyPanel], ['bark', applyCatName], ['dk', applyDivName], ['share', applyShare], ['sk', applySeries]];
+function applyControl(t){
+  for (const [d, apply] of CONTROLS) if (t.dataset[d]) return apply(t);
+  return null;
+}
+
+function applyK(t){
+  const k = t.dataset.k;
+  if (applyKSelect(k, t)) return null;
+  let rebuild = beforeK(k, t);
+  if (FM.NUM_KEYS.has(k)){ const v = numberK(k, t); if (v === null) return null; F[k] = v; }
+  else F[k] = t.type === 'checkbox' ? t.checked : t.value;
+  if (k === 'rows' || k === 'cols'){ F[k] = Math.max(1, Math.round(F[k] || 1)); rebuild = true; }
+  // Keys that decide which controls are on show have to redraw the sidebar, not
+  // just the figure — the fields they reveal or lock are part of their effect.
+  if (FM.SHOWS_MORE.has(k)) rebuild = true;
+  return rebuild;
+}
+// The keys done with here, the sidebar rebuilt (true): which panel the axes or a range are
+// about, and the palette's scope, a step of its own.
+function applyKSelect(k, t){
+  if (k === 'axSel'){ axSel = t.value === 'all' ? 'all' : +t.value; refresh(true); return true; }
+  if (k === 'palScope'){ F.palScope = t.value; applyPalette(); pushUndo(); refresh(true); return true; }
+  if (k === 'rangePanel'){ F.rangePanel = +t.value; refresh(true); return true; }
+  // Which panel the Range column is about: nothing in the model changes, only
+  // what the column shows, so it rebuilds and stops there.
+  if (k === 'xPanel' || k === 'yPanel'){ F[k] = +t.value; F.rangePanel = +t.value; refresh(true); return true; }
+  return false;
+}
+// What a switch brings with it before it is set; true: the sidebar is to be rebuilt.
+function beforeK(k, t){
+  let rebuild = false;
+  // Turning an auto range off must hand you the range you are looking at, not
+  // the model's placeholder 0..1, so the bounds are read while auto still holds.
+  if (k === 'plotAuto' && !t.checked){ F.plotW = lastInner.w; F.plotH = lastInner.h; rebuild = true; }
+  if (k === 'plotAuto' && t.checked) rebuild = true;
+  // Off, the tilt opens on the one the figure was drawn with.
+  if (k === 'catRotAuto' && !t.checked) F.catRot = lastCatRot;
+  // ...and the minors on as many as are drawn, which on a log axis is not 4.
+  if ((k === 'minorXAuto' || k === 'minorYAuto') && !t.checked)
+    F[k === 'minorXAuto' ? 'minorX' : 'minorY'] = autoMinorsOf(k === 'minorXAuto' ? 'x' : 'y');
+  if (k === 'xLog' || k === 'yLog') FM.relogRanges(F, k[0], t.checked);
+  if ((k === 'xAuto' || k === 'yAuto') && !t.checked) FM.handOver(F, k, computeRanges());
+  return rebuild;
+}
+// A number typed for F[k], or null: refused by its field, or a range's bound its axis
+// cannot take (≤ 0 on a log axis), the field flashed and set back to the bound in force.
+function numberK(k, t){
+  let v = readNum(t); if (v === null) return null;
+  if (/^[xy]m(in|ax)$/.test(k)){
+    v = takenOf(k[0], v);
+    if (v === null){ flashFieldInvalid(t); t.value = +shownOf(k[0], F[k]).toPrecision(6); return null; }
+  }
+  return v;
+}
+// The range column's automatic switch: the figure's while sharing, else that of the group
+// the panel on show is scaled with (headed by rangeRoot).
+function applyRauto(t){
+  const X = t.dataset.rauto === 'x';
+  const shared = X ? F.shareX : F.shareY;
+  const sel = FM.selPanel(F, X);
+  const i = shared ? sel : rangeRoot(sel, X ? 'shareXWith' : 'shareYWith');
+  return FM.rangeAuto(F, X, shared, i, t.checked, computeRanges) ? true : null;
+}
+function applyAk(t){
+  FM.setAxes(F, axTargets(), t.dataset.side, t.dataset.ak, t.type === 'checkbox' ? t.checked : t.value);
+  return false;
+}
+// A bound of a group's range by hand (end 0 or 1), refused as a figure-wide one is.
+function applyMan(t){
+  const bag = t.dataset.man;
+  const i = rangeRoot(FM.selPanel(F, bag === 'xMan'), bag === 'xMan' ? 'shareXWith' : 'shareYWith');
+  const cur = FM.manOf(F, bag, i, computeRanges());
+  let v = readNum(t); if (v === null) return null;
+  v = takenOf(bag[0], v);
+  if (v === null){ flashFieldInvalid(t); t.value = +shownOf(bag[0], cur[+t.dataset.end]).toPrecision(6); return null; }
+  cur[+t.dataset.end] = v;
+  F[bag][i] = cur;
+  return false;
+}
+// One control, applied to every series at once (its select's '' the mixed state: nothing).
+function applyAll(t){
+  const k = t.dataset.all, v = t.value;
+  if (k === 'show' || k === 'inLegend') FM.setEvery(F, k, t.checked);
+  else if (v === '') return null;
+  else if (k === 'width'){ const w = readNum(t); if (w === null) return null; FM.setEvery(F, k, w); }
+  else FM.setEvery(F, k, v);
+  return true;
+}
+function applyGrid(t){ F.grid[t.dataset.g] = t.type === 'checkbox' ? t.checked : t.value; return false; }
+function applyDataLabels(t){
+  const k = t.dataset.dl;
+  if (FM.DL_NUM.has(k)){ const v = readNum(t); if (v === null) return null; F.dataLabels[k] = v; }
+  else F.dataLabels[k] = t.type === 'checkbox' ? t.checked : t.value;
+  return k === 'on';         // the rest of the section appears/hides
+}
+function applyFont(t){
+  if (t.dataset.f === 'family'){ F.font.family = t.value; }
+  else { const v = readNum(t); if (v === null) return null; F.font[t.dataset.f] = v; }
+  return false;
+}
+// A panel's title or Y label; its place or span, refused if it would land on another panel
+// (the controls rebuilt so that the field snaps back).
+function applyPanel(t){
+  const i = +t.dataset.p, p = F.panels[i]; if (!p) return null;
+  const k = t.dataset.pk;
+  if (k === 'title' || k === 'ylabel'){ p[k] = t.value; return false; }
+  return !FM.movePanel(F, i, k, t.value);
+}
+// Held by the category, so every series standing on that sample reads it.
+function applyCatName(t){
+  const [i, j] = t.dataset.bark.split(':').map(Number);
+  const s = F.series[i]; if (!s) return null;
+  F.catNames = { ...F.catNames, [s.xs[j]]: t.value };
+  return false;
+}
+// Every division holds its own name, the first one included; the series' name is
+// another thing (divName).
+function applyDivName(t){
+  const [i, k] = t.dataset.dk.split(':').map(Number);
+  const s = F.series[i]; if (!s) return null;
+  FM.setDiv(s, k, { name: t.value });
+  return false;
+}
+function applyShare(t){
+  const p = F.panels[+t.dataset.p]; if (!p) return null;
+  p[t.dataset.share] = t.value === '' ? null : +t.value;
+  return true;
+}
+function applySeries(t){
+  const s = F.series[+t.dataset.s]; if (!s) return null;
+  const k = t.dataset.sk;
+  if (k === 'show') s.show = t.checked;
+  else if (k === 'inLegend') s.inLegend = t.checked;
+  else if (k === 'width'){ const v = readNum(t); if (v === null) return null; s.width = v; }
+  else if (k === 'label'){ s.label = s.rename = t.value; }
+  else s[k] = t.value;
+  return false;
+}
+
+/* The sidebar's buttons, one listener: a handler a kind of button, tried in this order,
+   the first the click is inside taking it; the panels' + and × after them all. */
+const CLICKS = [['[data-rich-act]', onRichButton], ['[data-restore]', onRestoreNames], ['[data-align-btn]', onAlignButton],
+  ['.color-swatch[data-inksw]', onInkSwatch], ['[data-fill]', onFillButton], ['[data-spal]', onSeriesPalette], ['[data-stexpal]', onSeriesTexPalette],
+  ['.color-swatch[data-dsw]', onDivSwatch], ['.color-swatch', onSeriesSwatch], ['.fig-pal', onPaletteButton], ['[data-texpal]', onTexPaletteButton],
+  ['[data-adddiv], [data-deldiv]', onDivButton]];
+function onControlsClick(e){
+  for (const [sel, on] of CLICKS){ const el = e.target.closest(sel); if (el){ on(el); return; } }
+  const addB = e.target.closest('[data-add-panel]');
+  const delB = e.target.closest('[data-del-panel]');
+  if (addB) addPanel();
+  else if (delB) delPanel(+delB.dataset.delPanel);
+}
+// A rich field's buttons: raised, lowered (wrapping the selection), a character from the map.
+function onRichButton(rb){
+  const key = rb.dataset.for;
+  const input = controlsEl.querySelector(`input[data-rich="${key}"]`);
+  if (rb.dataset.richAct === 'chars') charPicker.open(rb, ch=> insertRich(input, key, ch, null));
+  else insertRich(input, key, null, rb.dataset.richAct);
+}
+// Where the caret was before the button took focus, so an insert lands there.
+function insertRich(input, key, text, wrap){
+  const a = input.selectionStart ?? input.value.length;
+  const b = input.selectionEnd ?? a;
+  const { value, caret } = FM.richInsert(input.value, a, b, text, wrap);
+  input.value = value;
+  input.focus(); input.setSelectionRange(caret, caret);
+  F[key] = input.value;
+  pushUndo(); refresh(false);
+}
+function onRestoreNames(){
+  restoreNames();
+  pushUndo(); refresh(true);
+}
+function onAlignButton(alignB){
+  alignPicker.open(alignB, code=>{ F.align = code; pushUndo(); refresh(true); });
+}
+function onInkSwatch(inkB){
+  colorPickerUI.open(inkB, F.inkColor, color=>{ F.inkColor = color; pushUndo(); refresh(false); });
+}
+function onFillButton(fillB){
+  const [si, dk] = fillB.dataset.fill.split(':').map(Number);
+  const s0 = F.series[si];
+  if (!s0) return;
+  fillPicker.open(fillB, FM.fillOf(s0, dk), st=>{
+    FM.setFill(F, s0, dk, st);    // the series' own picked by hand: the texture palette stops re-spreading over it
+    pushUndo();
+    refresh(false);
+    // The buttons carry a picture of the fill, so they are redrawn where they
+    // stand rather than by rebuilding the row out from under the open panel.
+    syncSwatches();
   });
+}
+function onSeriesPalette(spal){
+  const s = F.series[+spal.dataset.spal]; if (!s) return;
+  palettePickerUI.open(spal, colors=>{
+    paletteOnSeries(s, colors);
+    F.palette = null;     // one series coloured by hand: stop re-spreading over it
+    pushUndo(); refresh(true);
+  }, { colors: ()=> FM.divColors(s) });
+}
+function onSeriesTexPalette(stexpal){
+  const s = F.series[+stexpal.dataset.stexpal]; if (!s) return;
+  texPalettePicker.open(stexpal, tex=>{
+    texPaletteOnSeries(s, tex);
+    F.texPalette = null;  // one series textured by hand: stop re-spreading over it
+    pushUndo(); refresh(true);
+  }, { textures: ()=> divsOf(s).map((_, k)=> texEntry(divTexture(s, k), divInv(s, k))) });
+}
+function onDivSwatch(dsw){
+  const [i, k] = dsw.dataset.dsw.split(':').map(Number);
+  const s = F.series[i]; if (!s) return;
+  colorPickerUI.open(dsw, divColor(s, k), color=>{
+    FM.setDivColor(s, k, color);
+    F.palette = null;
+    pushUndo(); refresh(false);
+  });
+}
+function onSeriesSwatch(sw){
+  const i = +sw.dataset.sw, s = F.series[i]; if (!s) return;
+  colorPickerUI.open(sw, s.color, color=>{
+    // Under "palette by panel" the panels are meant to read alike, so a colour is
+    // a property of a position within a panel, not of one series: every series
+    // holding that position in its own panel takes the new colour too.
+    FM.setColors(samePositionSeries(i), color);
+    F.palette = null;         // hand-picked: stop re-applying a palette over it
+    pushUndo(); refresh(false);
+  });
+}
+function onPaletteButton(pal){
+  palettePickerUI.open(pal,
+    colors=>{ applyPalette(colors); pushUndo(); refresh(true); },
+    {
+      // Only the composer spreads a palette two ways, so only it offers the choice.
+      scope: F.palScope,
+      onScope: v=>{
+        F.palScope = v; applyPalette(); pushUndo(); refresh(true);
+        palettePickerUI.reanchor(controlsEl.querySelector('.fig-pal'));
+      },
+      // Divisions are a bar chart's affair, so the choice is offered there only.
+      byDiv: barMode() ? F.palByDiv : null,
+      onByDiv: v=>{
+        F.palByDiv = v;
+        // Off, the divisions have no colours of their own — with or without a
+        // palette to spread, which is what makes the switch show at once.
+        if (!v) FM.clearBarColors(F);
+        applyPalette(); pushUndo(); refresh(true);
+        palettePickerUI.reanchor(controlsEl.querySelector('.fig-pal'));
+      },
+      colors: ()=> FM.colorsInUse(F),
+    });
+}
+function onTexPaletteButton(texpalB){
+  texPalettePicker.open(texpalB, tex=>{ applyTexPalette(tex); pushUndo(); refresh(true); }, {
+    scope: F.texScope,
+    onScope: v=>{
+      F.texScope = v; applyTexPalette(); pushUndo(); refresh(true);
+      texPalettePicker.reanchor(controlsEl.querySelector('[data-texpal]'));
+    },
+    byDiv: F.texByDiv,
+    onByDiv: v=>{
+      F.texByDiv = v;
+      if (!v) FM.clearBarTex(F);
+      applyTexPalette(); pushUndo(); refresh(true);
+      texPalettePicker.reanchor(controlsEl.querySelector('[data-texpal]'));
+    },
+    textures: texturesInUse,
+  });
+}
+function onDivButton(divB){
+  const done = divB.dataset.adddiv !== undefined
+    ? addDiv(+divB.dataset.adddiv)
+    : delDiv(...divB.dataset.deldiv.split(':').map(Number));
+  if (!done) return;
+  redealPalettes();
+  pushUndo(); refresh(true);
+}
+// A panel added in the first free cell (the grid grown if needed), with its share of the series.
+function addPanel(){
+  const spot = FM.newPanelCell(F);
+  F.panels.push(newPanel(spot[0], spot[1]));
+  distributeSeries();
+  redealPalettes();
+  pushUndo(); refresh(true);
+}
+function delPanel(i){
+  if (!FM.dropPanel(F, i)) return;
+  redealPalettes();
+  pushUndo(); refresh(true);
 }
 
 /* ---- Modal ----------------------------------------------------------------- */

@@ -358,11 +358,30 @@ function paintMarks({ g, m, pj, T, Wd, Ht }, heads, was, keep){
 }
 
 /* ---------- the view ---------- */
+/* The view, a state object V that the functions below take (v564, no longer one closure):
+   its elements (wrap, canvas, cap, ctx), the solid's model and key (sig), its caption, the
+   camera R, the canvas's size (S its width, H its height) and pixel ratio, the frame asked
+   for (raf), the theme readTheme gave, labelsWere (slot → where its label's centre sat in
+   the last frame, relative to its tip: labels keep their places as the solid turns;
+   forgotten on a reset and with a new solid, so the home view always looks the same; kept
+   in getView), the layers, the drag, the last tap and a key held, and what follows the
+   page. */
 export function shapeView(container, opts = {}){
-  const wrap = document.createElement('div');
+  const V = { container, opts, model: null, sig: '', caption: '', keepView: false, R: viewAt(HOME_AZ, HOME_EL),
+    S: 0, H: 0, ratio: 1, raf: 0, dead: false, theme: null, labelsWere: new Map(), lay: layerSet(),
+    drag: null, lastTap: null, keyHeld: false, seenW: -1, dprMql: null };
+  makeElements(V);
+  V.request = () => request(V);
+  wireCanvas(V);
+  followPage(V);
+  return apiOf(V);
+}
+
+function makeElements(V){
+  const wrap = V.wrap = document.createElement('div');
   wrap.className = 'shape3d';
   wrap.hidden = true;
-  const canvas = document.createElement('canvas');
+  const canvas = V.canvas = document.createElement('canvas');
   canvas.className = 'shape3d-canvas';
   canvas.tabIndex = 0;
   // A widget with keys of its own (the arrows turn it): as an application a screen reader
@@ -371,252 +390,251 @@ export function shapeView(container, opts = {}){
   canvas.setAttribute('aria-roledescription', '3D view');
   canvas.setAttribute('aria-keyshortcuts', 'ArrowLeft ArrowRight ArrowUp ArrowDown Home');
   canvas.style.touchAction = 'none';    // the drag is the view's, not the page's scroll (also in the CSS)
-  const cap = document.createElement('div');
+  const cap = V.cap = document.createElement('div');
   cap.className = 'shape3d-cap';
   wrap.append(canvas, cap);
-  container.appendChild(wrap);
-  const ctx = canvas.getContext('2d');
+  V.container.appendChild(wrap);
+  V.ctx = canvas.getContext('2d');
+}
+// readTheme's answer, until the theme changes; the PNG's made of it.
+const themeOf = V => V.theme || (V.theme = readTheme(V.container, V.opts.color));
+const pngTheme = V => pngThemeOf(themeOf(V));
 
-  let model = null, sig = '', caption = '', keepView = false;
-  let R = viewAt(HOME_AZ, HOME_EL);
-  let S = 0, H = 0, ratio = 1, raf = 0, dead = false;   // S the canvas's width, H its height
-  let theme = null;                     // readTheme's answer, until the theme changes
-  // slot → where its label's centre sat in the last frame, relative to its tip: labels
-  // keep their places as the solid turns. Forgotten on a reset and with a new solid (so
-  // the home view always looks the same), kept in getView.
-  const labelsWere = new Map();
-  const themeOf = () => theme || (theme = readTheme(container, opts.color));
-  const pngTheme = () => pngThemeOf(themeOf());
-  const lay = layerSet();
+/* Everything, in CSS pixels on a Wd × Ht box (g already scaled by r): the solid fits
+   the shorter side, centred. A fast
+   paint (during a drag, or while an arrow key is held) coarsens what costs most and
+   shows least while the solid moves: the open ends' fade mask and the cones' fine cut
+   at the solid's surface. The frame after it is let go is a full one. */
+function paint(V, g, Wd, Ht, r, fast, forPng = false){
+  const m = V.model, T = forPng ? pngTheme(V) : themeOf(V), pj = projection(m, V.R, Wd, Ht), lay = V.lay;
+  const fr = { g, Wd, Ht, m, pj, T, fast, lr: Math.min(r, LAYER_MAX), cr: Math.min(r, forPng ? LAYER_MAX : CONE_LAYER_MAX) };
+  const sol = paintSolid(fr, lay);
+  const lines = dirLines(m, pj, T.dirs);
+  const coneParts = new Map();          // cone → { out: [hidden polygons, visible polygons], rim }
+  for (const d of m.dirs) for (const cn of d.cones) coneParts.set(cn, splitCone(cn, pj, fast));
+  // Under the solid: what it hides.
+  paintCones(fr, lay, coneParts, true, 1);
+  paintEdges(fr, sol, true);
+  paintLines(fr, lines, true);
+  // The solid.
+  lay.blit(g, 0, fr.lr, sol.box, SOLID_ALPHA);
+  paintEdges(fr, sol, false);
+  // On top: what is in front of it or beside it.
+  paintCones(fr, lay, coneParts, false, 2);
+  paintLines(fr, lines, false);
+  paintMarks(fr, lines.heads, V.labelsWere, !forPng);
+}
 
-  /* Everything, in CSS pixels on a Wd × Ht box (g already scaled by r): the solid fits
-     the shorter side, centred. A fast
-     paint (during a drag, or while an arrow key is held) coarsens what costs most and
-     shows least while the solid moves: the open ends' fade mask and the cones' fine cut
-     at the solid's surface. The frame after it is let go is a full one. */
-  function paint(g, Wd, Ht, r, fast, forPng = false){
-    const m = model, T = forPng ? pngTheme() : themeOf(), pj = projection(m, R, Wd, Ht);
-    const fr = { g, Wd, Ht, m, pj, T, fast, lr: Math.min(r, LAYER_MAX), cr: Math.min(r, forPng ? LAYER_MAX : CONE_LAYER_MAX) };
-    const sol = paintSolid(fr, lay);
-    const lines = dirLines(m, pj, T.dirs);
-    const coneParts = new Map();          // cone → { out: [hidden polygons, visible polygons], rim }
-    for (const d of m.dirs) for (const cn of d.cones) coneParts.set(cn, splitCone(cn, pj, fast));
-    // Under the solid: what it hides.
-    paintCones(fr, lay, coneParts, true, 1);
-    paintEdges(fr, sol, true);
-    paintLines(fr, lines, true);
-    // The solid.
-    lay.blit(g, 0, fr.lr, sol.box, SOLID_ALPHA);
-    paintEdges(fr, sol, false);
-    // On top: what is in front of it or beside it.
-    paintCones(fr, lay, coneParts, false, 2);
-    paintLines(fr, lines, false);
-    paintMarks(fr, lines.heads, labelsWere, !forPng);
+// The canvas's size in CSS pixels (viewSize), from the container's inner width and
+// opts.height (a number or a function); null while the container has no width.
+function measure({ container, opts }){
+  const cs = getComputedStyle(container);
+  const w = container.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
+  if (!(w > 0)) return null;
+  return viewSize(w, typeof opts.height === 'function' ? opts.height() : opts.height);
+}
+function draw(V, fast = false){
+  if (V.dead || !V.model) return;
+  const [w, h] = measure(V) || [V.S, V.H];
+  if (!w) return;
+  const { canvas, ctx } = V, r = window.devicePixelRatio || 1;
+  if (w !== V.S || h !== V.H || r !== V.ratio){
+    V.S = w; V.H = h; V.ratio = r;
+    canvas.style.width = V.S + 'px'; canvas.style.height = V.H + 'px';
+    canvas.width = Math.round(V.S * V.ratio); canvas.height = Math.round(V.H * V.ratio);
+    V.cap.style.maxWidth = V.S + 'px';
   }
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  // Every frame from the context's defaults: a line join or dash left by the last one
+  // would make the same view come out different from one frame to the next.
+  ctx.save();
+  ctx.setTransform(V.ratio, 0, 0, V.ratio, 0, 0);
+  paint(V, ctx, V.S, V.H, V.ratio, fast);
+  ctx.restore();
+}
+// A frame is fast while the solid is being turned continuously (a drag, a held key).
+const busy = V => !!(V.drag && V.drag.moved) || V.keyHeld;
+function request(V){ if (!V.raf && !V.dead) V.raf = requestAnimationFrame(() => { V.raf = 0; draw(V, busy(V)); }); }
 
-  // The canvas's size in CSS pixels (viewSize), from the container's inner width and
-  // opts.height (a number or a function); null while the container has no width.
-  function measure(){
-    const cs = getComputedStyle(container);
-    const w = container.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
-    if (!(w > 0)) return null;
-    return viewSize(w, typeof opts.height === 'function' ? opts.height() : opts.height);
-  }
-  function draw(fast = false){
-    if (dead || !model) return;
-    const [w, h] = measure() || [S, H];
-    if (!w) return;
-    const r = window.devicePixelRatio || 1;
-    if (w !== S || h !== H || r !== ratio){
-      S = w; H = h; ratio = r;
-      canvas.style.width = S + 'px'; canvas.style.height = H + 'px';
-      canvas.width = Math.round(S * ratio); canvas.height = Math.round(H * ratio);
-      cap.style.maxWidth = S + 'px';
-    }
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    // Every frame from the context's defaults: a line join or dash left by the last one
-    // would make the same view come out different from one frame to the next.
-    ctx.save();
-    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-    paint(ctx, S, H, ratio, fast);
-    ctx.restore();
-  }
-  // A frame is fast while the solid is being turned continuously (a drag, a held key).
-  let drag = null, lastTap = null, keyHeld = false;
-  const busy = () => !!(drag && drag.moved) || keyHeld;
-  const request = () => { if (!raf && !dead) raf = requestAnimationFrame(() => { raf = 0; draw(busy()); }); };
-
-  /* ---------- interaction ---------- */
-  const rotate = (dx, dy) => {           // screen pixels → a turn about the axis normal to the drag
-    const t = turned(R, dx, dy, Math.min(S, H));
-    if (!t) return;
-    R = t;
-    request();
-  };
-  const reset = () => { R = model ? model.home.slice() : viewAt(HOME_AZ, HOME_EL); labelsWere.clear(); request(); };
-  const onDown = e => {
-    if (!model || drag || (e.pointerType === 'mouse' && e.button !== 0)) return;
-    drag = { id: e.pointerId, x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, moved: false };
-    try { canvas.setPointerCapture(e.pointerId); } catch(_){}
-    canvas.classList.add('is-grabbing');
-    e.preventDefault();
-    // Keys work after a drag too; but a ring drawn on a mouse or touch focus is noise.
-    canvas.focus({ preventScroll: true, focusVisible: false });
-  };
-  const onMove = e => {
-    if (!drag || e.pointerId !== drag.id) return;
-    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
-    drag.x = e.clientX; drag.y = e.clientY;
-    if (Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) > 4) drag.moved = true;
-    rotate(dx, dy);
-  };
-  const onUp = e => {
-    if (!drag || e.pointerId !== drag.id) return;
-    const d = drag;
-    drag = null;
-    canvas.classList.remove('is-grabbing');
-    try { canvas.releasePointerCapture(e.pointerId); } catch(_){}
-    // The drag's frames were fast ones: the view where it was left, at full quality.
-    if (d.moved) request();
-    // A double tap resets (touch and pen; a mouse has dblclick). Taps only, not drags.
-    if (e.type !== 'pointerup' || d.moved || e.pointerType === 'mouse') return;
-    const now = performance.now();
-    if (doubleTap(lastTap, now, e.clientX, e.clientY)){ lastTap = null; reset(); }
-    else lastTap = { t: now, x: e.clientX, y: e.clientY };
-  };
-  const onDbl = e => { if (model){ e.preventDefault(); reset(); } };
-  const onKey = e => {
-    if (!model || e.altKey || e.ctrlKey || e.metaKey) return;
-    const mv = keyTurn(e.key, e.shiftKey, Math.min(S, H));
-    if (!mv && e.key !== 'Home') return;
-    // The key is the view's: no page scroll, and no document-level handler (← / → step
-    // through the samples there) may act on it too.
-    e.preventDefault();
-    e.stopPropagation();
-    if (!mv){ reset(); return; }
-    // A held key repeats: fast frames, as a drag, until it is let go.
-    if (e.repeat) keyHeld = true;
-    rotate(mv[0], mv[1]);
-  };
-  const onKeyUp = () => { if (keyHeld){ keyHeld = false; request(); } };
-  canvas.addEventListener('pointerdown', onDown);
-  canvas.addEventListener('pointermove', onMove);
+/* ---------- interaction ---------- */
+function rotate(V, dx, dy){             // screen pixels → a turn about the axis normal to the drag
+  const t = turned(V.R, dx, dy, Math.min(V.S, V.H));
+  if (!t) return;
+  V.R = t;
+  request(V);
+}
+function reset(V){ V.R = V.model ? V.model.home.slice() : viewAt(HOME_AZ, HOME_EL); V.labelsWere.clear(); request(V); }
+function wireCanvas(V){
+  const { canvas } = V, onUp = e => pointerUp(V, e), onKeyUp = () => keyUp(V);
+  canvas.addEventListener('pointerdown', e => pointerDown(V, e));
+  canvas.addEventListener('pointermove', e => pointerMove(V, e));
   canvas.addEventListener('pointerup', onUp);
   canvas.addEventListener('pointercancel', onUp);
   canvas.addEventListener('lostpointercapture', onUp);
-  canvas.addEventListener('dblclick', onDbl);
-  canvas.addEventListener('keydown', onKey);
+  canvas.addEventListener('dblclick', e => { if (V.model){ e.preventDefault(); reset(V); } });
+  canvas.addEventListener('keydown', e => keyDown(V, e));
   canvas.addEventListener('keyup', onKeyUp);
   canvas.addEventListener('blur', onKeyUp);
+}
+function pointerDown(V, e){
+  const { canvas } = V;
+  if (!V.model || V.drag || (e.pointerType === 'mouse' && e.button !== 0)) return;
+  V.drag = { id: e.pointerId, x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, moved: false };
+  try { canvas.setPointerCapture(e.pointerId); } catch(_){}
+  canvas.classList.add('is-grabbing');
+  e.preventDefault();
+  // Keys work after a drag too; but a ring drawn on a mouse or touch focus is noise.
+  canvas.focus({ preventScroll: true, focusVisible: false });
+}
+function pointerMove(V, e){
+  const { drag } = V;
+  if (!drag || e.pointerId !== drag.id) return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  drag.x = e.clientX; drag.y = e.clientY;
+  if (Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) > 4) drag.moved = true;
+  rotate(V, dx, dy);
+}
+function pointerUp(V, e){
+  const d = V.drag;
+  if (!d || e.pointerId !== d.id) return;
+  V.drag = null;
+  V.canvas.classList.remove('is-grabbing');
+  try { V.canvas.releasePointerCapture(e.pointerId); } catch(_){}
+  // The drag's frames were fast ones: the view where it was left, at full quality.
+  if (d.moved) request(V);
+  // A double tap resets (touch and pen; a mouse has dblclick). Taps only, not drags.
+  if (e.type !== 'pointerup' || d.moved || e.pointerType === 'mouse') return;
+  const now = performance.now();
+  if (doubleTap(V.lastTap, now, e.clientX, e.clientY)){ V.lastTap = null; reset(V); }
+  else V.lastTap = { t: now, x: e.clientX, y: e.clientY };
+}
+function keyDown(V, e){
+  if (!V.model || e.altKey || e.ctrlKey || e.metaKey) return;
+  const mv = keyTurn(e.key, e.shiftKey, Math.min(V.S, V.H));
+  if (!mv && e.key !== 'Home') return;
+  // The key is the view's: no page scroll, and no document-level handler (← / → step
+  // through the samples there) may act on it too.
+  e.preventDefault();
+  e.stopPropagation();
+  if (!mv){ reset(V); return; }
+  // A held key repeats: fast frames, as a drag, until it is let go.
+  if (e.repeat) V.keyHeld = true;
+  rotate(V, mv[0], mv[1]);
+}
+function keyUp(V){ if (V.keyHeld){ V.keyHeld = false; request(V); } }
 
-  /* ---------- follow the container, the theme and the screen ---------- */
+/* ---------- follow the container, the theme and the screen ---------- */
+function followPage(V){
   // Only the container's width sets the view's size (its height follows the canvas).
   // The draw waits for the next frame: resizing the canvas inside the observer's own
   // delivery changes the layout it is observing, which the browser reports as a loop.
-  let seenW = -1;
-  const ro = new ResizeObserver(entries => {
+  V.ro = new ResizeObserver(entries => {
     const w = Math.round(entries[entries.length - 1].contentRect.width);
-    if (w === seenW) return;
-    seenW = w;
-    if (model) request();
+    if (w === V.seenW) return;
+    V.seenW = w;
+    if (V.model) request(V);
   });
-  ro.observe(container);
-  const onTheme = () => { theme = null; request(); };
-  const mo = new MutationObserver(onTheme);
-  mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-  const mql = window.matchMedia ? matchMedia('(prefers-color-scheme: light)') : null;
-  if (mql) mql.addEventListener('change', onTheme);
+  V.ro.observe(V.container);
+  V.onTheme = () => { V.theme = null; request(V); };
+  V.mo = new MutationObserver(V.onTheme);
+  V.mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  V.mql = window.matchMedia ? matchMedia('(prefers-color-scheme: light)') : null;
+  if (V.mql) V.mql.addEventListener('change', V.onTheme);
   // A window moved to a screen of another pixel ratio: redraw sharp there.
-  let dprMql = null;
-  const onDpr = () => { watchDpr(); request(); };
-  const watchDpr = () => {
-    if (dprMql) dprMql.removeEventListener('change', onDpr);
-    dprMql = window.matchMedia ? matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`) : null;
-    if (dprMql) dprMql.addEventListener('change', onDpr);
-  };
-  watchDpr();
+  V.onDpr = () => { watchDpr(V); request(V); };
+  watchDpr(V);
   // The labels are text in the app's web font: drawn before it has loaded, they would
   // keep the fallback face until the next redraw.
-  const fonts = document.fonts;
+  const fonts = V.fonts = document.fonts;
   if (fonts){
-    fonts.addEventListener('loadingdone', request);
-    fonts.ready.then(() => { if (model) request(); });
+    fonts.addEventListener('loadingdone', V.request);
+    fonts.ready.then(() => { if (V.model) request(V); });
   }
+}
+function watchDpr(V){
+  if (V.dprMql) V.dprMql.removeEventListener('change', V.onDpr);
+  V.dprMql = window.matchMedia ? matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`) : null;
+  if (V.dprMql) V.dprMql.addEventListener('change', V.onDpr);
+}
 
+function apiOf(V){
   return {
-    set(solid){
-      if (dead) return;
-      if (!solid){
-        model = null; sig = ''; caption = '';
-        wrap.hidden = true;
-        cap.textContent = '';
-        canvas.removeAttribute('aria-label');
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        return;
-      }
-      model = buildModel(solid);
-      theme = null;                     // the container may have moved since
-      // The same solid again (a re-render) keeps the user's view; another one starts
-      // from its home view (unless a view was put in for it before it came).
-      const s = solidKey(model, solid);
-      if (s !== sig){ sig = s; if (!keepView){ R = model.home.slice(); labelsWere.clear(); } }
-      keepView = false;
-      caption = solid.caption ? String(solid.caption) : '';
-      cap.textContent = caption;
-      cap.hidden = !caption;
-      canvas.setAttribute('aria-label', describeSolid(model, caption));
-      wrap.hidden = false;
-      draw();
-    },
+    set: solid => setSolid(V, solid),
     // The camera, as plain numbers (JSON-safe), with where the labels sat: give it back
     // to setView to see the solid turned the same way again, labelled the same way.
-    getView(){
-      return viewState(R, labelsWere);
-    },
-    setView(state){
-      if (dead) return false;
-      const v = viewFromState(state);
-      if (!v) return false;
-      R = v.R;
-      labelsWere.clear();
-      for (const [slot, o] of v.labels) labelsWere.set(slot, o);
-      if (model) draw(); else keepView = true;
-      return true;
-    },
-    destroy(){
-      if (dead) return;
-      dead = true;
-      if (raf) cancelAnimationFrame(raf);
-      ro.disconnect(); mo.disconnect();
-      if (mql) mql.removeEventListener('change', onTheme);
-      if (dprMql) dprMql.removeEventListener('change', onDpr);
-      if (fonts) fonts.removeEventListener('loadingdone', request);
-      wrap.remove();
-      lay.clear();
-      model = null;
-    },
+    getView: () => viewState(V.R, V.labelsWere),
+    setView: state => putView(V, state),
+    destroy: () => destroyView(V),
     // The view as a PNG (labels and caption in), at twice the CSS size at least.
-    png(){
-      if (dead || !model) return null;
-      const [Wd, Ht] = S ? [S, H] : measure() || [SIZE_MAX, SIZE_MAX], r = Math.max(2, window.devicePixelRatio || 1);
-      const T = pngTheme();
-      const capH = caption ? 24 : 0;
-      const c = document.createElement('canvas');
-      c.width = Math.round(Wd * r); c.height = Math.round((Ht + capH) * r);
-      const g = c.getContext('2d');
-      g.setTransform(r, 0, 0, r, 0, 0);
-      // (no background: transparent)
-      paint(g, Wd, Ht, r, false, true);
-      if (caption){
-        g.font = `400 12px ${T.font}`;
-        g.fillStyle = T.muted;
-        g.textAlign = 'center';
-        g.textBaseline = 'middle';
-        g.fillText(caption, Wd / 2, Ht + capH / 2 - 2, Wd - 12);
-      }
-      return c.toDataURL('image/png');
-    },
+    png: () => viewPng(V),
   };
+}
+function setSolid(V, solid){
+  if (V.dead) return;
+  if (!solid){ clearSolid(V); return; }
+  V.model = buildModel(solid);
+  V.theme = null;                       // the container may have moved since
+  // The same solid again (a re-render) keeps the user's view; another one starts
+  // from its home view (unless a view was put in for it before it came).
+  const s = solidKey(V.model, solid);
+  if (s !== V.sig){ V.sig = s; if (!V.keepView){ V.R = V.model.home.slice(); V.labelsWere.clear(); } }
+  V.keepView = false;
+  V.caption = solid.caption ? String(solid.caption) : '';
+  V.cap.textContent = V.caption;
+  V.cap.hidden = !V.caption;
+  V.canvas.setAttribute('aria-label', describeSolid(V.model, V.caption));
+  V.wrap.hidden = false;
+  draw(V);
+}
+function clearSolid(V){
+  const { canvas, ctx } = V;
+  V.model = null; V.sig = ''; V.caption = '';
+  V.wrap.hidden = true;
+  V.cap.textContent = '';
+  canvas.removeAttribute('aria-label');
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+function putView(V, state){
+  if (V.dead) return false;
+  const v = viewFromState(state);
+  if (!v) return false;
+  V.R = v.R;
+  V.labelsWere.clear();
+  for (const [slot, o] of v.labels) V.labelsWere.set(slot, o);
+  if (V.model) draw(V); else V.keepView = true;
+  return true;
+}
+function destroyView(V){
+  if (V.dead) return;
+  V.dead = true;
+  if (V.raf) cancelAnimationFrame(V.raf);
+  V.ro.disconnect(); V.mo.disconnect();
+  if (V.mql) V.mql.removeEventListener('change', V.onTheme);
+  if (V.dprMql) V.dprMql.removeEventListener('change', V.onDpr);
+  if (V.fonts) V.fonts.removeEventListener('loadingdone', V.request);
+  V.wrap.remove();
+  V.lay.clear();
+  V.model = null;
+}
+function viewPng(V){
+  if (V.dead || !V.model) return null;
+  const [Wd, Ht] = V.S ? [V.S, V.H] : measure(V) || [SIZE_MAX, SIZE_MAX], r = Math.max(2, window.devicePixelRatio || 1);
+  const T = pngTheme(V);
+  const capH = V.caption ? 24 : 0;
+  const c = document.createElement('canvas');
+  c.width = Math.round(Wd * r); c.height = Math.round((Ht + capH) * r);
+  const g = c.getContext('2d');
+  g.setTransform(r, 0, 0, r, 0, 0);
+  // (no background: transparent)
+  paint(V, g, Wd, Ht, r, false, true);
+  if (V.caption){
+    g.font = `400 12px ${T.font}`;
+    g.fillStyle = T.muted;
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText(V.caption, Wd / 2, Ht + capH / 2 - 2, Wd - 12);
+  }
+  return c.toDataURL('image/png');
 }

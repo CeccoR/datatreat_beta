@@ -22,6 +22,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import * as M from '../xrd-shape3d-model.js';
+import { fakePage, install } from './page3d.mjs';
 
 const UPDATE = !!process.env.UPDATE_GOLDEN || process.env.npm_lifecycle_event === 'test:update';
 const GOLDEN = path.join(path.dirname(fileURLToPath(import.meta.url)), 'golden', 'shape3d.json');
@@ -310,113 +311,7 @@ test('the colours, the theme, the canvas\'s size, the words for a screen reader'
   assert.deepEqual(M.triadAxes(I3.flat(), [[0, 0, 1], [1, 0, 0], [0, 1, 0]]).map(a => [a.i, a.sx, a.sy, a.z]), [[1, 1, -0, 0], [2, 0, -1, 0], [0, 0, -0, 1]]);
 });
 
-/* ---- The view as a whole, on a page as small as it needs ---- */
-const TOKENS = {
-  dark: { '--bg': '#0e1316', '--text': '#dfe8ea', '--muted': '#7f97a0', '--accent': '#ffb454', '--phase2': '#5ab0ff' },
-  light: { '--bg': '#ffffff', '--text': '#1a2327', '--muted': '#56676f', '--accent': '#c77700', '--phase2': '#1f6fd0' },
-};
-// A colour as a canvas gives it back: #rrggbb when opaque, rgba(…) when not; anything else
-// is no colour, and the property keeps what it had.
-function canvasColour(v, was){
-  const s = String(v).trim().toLowerCase();
-  const hex = n => n.toString(16).padStart(2, '0');
-  let m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/.exec(s);
-  if (m){ const h = m[1].length === 3 ? [...m[1]].map(c => c + c).join('') : m[1]; return '#' + h; }
-  if (s === 'black') return '#000000';
-  if (s === 'white') return '#ffffff';
-  m = /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*([\d.]+)\s*)?\)$/.exec(s);
-  if (m){
-    const [r, g, b] = [m[1], m[2], m[3]].map(x => Math.round(Math.min(255, +x)));
-    return m[4] == null || +m[4] >= 1 ? '#' + hex(r) + hex(g) + hex(b) : `rgba(${r}, ${g}, ${b}, ${+m[4]})`;
-  }
-  return typeof v === 'object' ? v : was;
-}
-function fakePage(){
-  const log = [];
-  let nid = 0, theme = 'dark';
-  const fmt = v => typeof v === 'number' ? (Object.is(v, -0) ? '-0' : String(v))
-    : typeof v === 'string' ? JSON.stringify(v)
-    : Array.isArray(v) ? '[' + v.map(fmt).join(',') + ']'
-    : v && v.data instanceof Uint8ClampedArray ? `img(${v.width}x${v.height}:${sha(v.data).slice(0, 16)})`
-    : v && v.id ? v.id : String(v);
-  const rec = (id, what, args) => log.push(id + '.' + what + (args ? '(' + args.map(fmt).join(',') + ')' : ''));
-  const recorder = (id, state = {}, special = {}) => new Proxy(Object.assign(state, { id }), {
-    get(st, k){
-      if (k in st || typeof k === 'symbol') return st[k];
-      return (...a) => { const r = special[k] ? special[k](...a) : undefined; rec(id, k, a); return r; };
-    },
-    set(st, k, v){
-      st[k] = k === 'fillStyle' || k === 'strokeStyle' ? canvasColour(v, st[k]) : v;
-      rec(id, k + '=' + fmt(v));
-      return true;
-    },
-  });
-  class El {
-    constructor(tag){ this.tag = tag; this.id = tag + (++nid); this.style = {}; this.attrs = {}; this.on = {}; this.kids = []; this.parentElement = null; this.nodeType = 1; this.hidden = false; this.clientWidth = 0; this.bg = ''; this.classList = { add(){}, remove(){} }; }
-    setAttribute(k, v){ this.attrs[k] = String(v); }
-    getAttribute(k){ return k in this.attrs ? this.attrs[k] : null; }
-    removeAttribute(k){ delete this.attrs[k]; }
-    append(...c){ c.forEach(x => this.appendChild(x)); }
-    appendChild(c){ c.parentElement = this; this.kids.push(c); return c; }
-    remove(){ if (this.parentElement) this.parentElement.kids = this.parentElement.kids.filter(x => x !== this); this.parentElement = null; }
-    addEventListener(t, f){ (this.on[t] = this.on[t] || []).push(f); }
-    removeEventListener(t, f){ this.on[t] = (this.on[t] || []).filter(x => x !== f); }
-    fire(type, e = {}){ for (const f of this.on[type] || []) f({ type, pointerId: 7, pointerType: 'mouse', button: 0, clientX: 0, clientY: 0, preventDefault(){}, stopPropagation(){}, ...e }); }
-    focus(){}
-    setPointerCapture(){ throw new Error('no such pointer'); }
-    releasePointerCapture(){}
-  }
-  class Canvas extends El {
-    constructor(){ super('canvas'); this.w = 300; this.h = 150; this.ctx = null; }
-    get width(){ return this.w; }
-    set width(v){ this.w = v; rec(this.id, 'width=' + v); }
-    get height(){ return this.h; }
-    set height(v){ this.h = v; rec(this.id, 'height=' + v); }
-    getContext(){
-      return this.ctx || (this.ctx = recorder(this.id, { fillStyle: '#000000', font: '10px sans-serif' }, {
-        createImageData: (w, h) => ({ width: w, height: h, data: new Uint8ClampedArray(4 * w * h) }),
-        createLinearGradient: () => recorder('grad' + (++nid)),
-        // a width a character, by the font's size
-        measureText: s => ({ width: String(s).length * 0.55 * parseFloat(/([\d.]+)px/.exec(this.ctx.font || '10px')[1]) }),
-      }));
-    }
-    toDataURL(){ const s = sha(log.join('\n')); rec(this.id, 'toDataURL'); return 'data:image/png;' + s; }
-  }
-  const frames = [], observers = [];
-  const page = {
-    log, frames,
-    document: {
-      createElement: t => t === 'canvas' ? new Canvas() : new El(t),
-      documentElement: new El('html'),
-    },
-    getComputedStyle: el => ({
-      getPropertyValue: n => TOKENS[theme][n] || '',
-      backgroundColor: el.bg ? (el.bg[theme] || el.bg) : 'rgba(0, 0, 0, 0)',
-      fontFamily: 'Inter, sans-serif', paddingLeft: '8px', paddingRight: '8px',
-    }),
-    requestAnimationFrame: f => { frames.push(f); return frames.length; },
-    cancelAnimationFrame: () => {},
-    matchMedia: () => ({ addEventListener(){}, removeEventListener(){} }),
-    ResizeObserver: class { constructor(f){ this.f = f; } observe(el){ observers.push(() => this.f([{ contentRect: { width: el.clientWidth - 16 } }])); this.f([{ contentRect: { width: el.clientWidth - 16 } }]); } disconnect(){} },
-    MutationObserver: class { constructor(f){ page.themed.push(f); } observe(){} disconnect(){} },
-    // (new Path2D() gives back the recorder this returns)
-    Path2D: function(){ return recorder('path' + (++nid)); },
-    themed: [],
-    // the frames asked for, run (and those they ask for)
-    flush(){ for (let i = 0; i < 4 && frames.length; i++){ const fs = frames.splice(0); fs.forEach(f => f(0)); } },
-    resize(){ observers.forEach(o => o()); },
-    setTheme(t){ theme = t; page.themed.forEach(f => f([])); },
-  };
-  return page;
-}
-function install(page, dpr){
-  Object.assign(globalThis, {
-    window: globalThis, devicePixelRatio: dpr, document: page.document, getComputedStyle: page.getComputedStyle,
-    requestAnimationFrame: page.requestAnimationFrame, cancelAnimationFrame: page.cancelAnimationFrame, matchMedia: page.matchMedia,
-    ResizeObserver: page.ResizeObserver, MutationObserver: page.MutationObserver, Path2D: page.Path2D,
-  });
-}
-
+/* ---- The view as a whole, on a page as small as it needs (page3d.mjs fakePage) ---- */
 const turn = (a, b) => { const c = Math.cos(a), s = Math.sin(a), c2 = Math.cos(b), s2 = Math.sin(b);
   return [c, -s, 0, s * c2, c * c2, -s2, s * s2, c * s2, c2]; };
 
@@ -459,4 +354,104 @@ test('the view, solid by solid, as v553 drew it (golden digests)', async ()=>{
   const want = JSON.parse(fs.readFileSync(GOLDEN, 'utf8'));
   assert.deepEqual(Object.keys(got), Object.keys(want));
   for (const n of names) assert.deepEqual(got[n], want[n], n);
+});
+
+/* ---- The view's events and what follows the page (v564, shapeView split into functions
+   at module level) ----
+   Cases beyond the drawing, each on a page that keeps the media queries, the fonts, a clock
+   and the classes (page3d.mjs): taps (a double tap within 350 ms and 24 px puts the view
+   back, a slow one or a mouse's not), a double click, pointers it does not take (the other
+   button, a second one, another's moves), a drag cancelled or its capture lost, a press that
+   does not move, keys held (fast frames until let go or blurred), with modifiers, Home,
+   others, with no solid; a view put in before its solid (kept for it), the same solid again
+   (the view kept) and another (home); the screen's pixel ratio and the theme changed, the
+   fonts loaded and ready, the container at no width, a PNG before any frame; destroyed (every
+   listener let go) and used after. Each case's calls, views, words, classes and listeners
+   hashed: golden/shape3dview.json, as v563's shapeView took them. The module's colour cache
+   (readTheme's canvas, made once, on the page of its first call) made first on a page of its
+   own, so that no case's log depends on the cases before it. */
+const GOLDEN_VIEW = path.join(path.dirname(fileURLToPath(import.meta.url)), 'golden', 'shape3dview.json');
+const PAGE_O = { media: true, fonts: true, clock: true, classes: true };
+export function warmTheme(readTheme){
+  const page = fakePage();
+  install(page, 1);
+  readTheme(page.document.createElement('div'));
+}
+export async function viewCase({ shapeView, readTheme }, name){
+  warmTheme(readTheme);
+  const page = fakePage(PAGE_O), perf = globalThis.performance;
+  install(page, name === 'page' ? 2 : 1, PAGE_O);
+  try {
+    const box = page.document.createElement('div');
+    box.clientWidth = name === 'page' ? 0 : 300;
+    const view = shapeView(box, name === 'early' ? { color: '--phase2' } : {});
+    const wrap = box.kids[0], canvas = wrap.kids[0], out = [];
+    const say = what => out.push([what, JSON.stringify(view.getView()), canvas.getAttribute('aria-label'), [...canvas.classes].join(), wrap.hidden, wrap.parentElement ? 'in' : 'out',
+      page.listening('resolution'), page.listening('color-scheme'), page.fontsListening(), page.frames.length].join(' | '));
+    const tap = (x, y, type = 'touch', id = 4) => { canvas.fire('pointerdown', { pointerId: id, pointerType: type, clientX: x, clientY: y }); canvas.fire('pointerup', { pointerId: id, pointerType: type, clientX: x, clientY: y }); };
+    if (name === 'taps'){
+      view.set(SOLIDS.box); canvas.fire('keydown', { key: 'ArrowLeft' }); page.flush(); say('turned');
+      tap(50, 50); page.advance(200); tap(60, 70); page.flush(); say('double tap: home');
+      canvas.fire('keydown', { key: 'ArrowUp' }); page.flush();
+      tap(50, 50); page.advance(400); tap(50, 50); page.flush(); say('slow: kept');
+      page.advance(100); tap(90, 50); page.flush(); say('far: kept');
+      tap(10, 10, 'pen', 6); page.advance(50); tap(12, 12, 'pen', 6); page.flush(); say('pen: home');
+      canvas.fire('keydown', { key: 'ArrowRight' }); tap(5, 5, 'mouse'); page.advance(10); tap(5, 5, 'mouse'); page.flush(); say('mouse: kept');
+      canvas.fire('pointerdown', { pointerId: 4, pointerType: 'touch', clientX: 0, clientY: 0 }); canvas.fire('pointermove', { pointerId: 4, clientX: 30, clientY: 0 });
+      canvas.fire('pointerup', { pointerId: 4, pointerType: 'touch', clientX: 30, clientY: 0 }); page.advance(20); tap(30, 0); page.flush(); say('a drag is no tap');
+    } else if (name === 'pointers'){
+      view.set(SOLIDS.needle); page.flush();
+      canvas.fire('pointerdown', { button: 2 }); canvas.fire('pointermove', { clientX: 40 }); say('the other button');
+      canvas.fire('pointerdown', { pointerId: 1, pointerType: 'touch', clientX: 10, clientY: 10 }); canvas.fire('pointerdown', { pointerId: 2, pointerType: 'touch' });
+      canvas.fire('pointermove', { pointerId: 2, clientX: 90 }); canvas.fire('pointermove', { pointerId: 1, clientX: 12, clientY: 11 }); say('a small move'); page.flush();
+      canvas.fire('pointermove', { pointerId: 1, clientX: 60, clientY: 30 }); page.flush(); say('dragging');
+      canvas.fire('pointercancel', { pointerId: 1 }); page.flush(); say('cancelled');
+      canvas.fire('pointerdown', { pointerId: 3, clientX: 0, clientY: 0 }); canvas.fire('pointermove', { pointerId: 3, clientX: 20, clientY: 40 });
+      canvas.fire('lostpointercapture', { pointerId: 3 }); page.flush(); say('capture lost');
+      canvas.fire('pointerup', { pointerId: 3 }); canvas.fire('dblclick'); page.flush(); say('double click');
+    } else if (name === 'keys'){
+      canvas.fire('keydown', { key: 'ArrowLeft' }); canvas.fire('dblclick'); say('no solid');
+      view.set(SOLIDS.plate); page.flush();
+      for (let k = 0; k < 3; k++){ canvas.fire('keydown', { key: 'ArrowDown', repeat: k > 0 }); page.flush(); }
+      say('held'); canvas.fire('blur'); page.flush(); say('blurred');
+      canvas.fire('keydown', { key: 'ArrowRight', shiftKey: true, repeat: true }); page.flush(); canvas.fire('keyup'); page.flush(); say('let go');
+      for (const m of ['altKey', 'ctrlKey', 'metaKey']) canvas.fire('keydown', { key: 'ArrowUp', [m]: true });
+      canvas.fire('keydown', { key: 'a' }); canvas.fire('keydown', { key: 'Enter' }); page.flush(); say('others');
+      canvas.fire('keydown', { key: 'Home' }); page.flush(); say('home');
+    } else if (name === 'early'){
+      out.push('setView ' + view.setView({ R: turn(1.1, 0.4), labels: [[0, 10, -8]] })); say('before its solid');
+      view.set(SOLIDS.ellipsoid); page.flush(); say('kept for it');
+      canvas.fire('keydown', { key: 'ArrowLeft' }); page.flush();
+      view.set(SOLIDS.ellipsoid); page.flush(); say('the same again');
+      view.set(SOLIDS.disc); page.flush(); say('another');
+      out.push('setView ' + view.setView({ R: [1, 0, 0, 0, 1, 0, 0, 0, -1] })); say('a mirror');
+    } else if (name === 'page'){
+      out.push('png ' + view.png()); view.set(SOLIDS.rod); say('no width'); out.push('png ' + view.png());
+      box.clientWidth = 280; page.resize(); page.flush(); say('a width');
+      globalThis.devicePixelRatio = 3; page.mediaChange('resolution'); page.flush(); say('pixel ratio 3');
+      page.mediaChange('resolution'); page.flush();
+      page.mediaChange('color-scheme'); page.flush(); say('scheme');
+      page.fontsDone(); page.flush(); say('a font');
+      page.fontsReady(); await new Promise(r => setTimeout(r, 0)); page.flush(); say('fonts ready');
+      out.push('png ' + view.png());
+    } else if (name === 'destroy'){
+      view.set(SOLIDS.box); page.flush(); canvas.fire('keydown', { key: 'ArrowUp' });
+      view.destroy(); say('destroyed'); page.flush();
+      view.set(SOLIDS.disc); out.push('setView ' + view.setView({ R: turn(0.2, 0.2) }), 'png ' + view.png()); view.destroy();
+      canvas.fire('keydown', { key: 'Home' }); page.mediaChange('resolution'); page.fontsDone(); page.flush(); say('after');
+    }
+    view.destroy();
+    return { digest: sha(page.log.join('\n') + '\n' + out.join('\n')), calls: page.log.length, steps: out.length };
+  } finally { Object.defineProperty(globalThis, 'performance', { value: perf, configurable: true, writable: true }); }
+}
+export const VIEW_CASES = ['taps', 'pointers', 'keys', 'early', 'page', 'destroy'];
+
+test('the view\'s events and the page it follows, as v563\'s shapeView took them (golden digests)', async ()=>{
+  const S = await import('../xrd-shape3d.js'), got = {};
+  for (const n of VIEW_CASES) got[n] = await viewCase(S, n);
+  for (const n of VIEW_CASES) assert.ok(got[n].calls > 500, n + ': drawn');
+  if (UPDATE){ fs.writeFileSync(GOLDEN_VIEW, JSON.stringify(got, null, 1) + '\n'); return; }
+  const want = JSON.parse(fs.readFileSync(GOLDEN_VIEW, 'utf8'));
+  assert.deepEqual(Object.keys(got), Object.keys(want));
+  for (const n of VIEW_CASES) assert.deepEqual(got[n], want[n], n);
 });

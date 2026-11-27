@@ -25,6 +25,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import * as L from '../figure-layout.js';
+import * as FM from '../figure-model.js';
 
 const UPDATE = !!process.env.UPDATE_GOLDEN || process.env.npm_lifecycle_event === 'test:update';
 const GOLDEN = path.join(path.dirname(fileURLToPath(import.meta.url)), 'golden', 'figlayout.json');
@@ -391,11 +392,11 @@ test('the legends, the shared titles, the tiles, the colours, the symbols, the r
 
 /* ---- drawFigure as a whole, on a page that records what it is given ----
    figure.js needs a page to load (utils.js, plot.js), so its source is run here as it
-   stands, its imports handed in: figure-layout.js itself, plot.js's svgEl, niceTicks,
-   fmtTick, SUB_DROP and TILT_DY and utils.js's tiltFits, CP_PALETTES, esc and X_SVG from
-   their source, the rest (pickers, the tabs) inert. The page: elements that keep their
-   attributes in the order they were set, their text and their children, and a canvas
-   that measures text a fixed width a character. */
+   stands, its imports handed in: figure-layout.js and figure-model.js themselves, plot.js's
+   svgEl, niceTicks, fmtTick, SUB_DROP and TILT_DY and utils.js's tiltFits, CP_PALETTES, esc
+   and X_SVG from their source, the rest (pickers, the tabs) inert. The page: elements that
+   keep their attributes in the order they were set, their text and their children, and a
+   canvas that measures text a fixed width a character. */
 class El {
   constructor(tag){ this.tag = tag; this.attrs = new Map(); this.kids = []; this.text = ''; }
   setAttribute(k, v){ this.attrs.set(k, String(v)); }
@@ -424,7 +425,7 @@ const UTIL = new Function(decl('utils.js', 'tiltFits') + '\n' + ['esc', 'CP_PALE
 /* figure.js's source (or another's: an older version's, given as text), run with its imports
    handed in; gives its drawFigure and the model's setter. */
 function loadFigure(src = fs.readFileSync(new URL('../figure.js', import.meta.url), 'utf8')){
-  const from = { './plot.js': PLOT, './utils.js': UTIL, './tabs.js': { tabOf: () => null, TABS: [] }, './figure-layout.js': L };
+  const from = { './plot.js': PLOT, './utils.js': UTIL, './tabs.js': { tabOf: () => null, TABS: [] }, './figure-layout.js': L, './figure-model.js': FM };
   const names = [], values = [];
   src = src.replace(/^import\s+(?:\*\s+as\s+(\w+)|\{([^}]*)\})\s+from\s+'([^']+)';\n/gm, (m, ns, list, mod) => {
     if (ns){ names.push(ns); values.push(from[mod]); }

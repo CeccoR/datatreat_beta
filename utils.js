@@ -2,6 +2,8 @@
    GENERIC UTILITIES
 ========================================================= */
 import { fixed, isFixed } from './db.js';
+import { listHtml } from './filelist-html.js';
+import { downloadOf, zipEntries, gapFor, landing, outside, halfAt, movedFrom } from './filelist-model.js';
 const COLORS = [
   '#3aa0ff','#ff7a59','#5fcf6a','#d050ff','#ffcc4d','#ff5050','#4dd0e1','#c0ca33','#9575cd','#f06292',
   '#ff9800','#00bcd4','#8bc34a','#e91e63','#00897b','#ff5722','#1565c0','#f9a825','#6a1b9a','#558b2f',
@@ -865,59 +867,33 @@ function moveFileTo(all, from, to, slots, isSample = anySample){
 // A perfect 1:1 cross with rounded stroke caps (replaces the plain ✕ glyph).
 // Inked box 15×15, centred on (12,12) — same size as the download glyph below.
 const X_SVG = (size=14)=> `<svg class="x-icon" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="4.5" y1="4.5" x2="19.5" y2="19.5"/><line x1="4.5" y1="19.5" x2="19.5" y2="4.5"/></svg>`;
-// A file's own grip inside a row (callbacks.parts): six dots, smaller than the row's ≡.
-const FGRIP = `<svg viewBox="0 0 10 14" width="8" height="12" fill="currentColor" aria-hidden="true"><circle cx="3" cy="3" r="1.15"/><circle cx="7" cy="3" r="1.15"/><circle cx="3" cy="7" r="1.15"/><circle cx="7" cy="7" r="1.15"/><circle cx="3" cy="11" r="1.15"/><circle cx="7" cy="11" r="1.15"/></svg>`;
 // Download glyph, inked box 15×15 centred on (12,12) so it matches the X exactly.
 const DL_SVG = (size=15)=> `<svg class="dl-icon" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="4.5" x2="12" y2="15"/><polyline points="7 10.5 12 15 17 10.5"/><line x1="4.5" y1="19.5" x2="19.5" y2="19.5"/></svg>`;
 
+/* The list's markup (filelist-html.js) and calculations (filelist-model.js) take these. */
+const LIST_U = { esc, X_SVG, DL_SVG, isIncluded, fileOf };
+/* The list drawn into its container, then wired (v564: no longer one closure): L the
+   list's state (wrap, files, callbacks, nIn the traces included; drag a row dragged, fdrag
+   a file by its grip), which the functions below take, in the order they were added. */
 function renderUnifiedFileList(container, files, callbacks, note, noteHead){
   const wrap = container;
   if (!wrap) return;
   if (!files.length){ wrap.innerHTML=''; return; }
+  const L = { wrap, files, callbacks, nIn: files.filter(isIncluded).length, drag: null, fdrag: null };
+  wrap.innerHTML = listHtml(files, callbacks, note, noteHead, L.nIn, LIST_U);
+  wireListIncl(L);
+  wireListRemoveAll(L);
+  wireListColors(L);
+  wireListLabels(L);
+  wireListRemove(L);
+  wireListDownloads(L);
+  wireListDrag(L);
+  if (callbacks.parts) wirePartDrag(L);
+}
 
-  /* The columns, the same in every module: drag and include box fixed 26px each, side by
-     side at the left edge; actions fixed 58px (a fixed width guarantees the download+remove
-     icons fit even on narrow phones); LABEL (its colour and its name's field), FILE and the
-     note, with no header but the module's (GC's SAMPLE), share what those leave as
-     3 : 3 : 2. Their percentages add up to 100%, more than is left, and a fixed table
-     layout scales them to it, the px columns kept. To v531 the list was of files: FILE
-     (the colour, the name) then LABEL; v532–v533 headed the names TRACE, LABEL again
-     from v534. */
-  const colgroup = `<colgroup><col style="width:26px"><col style="width:26px"><col style="width:37.5%"><col style="width:37.5%"><col style="width:25%"><col style="width:58px"></colgroup>`;
-  const grip = `<svg class="grip-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><line x1="2.5" y1="5" x2="13.5" y2="5"/><line x1="2.5" y1="8" x2="13.5" y2="8"/><line x1="2.5" y1="11" x2="13.5" y2="11"/></svg>`;
-  const nIn = files.filter(isIncluded).length;
-  const fileColor = f => f.color || '', anyColor = files.some(fileColor);
-
-  let html = `<div class="table-wrap-box"><table class="file-table">${colgroup}<thead><tr><th></th><th class="incl-cell"><input type="checkbox" class="incl-all"${nIn ? ' checked' : ''} title="Include all traces in the analysis, or none"></th><th><div class="file-head">${anyColor ? '<button class="palette-pick-btn" title="Apply color palette"></button>' : '<span class="palette-pick-btn swatch-gap" aria-hidden="true"></span>'}<span>LABEL</span></div></th>`;
-  html += `<th>FILE</th><th class="note-cell"${noteHead ? ` title="${esc(noteHead)}"` : ''}>${noteHead ? esc(noteHead) : ''}</th>`;
-  const dlIcon = DL_SVG(15);
-  const xIcon = X_SVG(15);
-  html += `<th class="row-acts" style="text-align:right;white-space:nowrap"><button class="download-all del-bare dl-bare" title="Download all files (zip)">${dlIcon}</button><button class="remove-all del-bare is-danger" title="Remove all">${xIcon}</button></th></tr></thead><tbody>`;
-
-  files.forEach((f, i)=>{
-    const swatch = fileColor(f) ? `<button class="color-swatch" data-i="${i}" data-color="${esc(f.color)}" style="background:${esc(f.color)}" title="Pick color"></button>` : '<span class="color-swatch swatch-gap" aria-hidden="true"></span>';
-    const on = isIncluded(f), file = fileOf(f);
-    html += `<tr class="file-row${on ? '' : ' is-excluded'}" data-i="${i}">`;
-    html += `<td class="drag-cell"><span class="drag-handle" title="Drag to reorder">${grip}</span></td>`;
-    html += `<td class="incl-cell"><input type="checkbox" class="file-incl" data-i="${i}"${on ? ' checked' : ''} title="Include in the analysis"></td>`;
-    const tip = callbacks.tip ? callbacks.tip(f, i) : '';
-    html += `<td class="trace-cell"${tip ? ` title="${esc(tip)}"` : ''}><span class="trace-inner">${swatch}<input type="text" class="label-input file-label" data-i="${i}" value="${esc(f.label)}" aria-label="Trace name"></span></td>`;
-    const parts = callbacks.parts ? callbacks.parts(f, i) : null;
-    if (parts) html += `<td class="fname fname-parts" title="${esc(parts.map(p=> p.name).join(' + '))}"><span class="fname-inner fparts">${parts.map((p, k)=>
-      `<span class="fpart${p.warn ? ' is-warn' : ''}" data-i="${i}" data-p="${k}"${p.warn ? ` title="${esc(p.name + ': ' + p.warn)}"` : ` title="${esc(p.name)}"`}><span class="fpart-grip" title="Drag onto another file to pair it with that one (onto a file already paired: the two swap)" aria-hidden="true">${FGRIP}</span><span class="fname-text">${esc(p.name)}</span></span>`).join('')}</span></td>`;
-    else html += `<td class="fname" title="${esc(file)}"><span class="fname-inner"><span class="fname-text">${esc(file)}</span></span></td>`;
-    html += `<td class="note-cell">${note ? note(f, i) : ''}</td>`;
-    html += `<td class="row-acts" style="text-align:right;white-space:nowrap"><button class="dl-file del-bare dl-bare idle-dim" data-i="${i}" title="Download its file">${dlIcon}</button><button class="del del-bare row-del is-danger idle-dim" data-i="${i}" title="Remove">${xIcon}</button></td>`;
-    html += `</tr>`;
-  });
-  html += `</tbody></table></div>`;
-  // With every trace left out nothing is analysed, and no card follows the list: this
-  // says why.
-  if (!nIn) html += `<p class="txt-meta file-none">No trace is included in the analysis.</p>`;
-  wrap.innerHTML = html;
-
-  // The header box: ticked with every trace in, empty with none, the dash with some.
-  // A press includes them all, or, when all are in already, leaves them all out.
+// The header box: ticked with every trace in, empty with none, the dash with some.
+// A press includes them all, or, when all are in already, leaves them all out.
+function wireListIncl({ wrap, files, callbacks, nIn }){
   const inclAll = wrap.querySelector('.incl-all');
   inclAll.indeterminate = nIn > 0 && nIn < files.length;
   inclAll.addEventListener('change', ()=>{
@@ -926,13 +902,19 @@ function renderUnifiedFileList(container, files, callbacks, note, noteHead){
   wrap.querySelectorAll('.file-incl').forEach(cb=>{
     cb.addEventListener('change', e=>{ if (callbacks.onInclude) callbacks.onInclude(+e.target.dataset.i, e.target.checked); });
   });
+}
 
-  // Removing files (all or one) is treated as an ordinary edit to the project — it
-  // updates the draft rather than discarding it — so this only confirms the action.
+// Removing files (all or one) is treated as an ordinary edit to the project — it
+// updates the draft rather than discarding it — so this only confirms the action.
+function wireListRemoveAll({ wrap, callbacks }){
   wrap.querySelector('.remove-all').addEventListener('click', async ()=>{
     if (!await confirmBanner('Are you sure to remove all traces?')) return;
     if (callbacks.onRemoveAll) callbacks.onRemoveAll();
   });
+}
+
+// The palette over the list (where a trace has a colour), and each trace's colour.
+function wireListColors({ wrap, callbacks }){
   const palBtn = wrap.querySelector('button.palette-pick-btn');
   if (palBtn) palBtn.addEventListener('click', e=>{
     e.stopPropagation();
@@ -953,9 +935,12 @@ function renderUnifiedFileList(container, files, callbacks, note, noteHead){
       });
     });
   });
-  /* A label is taken when the field is left (or on Enter), in every module: not at each
-     key, where a module redrew its plots and stored a step of the undo history, which made
-     typing slow (to v466). Escape puts back the label the field had when entered. */
+}
+
+/* A label is taken when the field is left (or on Enter), in every module: not at each
+   key, where a module redrew its plots and stored a step of the undo history, which made
+   typing slow (to v466). Escape puts back the label the field had when entered. */
+function wireListLabels({ wrap, callbacks }){
   wrap.querySelectorAll('.file-label').forEach(inp=>{
     inp.addEventListener('focus', ()=>{ inp.dataset.was = inp.value; });
     inp.addEventListener('change', e=>{
@@ -968,136 +953,129 @@ function renderUnifiedFileList(container, files, callbacks, note, noteHead){
       else if (e.key === 'Escape' && inp.dataset.was != null){ e.preventDefault(); e.stopPropagation(); inp.value = inp.dataset.was; inp.blur(); }
     });
   });
+}
+
+function wireListRemove({ wrap, callbacks }){
   wrap.querySelectorAll('.row-del').forEach(btn=>{
     // Removing a single file is a plain edit — no confirmation, even for the last one.
     btn.addEventListener('click', e=>{ if (callbacks.onRemove) callbacks.onRemove(+e.currentTarget.dataset.i); });
   });
-  // Per-file download of the original uploaded content, byte-for-byte. A file
-  // keeps its original bytes in `rawBytes`, or a `rawFiles` list (e.g. EPR's
-  // .dsc + .dta pair), or legacy decoded text in `raw` (older sessions).
-  // A part of a list with neither bytes nor text (its bytes not stored in this browser any
-  // more, v517) is not available, as a file of no bytes is: to v516 it went into the zip
-  // as an empty file, with no word.
-  // (a trace's file: under its own name, `src`, where the trace has a name of its own)
-  const originalsOf = f => {
-    if (f.rawFiles && f.rawFiles.length)
-      return f.rawFiles.map(rf=> rf.bytes != null ? { name:rf.name, bytes:rf.bytes } : { name:rf.name, text:rf.data ?? rf.text });
-    if (f.rawBytes != null) return [{ name:fileOf(f), bytes:f.rawBytes }];
-    if (f.raw != null) return [{ name:fileOf(f), text:f.raw }];
-    return [];
-  };
-  const lostOf = f => originalsOf(f).filter(o=> o.bytes == null && o.text == null).map(o=> o.name);
+}
+
+// Per-file download of the original uploaded content, byte-for-byte (filelist-model.js
+// downloadOf), and all of them as a single zip (zipEntries).
+function wireListDownloads({ wrap, files }){
   wrap.querySelectorAll('.dl-file').forEach(btn=>{
     btn.addEventListener('click', e=>{
       const f = files[+e.currentTarget.dataset.i];
       if (!f) return;
-      const orig = originalsOf(f), lost = lostOf(f);
-      if (!orig.length || lost.length){ alert('The original file for “'+(lost[0] || f.name)+'” is not available.'); return; }
-      if (orig.length === 1){
-        if (orig[0].bytes != null) downloadBytes(orig[0].name, orig[0].bytes);
-        else downloadBlob(orig[0].name, orig[0].text);
-      } else downloadZip(fileOf(f)+'.zip', orig);
+      const d = downloadOf(LIST_U, f);
+      if (d.missing){ alert('The original file for “'+d.name+'” is not available.'); return; }
+      if (d.one){
+        if (d.one.bytes != null) downloadBytes(d.one.name, d.one.bytes);
+        else downloadBlob(d.one.name, d.one.text);
+      } else downloadZip(d.zip, d.entries);
     });
   });
-  // Download all originals as a single zip
   const dlAll = wrap.querySelector('.download-all');
   if (dlAll) dlAll.addEventListener('click', ()=>{
-    // (a file once, however many of its traces are listed: by its bytes, or its name)
-    const seen = new Set(), entries = files.filter(f=> !lostOf(f).length).flatMap(originalsOf)
-      .filter(o=>{ const k = o.bytes != null ? o.bytes : 'name:' + o.name; if (seen.has(k)) return false; seen.add(k); return true; });
+    const entries = zipEntries(LIST_U, files);
     if (!entries.length){ alert('No original files are available to download.'); return; }
     downloadZip('files.zip', entries);
   });
+}
 
-  /* Drag-to-reorder via pointer events (works with both mouse and touch): grab the
-     handle and drag. What lights is the gap the row would land in (dropGap) — a line
-     over the row it would go before, or under the last — and that is where it goes.
-     The two gaps beside the dragged row would leave it where it is: they never light,
-     and a drop there does nothing. (The line used to be the top of the row under the
-     pointer while the row went in that row's place: dragged down, it landed under
-     the row the line was over, the gap under the dragged row itself lit, and the one
-     under the last row could not be reached.) */
-  const rows = [...wrap.querySelectorAll('.file-row')];
-  const gapAt = y =>{ const g = dropGap(rows, y); return g === drag.from || g === drag.from + 1 ? null : g; };
-  const mark = g => rows.forEach((r, k)=>{
-    r.classList.toggle('drop-before', g != null && k === g);
-    r.classList.toggle('drop-after', g === rows.length && k === rows.length - 1);
-  });
-  let drag = null; // { from }
-  rows.forEach(row=>{
+/* Drag-to-reorder via pointer events (works with both mouse and touch): grab the
+   handle and drag. What lights is the gap the row would land in (dropGap) — a line
+   over the row it would go before, or under the last — and that is where it goes.
+   The two gaps beside the dragged row would leave it where it is: they never light,
+   and a drop there does nothing (filelist-model.js gapFor). (The line used to be the top
+   of the row under the pointer while the row went in that row's place: dragged down, it
+   landed under the row the line was over, the gap under the dragged row itself lit, and
+   the one under the last row could not be reached.) */
+function wireListDrag(L){
+  L.rows = [...L.wrap.querySelectorAll('.file-row')];
+  L.rows.forEach(row=>{
     const handle = row.querySelector('.drag-handle');
     handle.addEventListener('pointerdown', e=>{
       e.preventDefault();
-      drag = { from: +row.dataset.i };
+      L.drag = { from: +row.dataset.i };
       row.classList.add('dragging');
       try { handle.setPointerCapture(e.pointerId); } catch(_){}
     });
     handle.addEventListener('pointermove', e=>{
-      if (!drag) return;
-      mark(gapAt(e.clientY));
+      if (!L.drag) return;
+      markGap(L, gapAt(L, e.clientY));
     });
-    const finish = (e)=>{
-      if (!drag) return;
-      const g = gapAt(e.clientY), from = drag.from;
-      mark(null); rows.forEach(r=> r.classList.remove('dragging'));
-      drag = null;
-      // The gap before row g is, once the row is out of the list, index g − 1 if it
-      // came from above, g if from below.
-      if (g != null && callbacks.onReorder) callbacks.onReorder(from, g > from ? g - 1 : g);
-    };
-    handle.addEventListener('pointerup', finish);
-    handle.addEventListener('pointercancel', ()=>{ mark(null); rows.forEach(r=> r.classList.remove('dragging')); drag = null; });
+    handle.addEventListener('pointerup', e=> dropRow(L, e));
+    handle.addEventListener('pointercancel', ()=>{ markGap(L, null); L.rows.forEach(r=> r.classList.remove('dragging')); L.drag = null; });
   });
+}
+const gapAt = (L, y)=> gapFor(dropGap(L.rows, y), L.drag.from);
+const markGap = ({ rows }, g)=> rows.forEach((r, k)=>{
+  r.classList.toggle('drop-before', g != null && k === g);
+  r.classList.toggle('drop-after', g === rows.length && k === rows.length - 1);
+});
+function dropRow(L, e){
+  if (!L.drag) return;
+  const g = gapAt(L, e.clientY), from = L.drag.from;
+  markGap(L, null); L.rows.forEach(r=> r.classList.remove('dragging'));
+  L.drag = null;
+  if (g != null && L.callbacks.onReorder) L.callbacks.onReorder(from, landing(g, from));
+}
 
-  /* A file dragged by its own grip (callbacks.parts, GC's pairs): what lights is a whole
-     file, the one it would land on, never a gap. A row of one file is that file from edge
-     to edge; a row of two, each its half, split between their middles. The dragged file
-     itself is no target: off every other file, a file with a partner lights itself, dashed,
-     and a drop there leaves it alone in a row of its own. */
-  if (!callbacks.parts) return;
-  const partEls = [...wrap.querySelectorAll('.fpart')];
-  const partOf = el => ({ i: +el.dataset.i, p: +el.dataset.p });
-  let fdrag = null;   // { el, from, paired }
-  const partAt = (x, y)=>{
-    for (const r of rows){
-      const b = r.getBoundingClientRect();
-      if (y < b.top || y > b.bottom || x < b.left || x > b.right) continue;
-      const ps = [...r.querySelectorAll('.fpart')];
-      if (!ps.length) return null;
-      let el = ps[0];
-      if (ps.length > 1){ const m = ps.map(p=>{ const q = p.getBoundingClientRect(); return (q.top + q.bottom)/2; }); el = y < (m[0] + m[1])/2 ? ps[0] : ps[1]; }
-      return el === fdrag.el ? null : el;
-    }
-    return null;
-  };
-  const fmark = (x, y)=>{
-    const t = x == null ? null : partAt(x, y);
-    partEls.forEach(el=> el.classList.toggle('drop-on', el === t));
-    if (fdrag) fdrag.el.classList.toggle('drop-alone', x != null && !t && fdrag.paired);
-    return t;
-  };
-  const fend = ()=>{ partEls.forEach(el=> el.classList.remove('drop-on', 'drop-alone', 'fdragging')); wrap.classList.remove('fdrag-on'); fdrag = null; };
-  partEls.forEach(el=>{
+/* A file dragged by its own grip (callbacks.parts, GC's pairs): what lights is a whole
+   file, the one it would land on, never a gap. A row of one file is that file from edge
+   to edge; a row of two, each its half, split between their middles. The dragged file
+   itself is no target: off every other file, a file with a partner lights itself, dashed,
+   and a drop there leaves it alone in a row of its own. */
+function wirePartDrag(L){
+  L.partEls = [...L.wrap.querySelectorAll('.fpart')];
+  L.partEls.forEach(el=>{
     const g = el.querySelector('.fpart-grip');
     g.addEventListener('pointerdown', e=>{
       if (e.pointerType === 'mouse' && e.button !== 0) return;
       e.preventDefault(); e.stopPropagation();
-      fdrag = { el, from: partOf(el), paired: el.parentElement.querySelectorAll('.fpart').length > 1, x: e.clientX, y: e.clientY, moved: false };
-      el.classList.add('fdragging'); wrap.classList.add('fdrag-on');
+      L.fdrag = { el, from: partOf(el), paired: el.parentElement.querySelectorAll('.fpart').length > 1, x: e.clientX, y: e.clientY, moved: false };
+      el.classList.add('fdragging'); L.wrap.classList.add('fdrag-on');
       try { g.setPointerCapture(e.pointerId); } catch(_){}
     });
     // (a press and release in place, no move, is no drop: nothing happens)
-    g.addEventListener('pointermove', e=>{ if (!fdrag) return; if (Math.hypot(e.clientX - fdrag.x, e.clientY - fdrag.y) > 4) fdrag.moved = true; if (fdrag.moved) fmark(e.clientX, e.clientY); });
-    g.addEventListener('pointerup', e=>{
-      if (!fdrag) return;
-      const moved = fdrag.moved || Math.hypot(e.clientX - fdrag.x, e.clientY - fdrag.y) > 4;
-      const t = moved ? fmark(e.clientX, e.clientY) : null, from = fdrag.from, paired = fdrag.paired && moved;
-      fend();
-      if (t){ if (callbacks.onPartDrop) callbacks.onPartDrop(from, partOf(t)); }
-      else if (paired && callbacks.onPartDrop) callbacks.onPartDrop(from, null);
-    });
-    g.addEventListener('pointercancel', fend);
+    g.addEventListener('pointermove', e=>{ const d = L.fdrag; if (!d) return; if (movedFrom(d.x, d.y, e.clientX, e.clientY)) d.moved = true; if (d.moved) markPart(L, e.clientX, e.clientY); });
+    g.addEventListener('pointerup', e=> dropPart(L, e));
+    g.addEventListener('pointercancel', ()=> endPart(L));
   });
+}
+const partOf = el => ({ i: +el.dataset.i, p: +el.dataset.p });
+// The file under (x, y) the dragged one would land on: none off every row, on itself or
+// on a row of no files.
+function partAt(L, x, y){
+  for (const r of L.rows){
+    if (outside(r.getBoundingClientRect(), x, y)) continue;
+    const ps = [...r.querySelectorAll('.fpart')];
+    if (!ps.length) return null;
+    const el = ps.length > 1 ? ps[halfAt(ps.map(p=> p.getBoundingClientRect()), y)] : ps[0];
+    return el === L.fdrag.el ? null : el;
+  }
+  return null;
+}
+// The file it would land on lit (x null: none), the dragged one dashed where it would
+// stand alone; that file given back.
+function markPart(L, x, y){
+  const t = x == null ? null : partAt(L, x, y);
+  L.partEls.forEach(el=> el.classList.toggle('drop-on', el === t));
+  if (L.fdrag) L.fdrag.el.classList.toggle('drop-alone', x != null && !t && L.fdrag.paired);
+  return t;
+}
+function endPart(L){ L.partEls.forEach(el=> el.classList.remove('drop-on', 'drop-alone', 'fdragging')); L.wrap.classList.remove('fdrag-on'); L.fdrag = null; }
+function dropPart(L, e){
+  const d = L.fdrag, cb = L.callbacks;
+  if (!d) return;
+  const moved = d.moved || movedFrom(d.x, d.y, e.clientX, e.clientY);
+  const t = moved ? markPart(L, e.clientX, e.clientY) : null, from = d.from, paired = d.paired && moved;
+  endPart(L);
+  if (t){ if (cb.onPartDrop) cb.onPartDrop(from, partOf(t)); }
+  else if (paired && cb.onPartDrop) cb.onPartDrop(from, null);
 }
 
 /* Where a row dragged in a list would land: the gap before rows[g], g = 0 … n (n:

@@ -265,7 +265,7 @@ was proposed; nothing here is in the code yet.
   the byte; in Node, v554's figure.js against this one on 1500 random figures, 3.7 million
   elements, none different. 24 figures kept in tests/figlayout.test.mjs (golden digests of
   `drawFigure`'s markup on a recording page, figure.js run from its source) beside tests of
-  the calculations. Still long in figure.js: `wireControls` (~370), the controls' wiring.
+  the calculations.
   Done for tauc.js in v556, the first of the modules that were one closure: what DRS works
   out in `tauc-model.js` (the energies, a file read and its points and notes, the
   reflectance, the curves over the points with a value, the window scan and its fit, E_g,
@@ -666,8 +666,100 @@ was proposed; nothing here is in the code yet.
   listeners or of writes within a step, a file whose stem is loaded, an instrument of
   another file's bytes). tests/xrdmodel.test.mjs, tests/iodomodel.test.mjs and
   tests/eprmodel.test.mjs keep the calculations' and markup's tests and 40 cases each as
-  v562 gave them (golden digests). Still long (v563): `wireControls` (figure.js, 372).
-  The others when work takes us into them.
+  v562 gave them (golden digests). Done for the last of the long UI functions in v564:
+  `wireControls` (figure.js, 372 lines, its click handler alone 192), `renderUnifiedFileList`
+  (utils.js, 229, the trace list every module shows), `shapeView` (xrd-shape3d.js, 262) and
+  `cellView` (xrd-cell3d.js, 191). What the composer's sidebar does to a figure goes to
+  `figure-model.js` (the keys that are numbers and those that reshape the sidebar, a panel
+  placed, added in the first free cell and removed, a range carried across a log switch,
+  handed over as the automatic one goes off, a group's switch and its range by hand, the
+  axes' settings, a setting for every series, a division's name, colour and fill, the
+  colours a pick reaches and a palette keeps, a fill as its picker shows it and takes it
+  back, text put into a rich title); figure.js keeps the reading and the redraws, the
+  controls routed by their data attribute (`applyControl` over `applyK`, `applyKSelect`,
+  `beforeK`, `numberK`, `applyRauto`, `applyAk`, `applyMan`, `applyAll`, `applyGrid`,
+  `applyDataLabels`, `applyFont`, `applyPanel`, `applyCatName`, `applyDivName`,
+  `applyShare`, `applySeries`; `runControl`) and the buttons by the kind clicked
+  (`onControlsClick` over `onRichButton`, `insertRich`, `onRestoreNames`, `onAlignButton`,
+  `onInkSwatch`, `onFillButton`, `onSeriesPalette`, `onSeriesTexPalette`, `onDivSwatch`,
+  `onSeriesSwatch`, `onPaletteButton`, `onTexPaletteButton`, `onDivButton`, `addPanel`,
+  `delPanel`), the listeners in their order. The trace list's calculations go to
+  `filelist-model.js` (a trace's files and its download, the list's zip, where a row dragged
+  lands, a point on a row and on one of its two files, a press that moved) and its markup to
+  `filelist-html.js` (the head, a row, a pair's files, the list), utils.js's helpers handed
+  in; utils.js keeps the wiring over a state object (`wireListIncl`, `wireListRemoveAll`,
+  `wireListColors`, `wireListLabels`, `wireListRemove`, `wireListDownloads`,
+  `wireListDrag` with `dropRow`, `wirePartDrag` with `partAt`, `markPart`, `dropPart`), its
+  exports as they were. The 3D views: `shapeView` no longer one closure, its view a state
+  object (`makeElements`, `paint`, `measure`, `draw`, `request`, `rotate`, `reset`,
+  `wireCanvas`, `pointerDown`, `pointerMove`, `pointerUp`, `keyDown`, `keyUp`,
+  `followPage`, `watchDpr`, `apiOf`, `setSolid`, `clearSolid`, `putView`, `destroyView`,
+  `viewPng`); `cellView` the same, what it draws going to `xrd-cell3d-model.js` (the cell's
+  model, a frame's projection, the edges behind and in front, the spheres back to front and
+  their shading, the triad's corner, the side, the words, the view kept and put back; the
+  turns, keys and double taps the shape's own, xrd-shape3d-model.js), `elementColor` still
+  exported by xrd-cell3d.js. figure.js 3089 lines to 3029 (wireControls 372 to 12, the click
+  handler 192 to 7, the longest new function 23), utils.js 2770 to 2748
+  (renderUnifiedFileList 229 to 15, the longest of its parts 22), xrd-shape3d.js 622 to 640
+  (shapeView 262 to 10, the longest new 27), xrd-cell3d.js 266 to 225 (cellView 191 to 10,
+  the longest 19); figure-model.js 181, filelist-model.js 57, filelist-html.js 71,
+  xrd-cell3d-model.js 125. The same operations in the same order: in the browser, v563 and
+  this tree, the composer end to end on GC's mean-rate bars and its rates (600 steps: every
+  field of the sidebar in turn, valid, refused, with a comma, every button and its popup:
+  colours, palettes and texture palettes by scope and by division, fills, the alignment, the
+  character map; divisions and panels added and removed, undo and redo, presets, Reset, the
+  preview zoomed and panned, resized, SVG and PNG exports, closed and opened again from its
+  memory), the trace lists of six modules (199 steps: DRS, XRPD, GC with replicates and pairs
+  dragged by their grips, EPR's pairs, SEM with no colours, Custom's traces of one file: left
+  out, all and none, names typed, Escape, Tab, rows dragged, colours, palettes, downloads,
+  removals confirmed and not, undo and redo), the two 3D views on a page of their own at the
+  pixel ratios 1 and 2 (142 steps: dragged, hovered, keys held, Home, double clicks, taps and
+  pens, a touch cancelled, the right button, views put back, PNGs, both themes, resized, the
+  next solid and phase, none, destroyed) and the Rietveld card's unit cell in the app (12):
+  13200, 4378 and 1116 fields (263435, 31688 and 3656 items), none different (v563 against
+  itself, none either; the composer's memory keyed by the tab's id, random, masked; the
+  shape's labels placed from where they sat in the frame before, so a frame drawn after each
+  input). In Node, v563's and this tree's figure.js, utils.js's list and the two views, each
+  run from its source on a page of stubs recording every markup, value, property, style,
+  class, attribute, listener, focus, canvas call (every number by its shortest round-trip
+  string) and frame: 400 composer sessions of 40 steps (11.5 million entries), 2000 lists of
+  80 (2.36 million), 800 shape views of 60 (29.9 million) and 1500 cell views of 80 (3.57
+  million), none different. Thirteen mutations of the new code (the list: a download's
+  title, the gaps beside a dragged row, the name field's listeners' order, the zip's files
+  told apart by name alone; the composer: a span cut a row past the grid, the buttons' order
+  (a division's swatch taken as a series'), 'solid' kept as a dash, the data labels' switch
+  rebuilding nothing; the shape: no full frame after a drag, the fonts' listener kept after
+  destroy; the cell: a sphere's opacity, a double tap not forgotten, an edge at the centre's
+  depth put behind it) were each caught: eleven by the Node sessions, ten by the new tests,
+  eleven by the golden cases run through each tree's page, five by the browser sessions (the
+  others act on what they do not reach or record). Two are all but equivalent in the app:
+  the span, which the redraw after every edit clamps back into the grid (the tests alone
+  catch it), and the order of a field's listeners for events of different types (the Node
+  sessions alone). tests/figuremodel.test.mjs,
+  tests/filelistmodel.test.mjs and tests/cell3d.test.mjs keep the calculations' and markup's
+  tests and 40 cases each (the views' six) as v563 gave them, shape3d.test.mjs six cases of
+  the shape's events (golden digests). Still long (v564): figure.js's `controlsHtml` (128),
+  `buildModel` (97), `seriesFromPlot` (87); utils.js's colour picker `_build` (117). The
+  others when work takes us into them.
+- **The trace list: a row's grip takes the mouse's right button (found in v564, as v563 has
+  it).** The ≡ that drags a row to another place in every module's trace list (utils.js
+  `wireListDrag`) starts a drag on any button's press: pressed with the right button and let
+  go over another gap, the row moves there, a step of the history (checked on v563 in the
+  browser: DRS's three spectra, the first one's grip pressed with the right button and let
+  go over the third: the first now last). A file's own grip in the same list (GC's pairs)
+  takes the left button only, as the 3D views and the figure's preview do. Proposed: the
+  row's grip as the file's (a mouse's other buttons refused). Left as it is meanwhile (a
+  visible change).
+- **The figure composer: the width for every series lets a bar be wider than its slot (found
+  in v564, as v563 has it).** In the all-series row the width field (figure.js
+  `allSeriesHtml`, data-max 6, "Line / bar width for every series") takes a line's range,
+  0.1–6, where a bar's own field takes 0.1–1 (a fraction of its category's slot): in a bar
+  chart 3 typed there sets every bar three slots wide, the bars over each other and their
+  neighbours, and each bar's own field then shows the 3 it would refuse (checked on v563 in
+  the browser: GC's mean-rate bars, a bar 89 px wide drawn 334 px; 3 typed in a bar's own
+  field refused, set back to 3). Proposed: the field's range a bar's where every series is a
+  bar (and, with lines and bars together, the value cut to each one's range, or the field
+  for the lines alone). Left as it is meanwhile (a visible change).
 - **Iodometry: a file whose bytes cannot be read ends the whole drop (found in v563, as
   v562 has it).** The drop reads each file's bytes (`file.arrayBuffer()`, iodo.js `onDrop`)
   outside the guard that refuses a file it cannot read: a file gone from the disk after it

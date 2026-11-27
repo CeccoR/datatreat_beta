@@ -1,0 +1,34 @@
+{
+ "views": {
+  "draw": {
+   "digest": "802837ea36fb9f6d880191449823620f486891bab66a8ac85cfcf502e3a372ce",
+   "calls": 2603,
+   "steps": 12
+  },
+  "side": {
+   "digest": "1e83c3cc7c274da2d4c904e1292277f18fe5f2d1d6edee8224ed2d03d159c087",
+   "calls": 1271,
+   "steps": 4
+  },
+  "taps": {
+   "digest": "5fc9d73919d22fdc45044eb08354f2f5f64c7199a8c32a5e1c95ecc0446aa44f",
+   "calls": 1493,
+   "steps": 6
+  },
+  "pointers": {
+   "digest": "31afbf78b9f983529aff24a9f65a878fe69bc7b551cf32591e2ac404c1a0b93e",
+   "calls": 1114,
+   "steps": 7
+  },
+  "views": {
+   "digest": "253a9f4e611dd864c75ad70b733f44a1a646743667140af91c53e79fb5fa379b",
+   "calls": 1928,
+   "steps": 19
+  },
+  "destroy": {
+   "digest": "4ea18da57770272ef7f91cfaffebfccc61c9dca058d8fd1496ac6aac048ad0cf",
+   "calls": 319,
+   "steps": 4
+  }
+ }
+}

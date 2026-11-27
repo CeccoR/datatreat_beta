@@ -1,0 +1,32 @@
+{
+ "taps": {
+  "digest": "85ba9b1ea44b82060dc1e80765f203b813267050d43b59d6ec4c9d19751f8d90",
+  "calls": 50864,
+  "steps": 7
+ },
+ "pointers": {
+  "digest": "5c7702e9dd676e89df04b4b37f3f25f641c385c2ddf9afacd0eb4b2b9924542f",
+  "calls": 36179,
+  "steps": 6
+ },
+ "keys": {
+  "digest": "e71d06d8a208104c05054a412a05813cf72d855dd01c3dcc8f8a2898ccefc3d4",
+  "calls": 33521,
+  "steps": 6
+ },
+ "early": {
+  "digest": "bacad1b80fb0a40685f9bb8260e4068707071411dbcc2c6653235b9a508e28db",
+  "calls": 37946,
+  "steps": 7
+ },
+ "page": {
+  "digest": "b3a0b61d8c8a25cd77b4da5e7595fcd42500598361604038473e1e50d76a9db8",
+  "calls": 45018,
+  "steps": 9
+ },
+ "destroy": {
+  "digest": "646db4a7714730472835ad60896942bbcacd9e047e8581b1609172021685dd82",
+  "calls": 7418,
+  "steps": 4
+ }
+}
