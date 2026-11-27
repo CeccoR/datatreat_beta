@@ -464,7 +464,10 @@ function drawXY(svg, list, data, prev, norm){
 function drawBars(svg, list, data, legend){
   valueBars(svg, { ...M.barsOf(list, data), yLabel: esc(M.yTitle(list)), legend });
 }
-// Boxes (fig-model.js boxStatsOf, boxLayout): their names measured in the plot's font.
+// Boxes (fig-model.js boxStatsOf, boxLayout): their names measured in the plot's font. Each
+// no shorter than its mean's cross (v577: plot.js minBox, as XRPD's sizes from v576), so that
+// a series of one value, or of values all alike, shows its colour (to v576 its lines alone),
+// in the figure composer too.
 function drawBoxes(svg, list, data){
   const st = M.boxStatsOf(U, data);
   const mctx = document.createElement('canvas').getContext('2d');
@@ -476,7 +479,7 @@ function drawBoxes(svg, list, data){
   list.forEach((e, k)=>{
     const b = st[k];
     if (b){
-      plot.box(k + 1, b, e.color, L.hw, 0, { label: e.name });
+      plot.box(k + 1, b, e.color, L.hw, 0, { label: e.name, minBox: true });
       plot.barLabel(k + 1, Math.max(b.hi, ...b.out), M.boxLabel(b), { gap: 6 });
     }
     plot.tickLabel(k + 1, L.fit.labels[k], L.fit.rot, e.name, e.s.key);

@@ -506,9 +506,10 @@ class Plot{
      to the furthest values within 1.5 IQR, each value beyond them a circle, and the
      mean a cross. `st` = {q1, med, q3, lo, hi, mean, err, out[]}; `err`, the ± written
      beside the mean, is carried for whatever reads the plot back. `meta.label` names
-     its series; `meta.minBox` (v576, XRPD's crystallite sizes) draws the box no shorter
-     than the mean's cross, about its middle, so that a box of one value (or of values all
-     alike: its quartiles one) shows its colour, not its lines alone. */
+     its series; `meta.minBox` (v576, XRPD's crystallite sizes; v577 every box plot's, the
+     Custom module's too) draws the box no shorter than the mean's cross, about its middle,
+     so that a box of one value (or of values all alike: its quartiles one) shows its
+     colour, not its lines alone. */
   box(xc, st, color, hw, dx, meta){
     const entry = {type:'box', xc, q1:st.q1, med:st.med, q3:st.q3, lo:st.lo, hi:st.hi, mean:st.mean, err:st.err,
                    out:(st.out||[]).slice(), color, hw:hw||14, dx:dx||0, label: meta && meta.label, ...(meta && meta.minBox ? { minBox: true } : {})};

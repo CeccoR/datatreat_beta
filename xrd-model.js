@@ -177,11 +177,12 @@ export function keptState(U, k, v, gone){
 // A state as the restore takes it: of this version (v 2), or migrated.
 export const stateIn = (U, s0)=> U.isObj(s0) && s0.v === 2 ? s0 : migrate(U, U.isObj(s0) ? s0 : {});
 /* Its files read again (each its default colour by its place: U.colorOf; null, one left
-   out), the standard's, how many are lost, and the places among the included of the files
-   left out (an entry that is no file counts as included: it holds no included:false),
-   whose entries the cards' per-sample lists drop. → { reads, stdRead, lost, gone } */
+   out; the CIFs a file left out holds, whole again: heldIn), the standard's, how many are
+   lost, and the places among the included of the files left out (an entry that is no file
+   counts as included: it holds no included:false), whose entries the cards' per-sample
+   lists drop. → { reads, stdRead, lost, gone } */
 export function readsOf(U, s){
-  const raw = Array.isArray(s.files) ? s.files : [], reads = raw.map((f, i)=> keptFile(U, f, i, U.colorOf(i)));
+  const raw = Array.isArray(s.files) ? s.files : [], at = cifStates(U, cardsIn(U, s)), reads = raw.map((f, i)=> heldIn(U, keptFile(U, f, i, U.colorOf(i)), at));
   const stdRead = s.std ? keptFile(U, s.std, 0, '#d4a72c') : null, lost = reads.filter(r=> !r).length;
   const gone = new Set();
   raw.reduce((j, f, i)=>{ if (U.isObj(f) && f.included === false) return j; if (!reads[i]) gone.add(j); return j + 1; }, 0);
@@ -213,6 +214,35 @@ export const keptSlots = (key, s)=> [{ key: key + ':params', arr: s.perParams, m
   { key: key + ':manual', arr: s.manualPeaks, make: copyArr },
   { key: key + ':removed', arr: s.removedPeaks, make: copyArr },
   ...(Array.isArray(s.cif) ? [{ key: key + ':cif', arr: s.cif, make: v=>{ const q = cifIn(v, s.cifTexts); return q && cifRef(q, textsOf(s)); }, out: v=> cifIn(v, s.cifTexts) }] : [])];
+/* A file left out holds its sample's CIF whole while the page has it (held, under its card's
+   key: a reference to the text the card's samples share), and the state saved holds it as
+   a sample's (v577; to v576 its text whole, one copy more in the state, the history's steps
+   and the project for each such file): its file's name and its text's place in the pool of
+   its card's Scherrer settings (heldOut: cifRef, the text added there where it is not yet),
+   where that card has them with its samples' CIFs; else whole, as before. Read back (heldIn,
+   readsOf) it is whole again; one of v575 or v576 is whole already. cifStates: the cards'
+   Scherrer settings with their samples' CIFs, by the key their held CIFs are under. */
+const cifStates = (U, cards)=> new Map(cards.filter(c=> U.isObj(c) && U.isObj(c.states) && U.isObj(c.states.scherrer) && Array.isArray(c.states.scherrer.cif))
+  .map(c=> ['A' + c.id + ':cif', c.states.scherrer]));
+// The files and cards of a state being saved, its own copies (a file's held is the page's:
+// one with a CIF made anew).
+export function heldOut(U, files, cards){
+  const at = cifStates(U, cards);
+  files.forEach(f=>{
+    if (!U.isObj(f.held)) return;
+    let held = null;
+    at.forEach((s, key)=>{ const q = cifIn(f.held[key]); if (q) (held = held || { ...f.held })[key] = cifRef(q, textsOf(s)); });
+    if (held) f.held = held;
+  });
+}
+// A file read (f, its own copy; its held the state's, made anew), its held CIFs whole.
+function heldIn(U, f, at){
+  if (!f || !U.isObj(f.held)) return f;
+  let held = null;
+  at.forEach((s, key)=>{ const v = f.held[key]; if (U.isObj(v) && Number.isInteger(v.ref)) (held = held || { ...f.held })[key] = cifIn(v, s.cifTexts); });
+  if (held) f.held = held;
+  return f;
+}
 // A card's element ids by its kind.
 export const prefixOf = a => (a.type === 'scherrer' ? 'xrdA' : 'xrdR') + a.id;
 // A Rietveld state with what a run wrote for the patterns named (runPatch), put where it

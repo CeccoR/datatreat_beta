@@ -122,7 +122,7 @@ test('XRPD Scherrer: peaks at a reflection\'s Kα2 alone said in the grey rule u
         boxes: w.querySelectorAll('.alert').length, k2: [...w.querySelectorAll('.peak-row')].filter(t=> / Kα2$/.test(t.cells[2].textContent)).length };
     });
     assert.deepEqual([r.grey, r.after, r.boxes, r.k2], [true, true, 0, 4]);
-    assert.match(r.text, /; 4 of 8 peaks only at a reflection's Kα2 \(λ 1\.544426 Å\), named so and left out of its sizes, as each repeats its Kα1 peak\.$/);
+    assert.match(r.text, /; 4 of 8 peaks at a reflection's Kα2 \(λ 1\.544426 Å\), the nearest line within their tolerance, with a taller peak below at that reflection's λ: named so and left out of its sizes, as each repeats its Kα1 peak\.$/);
     assert.ok(!/[!—]|v\d{3}/.test(r.text), r.text);
     const t = await firstTop(page, '#tab-xrd .an-card:nth-child(1)', { frame: 'svg.plot', head: ':scope .col.mw280 > .param-head' });
     assert.ok(Math.abs(t.top - t.frame) <= 1, `the title's top ${t.top}, the plot frame's ${t.frame}`);
