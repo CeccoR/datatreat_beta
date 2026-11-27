@@ -177,6 +177,22 @@ was proposed; nothing here is in the code yet.
 
 ## GC
 
+- **The previous method's results after a window changed (bug 20, v578, done: windows
+  integrated on demand).** To v577 a window's edge changed was applied at once and its files
+  integrated again a second later, the results of the method before shown meanwhile ("Method
+  changed: …" over the chromatogram); integration.csv had no values for them and
+  chromatogram.csv gave that method's model with no word of it. From v578 an edit is pending:
+  the results, plots, tables, calibration and CSVs stay the windows applied ones (each CSV row
+  ends with them), a grey line names them, and Integrate (under Peaks and in the Calibration
+  window, one run) integrates every file and standard with the edited windows, the
+  chromatogram in view first, then applies them all at once, one step (Stop keeps everything
+  as it was). No "previous method" state is left. Left for later, seen while doing it: (1)
+  the red rule of a window made too short and the warning of an edge in a neighbour still
+  name the window by its key ("The H2O2 window…"), where Windows now says "H₂-O₂ fit"; (2) a
+  Stop holds the files left of every Integration card of the tab (as to v577), not only its
+  own card's; (3) the windows edited while the card has no raw chromatograms at all are
+  pending as any edit, and the files loaded after them are integrated with the windows
+  applied, Integrate then applying the edit.
 - **Other gases from the raw chromatograms.** The Integration card fits H₂ and O₂ only (one
   window, 268–326 s, with the system peak at 310 s and the baseline step); N₂ and the
   others need windows of their own, as the Python's N₂ window (321–346 s, with the system

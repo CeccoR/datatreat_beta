@@ -7,7 +7,9 @@
    never taken away, malformed ones dropped) and saved, the states a result is written into;
    what the job integrates; the entries a card shows (pairs, a count that differs, raw
    chromatograms alone and paired, files left out, bytes not stored), their results under
-   the method or the one before it (stale); the standards' names (the table's Analysis
+   the method applied, never the windows edited (v578: to v577 the one before it, stale);
+   what the job integrates first (the chromatograms in view, then a run's windows), what a
+   card has left; the standards' names (the table's Analysis
    column, its number, a column of v544–v548's), rows and lines; a gas's concentration by the
    standards' line (%mol and ppm, through zero), by the GC software's scale (k) or none, and
    what Analysis takes of a sample, kept while nothing changes; the suspicious rule against a
@@ -28,10 +30,13 @@
    line, the alerts, the selectors' names, the chromatogram's and the overview's plot calls,
    notices and legends, Peaks, Windows, the CSVs, the state, sig, what Analysis takes, the
    results saved and, while it is open, the calibration window's files, warning, rows,
-   status, fit, lines and what a drop said) and three scenes (an old calibration named beside
+   status, fit, lines and what a drop said) and four scenes (an old calibration named beside
    standards added after it; methods changed, refused and reset; rows of every kind chosen,
-   left out and unpaired) as v559's gc-integ.js gave them, run from its source on a page of
-   stubs: their digests in tests/golden/integmodel.json (npm run
+   left out and unpaired; v578: windows edited, applied as Integrate applies them, a state
+   with windows pending put back) as v559's gc-integ.js gave them, a window's edges pending
+   until applied from v578 (a window edited, its results the method's applied; with no
+   standards, the calibration window its files and warning alone), run from its source on a
+   page of stubs: their digests in tests/golden/integmodel.json (npm run
    test:update writes them anew after a change meant to alter them). utils.js's, modkit.js's,
    modcharts.js's, plot.js's and snav.js's helpers, which need a page to load, are taken
    from their source as they stand there. About two seconds. */
@@ -199,10 +204,10 @@ function resultsFor(R, whole = false){
 function instance(all, cards){
   const apis = new Map();
   const S = { ctx: { all, cards: ()=> cards, inst: id => apis.get(id), isTcd: GM.isTcd, readTable: t => GM.readGc(t, true), gases: GASES },
-    ...M.gasTable(U, GASES), read: new WeakMap(), tabs: new WeakMap(), store: new Map(), job: null, halted: false, soon: 0, failed: '', dead: false };
-  const card = a =>{
-    const C = { a, method: M.methodIn(U, null), cal: M.calIn(U, null), ovGas: 'h2', ovY: 'conc', selName: null, selK: 0, wasMethod: null, valuesKept: new Map(), calSel: 0, drawn: null, calDrawn: null };
-    apis.set(a.id, { tcdRecs: ()=> M.tcdRecs(S, C), method: ()=> C.method });
+    ...M.gasTable(U, GASES), read: new WeakMap(), tabs: new WeakMap(), store: new Map(), job: null, halted: false, failed: '', dead: false };
+  const card = (a, view = ()=> [])=>{
+    const C = { a, method: M.methodIn(U, null), edit: M.methodIn(U, null), run: null, stopped: false, cal: M.calIn(U, null), ovGas: 'h2', ovY: 'conc', selName: null, selK: 0, valuesKept: new Map(), calSel: 0, drawn: null, calDrawn: null };
+    apis.set(a.id, { tcdRecs: ()=> M.tcdRecs(S, C), method: ()=> C.method, runMethod: ()=> C.run ? C.run.m : null, inView: view });
     return C;
   };
   return { S, card };
@@ -250,10 +255,22 @@ test('the method, its key and v544\'s; a result as the store keeps it; the calib
   M.restoreCard(U, S, C, { method: ALT_M, cal: c, ovGas: ['co2', 'o2', 'h2'], ovY: 'area' });
   assert.deepEqual([C.method.windows[0].from, C.ovGas, C.ovY], [270, 'h2', 'area'], 'v544\'s list: its first gas in the module\'s order');
   M.restoreCard(U, S, C, { method: ALT_M, cal: c, ovGas: ['co2', 'o2'], ovY: 'area' });
-  assert.equal(canon(M.snapshotOf(C)), canon({ method: ALT_M, cal: M.calCopy(C.cal), ovGas: ['o2'], ovY: 'area' }));
-  C.wasMethod = DEF; M.restoreCard(U, S, C, { method: ALT_M }); assert.equal(C.wasMethod, DEF);
-  M.restoreCard(U, S, C, 'junk'); assert.deepEqual([C.wasMethod, M.isDefault(U, C.method), C.ovGas, C.ovY], [null, true, 'h2', 'conc']);
-  M.takeMethod(U, C, { ...M.clone(ALT_M), extra: 1 }); assert.deepEqual([C.wasMethod === DEF || M.isDefault(U, C.wasMethod), 'extra' in C.method], [true, false]);
+  assert.equal(canon(M.snapshotOf(U, C)), canon({ method: ALT_M, cal: M.calCopy(C.cal), ovGas: ['o2'], ovY: 'area' }));
+  /* v578: the windows as edited, pending until Integrate: `edit` beside the method applied, in
+     the state only where they differ; a window an edit lacks (or one refused) the method's; no
+     edit (a state of before, or none pending), the method's; a stop said let go. */
+  assert.ok(!M.isPending(U, C) && C.edit !== C.method, 'the same windows, its own copy');
+  M.takeEdit(U, C, { ...M.clone(DEF), extra: 1 });
+  assert.deepEqual([M.isPending(U, C), M.methodKey(U, C.edit) === M.methodKey(U, DEF), 'extra' in C.edit, C.method.windows[0].from], [true, true, false, 270]);
+  assert.equal(canon(M.snapshotOf(U, C)), canon({ method: ALT_M, edit: DEF, cal: M.calCopy(C.cal), ovGas: ['o2'], ovY: 'area' }));
+  C.stopped = true;
+  M.restoreCard(U, S, C, { method: DEF, edit: { windows: [{ key: 'H2O2', from: 270 }] } });
+  assert.deepEqual([M.isPending(U, C), C.edit.windows[0].from, C.stopped], [false, 268, false], 'a window refused: the method\'s');
+  M.restoreCard(U, S, C, { method: ALT_M, edit: { windows: [{ key: 'H2O2', from: 268, to: 331 }] } });
+  assert.deepEqual([M.isPending(U, C), C.method.windows[0].from, C.edit.windows[0].to], [true, 270, 331]);
+  M.restoreCard(U, S, C, { method: ALT_M, edit: 'junk' }); assert.equal(M.isPending(U, C), false);
+  M.restoreCard(U, S, C, 'junk'); assert.deepEqual([M.isPending(U, C), M.isDefault(U, C.method), C.ovGas, C.ovY], [false, true, 'h2', 'conc']);
+  assert.deepEqual(M.methodIn(U, { windows: [{ key: 'H2O2', from: 'x', to: 9 }] }, ALT_M).windows[0].from, 270, 'a base\'s edges where its own are none');
 });
 
 test('the results taken in, saved and written into the states that hold their file; what the job integrates', ()=>{
@@ -283,10 +300,10 @@ test('the results taken in, saved and written into the states that hold their fi
   assert.deepEqual(M.workOf(S, w[1]), [null, null, null]);
   assert.deepEqual(M.resultIn(U, { error: 'no' }), { error: 'no', gases: {}, windows: [] });
   assert.deepEqual(M.resultIn(U, null), { error: 'the integration failed', gases: {}, windows: [] });
-  // the job's own results over the store's, while it runs
-  S.job = { key: kLone, work: [1] };
-  assert.deepEqual([M.resultsAt(S, kLone), M.status(S).job === S.job, M.status(S).soon], [[1], true, false]);
-  S.job = null; S.soon = 5; assert.equal(M.status(S).soon, true); S.soon = 0;
+  // the job's own results over the store's, while it runs (v578: its files' each)
+  S.job = { works: new Map([[kLone, [1]]]) };
+  assert.deepEqual([M.resultsAt(S, kLone), M.resultsAt(S, kRun) === S.store.get(kRun), M.status(S).job === S.job, 'soon' in M.status(S)], [[1], true, true, false]);
+  S.job = null;
   // the states written into: those holding the file (a row, a pair's mate, a card's calibration)
   const fk = kRun.slice(0, kRun.indexOf('|'));
   const states = [{ files: [all[0]] }, { files: [{ ...all[0].mate }] }, { files: [{ name: 'x' }], cards: [{ cal: { files: [{ rawBytes: BYTES['run_TCD.csv'] }] } }] }, { files: [all[1]] }, 'x', { files: 3, cards: [null, { cal: 5 }] }];
@@ -296,6 +313,28 @@ test('the results taken in, saved and written into the states that hold their fi
   // the card's raw chromatograms with its calibration's
   C.cal = M.calIn(U, { files: [{ name: 's', rawBytes: BYTES['standards_TCD.csv'] }] });
   assert.deepEqual(M.tcdRecs(S, C).map(r=> r.name), ['run_TCD.csv', 'lone_TCD.csv', 'broken_TCD.csv', 's']);
+  /* v578: the chromatograms in view first (the standard on show, then the card's), each its
+     chromatogram on show first, then the rest in list order; a run's windows after the
+     method's, every file of the card, a Stop holding the method's alone; what a card has left
+     under a method (the store's, a file used twice once). */
+  const view = [], two = instance(all, cards), C2 = two.card(cards[0], ()=> view), S2 = two.S;
+  C2.cal = C.cal;
+  const kStd = M.keyOf(U, C2.cal.files[0], DEF), ks = [kRun, kLone, kStd], alt = r => M.keyOf(U, r, ALT_M), recs = [all[0].mate, all[1], C2.cal.files[0]];
+  const W2 = ()=> M.wanted(U, S2).map(g=> [ks.indexOf(g.key) >= 0 ? ks.indexOf(g.key) : 'alt' + recs.findIndex(r=> alt(r) === g.key), g.miss.join()]);
+  const all12 = '0,1,2,3,4,5,6,7,8,9,10,11';
+  assert.deepEqual(W2(), [[0, all12], [1, '0,1,2'], [2, '0,1,2,3,4,5']]);
+  view.push({ rec: C2.cal.files[0], k: 4 }, { rec: all[1], k: 2 }, { rec: all[1], k: 2 });
+  assert.deepEqual(W2(), [[2, '4,0,1,2,3,5'], [1, '2,0,1'], [0, all12]], 'in view first, its chromatogram first');
+  S2.store.set(kLone, [{ gases: {}, windows: [] }, null, null]);
+  C2.run = { m: ALT_M };
+  assert.deepEqual(W2(), [[2, '4,0,1,2,3,5'], [1, '2,1'], [0, all12], ['alt2', '4,0,1,2,3,5'], ['alt1', '2,0,1'], ['alt0', all12]], 'the run\'s after');
+  S2.halted = true;
+  assert.deepEqual(W2().map(g=> g[0]), ['alt2', 'alt1', 'alt0'], 'a Stop holds the method\'s alone');
+  assert.deepEqual([M.leftUnder(U, S2, C2, DEF), M.leftUnder(U, S2, C2, ALT_M)], [20, 21]);
+  recs.forEach(r=> S2.store.set(alt(r), new Array(M.dataOf(S2, r).cols.length).fill({ gases: {}, windows: [] })));
+  assert.deepEqual([M.leftUnder(U, S2, C2, ALT_M), M.wanted(U, S2)], [0, []]);
+  C2.cal = M.calIn(U, { files: [C.cal.files[0], { name: 't', rawBytes: BYTES['standards_TCD.csv'] }] });
+  assert.equal(M.leftUnder(U, S2, C2, DEF), 20, 'a file used twice counted once');
   // read once per file, by its bytes; a table read so too; primed
   const d = M.dataOf(S, all[0].mate);
   assert.equal(M.dataOf(S, all[0].mate), d);
@@ -325,13 +364,16 @@ test('the entries, their results and names; the concentrations; what Analysis ta
   assert.deepEqual(M.showsOf(S, C), { file: 'mini_TCD.csv', k: 0 });
   M.showNext(U, C, { file: 'alt_TCD.csv', k: -1 }); assert.deepEqual([C.selName, C.selK], ['alt_TCD.csv', 0]);
   M.showNext(U, C, { file: 3, k: 2 }); M.showNext(U, C, null); M.showNext(U, C, { file: 'lone_TCD.csv', k: 2 }); assert.deepEqual([C.selName, C.selK], ['lone_TCD.csv', 2]);
-  // results: none, stale (the method before), current
+  // results: none, those of the method applied, never the windows edited (v578: to v577 the
+  // method before's, stale, the method changed)
   const R = rng(5), res = resultsFor(R), kMini = M.keyOf(U, all[2].mate, DEF);
   M.loadResults(U, S.store, { [kMini]: MINI_RES });
   assert.equal(M.resOf(U, S, C, all[0].mate).res, null);
-  C.method = ALT_M; C.wasMethod = DEF;
-  assert.deepEqual([M.resOf(U, S, C, all[2].mate).stale, M.resOf(U, S, C, all[2].mate).m === DEF], [true, true]);
-  C.method = DEF; C.wasMethod = null;
+  M.takeEdit(U, C, ALT_M);
+  assert.deepEqual([M.resOf(U, S, C, all[2].mate).res === S.store.get(kMini), M.resOf(U, S, C, all[2].mate).m === C.method, 'stale' in M.resOf(U, S, C, all[2].mate)], [true, true, false]);
+  C.method = ALT_M;
+  assert.deepEqual([M.resOf(U, S, C, all[2].mate).res, M.resOf(U, S, C, all[2].mate).m], [null, ALT_M]);
+  C.method = DEF; C.edit = M.clone(DEF);
   // the suspicious rule: by hand, in %mol (run, the 5th injection 40 % over) and ppm (alt, O₂ at the 3rd half)
   M.loadResults(U, S.store, res);
   const run = es[0], rr = M.resOf(U, S, C, run.tcd).res, J = M.judge(S, run, rr);
@@ -431,7 +473,7 @@ test('what the plots draw: the chromatogram over its residuals, the run overview
   assert.deepEqual([M.chromOf(U, { d: null }, DEF).fail, M.chromOf(U, { d: { error: 'x' } }, DEF).fail], ['read', 'read']);
   assert.equal(M.chromOf(U, { d: { t: [1, 2], cols: [[1, 2]] }, k: 0 }, DEF).fail, 'empty');
   const none = M.chromOf(U, { d: e.d, k: 0, R: null }, DEF);
-  assert.deepEqual([none.r, none.curves, none.R.stale], [null, [], false]);
+  assert.deepEqual([none.r, none.curves, none.R], [null, [], { res: null, m: DEF }]);
   // the overview: H₂ against the time (mini: no k, area), O₂, a gas that is none; the run: its injections' numbers when no table
   C.ovY = 'conc';
   const O = M.overviewOf(U, S, C, e);
@@ -460,7 +502,6 @@ test('the status, the alerts\' facts, the CSVs; the calibration window\'s files 
   const st = ()=> M.progressOf(U, S, C).state;
   assert.equal(st(), 'left');
   S.halted = true; assert.equal(st(), 'stopped'); S.halted = false;
-  S.soon = 1; assert.equal(st(), 'soon'); S.soon = 0;
   S.failed = 'x'; assert.equal(st(), 'failed'); S.failed = '';
   S.job = { total: 3, done: 1, name: 'a' }; assert.deepEqual([st(), M.progressOf(U, S, C).pct], ['running', 33]); S.job = null;
   const R = rng(3), res = resultsFor(R);
@@ -468,23 +509,39 @@ test('the status, the alerts\' facts, the CSVs; the calibration window\'s files 
   M.loadResults(U, S.store, res);
   assert.equal(st(), 'done');
   const noneS = instance([], cards); assert.equal(M.progressOf(U, noneS.S, noneS.card(cards[0])).state, 'none');
+  /* v578: the windows edited (pending: the method applied named); a job going on is this card's
+     only while it has its run or its files left; a run stopped with the windows still edited;
+     a failure said where something is left or edited. */
+  M.takeEdit(U, C, ALT_M);
+  let x = M.progressOf(U, S, C);
+  assert.deepEqual([x.state, x.pending, x.left, x.m === C.method], ['pending', true, 0, true]);
+  S.job = { total: 4, done: 3, name: 'b' }; assert.equal(st(), 'pending', 'another card\'s job');
+  C.run = { m: ALT_M }; x = M.progressOf(U, S, C); assert.deepEqual([x.state, x.pct], ['running', 75]);
+  C.run = null; S.job = null; C.stopped = true; assert.equal(st(), 'stopped');
+  S.halted = true; S.failed = 'x'; assert.equal(st(), 'failed');
+  C.edit = M.clone(C.method); assert.equal(st(), 'done', 'nothing left, nothing edited: no failure said, no stop');
+  S.halted = false; S.failed = ''; C.stopped = false;
   // the alerts' facts: unreadable, a count that differs, two raw chromatograms paired, alone; transfer
   const f = M.alertFacts(U, S, C);
   // (v567: the GC software's scale is said by the Production Rate cards, gc-html.js srcAlertsHtml)
   assert.deepEqual([f.errs.map(e=> e.name), f.warn.map(w=> [w.kind, w.e.name]), f.transfer], [['broken_TCD.csv'], [['rows', 'short_TCD.csv'], ['twin', 'twinA_TCD.csv'], ['twin', 'twinB_TCD.csv'], ['alone', 'lone_TCD.csv']], undefined]);
   // integration.csv: every chromatogram's values; chromatogram.csv: the whole chromatogram, the model blank outside its window
+  // (each row ending with the windows applied, v578: never those edited)
   const es = M.entriesOf(S), csv = M.integrationCsv(U, S, C, es).split('\n');
-  assert.equal(csv[0], 'File;Table;Injection;Injection date;H2 area;H2 area sd;H2 apex (s);H2 chi2r;H2 (%mol);H2 source;H2 table (%mol);H2 suspicious;O2 area;O2 area sd;O2 apex (s);O2 chi2r;O2 (%mol);O2 source;O2 table (%mol);O2 suspicious;Flags');
+  assert.equal(csv[0], 'File;Table;Injection;Injection date;H2 area;H2 area sd;H2 apex (s);H2 chi2r;H2 (%mol);H2 source;H2 table (%mol);H2 suspicious;O2 area;O2 area sd;O2 apex (s);O2 chi2r;O2 (%mol);O2 source;O2 table (%mol);O2 suspicious;Flags;H2O2 window from (s);H2O2 window to (s)');
   assert.equal(csv.length, 1 + 12 + 11 + 2 + 2 + 3 + 1);
-  assert.match(csv[1], /^run_TCD\.csv;run\.csv;1;2026-11-13 10:00:00;\d+\.\d{6};\d+\.\d{6};287\.\d{3};/);
+  assert.match(csv[1], /^run_TCD\.csv;run\.csv;1;2026-11-13 10:00:00;\d+\.\d{6};\d+\.\d{6};287\.\d{3};.*;268\.00;326\.00$/);
   assert.ok(csv.some(l=> /transfer \(k = /.test(l)));
+  M.takeEdit(U, C, ALT_M);
+  assert.equal(M.integrationCsv(U, S, C, es), csv.join('\n'), 'windows edited: the same, the windows applied');
+  C.edit = M.clone(C.method);
   const mini = instance([ROWS[2]()], cards), Cm = mini.card(cards[0]);
   M.loadResults(U, mini.S.store, { [M.keyOf(U, mini.S.ctx.all[0].mate, DEF)]: MINI_RES });
   const em = M.entriesOf(mini.S)[0], D = M.chromOf(U, { d: em.d, k: 0, R: M.resOf(U, mini.S, Cm, em.tcd) }, DEF);
-  const cc = M.chromCsv(U, { t: D.tt, y: D.yy, curves: D.curves }).split('\n');
-  assert.equal(cc[0], 'Time (s);TCD signal;model H2O2;baseline H2O2;H2 (on the baseline);O2 (on the baseline);S310 (on the baseline);residual H2O2');
+  const cc = M.chromCsv(U, { t: D.tt, y: D.yy, curves: D.curves, m: D.R.m }).split('\n');
+  assert.equal(cc[0], 'Time (s);TCD signal;model H2O2;baseline H2O2;H2 (on the baseline);O2 (on the baseline);S310 (on the baseline);residual H2O2;H2O2 window from (s);H2O2 window to (s)');
   assert.equal(cc.length, 451 + 2);
-  assert.match(cc[1], /^250\.0000;-?\d+\.\d{6};;;;;;$/);
+  assert.match(cc[1], /^250\.0000;-?\d+\.\d{6};;;;;;;268\.00;326\.00$/);
   // the calibration window: a file told by what it holds
   const T = M.takeDropped(S, 'x_TCD.csv', BYTES['standards_TCD.csv']), Tb = M.takeDropped(S, 'b.csv', BYTES['broken_TCD.csv']);
   assert.deepEqual([T.kind, T.d.cols.length, Tb.bad, M.takeDropped(S, 'n.csv', BYTES['notext.csv']).bad, M.takeDropped(S, 'h.csv', BYTES['nothing.csv']).bad.slice(0, 40), M.takeDropped(S, 's.csv', BYTES['standards.csv']).kind],
@@ -525,26 +582,35 @@ test('the markup: the instructions, the card\'s and the window\'s bodies, Window
   assert.ok(info.startsWith('The <b>Integration</b> card integrates again') && info.includes('<h4 class="instr-math-head">From the area to the concentration</h4>') && info.endsWith(PAGE.cardInfo(false, false)));
   assert.ok(H.CAL_INFO.startsWith('The standards come as a pair'));
   const body = H.cardHtml(HU, 'gc7');
-  for (const id of ['gc7Bar', 'gc7Status', 'gc7Run', 'gc7Stop', 'gc7Alerts', 'gc7Notice', 'gc7FileIdx', 'gc7Chrom', 'gc7Resid', 'gc7ChromLegend', 'gc7InjIdx', 'gc7Over', 'gc7OverLegend', 'gc7Method', 'gc7Values', 'gc7Cal']) assert.ok(body.includes(`id="${id}"`), id);
-  assert.ok(body.includes('class="txt-mini param-head aligned cap-title gci-head gci-win-head"'));
+  // (v578: Integrate, its words and progress, under Peaks over Calibration…; no status bar over the card)
+  for (const id of ['gc7Status', 'gc7ProgWrap', 'gc7ProgBar', 'gc7Integrate', 'gc7Alerts', 'gc7Notice', 'gc7FileIdx', 'gc7Chrom', 'gc7Resid', 'gc7ChromLegend', 'gc7InjIdx', 'gc7Over', 'gc7OverLegend', 'gc7Method', 'gc7Values', 'gc7Cal']) assert.ok(body.includes(`id="${id}"`), id);
+  assert.ok(body.includes('class="txt-mini param-head aligned cap-title gci-head gci-win-head"') && !/gc7(Bar|Run|Stop)"/.test(body));
+  const at = id => body.indexOf(`id="${id}"`);
+  assert.ok(at('gc7Values') < at('gc7Status') && at('gc7Status') < at('gc7ProgWrap') && at('gc7ProgWrap') < at('gc7Integrate') && at('gc7Integrate') < at('gc7Cal'), 'under Peaks, over Calibration…');
+  assert.ok(body.includes('<div id="gc7Status" class="txt-meta rv-status gci-status" role="status"></div>') && body.includes('<div id="gc7ProgWrap" class="rv-prog" style="display:none"><div id="gc7ProgBar"></div></div>')
+    && body.includes('<div class="rv-btns"><button type="button" class="btn gci-integ" id="gc7Integrate">Integrate</button></div>'), 'the Rietveld card\'s component');
   const cal = H.calHtml(HU, 'gc7');
-  for (const s of ['id="gc7CalTitle"', 'id="gc7CalChrom"', 'id="gc7CalResid"', 'id="gc7CalLegend"', '<option value="%mol">%mol</option><option value="ppm">ppm</option>', 'gci-cal-levels']) assert.ok(cal.includes(s), s);
-  const m = M.methodIn(U, { windows: [{ key: 'H2O2', from: 264, to: 331 }] });
-  const mh = H.methodHtml(HU, { ...m, windows: [{ ...m.windows[0], key: 'K<b>' }] }, ['a <i>']);
-  // (v571: the windows' intrusions a compact warning, G08; a window not taken its rule in red
-  // under it, C19 and G11)
-  assert.ok(mh.includes('<span class="gci-win-name">K&lt;b&gt; fit</span>') && mh.includes('aria-label="K&lt;b&gt; window from (s)"') && mh.includes('value="264"') && mh.endsWith('<div class="alert warn compact gci-flag">⚠ a &lt;i&gt;</div>'));
-  assert.ok(mh.includes('H2 287.3 · O2 302.3 · S310 310.2') && !mh.includes('field-rule'));
-  const refused = H.methodHtml(HU, m, [], { wi: 0, text: H.tooShortText('K<b>') });
-  assert.ok(refused.endsWith('</div><p class="field-rule gci-win-rule" role="alert">The K&lt;b&gt; window must start at least 5 s before it ends.</p>') && !refused.includes('alert warn'), refused);
-  assert.equal(H.methodHtml(HU, m, [], { wi: 1, text: 'x' }).includes('field-rule'), false, 'the rule under its own window');
-  // Peaks
+  for (const s of ['id="gc7CalTitle"', 'id="gc7CalChrom"', 'id="gc7CalResid"', 'id="gc7CalLegend"', '<option value="%mol">%mol</option><option value="ppm">ppm</option>', 'gci-cal-levels', 'id="gc7CalStatus" class="txt-meta rv-status gci-cal-status"', 'id="gc7CalIntegrate"']) assert.ok(cal.includes(s), s);
+  assert.ok(cal.indexOf('gci-cal-levels') < cal.indexOf('id="gc7CalIntegrate"'), 'under the standards\' table');
   const gasOf = M.gasTable(U, GASES).gasOf;
+  const m = M.methodIn(U, { windows: [{ key: 'H2O2', from: 264, to: 331 }] });
+  const mh = H.methodHtml(HU, gasOf, { ...m, windows: [{ ...m.windows[0], key: 'K<b>', peaks: m.windows[0].peaks.map(pk=> pk.gas ? pk : { ...pk, name: 'S<1>' }) }] }, ['a <i>']);
+  // (v571: the windows' intrusions a compact warning, G08; a window not taken its rule in red
+  // under it, C19 and G11; v578: a window named by its gases, H₂-O₂, its gases' peaks too, the
+  // others as they are)
+  assert.ok(mh.includes('<span class="gci-win-name">H₂-O₂ fit</span>') && mh.includes('aria-label="H₂-O₂ window from (s)"') && mh.includes('aria-label="H₂-O₂ window to (s)"') && mh.includes('value="264"') && mh.endsWith('<div class="alert warn compact gci-flag">⚠ a &lt;i&gt;</div>'));
+  assert.ok(mh.includes('H₂ 287.3 · O₂ 302.3 · S&lt;1&gt; 310.2') && !mh.includes('field-rule'), mh);
+  const nogas = H.methodHtml(HU, gasOf, { windows: [{ key: 'K<b>', from: 1, to: 9, peaks: [{ name: 'X2', t: 3 }] }] }, []);
+  assert.ok(nogas.includes('<span class="gci-win-name">K&lt;b&gt; fit</span>') && nogas.includes('X2 3.0'), 'no gas: its key, its peaks as they are');
+  const refused = H.methodHtml(HU, gasOf, m, [], { wi: 0, text: H.tooShortText('K<b>') });
+  assert.ok(refused.endsWith('</div><p class="field-rule gci-win-rule" role="alert">The K&lt;b&gt; window must start at least 5 s before it ends.</p>') && !refused.includes('alert warn'), refused);
+  assert.equal(H.methodHtml(HU, gasOf, m, [], { wi: 1, text: 'x' }).includes('field-rule'), false, 'the rule under its own window');
+  // Peaks
   assert.equal(H.valuesHtml(HU, gasOf, null), '');
   assert.equal(H.valuesHtml(HU, gasOf, { wait: true }), '<p class="txt-meta">Not integrated yet.</p>');
   assert.equal(H.valuesHtml(HU, gasOf, { error: 'a <b>' }), '<div class="alert warn compact gci-flag">⚠ Not integrated: a &lt;b&gt;</div>');
   const conv = { h2: { how: 'transfer', k: 41234.567, n: 12, f: A => A }, o2: { why: 'none <x>' } };
-  const vh = H.valuesHtml(HU, gasOf, { R: { stale: true }, conv, gs: ['h2'], unitOf: ()=> '%mol', units: ['%mol'], tUnit: '%mol', aligned: true, keys: ['h2', 'o2'], fl: ['χ²ᵣ <9>'],
+  const vh = H.valuesHtml(HU, gasOf, { R: {}, conv, gs: ['h2'], unitOf: ()=> '%mol', units: ['%mol'], tUnit: '%mol', aligned: true, keys: ['h2', 'o2'], fl: ['χ²ᵣ <9>'],
     rows: [{ g: 'h2', x: { area: 1234.5678, sd: 2.345, tApex: 287.345, chi2r: 5.5 }, shown: 0.123456, tShown: 0.12, off: true }] });
   assert.ok(vh.includes('<td class="gci-bad" title="Out of proportion with the GC table">1234.6 ± 2.3</td>') && vh.includes('<td>287.35</td><td class="gci-bad">5.50</td><td>0.1235</td><td>0.1200</td>'));
   assert.ok(vh.includes('Conc. and GC table in %mol.') && vh.includes('Concentration from the GC software\'s scale (k): k = 41235 area per %mol (H<sub>2</sub>, median of 12 injections).'));
@@ -552,10 +618,21 @@ test('the markup: the instructions, the card\'s and the window\'s bodies, Window
   assert.ok(vh.includes('<div class="alert warn compact gci-flag">⚠ Suspicious: χ²ᵣ &lt;9&gt;</div>') && vh.endsWith('O₂: none &lt;x&gt;.</p>') && !vh.includes('previous method'));
   // the status, the alerts, the notices, the legends
   const st = { job: { done: 2, total: 5, name: 'a<b>' }, failed: 'f<x>' };
-  assert.equal(H.statusHtml(HU, { st, state: 'running', pct: 40 }), '<span class="gci-prog"><span class="gci-prog-bar" style="width:40%"></span></span><span>Integrating… 2 / 5 chromatograms · a&lt;b&gt;</span>');
-  // (v571: a run that failed, a compact error, C17)
-  assert.deepEqual(['failed', 'stopped', 'soon', 'left', 'done', 'none'].map(s=> H.statusHtml(HU, { st, left: 1, state: s })), ['<div class="alert bad compact">✕ The integration failed: f&lt;x&gt;.</div>', '<span>Stopped: 1 chromatogram not integrated with this method.</span>',
-    '<span>Method changed: integrating again in a moment…</span>', '<span>1 chromatogram to integrate.</span>', '', '<span class="txt-meta">No raw chromatograms (TCD) loaded: drop them beside their tables.</span>']);
+  // (v578: the words alone, the progress Integrate's own bar, utils.js runProgress; to v577 a bar in the line)
+  assert.equal(H.statusHtml(HU, gasOf, { st, state: 'running', pct: 40 }), '<span>Integrating… 2 / 5 chromatograms · a&lt;b&gt;</span>');
+  // (v571: a run that failed, a compact error, C17; v578: windows edited, the ones the results
+  // come from named, facts alone (R1–R4); a Stop says what is left and what is edited)
+  const ed = { st, m, pending: true };
+  assert.deepEqual(['failed', 'stopped', 'left', 'done', 'none'].map(s=> H.statusHtml(HU, gasOf, { st, left: 1, state: s })), ['<div class="alert bad compact">✕ The integration failed: f&lt;x&gt;.</div>', '<span>Stopped: 1 chromatogram not integrated.</span>',
+    '<span>1 chromatogram to integrate.</span>', '', '<span class="txt-meta">No raw chromatograms (TCD) loaded: drop them beside their tables.</span>']);
+  assert.deepEqual([H.statusHtml(HU, gasOf, { ...ed, state: 'pending', left: 0 }), H.statusHtml(HU, gasOf, { ...ed, state: 'stopped', left: 0 }), H.statusHtml(HU, gasOf, { ...ed, state: 'stopped', left: 3 }, ' of the standards')],
+    ['<span>The results shown come from H₂-O₂ fit 264–331 s, not from these windows.</span>', '<span>Stopped: the results shown come from H₂-O₂ fit 264–331 s, not from these windows.</span>',
+      '<span>Stopped: 3 chromatograms of the standards not integrated; the results shown come from H₂-O₂ fit 264–331 s, not from these windows.</span>']);
+  assert.ok(['pending', 'stopped', 'left', 'running'].every(s=> !/[!—]|v\d{3}/.test(H.statusHtml(HU, gasOf, { ...ed, state: s, left: 2 }))), 'R4: no "!", no "—", no version');
+  assert.equal(H.windowsText(gasOf, { windows: [{ key: 'A<', from: 1, to: 2 }, m.windows[0]] }), 'A< fit 1–2 s, H₂-O₂ fit 264–331 s');
+  // Integrate's tooltip, every state
+  assert.deepEqual([{ state: 'running' }, { state: 'pending', pending: true }, { state: 'stopped', left: 2 }, { state: 'done' }].map(H.integrateTitle), ['Stop the integration: what is shown stays as it is',
+    'Integrate every file and standard with the windows as edited: all of it changes at once when they are done', 'Integrate the chromatograms not integrated yet', 'Every chromatogram is integrated with these windows']);
   const e = { label: 'L<b>', rows: 3, n: 1, tcd: { name: 't<i>' }, twin: 'w&', d: { error: 'e<>' } };
   const ah = H.alertsHtml(HU, gasOf, { errs: [e], warn: [{ kind: 'rows', e }, { kind: 'twin', e }, { kind: 'alone', e }, { kind: 'out', e, g: 'o2', out: 2, n: 5, lo: 0.02, hi: 0.1, below: true, L: { intercept: -123.456 } }] });
   for (const s of ['t&lt;i&gt;: e&lt;&gt;', 'L&lt;b&gt;: 3 injections in the table, 1 chromatogram: not aligned: integrated all the same; Analysis uses the table alone.',
@@ -569,9 +646,9 @@ test('the markup: the instructions, the card\'s and the window\'s bodies, Window
   assert.deepEqual(['The integration failed', 'The integration worker failed.', 'out of memory', '', null].map(H.failedText),
     ['The integration failed.', 'The integration worker failed.', 'The integration failed: out of memory.', 'The integration failed.', 'The integration failed.']);
   const o = { d: { error: 'bad<' }, file: 'f<', what: 'w<' };
-  assert.deepEqual([H.pairNotice(HU, o, { fail: 'read' }), H.pairNotice(HU, { d: null }, { fail: 'read' }), H.pairNotice(HU, o, { fail: 'empty' }), H.pairNotice(HU, o, { r: null, R: {} }), H.pairNotice(HU, o, { r: {}, R: { stale: true } }), H.pairNotice(HU, o, { r: {}, R: {} })],
-    [boxHtml('bad', 'f&lt;: bad&lt;'), '', boxHtml('warn', 'w&lt;: no point in the windows.'), boxHtml('info', 'w&lt;: not integrated yet: the model is drawn once it is.'),
-      boxHtml('warn', 'Method changed: the model and the values shown are the previous method\'s until this file is integrated again.'), '']);
+  // (v578: no "previous method's" notice any more)
+  assert.deepEqual([H.pairNotice(HU, o, { fail: 'read' }), H.pairNotice(HU, { d: null }, { fail: 'read' }), H.pairNotice(HU, o, { fail: 'empty' }), H.pairNotice(HU, o, { r: null, R: {} }), H.pairNotice(HU, o, { r: {}, R: {} })],
+    [boxHtml('bad', 'f&lt;: bad&lt;'), '', boxHtml('warn', 'w&lt;: no point in the windows.'), boxHtml('info', 'w&lt;: not integrated yet: the model is drawn once it is.'), '']);
   assert.equal(H.chromLegendHtml(HU, [['#1', 'a<', ''], ['#2', 'b', 'mk-dots']]), '<span><i style="background:#1"></i>a&lt;</span><span><i class="mk-dots" style="color:#2"></i>b</span><span><i class="mk-box gci-mk-nb"></i>peaks the model leaves out</span>');
   assert.equal(H.ovGasHtml(gasOf, ['h2', 'o2'], 'o2'), '<button type="button" class="mode-chip plot-chip gci-ov-chip" data-g="h2" aria-pressed="false" title="Show H₂ (one gas at a time)">H<sub>2</sub></button><button type="button" class="mode-chip plot-chip gci-ov-chip is-on" data-g="o2" aria-pressed="true" title="Show O₂ (one gas at a time)">O<sub>2</sub></button>');
   assert.ok(H.ovYHtml(HU, { mode: 'area', c: null, G: gasOf('h2') }).includes('title="No calibration of H₂ and no table to take a scale from" disabled>Conc.</button>'));
@@ -585,10 +662,14 @@ test('the markup: the instructions, the card\'s and the window\'s bodies, Window
   const OLD = 'g&quot;: saved by an older version without its GC table: its standards are named by column. Drop the table (the same name without _TCD) to name them.';
   assert.equal(H.calWarnHtml(HU, H.calNotes(HU, files)), PAGE.alertHtml('warn', 'Opened, to check:', [OLD], 'gci-cal-dismiss-opened'));
   assert.deepEqual([H.calWarnHtml(HU, H.calNotes(HU, [files[0], { ...files[1], seen: ['opened'] }])), H.calWarnHtml(HU, [])], ['', '']);
-  assert.deepEqual([H.calStatusText([], 0, 0), H.calStatusText([1], 3, 6), H.calStatusText([1], 0, 1)], ['No standards: each pair takes the GC software\'s scale (k).', 'Integrating the standards… (3 left)', '1 chromatogram integrated.']);
-  // Stopped, nothing running (v569: to v568 "Integrating…" all the same).
-  assert.deepEqual([H.calStatusText([1], 3, 6, true), H.calStatusText([1], 1, 6, true), H.calStatusText([1], 0, 6, true), H.calStatusText([], 0, 0, true)],
-    ['Stopped: 3 chromatograms of the standards not integrated (↻ Re-integrate on the card).', 'Stopped: 1 chromatogram of the standards not integrated (↻ Re-integrate on the card).', '6 chromatograms integrated.', 'No standards: each pair takes the GC software\'s scale (k).']);
+  /* The window's run line (v578: its Integrate the card's): the card's run, failure and windows;
+     its standards' counts; stopped, nothing running, never "Integrating" (v569); all integrated,
+     how many (to v577 a line beside the unit, "No standards…" with none: now nothing). */
+  const cs = (state, left, rows, o = {})=> H.calStatusHtml(HU, gasOf, { st, m, pending: false, left: 9, state, ...o }, left, rows);
+  assert.deepEqual([cs('running', 3, 6), cs('failed', 3, 6), cs('pending', 0, 6, { pending: true }), cs('stopped', 3, 6), cs('stopped', 1, 6), cs('stopped', 0, 6), cs('stopped', 0, 6, { pending: true }), cs('left', 3, 6), cs('left', 0, 1), cs('done', 0, 6), cs('none', 0, 6)],
+    ['<span>Integrating… 2 / 5 chromatograms · a&lt;b&gt;</span>', '<div class="alert bad compact">✕ The integration failed: f&lt;x&gt;.</div>', '<span>The results shown come from H₂-O₂ fit 264–331 s, not from these windows.</span>',
+      '<span>Stopped: 3 chromatograms of the standards not integrated.</span>', '<span>Stopped: 1 chromatogram of the standards not integrated.</span>', '<span>6 chromatograms integrated.</span>',
+      '<span>Stopped: the results shown come from H₂-O₂ fit 264–331 s, not from these windows.</span>', '<span>3 chromatograms of the standards to integrate.</span>', '<span>1 chromatogram integrated.</span>', '<span>6 chromatograms integrated.</span>', '<span>6 chromatograms integrated.</span>']);
   assert.equal(H.levelRowsHtml(HU, [], 0, 0, 1), '<tr><td colspan="8" class="txt-meta">Drop the standards\' GC table and its raw chromatograms above.</td></tr>');
   const d = { t: [0, 0.5, 1, 1.5, 2], cols: [[1, 2, 3, 2, 1]] };
   const row = { f: { name: 'f<', table: { name: 't>' } }, fi: 0, j: 0, d, lv: { h2: 0.05, o2: null, on: false }, r: { error: 'x' }, name: 'n<b>' };
@@ -647,9 +728,10 @@ export function caseOf(n){
   // (the case's open: at least one step in three)
   return { rows, results: int(1, 1e6), state, steps };
 }
-/* And three scenes: an old calibration named beside standards added after it; methods
-   changed, refused and reset, the previous method's results meanwhile; rows of every kind
-   chosen, left out and unpaired. */
+/* And four scenes: an old calibration named beside standards added after it; methods
+   changed, refused and reset (v578: edited, pending, the results the method's applied);
+   rows of every kind chosen, left out and unpaired; windows edited, applied (Integrate's
+   swap), a state put back with windows pending, applied again and reset (v578). */
 const SCENES = [
   { rows: [0], results: -1, state: { cal: { files: [{ name: 'old (1)_TCD.csv', rawBytes: 'old (1)_TCD.csv', levels: [{ h2: 0.05 }, { h2: 0.1 }, { o2: 0.02 }, { o2: 0.05 }] }] } },
     steps: [['open'], ['row', 2], ['drop', ['standards.csv', 'standards_TCD.csv']], ['level', 4, 'h2', '0,05'], ['level', 5, 'h2', '0.1'], ['level', 6, 'h2', '0.2'], ['level', 7, 'o2', '0.02'],
@@ -659,6 +741,9 @@ const SCENES = [
       ['showNext', { file: 'mini_TCD.csv', k: 2 }], ['inj', 1], ['clear']] },
   { rows: [5, 4, 6, 7, 9, 1, 8], results: -3, state: { ovGas: ['o2'], ovY: 'area' },
     steps: [['sel', 0], ['sel', 1], ['sel', 3], ['sel', 5], ['include', 0, false], ['unpair'], ['sel', 2], ['include', 0, true], ['sel', 6], ['inj', 10]] },
+  { rows: [0, 2], results: -2, state: null,
+    steps: [['edge', 'from', '270'], ['gas', 'o2'], ['open'], ['apply'], ['edge', 'to', '331'], ['close'],
+      ['restore', { method: { windows: [{ key: 'H2O2', from: 270, to: 326 }] }, edit: { windows: [{ key: 'H2O2', from: 268, to: 331 }] } }], ['apply'], ['reset'], ['apply']] },
 ];
 // Every case: the 60 random ones, then the scenes.
 export const allCases = ()=> [...Array.from({ length: 60 }, (_, n)=> caseOf(n)), ...SCENES];
@@ -686,7 +771,8 @@ export function caseEnv(c){
   return { S, C, W: { open: false, held: [], alerts: '', rows: [] }, all };
 }
 const renderSel = (S, C)=>{ const e = M.curOf(S, C); if (e){ C.selName = e.name; if (C.selK >= e.n) C.selK = Math.max(0, e.n - 1); } return e; };
-function setMethod(C, m){ if (M.tooShort(m) || M.methodKey(U, m) === M.methodKey(U, C.method)) return; M.takeMethod(U, C, m); }
+// (v578: windows edited, pending; applied by Integrate's swap, its run's windows the card's: 'apply')
+function setMethod(C, m){ if (M.tooShort(m) || M.methodKey(U, m) === M.methodKey(U, C.edit)) return; M.takeEdit(U, C, m); }
 export function step(E, [op, a, b, x]){
   const { S, C, W, all } = E;
   const calChanged = ()=> C.valuesKept.clear();
@@ -696,8 +782,9 @@ export function step(E, [op, a, b, x]){
   else if (op === 'stepK') M.stepK(S, C, a);
   else if (op === 'gas'){ if (S.GAS[a] && a !== C.ovGas) C.ovGas = a; }
   else if (op === 'y'){ if (a !== C.ovY) C.ovY = U.oneOf(a, ['conc', 'area']); }
-  else if (op === 'edge'){ const v = +String(b).replace(',', '.'), m = M.clone(C.method); if (M.fin(v)){ m.windows[0][a] = v; setMethod(C, m); } }
+  else if (op === 'edge'){ const v = +String(b).replace(',', '.'), m = M.clone(C.edit); if (M.fin(v)){ m.windows[0][a] = v; setMethod(C, m); } }
   else if (op === 'reset') setMethod(C, M.methodIn(U, null));
+  else if (op === 'apply'){ C.method = M.clone(C.edit); calChanged(); }
   else if (op === 'open') W.open = true;
   else if (op === 'close'){ if (W.open){ W.open = false; W.held = []; W.alerts = ''; } }
   else if (op === 'drop'){
@@ -738,7 +825,7 @@ export function outputs(E){
   o.files = es.map(x=> [M.fileLabel(x), M.fileTitle(x)]);
   o.injs = e ? Array.from({ length: Math.min(e.n, 40) }, (_, k)=> [M.injShort(e, k), `${M.injName(e, k)} of ${e.n}${J && J.bad(k) ? ' (suspicious)' : ''}`, !!(J && J.bad(k))]) : [];
   const x = M.progressOf(U, S, C);
-  o.status = [x.state, H.statusHtml(HU, x)];
+  o.status = [x.state, H.statusHtml(HU, S.gasOf, x)];
   o.alerts = H.alertsHtml(HU, S.gasOf, M.alertFacts(U, S, C));
   // the chromatogram over its residuals (gc-integ.js drawPair)
   const pc = { d: e ? e.d : null, k: C.selK, R: e && !e.d.error ? M.resOf(U, S, C, e.tcd) : null, file: e ? e.tcd.name : '', what: e ? `${e.label}, chromatogram ${C.selK + 1}` : '' };
@@ -762,7 +849,7 @@ export function outputs(E){
     re.push(callOf('setRange', [D.lo, D.hi, rs.r0, rs.r1]));
     M.bandsOf(D.curves).forEach(z=> re.push(callOf('vband', [z[0], z[1], M.C_BAD, 0.14])));
     if (rs.rx.length) re.push(callOf('line', [[rs.rx[0], rs.rx[rs.rx.length - 1]], [0, 0], M.C_TABLE, 1, '3,3', 'zero', 'zero']), callOf('line', [rs.rx, rs.ry, M.C_MODEL, 1, 'undefined', 'residual', 'residual']));
-    C.drawn = { e, k: D.k, t: D.tt, y: D.yy, curves: D.curves, stale: D.R.stale };
+    C.drawn = { e, k: D.k, t: D.tt, y: D.yy, curves: D.curves, m: D.R.m };
   } else C.drawn = null;
   o.chrom = [ch, re, H.pairNotice(HU, pc, D)];
   // the run overview (gc-integ.js drawOverview)
@@ -775,33 +862,35 @@ export function outputs(E){
     o.over = [H.ovGasHtml(S.gasOf, Object.keys(S.GAS), O.g), H.ovYHtml(HU, O), H.overLegendHtml(O, S.C_FIT, M.C_BAD), ov];
   }
   o.values = H.valuesHtml(HU, S.gasOf, M.peaksOf(U, S, C, e));
-  o.method = [H.methodHtml(HU, C.method, M.intrusions(C.method)), M.isDefault(U, C.method)];
+  o.method = [H.methodHtml(HU, S.gasOf, C.edit, M.intrusions(C.edit)), M.isDefault(U, C.edit)];
   if (W.open) o.cal = calOutputs(E);
   // what it gives gc.js: its CSVs, state, sig, Analysis's values, the results saved
   const n = 'Card', out = !es.length ? (W.open && C.calDrawn ? [[`${n} - standard_chromatogram.csv`, M.chromCsv(U, C.calDrawn)]] : []) : [[`${n} - integration.csv`, M.integrationCsv(U, S, C, es)]];
   if (es.length && C.drawn && C.drawn.e && es.some(y=> y.name === C.drawn.e.name)) out.push([`${n} - chromatogram.csv`, M.chromCsv(U, C.drawn)]);
   if (es.length && W.open && C.calDrawn) out.push([`${n} - standard_chromatogram.csv`, M.chromCsv(U, C.calDrawn)]);
   o.csv = out.map(([k, t])=> [k, sha(t)]);
-  o.state = M.snapshotOf(C);
+  o.state = M.snapshotOf(U, C);
   o.sig = U.exactKey([M.methodKey(U, C.method), M.calKey(U, C)]);
   o.valuesFor = all.filter(GM.isTable).map(f=> M.valuesFor(U, S, C, f));
   o.saved = M.savedResults(U, S);
   return o;
 }
-// The calibration's window as paintWindow leaves it (its standard's plot, drawStd, as its CSV takes it).
+// The calibration's window as paintWindow leaves it (its standard's plot, drawStd, as its CSV
+// takes it); with no standards, its files and warning alone (v578).
 function calOutputs(E){
   const { S, C, W } = E, o = {};
   o.files = H.calFilesHtml(HU, C.cal.files);
   o.warn = H.calWarnHtml(HU, H.calNotes(HU, C.cal.files));
+  if (!C.cal.files.length){ W.rows = []; C.calDrawn = null; o.alerts = W.alerts; return o; }
   const rows = W.rows = M.calRows(U, S, C);
   W.checked = row => row.lv.on;
   if (C.calSel >= rows.length) C.calSel = Math.max(0, rows.length - 1);
-  o.status = H.calStatusText(C.cal.files, M.stdsLeft(U, S, C), rows.length);
+  o.status = H.calStatusHtml(HU, S.gasOf, M.progressOf(U, S, C), M.stdsLeft(U, S, C), rows.length);
   const [lo, hi] = M.range(C.method);
   o.rows = H.levelRowsHtml(HU, rows, C.calSel, lo, hi);
   const x = rows[C.calSel] || null, pc = { d: x ? x.d : null, k: x ? x.j : 0, R: x ? M.resOf(U, S, C, x.f) : null, file: x ? x.f.name : '', what: x ? x.name : '' };
   const D = M.chromOf(U, pc, C.method);
-  C.calDrawn = x && !D.fail ? { x, k: D.k, t: D.tt, y: D.yy, curves: D.curves, stale: D.R.stale } : null;
+  C.calDrawn = x && !D.fail ? { x, k: D.k, t: D.tt, y: D.yy, curves: D.curves, m: D.R.m } : null;
   o.notice = H.pairNotice(HU, pc, D);
   o.fit = H.calFitHtml(HU, S.gasOf, Object.keys(S.GAS), x);
   o.stats = Object.keys(S.GAS).map(g=> H.calStatsHtml(HU, S.gasOf, g, M.calGasOf(U, S, C, g), C.cal.unit, C.cal.zero[g]));
@@ -818,7 +907,7 @@ export function runCase(c){
   return canon(out);
 }
 
-test('60 cases and three scenes as v559\'s gc-integ.js gave them (golden digests)', ()=>{
+test('60 cases and four scenes as v559\'s gc-integ.js gave them, v578\'s windows applied on demand (golden digests)', ()=>{
   const got = { cases: allCases().map(c=> sha(runCase(c))) };
   if (UPDATE){ fs.writeFileSync(GOLDEN, JSON.stringify(got, null, 1) + '\n'); return; }
   const want = JSON.parse(fs.readFileSync(GOLDEN, 'utf8'));

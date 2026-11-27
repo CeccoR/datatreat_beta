@@ -15,7 +15,7 @@
    (xrd-rv-model.js: what a run takes and says, the keys the views are kept under, the state
    saved and put back) and its markup (xrd-rv-html.js) beside it.
 ========================================================= */
-import { fmtData, csvLine, X_SVG, DL_SVG as DL_ICON, downloadBytes, flashFieldInvalid, settings, fitCsvIcons, maxArr, barNames, barChipYmax, NORM_OPTIONS, normOf, confirmModal, keeper, boxHtml } from './utils.js';
+import { fmtData, csvLine, X_SVG, DL_SVG as DL_ICON, downloadBytes, flashFieldInvalid, settings, fitCsvIcons, maxArr, barNames, barChipYmax, NORM_OPTIONS, normOf, confirmModal, keeper, boxHtml, quickPress, runProgress } from './utils.js';
 import { fileSafe } from './cards.js';
 import { Plot } from './plot.js';
 import { PLOT_DL_ICON, CSV_ICON } from './modcharts.js';
@@ -188,7 +188,7 @@ function cardState(host, root, o){
     // The structure's 3D cell, the key of what it shows, how it was turned as its tab slept or
     // the page went (showNext), the frame its square is checked at (fitSide).
     cellV: null, cellKeyShown: '', cellNext: null, sideRaf: 0,
-    pressT: -Infinity, turnT: -Infinity,   // Refine's last press and turn (quick)
+    pressT: -Infinity, turnT: -Infinity,   // Refine's last press and turn (utils.js quickPress)
     stdTitle: '', stdShown: '',            // Instrumental standard…'s own title, and the run it shows
     // The settings window (makeSettings): its body as last built (its key: null, none; a
     // card with no phase builds one of key ''), a body being rebuilt, a Refinement entry not
@@ -938,13 +938,10 @@ function setStatus(S, t, kind){
   if (kind && ls.length) el.innerHTML = boxHtml(kind, ls.map(H.esc));
   else el.textContent = ls.join(' ');
 }
-function showProg(S, frac){ S.$('ProgWrap').style.display = ''; S.$('ProgBar').style.width = Math.max(0, Math.min(1, frac))*100 + '%'; }
-function hideProg(S){ S.$('ProgWrap').style.display = 'none'; S.$('ProgBar').style.width = '0%'; }
-// A press of Refine or Refine all within a moment of the last, or one of Refine within a
-// moment of its turning into Cancel or back, is not taken: the second click of a double
-// click (up to v477 it cancelled the run the first had started). A later click is.
-const QUICK = 600;
-function quick(S, turn){ const t = performance.now(); if (t - S.pressT < QUICK || (turn && t - S.turnT < QUICK)) return true; S.pressT = t; return false; }
+function showProg(S, frac){ runProgress(S.$('ProgWrap'), frac); }
+function hideProg(S){ runProgress(S.$('ProgWrap'), null); }
+// (a press of Refine or Refine all within a moment of the last, or one of Refine within a
+// moment of its turning into Cancel or back, not taken: utils.js quickPress)
 function syncButtons(S){
   const fs = S.host.files(), f = fs[curIdx(S)], on = M.locked(S);
   // Not now (host.blocked): a sample while the standard refines, the standard while a sample does.
@@ -1229,13 +1226,13 @@ function phaseChanged(S, e){
 // standard…. (the standard is one pattern: its window has neither)
 function wireButtons(S){
   S.$('Refine').onclick = ()=>{
-    if (quick(S, true)) return;
+    if (quickPress(S, true)) return;
     if (M.locked(S)){ cancel(S); return; }
     press(S, false);
   };
   S.$('Clear').onclick = ()=>{ const f = curFile(S); if (!f || M.locked(S) || !S.results[f.name]) return; delete S.results[f.name]; draw(S, true); S.host.commit(); if (S.std) S.host.changed(); };
   if (S.std) return;
-  S.$('RefineAll').onclick = ()=>{ if (!quick(S) && !M.locked(S)) press(S, true); };
+  S.$('RefineAll').onclick = ()=>{ if (!quickPress(S) && !M.locked(S)) press(S, true); };
   S.$('ClearAll').onclick = ()=>{ if (M.locked(S) || !Object.keys(S.results).length) return; S.results = {}; draw(S, true); S.host.commit(); };
   S.$('Prev').onclick = ()=> S.host.step(-1);
   S.$('Next').onclick = ()=> S.host.step(1);

@@ -2119,7 +2119,7 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 :root.narrow-layout .pside > .pside-col { margin-top: 12px; }
 /* The Rietveld card's side: the phases and the structure, then the buttons. */
 .rv-side > .rv-boxes { flex: 1 1 0; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
-.rv-side > .rv-status:empty { display: none; }
+.rv-status:empty { display: none; }
 /* (a run or a CIF that failed, what a run chose: a compact box in the status's place, v571) */
 .rv-status > .alert.compact { overflow-wrap: anywhere; }
 /* What the instrument's line rests on, under it: a compact box of each kind (xrd-rv-html.js
@@ -2127,7 +2127,7 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 .rv-instr-notes { display: flex; flex-direction: column; gap: 4px; }
 .rv-instr-notes:not(:empty) { margin-top: 6px; }
 .rv-side > .rv-prog { margin-top: 0; }
-.rv-side > .rv-btns > .btn { height: 33px; }
+.rv-side > .rv-btns > .btn, .gci-side > .rv-btns > .btn, .gci-cal-side > .rv-btns > .btn { height: 33px; }
 :root.narrow-layout .rv-side > .rv-boxes { flex: none; min-height: 300px; }
 /* (A .pside's column whose first box has its title above it, Custom's Series, the XRPD
    standard's Parameters, the GC calibration's Standards: the title's letters from the
@@ -3583,20 +3583,14 @@ td.fname-parts { padding-top: 3px; padding-bottom: 3px; }
 .fpart.is-warn .fname-text { color: var(--warn, #d9a21b); text-decoration: underline dotted; text-underline-offset: 2px; }
 
 /* ===== GC: the Integration card (gc-integ.js, v544; laid out as a DRS card from v545) =====
-   The status line, folded away while it has nothing to say. The plot's column as a Tauc
-   card's (.mw520, flex 2), the side as its parameters' (.mw280). Over the plot one line:
+   The plot's column as a Tauc card's (.mw520, flex 2), the side as its parameters' (.mw280).
+   Over the plot one line:
    the file's selector at its left, the plot's toolbar at its right; over the run overview
    the chromatogram's selector and the overview's toolbar alike. The chromatogram over its
    residuals, three to one, together a Tauc plot's size (φ : 1): 4φ/3 : 1 and 4φ : 1, the
    border between them dropped so that the residuals' top axis sits on the chromatogram's
    bottom one; the run overview as wide and half as tall (2φ : 1). Narrow, the two a
    standard plot and a half, the overview half. */
-.gci-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
-.gci-bar[hidden] { display: none; }
-.gci-status { flex: 1 1 260px; min-width: 0; display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text); }
-.gci-acts { display: flex; gap: 8px; flex-wrap: wrap; }
-.gci-prog { flex: none; width: 140px; height: 6px; border-radius: 3px; background: var(--panel2); border: 1px solid var(--line); overflow: hidden; }
-.gci-prog-bar { display: block; height: 100%; background: var(--accent); transition: width 0.2s; }
 .gci-alerts:not(:empty) { margin-bottom: 10px; }
 .gci-notice:not(:empty) { margin-bottom: 8px; }
 .gci-row { align-items: flex-start; }
@@ -3635,7 +3629,18 @@ table.gci-values th, table.gci-values td { white-space: nowrap; padding: 4px 6px
    an amber line, .gci-flag's own). */
 .alert.compact.gci-flag { margin-top: 8px; }
 .gci-values-box .txt-meta { margin: 6px 0 0; }
-.gci-side > .gci-cal { margin-top: 12px; }
+/* Integrate (v578), the Rietveld card's Refine's component (.rv-status, .rv-prog, .rv-btns):
+   at the side's foot over Calibration…, its words (folded away while they have nothing to
+   say) and its progress over it; in the calibration's window under the standards' table,
+   the column down to the plot's foot (to v577 a status line over the card, Re-integrate and
+   Stop beside it). */
+.gci-side > .rv-status:not(:empty) { margin-top: 12px; }
+.gci-side > .rv-prog { margin-top: 8px; }
+.gci-side > .rv-btns { margin-top: 12px; }
+.gci-cal-side > .rv-status:not(:empty), .gci-cal-side > .rv-prog, .gci-cal-side > .rv-btns { margin-top: 8px; }
+.gci-side > .gci-cal { margin-top: 8px; }
+/* (with no standards, the window's drop zone alone and what a drop said, v578) */
+.gci-cal-none .gci-cal-unit, .gci-cal-none .gci-cal-pside, .gci-cal-none .gci-cal-fits { display: none; }
 /* The calibration's window: XRPD's standard's (.xrd-std-box), its levels' table and a plot a gas. */
 .gci-cal-unit { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin: 12px 0 8px; }
 .gci-cal-unit select { width: auto; margin-left: 6px; padding: 2px 6px; border-radius: 6px; font: inherit; color: var(--text); background: var(--panel2); border: 1px solid var(--line); }

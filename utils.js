@@ -2237,6 +2237,21 @@ window.addEventListener('hashchange', ()=>{
   if (HASH_TABS.includes(t)) goTab(t, true);
 })();
 
+/* A run's button (the Rietveld card's Refine, GC's Integrate, v578): a press within a moment
+   of the last, or of the button's turning into its run's Cancel or Stop or back (`turn`, its
+   owner's turnT set as its label changes), is not taken: the second click of a double click
+   (up to v477 Refine's cancelled the run the first had started). A later click is. `o` holds
+   the last press (pressT) and turn (turnT). */
+const QUICK = 600;
+function quickPress(o, turn){ const t = performance.now(); if (t - o.pressT < QUICK || (turn && t - o.turnT < QUICK)) return true; o.pressT = t; return false; }
+// Its progress, a bar under the run's words (.rv-prog, the bar its child): at `frac` (0–1) of
+// its width, or hidden (null).
+function runProgress(wrap, frac){
+  const on = frac != null;
+  wrap.style.display = on ? '' : 'none';
+  wrap.firstElementChild.style.width = on ? Math.max(0, Math.min(1, frac))*100 + '%' : '0%';
+}
+
 /* =========================================================
    NUMERIC INPUT VALIDATION FEEDBACK
    Values out of range are already clamped in the analysis code, but silently.
@@ -2812,7 +2827,7 @@ export {
   colorOf, esc, stateKey, bytesKey, moduleStateKey, viewOnlyChange, registerBusy, moduleBusy, stopModule, colorPickerUI, CP_PALETTES, palettePickerUI, settings, fmtNum, fmtData, csvNum, csvLine, saveBlob, downloadBytes,
   X_SVG, DL_SVG, setupDropzone, renderUnifiedFileList, dropGap, includedOf, setIncluded, removeFileAt, moveFileTo, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, boxStats,
   maxArr, minArr, NORM_OPTIONS, normOf, fitLinear, tinv, goTab, setTabLoaded, moduleHasData, registerHistory, alertHtml, boxHtml, fileAlertHtml, fileLine, notesHtml, NOT_READ, bytesOf, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState,
-  getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, guardNumericInput,
+  getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, guardNumericInput, quickPress, runProgress,
   guardNumberInputs, createDateTimeField, flashFieldInvalid, numRule, tiltFits, barNames, barChipYmax, confirmBanner, confirmModal, normalizeProjIcons, refreshProjBar, saveSettings, registerModule,
   makeInstance, attachInstance, detachInstance, dropKey, withState, onAnyChange, onBusyChange, busyChanged, shownOf, showAgain, zoomAgain, keeper, kept, objId, exactKey, dropsBytes, asleep, vacate,
   fixed, isColor, customLast, orderModuleCards

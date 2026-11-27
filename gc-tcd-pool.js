@@ -3,10 +3,13 @@
    Many chromatograms integrated over a few module workers (gc-tcd.worker.js), as the
    Rietveld pool makes them (new Worker(URL, { type: 'module' }), same origin: CSP
    script-src 'self'). Each worker takes the next chromatogram as it ends one; the results
-   come back in the columns' order whatever order they end in.
+   come back in the jobs' order whatever order they end in.
 
-   integrateMany(t, cols, { method, workers, onProgress, signal, makeWorker })
-     t: the time (s); cols: one array per chromatogram (NaN where blank, as readTcd gives).
+   integrateMany(jobs, { workers, onProgress, signal, makeWorker })
+     jobs: one per chromatogram, { t, y, method }: its time (s) and signal (NaN where blank,
+       as readTcd gives), and the method it is integrated with (none: the engine's default).
+       Several files and methods in one call (v578: the Integration cards' job, its workers
+       kept from one file to the next; to v577 a call a file, its workers made anew).
      workers: how many (default navigator.hardwareConcurrency − 1, at least 1: the page
        keeps a core); never more than the chromatograms.
      onProgress(done, total, k, res): after each chromatogram k ends (res its result, or
@@ -34,15 +37,16 @@ const abortError = ()=>{
   const err = new Error('The integration was cancelled.'); err.name = 'AbortError'; return err;
 };
 
-export function integrateMany(t, cols, { method, workers, onProgress, signal, makeWorker } = {}){
-  const n = cols.length;
+export function integrateMany(jobs, { workers, onProgress, signal, makeWorker } = {}){
+  const n = jobs.length;
   const results = new Array(n), ms = new Array(n).fill(NaN);
   if (!n) return Promise.resolve({ results, ms, wall: 0 });
   if (signal && signal.aborted) return Promise.reject(abortError());
   const make = makeWorker || (()=> new Worker(URL_W, { type: 'module' }));
   const W = Math.max(1, Math.min(n, workers || poolSize()));
   const T0 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
-  const tt = Array.from(t);
+  // (each time made a plain array once, whichever chromatograms share it)
+  const plain = new Map(), tOf = t =>{ let p = plain.get(t); if (!p) plain.set(t, p = Array.from(t)); return p; };
   return new Promise((resolve, reject)=>{
     let next = 0, done = 0, over = false;
     const live = new Set();
@@ -74,7 +78,8 @@ export function integrateMany(t, cols, { method, workers, onProgress, signal, ma
         if (over) return;
         if (next >= n){ live.delete(entry); entry.stop(); return; }
         k = next++;
-        w.postMessage({ id: k, t: tt, y: Array.from(cols[k]), method });
+        const j = jobs[k];
+        w.postMessage({ id: k, t: tOf(j.t), y: Array.from(j.y), method: j.method });
       };
       const onMsg = e =>{
         const d = e.data;

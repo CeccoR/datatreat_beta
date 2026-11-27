@@ -10,7 +10,8 @@
    CRLF; '.' decimals and ',' separators); the calibration line with and without intercept;
    the software's factor carried over (median of area/%mol); and the workers' pool
    (gc-tcd-pool.js) on worker_threads made to look like Web Workers: the results of one call
-   each, in order, progress said, cancelled by an AbortSignal. */
+   each, in order, progress said, cancelled by an AbortSignal; files of their own times and
+   methods of their own in one call (v578). */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Worker as NodeWorker } from 'node:worker_threads';
@@ -216,19 +217,26 @@ const makeWorker = ()=>{
     terminate: ()=> w.terminate() };
 };
 
-test('the pool: chromatograms over workers, the results of one call each in order, progress, cancel', async ()=>{
+test('the pool: chromatograms over workers, the results of one call each in order, progress, cancel; files and methods of their own in one call (v578)', async ()=>{
   const runs = [synth({ seed: 1 }), synth({ h2: 500, seed: 2, spikeAt: null }), synth({ h2: 0, o2: 300, seed: 3 }), synth({ o2: 1500, seed: 4, spikeAt: null })];
-  const t = runs[0].t, cols = runs.map(r=> r.y);
+  const t = runs[0].t, jobs = runs.map(r=> ({ t, y: r.y }));
   const seen = [];
-  const out = await integrateMany(t, cols, { workers: 2, makeWorker, onProgress: (done, total, k)=> seen.push([done, total, k]) });
+  const out = await integrateMany(jobs, { workers: 2, makeWorker, onProgress: (done, total, k)=> seen.push([done, total, k]) });
   assert.equal(out.results.length, 4);
-  out.results.forEach((res, k)=> assert.deepEqual(res, G.integrateChromatogram(t, cols[k]), 'chromatogram ' + k));
+  out.results.forEach((res, k)=> assert.deepEqual(res, G.integrateChromatogram(t, jobs[k].y), 'chromatogram ' + k));
   assert.deepEqual(seen.map(s=> s[0]), [1, 2, 3, 4]); assert.ok(seen.every(s=> s[1] === 4));
   assert.deepEqual(seen.map(s=> s[2]).sort(), [0, 1, 2, 3]);
+  // A file of another time (a shorter one) and a method of its own beside the default, in one call.
+  const short = { t: t.slice(5, t.length - 5), y: runs[1].y.slice(5, runs[1].y.length - 5) };
+  const m = structuredClone(G.DEFAULT_METHOD); m.windows[0].to = m.windows[0].to + 2;
+  const mixed = [{ t, y: runs[0].y, method: m }, { ...short }, { t, y: runs[2].y }, { ...short, method: m }];
+  const both = await integrateMany(mixed, { workers: 3, makeWorker });
+  both.results.forEach((res, k)=> assert.deepEqual(res, G.integrateChromatogram(mixed[k].t, mixed[k].y, mixed[k].method), 'mixed ' + k));
+  assert.notDeepEqual(both.results[0], out.results[0], 'its own method');
   const ac = new AbortController();
-  const many = Array.from({ length: 12 }, (_, i)=> runs[i % 4].y);
-  await assert.rejects(integrateMany(t, many, { workers: 2, makeWorker, signal: ac.signal, onProgress: done=>{ if (done === 1) ac.abort(); } }), e=> e.name === 'AbortError');
+  const many = Array.from({ length: 12 }, (_, i)=> jobs[i % 4]);
+  await assert.rejects(integrateMany(many, { workers: 2, makeWorker, signal: ac.signal, onProgress: done=>{ if (done === 1) ac.abort(); } }), e=> e.name === 'AbortError');
   const pre = new AbortController(); pre.abort();
-  await assert.rejects(integrateMany(t, many, { makeWorker, signal: pre.signal }), e=> e.name === 'AbortError');
-  assert.deepEqual(await integrateMany(t, [], { makeWorker }), { results: [], ms: [], wall: 0 });
+  await assert.rejects(integrateMany(many, { makeWorker, signal: pre.signal }), e=> e.name === 'AbortError');
+  assert.deepEqual(await integrateMany([], { makeWorker }), { results: [], ms: [], wall: 0 });
 });

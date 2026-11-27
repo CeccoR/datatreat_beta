@@ -5,8 +5,9 @@
    version, a result as the store keeps it, the calibration (its unit, intercepts, files and
    levels) as a project holds it; the raw chromatograms and a calibration's table read once
    per file; the results held, taken from a state and saved, the states a result is written
-   into, what the job integrates; the pairs and files a card shows, their results under the
-   method or the one before it, the standards' names, rows and lines, a gas's areas turned
+   into, what the job integrates (the files in view first), what a card's run has left; the
+   pairs and files a card shows, their results under the method they come from, the
+   standards' names, rows and lines, a gas's areas turned
    into concentrations (the standards' line, else the GC software's scale), what Analysis
    takes of a sample; the suspicious rule (judge); the chromatogram over its residuals (its
    ranges, curves, legend, the points left out), the run overview (its points, ranges and
@@ -21,8 +22,10 @@
 
    The instance's state is S (gc-integ.js createInteg): its context ctx, the gases (GAS by
    key, gasOf, C_FIT), the raw chromatograms read (read) and the calibrations' tables
-   (tabs), by their bytes, the results (store) and the job (job, halted, soon, failed);
-   a card's is C (gc-integ.js makeCard): its method, the one before it (wasMethod), its
+   (tabs), by their bytes, the results (store) and the job (job, halted, failed); a card's
+   is C (gc-integ.js makeCard): its method (the one its results come from: applied), its
+   windows as edited (edit: the same while nothing is pending, v578), its run (Integrate's:
+   the windows it integrates, or null) and whether one was stopped (stopped), its
    calibration (cal), the overview's gas and y (ovGas, ovY), what it shows (selName, selK)
    and Analysis's values kept (valuesKept).
 ========================================================= */
@@ -81,11 +84,12 @@ export function gasTable(U, gases){
 /* ---- The method: the engine's own, its windows' edges the card's ---- */
 // (DEFAULT_METHOD is deep-frozen: a card's method is a copy)
 export const clone = m => structuredClone(m);
-/* A method as a project holds it (RESTORED): the default's, each window's edges where the
-   saved one has that window with edges that are numbers, its start before its end. What
-   else a method holds is the engine's, as it is (a v544 project's trapezoids ignored). */
-export function methodIn(U, m){
-  const out = clone(DEFAULT_METHOD);
+/* A method as a project holds it (RESTORED): the default's (or `base`'s: an edit's are its
+   card's method's), each window's edges where the saved one has that window with edges that
+   are numbers, its start before its end. What else a method holds is the engine's, as it is
+   (a v544 project's trapezoids ignored). */
+export function methodIn(U, m, base = DEFAULT_METHOD){
+  const out = clone(base);
   const ws = U.isObj(m) && Array.isArray(m.windows) ? m.windows : [];
   out.windows.forEach(w=>{
     const s = ws.find(x=> U.isObj(x) && x.key === w.key);
@@ -114,6 +118,8 @@ export function normKey(U, key){
 }
 export const noTrap = (U, r)=>{ if (U.isObj(r) && U.isObj(r.gases)) Object.values(r.gases).forEach(x=>{ if (U.isObj(x)) delete x.trap; }); return r; };
 export const isDefault = (U, m)=> methodKey(U, m) === methodKey(U, methodIn(U, null));
+// (windows edited and not integrated yet: Integrate's to apply, v578)
+export const isPending = (U, C)=> methodKey(U, C.edit) !== methodKey(U, C.method);
 /* A result as the store keeps it (and the project): JSON's (a NaN is null, read back as
    none), its numbers to 8 digits, a peak's physical parameters left out (the window's `p`
    gives them, windowCurves draws from it). */
@@ -183,7 +189,7 @@ export function tableOf(S, b){
 /* ---- The results ---- */
 export const keyOf = (U, rec, m)=> fileKey(U, rec) + '|' + methodKey(U, m);
 // (the job's own, as they come, over the store's)
-export const resultsAt = (S, key)=> S.job && S.job.key === key ? S.job.work : S.store.get(key) || null;
+export const resultsAt = (S, key)=> (S.job && S.job.works.get(key)) || S.store.get(key) || null;
 export const integCards = S => S.ctx.cards().filter(a=> a.type === 'integ').map(a=> S.ctx.inst(a.id)).filter(Boolean);
 export function usedKeys(U, S){
   const out = new Set();
@@ -219,20 +225,45 @@ export function holds(U, s, fk){
 }
 // A state with a result written in, where it holds its file (holds).
 export const withResult = (U, s, fk, key, arr)=> holds(U, s, fk) ? { ...s, integ: { ...(U.isObj(s.integ) ? s.integ : {}), [key]: arr } } : s;
-/* ---- The job: every (file, method) a card uses with a chromatogram not integrated ---- */
+/* ---- The job: every (file, method) a card uses with a chromatogram not integrated ----
+   First each card's files under the method its results come from (shown as they come: the
+   files of a project first loaded, a file or a standard added since, the rest of a run
+   stopped part way), unless a Stop holds them (`halted`); then the windows a card's run
+   integrates (Integrate: applied all at once when its every file is, gc-integ.js swap). A
+   card's files in view first (c.inView(): the chromatogram on show, the standard on show in
+   its calibration's window), each its chromatogram on show first, then the rest in list
+   order (v578; to v577 the files in list order, the method's alone). */
 export function wanted(U, S){
-  const out = [], seen = new Set();
-  integCards(S).forEach(c=> c.tcdRecs().forEach(r=>{
-    const m = c.method(), key = keyOf(U, r, m);
-    if (seen.has(key)) return;
-    seen.add(key);
-    const d = dataOf(S, r);
-    if (d.error) return;
-    const have = S.store.get(key) || [];
-    const miss = d.cols.map((_, j)=> j).filter(j=> !have[j]);
-    if (miss.length) out.push({ key, rec: r, method: m, miss, d });
-  }));
+  const out = [], seen = new Set(), cards = integCards(S);
+  const add = (c, m)=>{
+    const view = c.inView(), recs = c.tcdRecs(), at = r => view.find(v=> v.rec === r);
+    [...new Set([...view.map(v=> v.rec).filter(r=> recs.includes(r)), ...recs])].forEach(r=>{
+      const key = keyOf(U, r, m);
+      if (seen.has(key)) return;
+      seen.add(key);
+      const d = dataOf(S, r);
+      if (d.error) return;
+      const have = S.store.get(key) || [], v = at(r);
+      const miss = d.cols.map((_, j)=> j).filter(j=> !have[j]), first = v ? miss.indexOf(v.k) : -1;
+      if (first > 0) miss.unshift(...miss.splice(first, 1));
+      if (miss.length) out.push({ key, rec: r, method: m, miss, d });
+    });
+  };
+  if (!S.halted) cards.forEach(c=> add(c, c.method()));
+  cards.forEach(c=>{ const m = c.runMethod(); if (m) add(c, m); });
   return out;
+}
+// How many of a card's chromatograms are not integrated with method m, in the store (its
+// run's left; its files' under the method its results come from), a file used twice once.
+export function leftUnder(U, S, C, m){
+  const seen = new Set();
+  return tcdRecs(S, C).reduce((s, r)=>{
+    const key = keyOf(U, r, m), d = dataOf(S, r);
+    if (seen.has(key) || d.error) return s;
+    seen.add(key);
+    const have = S.store.get(key) || [];
+    return s + d.cols.reduce((n, _, j)=> n + (have[j] ? 0 : 1), 0);
+  }, 0);
 }
 // (how many chromatograms the files wanted miss)
 export const missing = w => w.reduce((s, g)=> s + g.miss.length, 0);
@@ -244,7 +275,7 @@ export function workOf(S, g){
 // (a chromatogram the engine could not fit is a result too, its error said: else it
 // would be wanted again at once, and fail again)
 export const resultIn = (U, r)=> r && !r.error ? compact(U, r) : { error: String(r && r.error || 'the integration failed'), gases: {}, windows: [] };
-export const status = S => ({ job: S.job, halted: S.halted, soon: !!S.soon, failed: S.failed });
+export const status = S => ({ job: S.job, halted: S.halted, failed: S.failed });
 
 /* ---- A card: the pairs and files of raw chromatograms it shows ----
    One entry each, in list order (the row's included). A table with its raw chromatograms:
@@ -265,13 +296,9 @@ export function entriesOf(S){
 export const tcdRecs = (S, C)=> [...entriesOf(S).map(e=> e.tcd), ...C.cal.files];
 export const curOf = (S, C)=>{ const es = entriesOf(S); return es.find(e=> e.name === C.selName) || es[0] || null; };
 export const aligned = e => !!(e && e.table && !e.d.error && e.rows === e.n);
-// The results of a file: under the method, else (stale) the one before it.
-export function resOf(U, S, C, rec){
-  const now = resultsAt(S, keyOf(U, rec, C.method));
-  if (now && now.some(Boolean)) return { res: now, m: C.method, stale: false };
-  if (C.wasMethod){ const old = resultsAt(S, keyOf(U, rec, C.wasMethod)); if (old && old.some(Boolean)) return { res: old, m: C.wasMethod, stale: true }; }
-  return { res: now, m: C.method, stale: false };
-}
+// The results of a file: under the method they come from (to v577, the windows changed and
+// the file not integrated again, the method's before them, said: no more, v578).
+export const resOf = (U, S, C, rec)=> ({ res: resultsAt(S, keyOf(U, rec, C.method)), m: C.method });
 // (the file's and the chromatogram's on show, its selectors' choice: a step of d, around)
 export function stepFile(S, C, d){
   const es = entriesOf(S), c = curOf(S, C), i = c ? es.findIndex(x=> x.name === c.name) : -1;
@@ -469,7 +496,7 @@ export function chromOf(U, o, method){
   // (the y range the windows' own: a neighbour, N₂ above all, may run off the top)
   const inW = yy.filter((_, i)=> tt[i] >= wa && tt[i] <= wb);
   if (!inW.length) return { fail: 'empty' };
-  const R = o.R || { res: null, m: method, stale: false }, r = R.res && R.res[k];
+  const R = o.R || { res: null, m: method }, r = R.res && R.res[k];
   let curves = [];
   // (the windows' curves on the points their fit used; a peak's on its baseline)
   if (r) try { curves = (r.windows || []).map(wr=> ({ wr, c: windowCurves(t, y, R.m, wr) })).filter(x=> x.c && x.c.t && x.c.t.length); } catch(err){ curves = []; }
@@ -599,16 +626,21 @@ export function nearest(P, pts, cx, cy){
 }
 
 /* ---- The status, the card's alerts ---- */
-/* What the status line says: { st (status), left (this card's chromatograms not
-   integrated with its method), pct, state: 'running' | 'failed' | 'stopped' | 'soon' |
-   'left' | 'done' | 'none' }. */
+/* What the status line says and how Integrate stands (gc-integ.js paintStatus): { st
+   (status), left (this card's chromatograms not integrated with the method its results come
+   from), pending (its windows edited and not integrated), m (that method), pct, state:
+   'running' (the job, while it has something of this card's to do: its run, its files
+   left) | 'failed' | 'stopped' (a Stop holding its files left, or its run stopped with the
+   windows still edited) | 'pending' | 'left' | 'done' | 'none' }. (v578: to v577 'soon', the
+   method changed and integrated again a moment after.) */
 export function progressOf(U, S, C){
-  const st = status(S), mine = new Set(tcdRecs(S, C).map(r=> keyOf(U, r, C.method)));
-  const left = wanted(U, S).filter(g=> mine.has(g.key)).reduce((s, g)=> s + g.miss.length, 0);
-  const total = entriesOf(S).reduce((s, e)=> s + e.n, 0);
-  const pct = st.job ? (st.job.total ? Math.round(100*st.job.done/st.job.total) : 0) : 0;
-  const state = st.job ? 'running' : st.failed ? 'failed' : left && st.halted ? 'stopped' : left && st.soon ? 'soon' : left ? 'left' : total ? 'done' : 'none';
-  return { st, left, pct, state };
+  const st = status(S), left = leftUnder(U, S, C, C.method), pending = isPending(U, C);
+  const total = entriesOf(S).reduce((s, e)=> s + e.n, 0), busy = !!st.job && (!!C.run || left > 0);
+  const pct = busy && st.job.total ? Math.round(100*st.job.done/st.job.total) : 0;
+  // (windows edited with no chromatogram at all: no result shown to say whose)
+  const state = busy ? 'running' : st.failed && (left || pending) ? 'failed' : (st.halted && left) || (C.stopped && pending) ? 'stopped'
+    : pending && (total || C.cal.files.length) ? 'pending' : left ? 'left' : total ? 'done' : 'none';
+  return { st, left, pending, m: C.method, pct, state };
 }
 /* The facts the card's alerts say (gc-integ-html.js alertsHtml): the files that could not
    be read (errs); what to check (warn: a count that differs, two files of raw chromatograms
@@ -631,7 +663,7 @@ export function alertFacts(U, S, C){
     const cs = L.pts.map(q=> toPct(q.conc, C.cal.unit)), lo = Math.min(...cs), hi = Math.max(...cs);
     es.forEach(e=>{
       const R = resOf(U, S, C, e.tcd);
-      if (e.d.error || !R.res || R.stale) return;
+      if (e.d.error || !R.res) return;
       const v = R.res.map(x=> x && x.gases && x.gases[g] && fin(x.gases[g].area) ? toPct((x.gases[g].area - L.intercept)/L.slope, C.cal.unit) : NaN).filter(fin);
       const out = v.filter(c=> c < lo || c > hi).length;
       if (out) warn.push({ kind: 'out', e, g, out, n: v.length, lo, hi, below: v.some(c=> c < lo), L });
@@ -640,14 +672,19 @@ export function alertFacts(U, S, C){
   return { errs: es.filter(e=> e.d.error), warn };
 }
 
-/* ---- Its CSVs ---- */
+/* ---- Its CSVs ----
+   Each row ends with the windows its results come from (v578: the method applied, never
+   windows edited and not integrated; to v577 none, and the windows changed, chromatogram.csv
+   gave the previous method's model with no word of it, integration.csv no values). */
+const winHeads = m => m.windows.flatMap(w=> [`${w.key} window from (s)`, `${w.key} window to (s)`]);
+const winCells = (U, m)=> m.windows.flatMap(w=> [U.fmtNum(w.from, 2), U.fmtNum(w.to, 2)]);
 // integration.csv: every chromatogram's values (the run overview's).
 export function integrationCsv(U, S, C, es){
-  const gs = Object.keys(S.GAS), gasOf = S.gasOf;
-  let t = U.csvLine(['File', 'Table', 'Injection', 'Injection date', ...gs.flatMap(g=> [`${gasOf(g).csv} area`, `${gasOf(g).csv} area sd`, `${gasOf(g).csv} apex (s)`, `${gasOf(g).csv} chi2r`, `${gasOf(g).csv} (%mol)`, `${gasOf(g).csv} source`, `${gasOf(g).csv} table (%mol)`, `${gasOf(g).csv} suspicious`]), 'Flags']);
+  const gs = Object.keys(S.GAS), gasOf = S.gasOf, win = winCells(U, C.method);
+  let t = U.csvLine(['File', 'Table', 'Injection', 'Injection date', ...gs.flatMap(g=> [`${gasOf(g).csv} area`, `${gasOf(g).csv} area sd`, `${gasOf(g).csv} apex (s)`, `${gasOf(g).csv} chi2r`, `${gasOf(g).csv} (%mol)`, `${gasOf(g).csv} source`, `${gasOf(g).csv} table (%mol)`, `${gasOf(g).csv} suspicious`]), 'Flags', ...winHeads(C.method)]);
   es.forEach(e=>{
     if (e.d.error) return;
-    const R = resOf(U, S, C, e.tcd), res = R.stale ? [] : R.res || [], conv = convAll(U, S, C, e, res), J = judge(S, e, res);
+    const res = resOf(U, S, C, e.tcd).res || [], conv = convAll(U, S, C, e, res), J = judge(S, e, res);
     for (let k = 0; k < e.n; k++){
       const r = res[k], times = aligned(e) ? e.table.injDates : null;
       t += U.csvLine([e.tcd.name, e.table ? e.table.name : '', String(k + 1), times ? isoLocal(times[k]) : '', ...gs.flatMap(g=>{
@@ -655,13 +692,13 @@ export function integrationCsv(U, S, C, es){
         return [U.fmtNum(x ? x.area : NaN, 6), U.fmtNum(x ? x.sd : NaN, 6), U.fmtNum(x ? x.tApex : NaN, 3), U.fmtNum(x ? x.chi2r : NaN, 4),
           x && c && c.f ? U.fmtNum(c.f(x.area), 6) : '', c && c.f ? (c.how === 'cal' ? 'calibration' : `transfer (k = ${sig(c.k, 6)})`) : '', aligned(e) && e.table.gas[g] ? U.fmtNum(e.table.gas[g][k], 6) : '',
           r ? (J.bad(k, g) ? 'yes' : 'no') : ''];
-      }), J(k).join('; ')]);
+      }), J(k).join('; '), ...win]);
     }
   });
   return t;
 }
-// A chromatogram drawn (drawPair's `drawn`): the whole of it, its model and parts and its
-// residuals, these blank outside the fit window.
+// A chromatogram drawn (drawPair's `drawn`, its method `m`): the whole of it, its model and
+// parts and its residuals, these blank outside the fit window.
 export function chromCsv(U, d){
   const at = new Map(), cols = [], heads = [];
   const put = (h, xs, ys)=>{ const m = new Map(); xs.forEach((x, i)=> m.set(x, ys[i])); cols.push(m); heads.push(h); };
@@ -672,8 +709,9 @@ export function chromCsv(U, d){
     if (c.residual) put(`residual ${wr.key}`, c.t, c.residual);
   });
   d.t.forEach((x, i)=> at.set(x, d.y[i]));
-  let ct = U.csvLine(['Time (s)', 'TCD signal', ...heads]);
-  d.t.forEach(x=>{ ct += U.csvLine([U.fmtNum(x, 4), U.fmtNum(at.get(x), 6), ...cols.map(m=> m.has(x) ? U.fmtNum(m.get(x), 6) : '')]); });
+  const win = winCells(U, d.m);
+  let ct = U.csvLine(['Time (s)', 'TCD signal', ...heads, ...winHeads(d.m)]);
+  d.t.forEach(x=>{ ct += U.csvLine([U.fmtNum(x, 4), U.fmtNum(at.get(x), 6), ...cols.map(m=> m.has(x) ? U.fmtNum(m.get(x), 6) : ''), ...win]); });
   return ct;
 }
 
@@ -776,21 +814,24 @@ export function levelsOf(L){
 
 /* ---- The card's state: saved and put back ---- */
 // (ovGas kept as v544 had it, a list: one gas now)
-export const snapshotOf = C => ({ method: clone(C.method), cal: calCopy(C.cal), ovGas: [C.ovGas], ovY: C.ovY });
+// (and the windows as edited where they are not those applied: `edit`, v578)
+export const snapshotOf = (U, C)=> ({ method: clone(C.method), ...(isPending(U, C) ? { edit: clone(C.edit) } : {}), cal: calCopy(C.cal), ovGas: [C.ovGas], ovY: C.ovY });
+/* A state put back: the method its results come from, the windows as edited (a window an
+   edit lacks, the method's; none, the method's), its calibration, the overview's gas and y;
+   no stop said. */
 export function restoreCard(U, S, C, s0){
   const s = U.isObj(s0) ? s0 : {};
-  const m = methodIn(U, s.method);
-  if (methodKey(U, m) !== methodKey(U, C.method)) C.wasMethod = null;
-  C.method = m; C.cal = calIn(U, s.cal);
+  C.method = methodIn(U, s.method);
+  C.edit = U.isObj(s.edit) ? methodIn(U, s.edit, C.method) : clone(C.method);
+  C.cal = calIn(U, s.cal);
   C.ovGas = (Array.isArray(s.ovGas) ? Object.keys(S.GAS).find(g=> s.ovGas.includes(g)) : null) || 'h2';
   C.ovY = U.oneOf(s.ovY, ['conc', 'area']);
+  C.stopped = false;
   C.valuesKept.clear();
 }
-// A method set (setMethod): taken, with the one before it kept for its results meanwhile.
-export function takeMethod(U, C, m){
-  C.wasMethod = C.method;
-  C.method = methodIn(U, m);
-}
+// Windows edited (setMethod): taken as the card's, pending until Integrate applies them (v578:
+// to v577 applied at once, integrated a moment after).
+export function takeEdit(U, C, m){ C.edit = methodIn(U, m); }
 // (what gc.js shows of a card beside its state, and what it gives back)
 export const showsOf = (S, C)=>{ const e = curOf(S, C); return e ? { file: e.name, k: C.selK } : null; };
 export function showNext(U, C, v){ if (U.isObj(v) && typeof v.file === 'string'){ C.selName = v.file; C.selK = Number.isInteger(v.k) && v.k >= 0 ? v.k : 0; } }
