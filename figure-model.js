@@ -5,7 +5,8 @@
    sidebar, a panel placed and spanned, added in the first free cell and removed, a range
    handed over as the automatic one leaves it and carried across a log switch, a setting
    given to every series, a division's own settings, a fill as the picker shows it and as
-   it takes it back, the colours a palette would keep, text put into a rich field. figure.js
+   it takes it back, the colours a palette would keep, text put into a rich field, the words
+   for ticks a setting by hand cannot have (v580). figure.js
    reads the fields, refuses what they cannot take and redraws; what the figure draws is
    worked out in figure-layout.js.
 ========================================================= */
@@ -189,4 +190,70 @@ export function richInsert(value, a, b, text, wrap){
   const sel = value.slice(a, b);
   const ins = wrap ? `${wrap}{${sel}}` : text;
   return { value: value.slice(0, a) + ins + value.slice(b), caret: a + ins.length - (wrap && !sel ? 1 : 0) };
+}
+
+/* The words for a tick fault (figure-layout.js tickFaults: { ax, code, step }, v580): why an
+   edit was refused, said under its control before what became of the edit (tail: "1e14 not
+   taken; 10 kept."), and the line under the Ticks while a setting by hand stands in a fault
+   that no edit brought (the data changed, a project opened), the setting kept: its subject,
+   what is wrong and what is drawn instead. */
+const TICK_WORDS = {
+  step:    [A => `${A} step not a number of 0 or more`, 'step', 'not a number of 0 or more', 'the automatic ticks drawn'],
+  range:   [A => `No end to the ${A} range`, 'step', 'the range has no end', 'the automatic ticks drawn'],
+  many:    [A => `Too many ${A} ticks for this range`, 'step', 'too many ticks for this range', 'the automatic ticks drawn'],
+  same:    [A => `${A} ticks too close to tell apart at these values`, 'step', 'ticks too close to tell apart at these values', 'the automatic ticks drawn'],
+  narrow:  [A => `${A} range too narrow for its values`, 'range', 'too narrow for its values', 'only some ticks drawn'],
+  decades: [A => `Too many decades on ${A}`, 'range', 'too many decades', 'no ticks drawn'],
+  minors:  [A => `Too many ${A} minor ticks for this range`, 'minor ticks', 'too many for this range', 'none drawn'],
+  fine:    [A => `${A} minor ticks too close to tell apart at these values`, 'minor ticks', 'too close to tell apart at these values', 'none drawn'],
+};
+export const tickRefused = (f, tail)=> `${TICK_WORDS[f.code][0](f.ax.toUpperCase())}: ${tail}`;
+export function tickNote(f){
+  const [, subject, what, drawn] = TICK_WORDS[f.code];
+  return `${f.ax.toUpperCase()} ${subject}${subject === 'step' && typeof f.step === 'number' ? ' ' + f.step : ''}: ${what}: ${drawn}.`;
+}
+
+/* A range's bound typed (end 0 its min, 1 its max; v in the axis's terms) against the other
+   bound (v580): why it is refused where the min would not stay below the max, else ''. To
+   v579 taken, the axis drawn with one tick or none. */
+export const boundOrder = (ax, end, v, other)=> (end ? v <= other : v >= other)
+  ? `${ax.toUpperCase()} ${end ? 'max must be above min' : 'min must be below max'}` : '';
+
+/* A preset applied (v580): an axis it brings into a tick fault the figure was not in gets its
+   own settings back, its step first, then its minors, then its range (with its log switch and
+   its sharing), each group only where the preset changed it and only while the axis is in
+   such a fault (fresh(): those faults, figure-layout.js tickFaults); the rest of the preset
+   stays. prev: the figure's settings before (a snapshot's scalars). Gives the groups put
+   back, { ax, group, fault, preset, kept } each (the group's values in the preset and
+   before), or null where a fault is left (the panels' own ranges): the preset is not to be
+   applied. */
+const axisGroups = ax =>{
+  const A = ax.toUpperCase();
+  return [['step', [ax + 'Step', ax + 'StepAuto']], ['minors', ['minor' + A, 'minor' + A + 'Auto']],
+          ['range', [ax + 'Log', ax + 'Auto', ax + 'min', ax + 'max', ax + 'Man', 'share' + A]]];
+};
+const pickKeys = (o, keys)=> JSON.parse(JSON.stringify(Object.fromEntries(keys.map(k=> [k, o[k]]))));
+export function keepAxes(F, prev, fresh){
+  const back = [];
+  for (const ax of ['x', 'y']) for (const [group, keys] of axisGroups(ax)){
+    const fault = fresh().find(f=> f.ax === ax);
+    if (!fault) break;
+    const preset = pickKeys(F, keys), kept = pickKeys(prev, keys);
+    if (JSON.stringify(preset) === JSON.stringify(kept)) continue;
+    Object.assign(F, pickKeys(kept, keys));
+    back.push({ ax, group, fault, preset, kept });
+  }
+  return fresh().length ? null : back;
+}
+// A group's settings in words (presetRefused).
+function groupWords(group, v, ax){
+  const A = ax.toUpperCase();
+  if (group === 'step') return v[ax + 'StepAuto'] ? 'the automatic step' : `step ${v[ax + 'Step']}`;
+  if (group === 'minors') return v['minor' + A + 'Auto'] ? 'the automatic minors' : `${v['minor' + A]} minors per major`;
+  return 'the range';
+}
+// Why a group of a preset was not taken, and what was kept (keepAxes).
+export function presetRefused(b){
+  const w = v => groupWords(b.group, v, b.ax);
+  return tickRefused(b.fault, `the preset's ${w(b.preset).replace(/^the /, '')} not taken; ${w(b.kept)}${b.group === 'range' ? ' before' : ''} kept.`);
 }

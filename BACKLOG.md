@@ -270,6 +270,14 @@ was proposed; nothing here is in the code yet.
   figure composer's), the golden outputs changed in those words alone (gcmodel, integmodel,
   rvmodel, stages). Nothing of the review is left.
 
+- **The composer's ticks and the settings by hand (v580, done; what is left).** v566 drew the
+  automatic ticks where a step by hand did not fit; from v580 an edit that would leave a
+  setting by hand out of the ticks is refused, the field back to what it was, a preset applied
+  but for such settings, and one the data alone stop fitting kept, with a note under the Ticks
+  (figure-layout.js `tickFaults`). Left: plot.js's own log axis (`yTicksIn`, DRS's log plot)
+  counts its decades as v579's composer did: a range 2^52 decades out, which no data can give,
+  would never end there.
+
 - **Long functions.** A handful of functions run to hundreds of lines: `createRietveld`
   (xrd-rv.js, ~1300), `createPeakAnalysis` (xrd-peaks.js, ~1100), `autoRefine`
   (xrd-rietveld.js, ~800), `shapeView` (xrd-shape3d.js, ~750), `drawFigure` (figure.js,

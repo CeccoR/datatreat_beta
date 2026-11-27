@@ -78,7 +78,7 @@ const UN = ['esc', 'fmtNum', 'csvField', 'csvJoin', 'csvLine', 'X_SVG', 'ALERT_I
 const KN = ['isObj', 'num', 'oneOf'], CN = ['PLOT_DL_ICON', 'plotWrap', 'chipRow'];
 const settings = { decimal: '.', field: ';' };
 const PAGE = new Function('settings', [...UN.map(n=> decl(n === 'ALERT_ICON' ? 'alerts.js' : 'utils.js', n)), ...KN.map(n=> decl('modkit.js', n)), ...CN.map(n=> decl('modcharts.js', n)),
-  decl('snav.js', 'snavHtml'), decl('plot.js', 'niceStep'), decl('plot.js', 'niceTicks'), decl('cards.js', 'cardInfo')].join('\n')
+  decl('snav.js', 'snavHtml'), decl('plot.js', 'niceStep'), decl('plot.js', 'niceRun'), decl('plot.js', 'niceTicks'), decl('cards.js', 'cardInfo')].join('\n')
   + `\nreturn { ${[...UN, ...KN, ...CN, 'snavHtml', 'niceTicks', 'cardInfo'].join(', ')} };`)(settings);
 const ids = new WeakMap();
 let nid = 0;

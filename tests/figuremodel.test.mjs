@@ -285,6 +285,32 @@ export function runCase(c){
 }
 export const CASES = 40;
 
+/* v580: the words for a tick fault (figure-layout.js tickFaults): why an edit was refused,
+   before what became of it, and the note under the Ticks while a setting by hand is not drawn
+   as set; a range's bound that would not keep the min below the max (boundOrder: a bound
+   with no number against it taken). ALERTS-REVIEW.md R4: what, a colon, why; no "!", no "—",
+   no version; a full stop. */
+test('the words for ticks a setting by hand cannot have: an edit refused, the note, a bound out of order (v580)', ()=>{
+  const f = (ax, code, step = 10)=> ({ ax, code, step });
+  assert.equal(FM.tickRefused(f('y', 'many'), '1e14 not taken; 10 kept.'), 'Too many Y ticks for this range: 1e14 not taken; 10 kept.');
+  assert.equal(FM.tickRefused(f('x', 'same'), 'left ticked.'), 'X ticks too close to tell apart at these values: left ticked.');
+  assert.equal(FM.tickRefused(f('y', 'narrow', ''), '1e12 not taken; 20 kept.'), 'Y range too narrow for its values: 1e12 not taken; 20 kept.');
+  assert.equal(FM.tickNote(f('y', 'many')), 'Y step 10: too many ticks for this range: the automatic ticks drawn.');
+  assert.equal(FM.tickNote(f('x', 'same', 1e-4)), 'X step 0.0001: ticks too close to tell apart at these values: the automatic ticks drawn.');
+  assert.equal(FM.tickNote(f('x', 'narrow', '')), 'X range: too narrow for its values: only some ticks drawn.');
+  assert.equal(FM.tickNote(f('y', 'fine', '')), 'Y minor ticks: too close to tell apart at these values: none drawn.');
+  assert.equal(FM.tickNote(f('y', 'step', null)), 'Y step: not a number of 0 or more: the automatic ticks drawn.', 'a malformed project\'s step');
+  // a range's bound against the other: the min below the max, or why not
+  assert.deepEqual([FM.boundOrder('y', 0, 50, 0), FM.boundOrder('x', 1, -3, 0), FM.boundOrder('y', 0, 5, 5), FM.boundOrder('y', 1, 5, 5)],
+    ['Y min must be below max', 'X max must be above min', 'Y min must be below max', 'Y max must be above min']);
+  assert.deepEqual([FM.boundOrder('y', 0, -1, 0), FM.boundOrder('y', 1, 1, 0), FM.boundOrder('y', 1, 1, NaN)], ['', '', '']);
+  for (const code of ['step', 'range', 'many', 'same', 'narrow', 'decades', 'minors', 'fine'])
+    for (const t of [FM.tickRefused(f('y', code), 'left ticked.'), FM.tickNote(f('y', code))]){
+      assert.match(t, /^[A-Z][^!—]*: [^!—]+\.$/, t);
+      assert.doesNotMatch(t, /v\d{3}|undefined/, t);
+    }
+});
+
 test('40 cases as v563\'s figure.js did them (golden digests)', ()=>{
   const got = { cases: Array.from({ length: CASES }, (_, i)=> sha(runCase(caseOf(i + 1)))) };
   if (UPDATE){ fs.writeFileSync(GOLDEN, JSON.stringify(got, null, 1) + '\n'); return; }

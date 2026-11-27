@@ -14,9 +14,10 @@
    their order: the same numbers to the last bit.
 
    What the page knows and Node cannot load is handed in, with the figure model, as one
-   context C = { F, textW, niceTicks, fmtTick, tiltFits }: F the model (figure.js
+   context C = { F, textW, niceRun, fmtTick, tiltFits }: F the model (figure.js
    buildModel), textW(text, px) a text's width in the figure's font (a canvas measures
-   it), plot.js's niceTicks and fmtTick, utils.js's tiltFits.
+   it), plot.js's niceRun (its niceTicks and whether they were cut short) and fmtTick,
+   utils.js's tiltFits.
 ========================================================= */
 
 export const PX_MM = 96 / 25.4;      // CSS px per mm at the nominal 96 dpi
@@ -202,13 +203,26 @@ export const stepY = C => C.F.yStepAuto ? 0 : C.F.yStep;
    values' floats, are left out. A log axis wider than MAX_DECADES (finite numbers span
    632) has no ticks. To v565 the majors were cut at the first 400, and the minors walked
    to one at a time from below, which a step of 0 or one under the values' float spacing
-   never got past: the tab hung. */
+   never got past: the tab hung.
+   Each guard says why it gave way (v580), a fault ('' none), for which the composer refuses
+   an edit and which it notes while it stands (tickFaults): 'step' a step by hand that is no
+   number of 0 or more, 'range' one on a range with no end, 'many' one past MAX_TICKS, 'same'
+   one whose majors coincide (each giving the automatic ticks); 'narrow' a range a few float
+   spacings wide, where the automatic ticks stop (plot.js niceRun: the ticks so far);
+   'decades' a log axis past MAX_DECADES, with no end or 2^52 decades out (no ticks);
+   'minors' minors past MAX_MINORS, 'fine' minors with no step or one too fine for the
+   floats (none). The drawing and the check go through the same plans (majorPlan, axisPlan,
+   minorPlan, minorRun): they cannot disagree. */
 export const MAX_TICKS = 400, MAX_MINORS = 20000, MAX_DECADES = 1000;
 
-// Major ticks for a range: a fixed step when the user set one, else a nice default.
-export function majorTicks(C, lo, hi, step){
-  const nice = ()=> C.niceTicks(lo, hi, 4).filter(t=> t >= lo && t <= hi);
-  if (!(step > 0)) return nice();
+// Major ticks for a range, { ticks, fault }: a fixed step when the user set one, else a nice default.
+function majorPlan(C, lo, hi, step){
+  const nice = fault =>{
+    const r = C.niceRun(lo, hi, 4);
+    return { ticks: r.ticks.filter(t=> t >= lo && t <= hi), fault: fault || (r.cut ? 'narrow' : '') };
+  };
+  if (!(step > 0) || step === Infinity) return nice(step === 0 ? '' : 'step');
+  if (!(isFinite(lo) && isFinite(hi))) return nice('range');
   const out = [], first = Math.ceil(lo / step) * step;
   // Snap to the step grid so 0.30000000000000004 never reaches a tick label.
   for (let k = 0; k <= MAX_TICKS; k++){
@@ -217,8 +231,10 @@ export function majorTicks(C, lo, hi, step){
     out.push(Math.abs(v) < step * 1e-9 ? 0 : +v.toPrecision(12));
   }
   // One too many, or two that coincide (a NaN, which never compares, too).
-  return out.length > MAX_TICKS || out.some((t, i)=> i && !(t > out[i-1])) ? nice() : out;
+  if (out.length > MAX_TICKS) return nice('many');
+  return out.some((t, i)=> i && !(t > out[i-1])) ? nice('same') : { ticks: out, fault: '' };
 }
+export function majorTicks(C, lo, hi, step){ return majorPlan(C, lo, hi, step).ticks; }
 
 export const xLog = C => !!C.F.xLog && !(C.F.cats && C.F.cats.length);
 export const yLog = C => !!C.F.yLog;
@@ -228,24 +244,28 @@ export const TX = (C, v) => xLog(C) ? lg(v) : v;
 export const TY = (C, v) => yLog(C) ? lg(v) : v;
 export const pow10 = t => +Math.pow(10, t).toPrecision(12);
 
-/* The major ticks of an axis. On a log one they are the whole decades in view, every
-   step-th one when a step is set (in decades). Under two decades in view there are
-   too few of those, and the ticks fall on the 1, 2 and 5 of each decade instead, or
-   failing three of those on nice values of the data, as a linear axis would pick
-   them. `dec` marks the decade kind, whose labels are powers of ten, not numbers. */
-export function axisTicks(C, ax, lo, hi){
+/* The major ticks of an axis, { ticks, fault }. On a log one they are the whole decades in
+   view, every step-th one when a step is set (in decades). Under two decades in view there
+   are too few of those, and the ticks fall on the 1, 2 and 5 of each decade instead, or
+   failing three of those on nice values of the data, as a linear axis would pick them.
+   `dec` marks the decade kind, whose labels are powers of ten, not numbers. */
+function axisPlan(C, ax, lo, hi){
   const step = ax === 'x' ? stepX(C) : stepY(C);
-  if (!isLog(C, ax)) return majorTicks(C, lo, hi, step);
-  if (!(hi - lo <= MAX_DECADES)) return [];
+  if (!isLog(C, ax)) return majorPlan(C, lo, hi, step);
+  // (nor one 2^52 decades out, where n++ stops moving n: no logarithm of a number, but a
+  // malformed project's range by hand counted its decades for ever to v579)
+  if (!(hi - lo <= MAX_DECADES && Math.max(Math.abs(lo), Math.abs(hi)) < 2 ** 52)) return { ticks: [], fault: 'decades' };
   const k = Math.max(1, Math.round(step) || 1), dec = [];
   for (let n = Math.ceil(lo - 1e-9); n <= hi + 1e-9; n++) if (n % k === 0) dec.push(n);
-  if (dec.length >= 2){ dec.dec = true; return dec; }
+  if (dec.length >= 2){ dec.dec = true; return { ticks: dec, fault: '' }; }
   const out = [];
   for (let n = Math.floor(lo); n <= Math.ceil(hi); n++)
     for (const m of [1, 2, 5]){ const t = Math.log10(m) + n; if (t >= lo - 1e-9 && t <= hi + 1e-9) out.push(t); }
-  if (out.length >= 3) return out;
-  return C.niceTicks(Math.pow(10, lo), Math.pow(10, hi), 4).map(lg).filter(t=> t >= lo && t <= hi);
+  if (out.length >= 3) return { ticks: out, fault: '' };
+  const r = C.niceRun(Math.pow(10, lo), Math.pow(10, hi), 4);
+  return { ticks: r.ticks.map(lg).filter(t=> t >= lo && t <= hi), fault: r.cut ? 'narrow' : '' };
 }
+export function axisTicks(C, ax, lo, hi){ return axisPlan(C, ax, lo, hi).ticks; }
 // How many minor ticks each major interval gets. Automatic on a log axis: a decade
 // apart, the 2…9 of the decade; several decades apart, the decades in between.
 export function minorsOf(C, ax, majors){
@@ -256,14 +276,14 @@ export function minorsOf(C, ax, majors){
   const k = majors.length > 1 ? majors[1] - majors[0] : 1;
   return k > 1 ? k - 1 : 8;
 }
-/* The minor ticks of an axis. On a log one, the n minors of an interval stand where
-   they would on a linear scale — at equal steps of the value from one major to the
-   next — and so crowd towards its top end: with n = 8 over a decade they are 2…9. */
-export function axisMinors(C, ax, majors, lo, hi){
+/* The minor ticks of an axis, { ticks, fault }. On a log one, the n minors of an interval
+   stand where they would on a linear scale — at equal steps of the value from one major to
+   the next — and so crowd towards its top end: with n = 8 over a decade they are 2…9. */
+function minorPlan(C, ax, majors, lo, hi){
   const F = C.F;
   const n = Math.max(0, Math.round(minorsOf(C, ax, majors)));
-  if (!isLog(C, ax)) return minorTicks(majors, lo, hi, n);
-  if (majors.length < 2 || !n) return [];
+  if (!isLog(C, ax)) return minorRun(majors, lo, hi, n);
+  if (majors.length < 2 || !n) return { ticks: [], fault: '' };
   // Automatic over several decades: the decades themselves.
   const auto = ax === 'x' ? F.minorXAuto : F.minorYAuto;
   const at = (a, b, j)=> majors.dec && auto && b - a > 1 ? a + j
@@ -271,26 +291,28 @@ export function axisMinors(C, ax, majors, lo, hi){
   const ends = [majors[0] - (majors[1] - majors[0]), ...majors,
                 majors[majors.length-1] + (majors[majors.length-1] - majors[majors.length-2])];
   const out = [];
-  if ((ends.length - 1) * n > MAX_MINORS) return out;
+  if ((ends.length - 1) * n > MAX_MINORS) return { ticks: out, fault: 'minors' };
   for (let i = 0; i + 1 < ends.length; i++)
     for (let j = 1; j <= n; j++){ const t = at(ends[i], ends[i+1], j); if (t >= lo && t <= hi) out.push(t); }
-  return out;
+  return { ticks: out, fault: '' };
 }
-/* `n` minor ticks between each pair of majors, extended one interval past both ends.
-   Positions that land on a major are dropped — a minor tick under a major one is
-   invisible except for the shorter mark poking out of it. The k of the first and the
+export function axisMinors(C, ax, majors, lo, hi){ return minorPlan(C, ax, majors, lo, hi).ticks; }
+/* `n` minor ticks between each pair of majors, extended one interval past both ends,
+   { ticks, fault }. Positions that land on a major are dropped — a minor tick under a major
+   one is invisible except for the shorter mark poking out of it. The k of the first and the
    last one in [lo, hi] are worked out, two either side for the rounding, and only
    those tried (to v565 every k from -div up, see MAX_TICKS). */
-export function minorTicks(majors, lo, hi, n){
+function minorRun(majors, lo, hi, n){
   n = Math.max(0, Math.round(n));
-  if (majors.length < 2 || !n) return [];
+  if (majors.length < 2 || !n) return { ticks: [], fault: '' };
   const div = n + 1, step = (majors[1] - majors[0]) / div, out = [];
   const first = majors[0], end = majors[majors.length-1] + div * step;
   const k0 = Math.max(-div, Math.floor((lo - first) / step) - 2);
   const k1 = Math.ceil((Math.min(hi, end) - first) / step) + 2;
   // Too fine for the values' floats: under 2^-49 of them, a few float spacings apart.
   const fine = step < Math.max(Math.abs(first), Math.abs(end)) * Math.pow(2, -49);
-  if (!(step > 0) || fine || !Number.isSafeInteger(k0) || !Number.isSafeInteger(k1) || k1 - k0 > MAX_MINORS) return out;
+  if (!(step > 0) || fine) return { ticks: out, fault: 'fine' };
+  if (!Number.isSafeInteger(k0) || !Number.isSafeInteger(k1) || k1 - k0 > MAX_MINORS) return { ticks: out, fault: 'minors' };
   for (let k = k0; k <= k1; k++){
     const v = first + k * step;
     if (v > hi + step / 2) break;
@@ -300,7 +322,42 @@ export function minorTicks(majors, lo, hi, n){
     if (((k % div) + div) % div === 0) continue;   // sits on a major
     out.push(v);
   }
-  return out;
+  return { ticks: out, fault: '' };
+}
+export function minorTicks(majors, lo, hi, n){ return minorRun(majors, lo, hi, n).ticks; }
+
+/* What keeps an axis's ticks over [lo, hi] from being drawn as set ('' nothing, v580): its
+   majors' fault, else its minors' (worked out as for drawing, whether or not the minors are
+   shown). The one test of an axis the composer's checks make. */
+export function axisFault(C, ax, lo, hi){
+  const m = axisPlan(C, ax, lo, hi);
+  return m.fault || minorPlan(C, ax, m.ticks, lo, hi).fault;
+}
+/* The faults a figure's axes stand in (v580) where a setting by hand is in them: the step's
+   (by hand by their nature), the minors' where their count is by hand, any where the panel's
+   range is (ranges: computeRanges). Each { ax, code, step, key } once, however many panels
+   have it; `key` holds the code and the settings by hand it is in (the step for the step's,
+   the count for the minors', the range where by hand), so that an edit bringing a setting
+   into a fault, or changing one that stands in a fault already, shows as a key that was not
+   there before (figure.js refuses it), while a change of the data's alone, or of a setting
+   that is not in the fault, does not. */
+const FAULT_OF = { step: 'step', range: 'step', many: 'step', same: 'step', narrow: '', decades: '', minors: 'n', fine: 'n' };
+export function tickFaults(C, ranges){
+  const F = C.F, out = new Map();
+  for (const ax of ['x', 'y']){
+    const X = ax === 'x';
+    const step = (X ? F.xStepAuto : F.yStepAuto) ? '' : X ? F.xStep : F.yStep;
+    const n = (X ? F.minorXAuto : F.minorYAuto) ? '' : X ? F.minorX : F.minorY;
+    (X ? ranges.xOf : ranges.yOf).forEach(([lo, hi], i)=>{
+      const hand = (X ? ranges.xHand : ranges.yHand)[i];
+      if (step === '' && n === '' && !hand) return;
+      const code = axisFault(C, ax, lo, hi), of = FAULT_OF[code];
+      if (!code || !(hand || of === 'step' || (of === 'n' && n !== ''))) return;
+      const key = [ax, code, of === 'step' ? step : '', of === 'n' ? n : '', hand ? lo + ',' + hi : ''].join('|');
+      if (!out.has(key)) out.set(key, { ax, code, step, key });
+    });
+  }
+  return [...out.values()];
 }
 // A tick's label: its number, or on a log axis's decades a 10 and its raised exponent.
 export const SUP_K = 0.72;
@@ -353,11 +410,12 @@ export function extentOf(C, panelIdxs){
 }
 
 // The X/Y range of every panel, indexed by panel. Shared means they all get the
-// figure-wide one; otherwise each panel resolves its own, manual if it has one set.
+// figure-wide one; otherwise each panel resolves its own, manual if it has one set
+// (xHand, yHand: the range by hand, v580, for tickFaults).
 export function computeRanges(C){
   const F = C.F;
   const globalExt = extentOf(C, F.panels.map((_, i)=> i)) || { x0:0, x1:1, y0:0, y1:1 };
-  const xOf = [], yOf = [];
+  const xOf = [], yOf = [], xHand = [], yHand = [];
   F.panels.forEach((p, i)=>{
     // Off the figure-wide switch, a panel is scaled with whatever group it shares
     // with — itself alone, unless it was pointed at another panel.
@@ -372,10 +430,12 @@ export function computeRanges(C){
     const ry = F.panels[rangeRoot(C, i, 'shareYWith')] || p;
     const autoX = F.shareX ? F.xAuto : rx.xAuto !== false;
     const autoY = F.shareY ? F.yAuto : ry.yAuto !== false;
-    xOf[i] = (autoX || !manX) ? [ex.x0, ex.x1] : manX.slice();
-    yOf[i] = (autoY || !manY) ? [ey.y0, ey.y1] : manY.slice();
+    xHand[i] = !(autoX || !manX);
+    yHand[i] = !(autoY || !manY);
+    xOf[i] = xHand[i] ? manX.slice() : [ex.x0, ex.x1];
+    yOf[i] = yHand[i] ? manY.slice() : [ey.y0, ey.y1];
   });
-  return { xOf, yOf, globalExt };
+  return { xOf, yOf, xHand, yHand, globalExt };
 }
 
 // True when nothing sits immediately beyond `side` of panel `i` — i.e. there is
