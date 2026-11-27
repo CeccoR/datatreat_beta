@@ -14,6 +14,7 @@
 import { NORM, PER, P_ATM, P_UNITS, INJ_DELAY_AUTO, GASES, molarVolume, inUnit, injDelay, mOf, aOf, qOf, tOf, pOf, startOf, endOf,
   lightOnWarn, lacking, seriesName, gasTxt, blankCounts, byName, headOf, isHead, isTable, isTcd, rowFiles } from './gc-model.js';
 import { boxHtml } from './alerts.js';
+import { failedWhy } from './gc-integ-html.js';
 
 /* ---- The instructions ---- */
 // What T and p are (their columns' titles, and the card's instructions).
@@ -155,7 +156,8 @@ export function paramTableHtml(P, files, u){
   // 10.25 | warnings 8.9 (%, of what m leaves: a fixed table layout scales them to it, m kept):
   // at the table's least width, 1000 px (style.css's .gc-param-table min-width), each header's
   // pill beside its name (the name on two lines where it must), m's select whole in its compact
-  // type (which cannot wrap; 4 px to spare for another system's select), and the date field
+  // type (which cannot wrap; 4 px to spare, and a wider one, another system's, cut with "…" in
+  // the room its cell leaves it: style.css, v584), and the date field
   // whole (v582: to v581 m 136 px, its select in the header's type, at 1060 px, Sample 10, Q
   // 12.5, T 10, p 13.5, Light-on 22.5, start and end 10, warnings 11.5; to v580 m 9 % at 1000
   // px, its name a word). At 860 px, the least width to v500, Q's pill already ran over its
@@ -317,15 +319,17 @@ export function fileNotes(all, u){
 /* Where a card's values came from, said at its top (v544): the samples re-integrated, and
    how each gas is made a concentration (the standards, or the GC software's scale, an info
    alert); the samples paired with raw chromatograms that keep their table, and why (a
-   warning). Nothing while no sample is paired or no Integration card is above (`name`,
-   that card's). */
+   warning); those whose integration failed, with the job's message, a compact error first
+   (v584, ALERTS-REVIEW.md R1–R4: to v583 "not done yet" in the warning, the failure untold).
+   Nothing while no sample is paired or no Integration card is above (`name`, that card's). */
 export function srcAlertsHtml(dataTables, name, u){
-  const used = [], kept = [], txt = Object.fromEntries(GASES.map(g=> [g.key, gasTxt(g)]));
+  const used = [], kept = [], failed = [], txt = Object.fromEntries(GASES.map(g=> [g.key, gasTxt(g)]));
   const k5 = v => Number.isFinite(v) ? String(+v.toPrecision(5)) : '?';
   const how = (s, g)=> s.how[g] === 'cal' ? 'calibrated by the standards' : `by the GC software's scale (k = ${k5(s.k[g] && s.k[g].k)})`;
   dataTables.forEach(d=>{
     const s = d.src;
     if (!s) return;
+    if (s.failed){ failed.push(`${u.esc(d.label)}: ${u.esc(failedWhy(s.failed))}.`); return; }
     if (!s.gas){ kept.push(`${u.esc(d.label)}: ${u.esc(s.why)}${s.integ ? ': see the Integration card' : ''}`); return; }
     const re = Object.keys(s.how).filter(g=> s.how[g] !== 'table'), tb = Object.keys(s.how).filter(g=> s.how[g] === 'table');
     if (re.length) used.push(`${u.esc(d.label)}: ${re.map(g=> `${txt[g] || u.esc(g)} ${u.esc(how(s, g))}`).join('; ')}`);
@@ -334,6 +338,8 @@ export function srcAlertsHtml(dataTables, name, u){
   // (where the GC software's scale is taken: its risks, which the Integration card's
   // instructions give, said once; to v566 an info box of that card's, its header alone)
   if (dataTables.some(d=> d.src && d.src.gas && Object.values(d.src.how).includes('transfer'))) used.push(`The GC software's scale (k): its risks are in the instructions of ${u.esc(name)}.`);
-  return (used.length ? u.alertHtml('info', `H₂ and O₂ re-integrated from the raw chromatograms (${u.esc(name)}), the times from the tables:`, used) : '')
-    + (kept.length ? u.alertHtml('warn', `The GC software's table used instead of the re-integration (${u.esc(name)}):`, kept) : '');
+  const head = `The GC software's table used instead of the re-integration (${u.esc(name)}):`;
+  return (failed.length ? boxHtml('bad', [head, ...failed]) : '')
+    + (used.length ? u.alertHtml('info', `H₂ and O₂ re-integrated from the raw chromatograms (${u.esc(name)}), the times from the tables:`, used) : '')
+    + (kept.length ? u.alertHtml('warn', head, kept) : '');
 }

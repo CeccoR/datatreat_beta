@@ -16,14 +16,13 @@
    object, U = { alignKept, objId, exactKey, fitLinear, csvNum, csvLine, wideCsv, barNames,
    num, isObj } (iodo.js U; alignKept: utils.js keeper's for the alignments, 'iodo-align').
 ========================================================= */
-import { decodeText, textLines, splitFields, parseNum, isNum, nameUnit, SEPS } from './textdata.js';
+import { decodeText, textLines, splitFields, parseNum, isNum, nameUnit, width, SEPS } from './textdata.js';
 import { fixed } from './db.js';
 
 /* ---- Reading a file (pure: the module's, for every instance; no DOM) ---- */
-// A line's fields up to the last that is not empty (a trailing separator adds none).
-export const width = r =>{ let n = r.length; while (n && r[n - 1] === '') n--; return n; };
 // A line of data: two numbers at least, and nothing but numbers and empty cells (a trace
-// shorter than the others leaves its cells empty).
+// shorter than the others leaves its cells empty; its width textdata.js's, v584: to v583 a
+// copy of its own).
 export function numRow(r){
   const w = width(r);
   let n = 0;

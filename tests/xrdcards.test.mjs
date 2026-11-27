@@ -7,8 +7,8 @@
      Ctrl+Z with the focus still on the box just ticked (5b: the key is the history's on a
      box, utils.js);
    - a card an undo or a redo brings back (closed by its ×, or added) brought into view, in
-     every module with cards (XRPD, DRS, GC, EPR); not on a tab switch nor a project opened
-     (N1);
+     every module with cards (XRPD, DRS, GC, EPR), whole over a scrollbar along the page's foot
+     (v584); not on a tab switch nor a project opened (N1);
    - a Scherrer card zoomed and folded, unfolded after another card's arrow stepped the
      sample: the new sample at its full range, as when stepped unfolded (21, v568; to v567 at
      the zoom the card had on the other); with nothing stepped, the zoom kept; a file left out,
@@ -316,6 +316,36 @@ test('N1: a card an undo or a redo brings back comes into view (XRPD, DRS, GC, E
       await key(page, true);
       assert.equal(await headInView(page, mod, last), true, mod + ': the card added, redone, is in view');
     }
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+/* v584: the screen's bottom the page's, over a scrollbar along it (cards.js revealBy, utils.js
+   viewport: to v583 the window's innerHeight, the card's foot under the scrollbar). A browser
+   that draws its scrollbars, the page wider than the window; a card a redo brings back below
+   the screen, short enough to come whole: its foot 12 px over the page's, not the window's. */
+test('N1 (v584): a card a redo brings back comes whole over a scrollbar along the page\'s foot', async ()=>{
+  const { page, errors, close } = await env.page({ scrollbars: true });
+  try {
+    await openModule(page, 'tauc');
+    await loadFiles(page, 'tauc', env.fx.files.tauc);
+    await page.evaluate(()=>{ const d = document.createElement('div'); d.style.cssText = 'width:3000px;height:1px'; document.body.appendChild(d); });
+    const g = await page.evaluate(()=> innerHeight - document.documentElement.clientHeight);
+    assert.ok(g > 0, `a scrollbar along the page's foot: ${g} px`);
+    await page.click('#taucAddAn');
+    await page.locator('.an-menu:not([hidden]) [data-kind="urbach"]').click();
+    await page.waitForTimeout(500); await settle(page);
+    const last = (await ids(page, 'tauc')).pop();
+    await key(page);
+    assert.equal(await headInView(page, 'tauc', last), null, 'the card added, undone');
+    await page.evaluate(()=> window.scrollTo(0, 0)); await still(page);
+    await key(page, true);
+    const at = await page.evaluate(sel=>{
+      const r = document.querySelector(sel).getBoundingClientRect(), top = document.getElementById('topbar').getBoundingClientRect().bottom;
+      return { top: r.top, bottom: r.bottom, h: r.height, bar: top, ch: document.documentElement.clientHeight };
+    }, card('tauc', last));
+    assert.ok(at.h + 24 <= at.ch - at.bar, `short enough to come whole: ${JSON.stringify(at)}`);
+    assert.ok(Math.abs(at.bottom - (at.ch - 12)) < 1, `its foot 12 px over the page's (${at.ch}), not the window's: ${JSON.stringify(at)}`);
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });

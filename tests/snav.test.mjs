@@ -5,7 +5,8 @@
    edge where there is none, and on a phone's 375 px with no sideways scroll), whole in its
    tooltip and in the list; the list (the app's menu, as the kinds' one) opened by the name
    or its arrow, closed by Escape, by a click elsewhere or by a choice, worked by the
-   keyboard (↑ ↓ Home End Enter, Tab); ← → stepping the samples as before. In DRS (its Tauc
+   keyboard (↑ ↓ Home End Enter, Tab), inside the page short of its scrollbars (v584); ← →
+   stepping the samples as before. In DRS (its Tauc
    and Urbach cards), XRPD (the Peaks/Scherrer and the Rietveld card), SEM, Iodometry and
    Custom; GC's Integration card's two (the chromatogram's over the run overview, its
    suspicious names red) in gctcd-ui.test.mjs. Synthetic files only. */
@@ -184,6 +185,45 @@ test('the selector on a phone (375 px): the arrows\' group as wide, a long name 
     assert.ok(s.tbLine > 15, 'the toolbar under the selector\'s line');
     assert.ok(Math.abs(s.row - s.pick) < 1, `up to the line's edge: ${s.pick}, ${s.row}`);
     assert.deepEqual(await page.evaluate(()=> [document.documentElement.scrollWidth <= document.documentElement.clientWidth, document.querySelector('#tab-tauc').scrollWidth <= document.querySelector('#tab-tauc').clientWidth]), [true, true], 'no sideways scroll');
+    assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
+  } finally { await close(); }
+});
+
+/* v584: the list inside the page, short of its scrollbars (cards-model.js menuAt with the
+   page's clientWidth and clientHeight, as the kinds' menu and the row menu: to v583 the
+   window's innerWidth and innerHeight, its edge under the scrollbar). A browser that draws its
+   scrollbars, the page wider than the window (a scrollbar along its foot too); the name put at
+   the page's right edge, where the list under it would end between the page's foot and the
+   window's: over it, and short of the right scrollbar. */
+test('the list inside the page, short of its scrollbars: at the right edge, and over its name where the page has no room under it (v584)', async ()=>{
+  const { page, errors, csp, close } = await env.page({ scrollbars: true });
+  try {
+    await openModule(page, 'tauc');
+    await page.setInputFiles('#taucFiles', [{ name: 'a.csv', mimeType: 'text/csv', buffer: drsCsv({ Eg: 3.2 }) }, { name: 'b.csv', mimeType: 'text/csv', buffer: drsCsv({ Eg: 2.9, seed: 4 }) }]);
+    await page.waitForFunction(()=> document.querySelectorAll('#taucFileTableWrap tr.file-row').length === 2 && !document.querySelector('.dz-loading'));
+    await settle(page);
+    await page.evaluate(()=>{ const d = document.createElement('div'); d.style.cssText = 'width:3000px;height:1px'; document.body.appendChild(d); });
+    const bars = await page.evaluate(()=> [innerWidth - document.documentElement.clientWidth, innerHeight - document.documentElement.clientHeight]);
+    assert.ok(bars[0] > 0 && bars[1] > 0, `both scrollbars drawn: ${bars}`);
+    const pick = page.locator('#tab-tauc .an-card').first().locator('.snav-pick');
+    await pick.click();
+    const m0 = await page.locator('.snav-menu').boundingBox();
+    await page.keyboard.press('Escape');
+    // Its name 40 px wide at the page's right edge, the foot of its list under it half the
+    // scrollbar's height past the page's.
+    const at = await pick.evaluate((b, mh)=>{
+      const cw = document.documentElement.clientWidth, ch = document.documentElement.clientHeight, g = innerHeight - ch;
+      Object.assign(b.style, { position: 'fixed', left: (cw - 40) + 'px', width: '40px', top: '0px' });
+      const h = b.getBoundingClientRect().height;
+      b.style.top = (ch - 8 - 6 - mh + g/2 - h) + 'px';
+      return { cw, ch, top: b.getBoundingClientRect().top };
+    }, m0.height);
+    await pick.click();
+    const m = await page.locator('.snav-menu').boundingBox();
+    assert.ok(Math.abs(m.x + m.width - (at.cw - 8)) < 1, `its right edge 8 px short of the page's (${at.cw}), not of the window's: ${JSON.stringify(m)}`);
+    assert.ok(m.y + m.height <= at.ch - 8 + 0.5 && m.y + m.height <= at.top - 6 + 0.5, `over its name, inside the page's height (${at.ch}): ${JSON.stringify([m, at])}`);
+    await page.keyboard.press('Escape');
+    assert.equal(await open(page), false);
     assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
   } finally { await close(); }
 });

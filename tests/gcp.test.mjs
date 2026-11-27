@@ -15,7 +15,8 @@
    - the table at the least width it is laid out for, 1000 px (v582: 1060 in v581, m's select
      in the header's type), and at 1300: each header's pill beside its name and nothing over
      its cell, p's name, pill and unit level with the others', m's select whole, in its compact
-     type, the date field whole. */
+     type, the date field whole; a wider select (another system's, a larger type: m's and p's)
+     cut with "…" in the room its cell leaves it, nothing over its cell (v584). */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { start, openModule, loadFiles, settle, moduleState, history, download, readZip, parseCsv, undo } from './helpers.mjs';
@@ -259,6 +260,20 @@ test('p: the table at 1300 px and at 1000 px, the least width it is laid out for
     assert.ok(!l.dateOver, 'the date field whole');
     assert.deepEqual(l.level, { name: 0, pill: 0, height: 0 }, 'p\'s name and pill level with Q\'s');
     assert.ok(Math.abs(l.norm) <= 1.5 && l.mPill === 0, `m's select on its pill's middle, its pill level with p's: ${JSON.stringify(l)}`);
+    // (v584: a wider select, another system's or a larger type (here 20 px, m's and p's): cut
+    // with "…" in the room its cell leaves it beside the pill, nothing over its cell, the table
+    // 1000 px; to v583 as wide as it came, over the pill and out of its cell)
+    const big = await page.evaluate(()=>{
+      const t = document.querySelectorAll('#tab-gc .gc-param-table')[1];
+      return [...t.querySelectorAll('thead select')].map(s=>{
+        s.style.fontSize = '20px';
+        const b = s.getBoundingClientRect(), th = s.closest('th').getBoundingClientRect(), pill = s.closest('.gc-th').querySelector('.mode-chip').getBoundingClientRect();
+        return { cls: s.className, inCell: b.left >= th.left && b.right <= th.right, beforePill: b.right <= pill.left - 8 + 0.5, pillIn: pill.right <= th.right, cut: getComputedStyle(s).textOverflow };
+      });
+    });
+    assert.deepEqual(big, ['gc-norm', 'gc-unit'].map(cls=> ({ cls, inCell: true, beforePill: true, pillIn: true, cut: 'ellipsis' })), JSON.stringify(big));
+    l = await layout(page);
+    assert.deepEqual([l.width, l.over], [1000, []], 'nothing over its cell, the table 1000 px');
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });

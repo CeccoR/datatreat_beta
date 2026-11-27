@@ -194,3 +194,9 @@ I nomi nel box Windows hanno i pedici (`H₂-O₂ fit`, `H₂`, `O₂`; S310 com
 | Bordo di una finestra GC dentro un picco vicino | `The H2O2 window (…) reaches S264 (…), which its model has no peak for: the fit degrades there.` | `The H₂-O₂ window (…) reaches …` | warn compatto |
 | GC, rate non normalizzate (m o A nell'intestazione della colonna; un valore vuoto è nessuno) | — | info compatto sotto i parametri: `No {m\|A} for {campioni}: the rates are not normalised, in µmol h⁻¹ and µmol.` | info |
 | Regola del campo m o A rifiutato (0, sotto, non un numero) | `A number, at least 0.001.` | `A number, at least 0.001, or none (empty).` (vuoto è un valore) | riga rossa |
+
+## Dopo (v584)
+
+| Cosa | Prima | Dopo (v584) | Tipo |
+|---|---|---|---|
+| Production Rate sotto un'integrazione GC fallita (R1–R4, come (iii) per la Calibration) | warn `The GC software's table used instead of the re-integration ({card}):` `{campione}: its integration is not done yet` fino alla fine (la card non era avvisata) | subito, error compatto in testa alla card: `The GC software's table used instead of the re-integration ({card}):` + `{campione}: the integration failed: {motivo}.` (il motivo del lavoro, come nello stato della card Integration); dopo uno Stop resta il warn `…: its integration was stopped before its end` | error compatto |

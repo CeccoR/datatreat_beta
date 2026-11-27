@@ -163,20 +163,23 @@ function ran(S, j){
   const next = M.wanted(U, S);
   if (next.length) run(S, next, j.done); else paint(S);
 }
-// What a job did, kept: each file's results so far (a run's not applied).
+// What a job did, kept: each file's results so far (a run's not applied). → whether some
+// are shown (the cards below to follow).
 function keep(S, j){
   let shown = false;
   j.groups.forEach(g=>{ const work = j.works.get(g.key); if (j.left.get(g.key) && work.some(Boolean)) shown = write(S, g.key, work.slice()) || shown; });
-  if (shown) S.ctx.changed();
+  return shown;
 }
 // A job let go: its workers stopped, what it did kept.
-function drop(S, j){ S.job = null; j.ac.abort(); keep(S, j); }
-// Failed (said, and halted: the runs end, everything as it was), what it did kept.
+function drop(S, j){ S.job = null; j.ac.abort(); if (keep(S, j)) S.ctx.changed(); }
+// Failed (said, and halted: the runs end, everything as it was), what it did kept; the cards
+// below say so at once, with why (v584: to v583 told nothing, "not done yet" to the end).
 function runFailed(S, j, e){
   if (S.job !== j || S.dead) return;
   S.job = null;
-  keep(S, j);
-  if (!e || e.name !== 'AbortError'){ S.failed = String(e && e.message || e); M.integCards(S).forEach(c=>{ c.endRun(); c.halt(true); }); }
+  const shown = keep(S, j), failed = !e || e.name !== 'AbortError';
+  if (failed){ S.failed = String(e && e.message || e); M.integCards(S).forEach(c=>{ c.endRun(); c.halt(true); }); }
+  if (shown || failed) S.ctx.changed();
   paint(S, true);
 }
 // The runs whose every file is integrated, applied (swap), once the task asking it ends (an
@@ -200,8 +203,9 @@ function paint(S, all){
                             history's, kit.hold }) or null; whether one was stopped (said);
                             whether a Stop holds its files (v581: its own; to v580 a Stop on
                             any card held every card's)
-     stopRes                while a Stop holds its files, their results then, the card's
-                            (gc-integ-model.js heldOf, v582), else null
+     stopRes                while a Stop holds its files, the results there were then, the
+                            card's (gc-integ-model.js heldOf, v582; v584 every file's, one it
+                            had not then too), else null
      pressT, turnT          Integrate's last press and turn (utils.js quickPress)
      cal                    its calibration (gc-integ-model.js calIn)
      ovGas, ovY             the run overview's gas and y (view keys of the state)
@@ -346,7 +350,7 @@ function stop(S, C){
 function hold(S, C, on){
   const was = C.halted;
   C.halted = on;
-  C.stopRes = on ? M.heldOf(U, S, C) : null;
+  C.stopRes = on ? M.heldOf(S) : null;
   return was;
 }
 function endRun(S, C){ const r = C.run; C.run = null; S.kit.release(r.mark); }
@@ -450,7 +454,8 @@ function drawChromPanel(S, chrom, D, vc, key){
     if (c.base){ chrom.line(c.t, c.base, M.C_BASE, 1.1, '5,4', { label: `baseline (${n})`, key: 'base ' + wr.key }); }
     // (the model under its peaks: each peak, on the baseline, drawn over it)
     if (c.model) chrom.line(c.t, c.model, M.C_MODEL, 1.4, undefined, { label: `model (${n})`, key: 'model ' + wr.key });
-    M.peakLines(S, wr, c, items, pc).forEach(l=> chrom.line(c.t, l.y, l.col, 1.3, l.dash, { label: l.name, key: 'peak ' + l.name }));
+    // (each peak named as Windows names it, "H₂", its key the engine's: v584, to v583 "H2")
+    M.peakLines(S, wr, c, items, pc).forEach(l=> chrom.line(c.t, l.y, l.col, 1.3, l.dash, { label: l.label, key: 'peak ' + l.name }));
   });
   const dr = M.droppedOf(D.curves);
   if (dr.sp.x.length) chrom.points(dr.sp.x, dr.sp.y, M.C_BAD, 4, { shape: 'cross', width: 1.6, label: 'spikes' });
@@ -488,12 +493,12 @@ function overlayOn(S, C, P, meth, edit){
     add('rect', { x: x0, y: m.t, width: Math.max(0, x1 - x0), height: Math.max(0, h - m.t - m.b), class: 'gci-ov gci-nb' });
     add('text', { x: (x0 + x1)/2, y: m.t + 14, 'font-size': 10, 'text-anchor': 'middle', class: 'gci-ov gci-nb-lb' }, z.name);
   });
-  // The peaks' places: a thin dotted line each, named at the top.
+  // The peaks' places: a thin dotted line each, named at the top as Windows names them (H₂).
   meth.windows.forEach(w=> (w.peaks || []).forEach((pk, i)=>{
     if (!M.fin(pk.t) || pk.t < P.xmin || pk.t > P.xmax) return;
     const x = P.px(pk.t), col = pk.gas ? S.gasOf(pk.gas).color : M.PEAK_COLORS[i % M.PEAK_COLORS.length];
     add('line', { x1: x, x2: x, y1: m.t, y2: h - m.b, stroke: col, 'stroke-width': 1, 'stroke-dasharray': '1,3' });
-    add('text', { x: x + 3, y: m.t + 30 + 11*(i % 3), 'font-size': 10, fill: col }, pk.name);
+    add('text', { x: x + 3, y: m.t + 30 + 11*(i % 3), 'font-size': 10, fill: col }, M.peakName(S.gasOf, pk));
   }));
   // The edges, dragged.
   meth.windows.forEach((w, wi)=> ['from', 'to'].forEach(side=>{

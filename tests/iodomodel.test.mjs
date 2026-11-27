@@ -24,6 +24,7 @@ import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import * as M from '../iodo-model.js';
 import * as H from '../iodo-html.js';
+import { width } from '../textdata.js';
 
 const UPDATE = !!process.env.UPDATE_GOLDEN || process.env.npm_lifecycle_event === 'test:update';
 const GOLDEN = new URL('./golden/iodomodel.json', import.meta.url);
@@ -85,7 +86,9 @@ test('a kinetics file read: columns, names, units, details; kept by its bytes', 
   assert.deepEqual(M.readKinetics('just\nwords\n'), { error: 'no columns of time and absorbance found' });
   assert.deepEqual(M.readKinetics('t,a\n1,2\n2,3\n'), { error: 'no pair of columns (time, absorbance) with three points or more' });
   assert.equal(M.toSec('min'), 60); assert.equal(M.toSec('ms'), 1e-3); assert.equal(M.toSec('sec'), 1);
-  assert.equal(M.width(['a', '', '']), 1); assert.equal(M.numRow(['1', '', '2']), true); assert.equal(M.numRow(['1', 'x']), false);
+  // (a line's width textdata.js's, no copy of its own: v584)
+  assert.equal(width(['a', '', '']), 1); assert.ok(!('width' in M), 'no width of its own');
+  assert.equal(M.numRow(['1', '', '2']), true); assert.equal(M.numRow(['1', 'x']), false); assert.equal(M.numRow(['1', '2', '', '']), true);
   // kept by its bytes: read once, the same traces; a pair that is none
   const b = enc(CARY), f = { rawBytes: b, k: 1 };
   assert.equal(M.tableOf(f), M.tableOf({ rawBytes: b })); assert.equal(M.traceOf(f).name, 'Sample <2>');

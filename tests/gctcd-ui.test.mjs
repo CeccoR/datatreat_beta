@@ -625,6 +625,12 @@ test('the Integration card: its two selectors, the chromatogram over its residua
     assert.ok(gr[0].includes('raw') && gr[1].includes('residual') && !gr[0].includes('residual'), JSON.stringify(gr));
     // (v582: the window's lines named as Windows names it, H₂-O₂; to v581 by its key, "model (H2O2)")
     assert.ok(gr[0].includes('model (H₂-O₂)') && gr[0].includes('baseline (H₂-O₂)') && !gr.flat().some(n=> n.includes('H2O2')), JSON.stringify(gr));
+    // (v584: its peaks named as Windows names them, H₂ and O₂, there, in its legend and at their
+    // places on the chromatogram; to v583 the engine's "H2", "O2")
+    assert.ok(['H₂', 'O₂', 'S310'].every(n=> gr[0].includes(n)) && !gr.flat().some(n=> /\b[HO]2\b/.test(n)), JSON.stringify(gr));
+    const shownNames = await card.evaluate(c=> [c.querySelector('.gci-legend').textContent, [...c.querySelectorAll('svg.gci-chrom text.gci-ov:not(.gci-nb-lb)')].map(t=> t.textContent)]);
+    assert.ok(/H₂.*O₂.*S310/.test(shownNames[0]) && !/[HO]2/.test(shownNames[0]), shownNames[0]);
+    assert.deepEqual(shownNames[1], ['H₂', 'O₂', 'S310'], 'the peaks\' places');
     assert.deepEqual(await page.$$eval('.fig-backdrop .fig-panel input[data-pk="ylabel"]', xs=> xs.map(x=> x.value)), ['TCD signal', 'Residual'], 'each its own Y title');
     await page.locator('.fig-backdrop [data-del-panel="1"]').click();
     gr = await groups();
@@ -1042,6 +1048,11 @@ test('an integration that fails says why: a compact error in the card\'s status 
     const said = '✕ The integration failed: no worker here (test).';
     assert.equal(await card.locator('.gci-status .alert.bad.compact').textContent(), said);
     assert.equal(await card.locator('.gci-status .gci-bad').count(), 0, 'no red text with no box');
+    // (v584: the Production Rate card under it told at once, with why, a compact error; to v583
+    // "its integration is not done yet" to the end)
+    const src = page.locator('#tab-gc .an-card').nth(1).locator('.gc-src');
+    assert.equal(await src.locator('.alert.bad.compact').textContent(), '✕ The GC software\'s table used instead of the re-integration (Integration):run: the integration failed: no worker here (test).');
+    assert.ok(!/not done yet/.test(await src.textContent()), await src.textContent());
     const wt = await firstTop(page, '#tab-gc .an-card:nth-child(1)', { frame: 'svg.gci-chrom', head: '.gci-win-head' });
     assert.ok(Math.abs(wt.top - wt.frame) <= 1, `Windows' top on the frame's: ${JSON.stringify(wt)}`);
     // The standards dropped: none integrated, the window says why, not that it was stopped.
@@ -1517,6 +1528,42 @@ test('Stop (v581, v582): a card\'s Stop holds its own files alone, applying noth
    list, the table kept) applied as they are, nothing pending; the raw chromatograms dropped
    again integrated with them (to v580 pending, the files loaded after them integrated with the
    windows before). */
+/* v584: a card stopped holds what there was at its Stop for a file it did not have then too: its
+   second file removed, the card stopped, the removal undone, the second card integrating the file
+   brought back: the first takes none of it (to v583 the store's, as they came: its results, the
+   card still stopped), the card under it says so; Integrate on it takes them, nothing fitted again. */
+test('Stop (v584): a file an undo brings back to a stopped card applies nothing of another card\'s run', async ()=>{
+  const { page, errors, csp, close } = await env.page();
+  try {
+    await openModule(page, 'gc');
+    await slow(page, 250);
+    await load(page, AB(), 2);
+    await page.click('#gcAddAn'); await page.click('.an-menu:not([hidden]) [data-kind="integ"]'); await settle(page);
+    const cs = page.locator('#tab-gc .an-card'), c1 = cs.nth(0), c2 = cs.nth(2);
+    await running(page);
+    await page.locator('#gcFileTableWrap tr.file-row').nth(1).locator('.row-del').click(); await settle(page);
+    assert.deepEqual((await rowsOf(page)).map(r=> r.files), [['a.csv', 'a_TCD.csv']], 'the second file removed');
+    await until(async ()=> (await fitted(page)) > 0, { what: 'a chromatogram done' });
+    await pressAfterTurn(page, c1.locator('.gci-integ'));
+    const n1 = await fitted(page);
+    assert.ok(n1 < N, `stopped part way through the first file: ${n1}`);
+    await undo(page);
+    assert.equal((await rowsOf(page)).length, 2, 'the second file back');
+    await until(async ()=> (await fitted(page)) === 2*N, { timeout: 60000, what: 'the second card\'s files integrated' });
+    await until(async ()=> (await c2.locator('.gci-status').getAttribute('data-state')) === 'done', { what: 'the second card done' });
+    await settle(page);
+    assert.deepEqual([await c1.locator('.gci-status').getAttribute('data-state'), await c1.locator('.gci-status').textContent()],
+      ['stopped', `Stopped: ${chroms(2*N - n1)} not integrated.`], 'the first still stopped, the file brought back not integrated on it');
+    const rate = await cs.nth(1).locator('.gc-src').textContent();
+    assert.ok(rate.includes('bb: its integration was stopped before its end') && rate.includes('a: its integration was stopped before its end'), 'the card under it: ' + rate);
+    // Integrate on it: the second's results taken, nothing fitted again.
+    await c1.locator('.gci-integ').click(); await settle(page); await integrated(page);
+    assert.deepEqual([await fitted(page), await c1.locator('.gci-status').getAttribute('data-state')], [2*N, 'done']);
+    assert.ok(!(await cs.nth(1).locator('.gc-src').textContent()).includes('stopped'));
+    assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
+  } finally { await close(); }
+});
+
 test('a window edited on a card with no result (v581): applied as it is, the files loaded after it integrated with it', async ()=>{
   const { page, errors, csp, close } = await env.page();
   try {

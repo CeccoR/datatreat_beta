@@ -19,7 +19,7 @@
    level of D, not a closure inside createDeck (to v561 one of 515 lines): what a listener
    holds is what it is handed.
 ========================================================= */
-import { X_SVG, esc, menuKeys } from './utils.js';
+import { X_SVG, esc, menuKeys, viewport } from './utils.js';
 import * as M from './cards-model.js';
 import * as H from './cards-html.js';
 
@@ -60,8 +60,8 @@ function kindMenu(kinds, layer){
 // row menu: v582, to v581 the window's whole width and height, a scrollbar's under it)
 function placeMenu(K){
   if (!K.anchor.isConnected){ closeMenu(K); return; }
-  const r = K.anchor.getBoundingClientRect(), w = K.el.offsetWidth, h = K.el.offsetHeight, page = document.documentElement;
-  const at = M.menuAt(r, w, h, page.clientWidth, page.clientHeight, K.centred);
+  const r = K.anchor.getBoundingClientRect(), v = viewport();
+  const at = M.menuAt(r, K.el.offsetWidth, K.el.offsetHeight, v.w, v.h, K.centred);
   K.el.style.left = at.left + 'px';
   K.el.style.top = at.top + 'px';
 }
@@ -642,12 +642,13 @@ function onAdd(D){
    screen. Smoothly (at once, the motion reduced), the card whole where it fits, else from
    its head (as the step ends: stepEnd). The scroll it takes; 0, none (cards-model.js
    revealOf). Up to v499 it came back where it had been, off screen as often as not, and
-   the page did not move. */
+   the page did not move. The screen's bottom the page's, over a scrollbar along it (v584:
+   to v583 the window's, innerHeight, the card's foot then under the scrollbar). */
 function revealBy(card){
   if (!card.isConnected || !card.getClientRects().length) return 0;
   const bar = document.getElementById('topbar'), top = bar ? Math.max(0, bar.getBoundingClientRect().bottom) : 0;
-  const r = card.getBoundingClientRect(), h = card.querySelector(':scope > .an-head').getBoundingClientRect(), bot = window.innerHeight;
-  return M.revealOf(top, r, h, bot);
+  const r = card.getBoundingClientRect(), h = card.querySelector(':scope > .an-head').getBoundingClientRect();
+  return M.revealOf(top, r, h, viewport().h);
 }
 // The card is rebuilt for the other kind in place; the module keeps what the kind left
 // had (build's prev) and gives it back if the card turns into it again. Only a record still

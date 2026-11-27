@@ -464,6 +464,11 @@ test('the cards\' markup, the parameter table and the alerts, every label escape
   // (with samples and no rate, the card says why under it, v567)
   assert.ok(b.includes('id="gc4NoRate"') && H.NO_RATE === 'No rate to show: no sample\'s interval overlaps its injections.');
   assert.equal(H.srcAlertsHtml([{ label: 'C' }], '', HU), '');
+  // (v584: an integration that failed, a compact error first, each sample's line with the job's
+  // message, ALERTS-REVIEW.md R1–R4; to v583 "not done yet" in the warning)
+  const fx = H.srcAlertsHtml([{ label: 'F<1>', src: { gas: null, why: 'its integration failed', failed: 'out of <memory>.' } }, { label: 'B', src: { gas: null, why: 'its integration was stopped before its end' } }], 'Int <1>', HU);
+  assert.ok(fx.startsWith('<div class="alert bad compact">✕ The GC software\'s table used instead of the re-integration (Int &lt;1&gt;):<br>F&lt;1&gt;: the integration failed: out of &lt;memory&gt;.</div><div class="alert warn">'), fx);
+  assert.ok(fx.includes('B: its integration was stopped before its end') && !fx.includes('F&lt;1&gt;: its integration failed'), 'the stopped one in the warning, the failed one not');
 });
 
 /* ---- The fixtures as v556's page analysed them ----

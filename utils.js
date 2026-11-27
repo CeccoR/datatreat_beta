@@ -364,9 +364,10 @@ class ColorPickerUI {
     if (!this._anchorBtn) return;
     const rect = this._anchorBtn.getBoundingClientRect();
     const pw = this._el.offsetWidth || 260, ph = this._el.offsetHeight || 430;
+    const v = viewport();
     let left = rect.right + 10, top = rect.top - 4;
-    if (left + pw > window.innerWidth - 8) left = rect.left - pw - 10;
-    if (top + ph > window.innerHeight - 8) top = rect.bottom + 4 - ph;
+    if (left + pw > v.w - 8) left = rect.left - pw - 10;
+    if (top + ph > v.h - 8) top = rect.bottom + 4 - ph;
     const inBox = composerTop(this._anchorBtn, rect, ph);
     if (inBox != null) top = inBox;
     this._el.style.left = Math.max(8,left)+'px';
@@ -545,9 +546,10 @@ class PalettePickerUI {
     if (!this._anchorBtn) return;
     const rect = this._anchorBtn.getBoundingClientRect();
     const pw = this._el.offsetWidth || 236, ph = this._el.offsetHeight || 260;
+    const v = viewport();
     let left = rect.right + 10, top = rect.top - 4;
-    if (left + pw > window.innerWidth - 8) left = rect.left - pw - 10;
-    if (top + ph > window.innerHeight - 8) top = window.innerHeight - ph - 8;
+    if (left + pw > v.w - 8) left = rect.left - pw - 10;
+    if (top + ph > v.h - 8) top = v.h - ph - 8;
     const inBox = composerTop(this._anchorBtn, rect, ph);
     if (inBox != null) top = inBox;
     this._el.style.left = Math.max(8,left)+'px';
@@ -1176,8 +1178,8 @@ function openRowMenu(L, row, at){
   el.setAttribute('aria-label', f.label || fileOf(f));
   el.innerHTML = menuHtml(rowMenu(LIST_U, f), LIST_U);
   document.body.appendChild(el);
-  const r = at ? { left: at.x, top: at.y, bottom: at.y, width: 0 } : row.getBoundingClientRect(), page = document.documentElement;
-  const p = menuAt(r, el.offsetWidth, el.offsetHeight, page.clientWidth, page.clientHeight, false, at ? 0 : 6);
+  const r = at ? { left: at.x, top: at.y, bottom: at.y, width: 0 } : row.getBoundingClientRect(), v = viewport();
+  const p = menuAt(r, el.offsetWidth, el.offsetHeight, v.w, v.h, false, at ? 0 : 6);
   el.style.left = p.left + 'px';
   el.style.top = p.top + 'px';
   rowMenuOn = { el, row, wrap: L.wrap, i, ac: new AbortController() };
@@ -1196,6 +1198,15 @@ function wireRowMenu({ el, ac }){
   // (seen first, on the window's capture: the history's keys act once it is closed, utils.js)
   window.addEventListener('keydown', e=>{ if ((e.ctrlKey || e.metaKey) && /^[zy]$/i.test(e.key)) closeRowMenu(); }, { capture: true, signal });
   for (const t of ['scroll', 'resize', 'blur']) window.addEventListener(t, closeRowMenu, { capture: t === 'scroll', signal });
+}
+/* The window's room short of its scrollbars ({ w, h }: the page's clientWidth and
+   clientHeight), what a menu or a popup is placed inside and a card brought into view
+   against: innerWidth and innerHeight take the scrollbars in, a popup at an edge then under
+   them (v584 every one of them: the sample selector's list, the composer's pickers, a card
+   brought into view; v582 the kinds' menu, v579 the row menu). */
+export function viewport(){
+  const p = document.documentElement;
+  return { w: p.clientWidth, h: p.clientHeight };
 }
 /* A menu's keys (the row menu's, v579; the kinds' menu's too, cards.js, v582): ↓ ↑ Home End
    move the focus along its items shown (`sel`; filelist-model.js menuKey), Enter and Space
@@ -2430,8 +2441,7 @@ function flashFieldInvalid(el, rule){
   r.setAttribute('role', 'alert');
   r.textContent = rule;
   document.body.appendChild(r);
-  const w = r.offsetWidth, vw = document.documentElement.clientWidth;
-  r.style.left = Math.max(4, Math.min(b.left, vw - w - 4)) + 'px';
+  r.style.left = Math.max(4, Math.min(b.left, viewport().w - r.offsetWidth - 4)) + 'px';
   r.style.top = (b.bottom + 3) + 'px';
   // (not as the field is left: a value is refused as it is, its change coming just before)
   const gone = ()=>{ if (_ruleEl === r) dropRule(); }, t = setTimeout(gone, 4000);

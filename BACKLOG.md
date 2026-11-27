@@ -200,7 +200,16 @@ was proposed; nothing here is in the code yet.
   once, and Integrate on it takes them (nothing fitted again); (5) the chromatogram's lines
   ("model (H2O2)", its legend in the composer) name the window as Windows does, "H₂-O₂", and
   the CSVs in ASCII, "model (H2-O2)", "H2-O2 window from (s)" (to v581 "model H2O2", "H2O2
-  window from (s)"); the state's and the results' keys stay "H2O2".
+  window from (s)"); the state's and the results' keys stay "H2O2". Seen then, done in v584:
+  (6) the peaks were still the engine's "H2", "O2" in the chromatogram's legend, the composer's
+  series and at their places on the plot, where Windows says H₂, O₂: now named so everywhere
+  (gc-integ-model.js peakName, Windows' own), the CSVs' headers and the keys as they were; (7)
+  an integration that failed stopped every card but left the Production Rate cards under them
+  at "its integration is not done yet": now told at once, a compact error with the job's
+  message (gc-integ.js runFailed, gc-html.js srcAlertsHtml); (8) a file a stopped card did not
+  have at its Stop (taken out then, brought back by an undo or its box ticked again) showed the
+  store's results, another card's run's as they came: now a Stop holds every result there is
+  then (heldOf), such a file as it was then, nothing applied until Integrate.
 - **Other gases from the raw chromatograms.** The Integration card fits H₂ and O₂ only (one
   window, 268–326 s, with the system peak at 310 s and the baseline step); N₂ and the
   others need windows of their own, as the Python's N₂ window (321–346 s, with the system
@@ -217,7 +226,10 @@ was proposed; nothing here is in the code yet.
   v582 its select is in a compact type (11 px) and the columns are shared again (m 132 px, the
   others in proportion, Light-on's date field and every pill whole at 1000 px): 1000 px again.
   Left: every column is at its least at 1000 px; a header in another language or a wider
-  select of another system (its arrow) would want more.
+  select of another system (its arrow) would want more. Done in v584 for the selects: m's m/A
+  and p's unit never wider than the room their cell leaves them beside the pill (style.css: the
+  label's min-width 0, the select's max-width, cut with "…"), checked with a 20 px type; a
+  header's name in another language would still want more.
 - **Tables alone have no grip (v574, done in v581).** To v580, while no raw chromatograms and no
   pair were in the list, its files had no grip of their own (as v544 made it, its test "tables
   alone: no grip"), so two tables paired by their names and unpaired by hand could not be paired
@@ -885,7 +897,14 @@ was proposed; nothing here is in the code yet.
   and dragged, the menu then refused mid-drag: now it opens the menu and drags nothing (the
   platform as the browser names it, navigator.userAgentData, else navigator.platform). Left:
   the sample selector's list (snav.js `place`) is still placed against innerWidth and
-  innerHeight.
+  innerHeight. Done in v584, and every other place that did so: the selector's list by
+  cards-model.js menuAt, the composer's pickers (the colour, the palettes', the special
+  characters', the alignment's, the fill's) and a card brought into view (cards.js revealBy)
+  against the page's clientWidth and clientHeight (utils.js viewport). Left as they are, being no
+  placing: the move's scroll at the window's edge (cards.js), SEM's pane at 70 % of the window's
+  height, the narrow layout's widths (as the media queries take them).
+- **A helper copied (v582's review, done in v584).** iodo-model.js had its own `width` (a line's
+  fields up to its last not empty), textdata.js's to the character: it imports that one.
 - **A last cell empty read as a column missing (Custom; GC's alternative export; v582, done).**
   textdata.js readColumns took a file's width as the most common among its lines up to their
   last cell not empty: `x,a,b` over `1,5,7`, `2,5,` and `3,5,` read two columns, its first two

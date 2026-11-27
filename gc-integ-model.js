@@ -103,8 +103,12 @@ export function methodIn(U, m, base = DEFAULT_METHOD){
    as shown (`as` 'txt': "H₂-O₂") or in a CSV's ASCII ('csv': "H2-O2", v582; to v581 the CSVs
    and the chromatogram's lines named it by its key, "H2O2"); a window with no gas's peak, by
    its key. A result's window (its key alone: the curves' wr) by method m's of that key
-   (curveName). The keys themselves, the state's and the results', stay as they are. */
+   (curveName). A peak's as shown: a gas's by the gas's words (H₂), another's as it is (S310),
+   in Windows, the chromatogram's legend and lines (the composer's series) and its peaks'
+   places (v584: to v583 the engine's "H2", "O2" there; gc-integ-html.js's to v583). The keys
+   themselves, the state's and the results', and the CSVs' headers stay as they are. */
 export const windowName = (gasOf, w, as = 'txt')=>{ const gs = (w.peaks || []).filter(pk=> pk.gas); return gs.length ? gs.map(pk=> gasOf(pk.gas)[as]).join('-') : w.key; };
+export const peakName = (gasOf, pk)=> pk.gas ? gasOf(pk.gas).txt : pk.name;
 export const curveName = (gasOf, m, wr, as)=> windowName(gasOf, m.windows.find(w=> w.key === wr.key) || wr, as);
 // (a stored result's null, JSON's NaN, read back as NaN, never as 0)
 export const deNull = (U, v)=> v === null ? NaN : Array.isArray(v) ? v.map(x=> deNull(U, x)) : U.isObj(v) ? Object.fromEntries(Object.entries(v).map(([k, x])=> [k, deNull(U, x)])) : v;
@@ -199,20 +203,23 @@ export function tableOf(S, b){
 export const keyOf = (U, rec, m)=> fileKey(U, rec) + '|' + methodKey(U, m);
 // (the job's own, as they come, over the store's)
 export const resultsAt = (S, key)=> (S.job && S.job.works.get(key)) || S.store.get(key) || null;
-/* A Stop holding a card's files (v582): the results they have then under the windows applied
-   (the job's so far among them), each a copy, null where none: a key → results. While it holds
-   them they are the card's (resIn), whatever another card integrating the same files with the
-   same windows brings meanwhile: the card stays stopped and takes none of it (to v581 shown
-   as it came, the card stopped, then done), until Integrate on it or files dropped let it go. */
-export function heldOf(U, S, C){
+/* A Stop holding a card's files (v582): every result there is then (the store's, the job's so
+   far over them), each a copy: a key → results. While it holds them they are the card's
+   (resIn), a key it has not, none: whatever another card integrating the same files with the
+   same windows brings meanwhile, the card stays stopped and takes none of it (to v581 shown as
+   it came, the card stopped, then done), a file it comes to show after its Stop (brought back
+   by an undo, taken in again) as it was then, with nothing come since (v584: to v583 the
+   store's, as they came), until Integrate on it or files dropped let it go. */
+export function heldOf(S){
   const out = new Map();
-  tcdRecs(S, C).forEach(r=>{ const key = keyOf(U, r, C.method), res = resultsAt(S, key); out.set(key, res && res.slice()); });
+  S.store.forEach((res, key)=> out.set(key, res.slice()));
+  if (S.job) S.job.works.forEach((res, key)=> out.set(key, res.slice()));
   return out;
 }
 // A card's results of a key: those a Stop holds (stopRes), else the job's as they come and the
 // store's (`stored`: the store's alone).
 function resIn(S, C, key, stored){
-  if (C.stopRes && C.stopRes.has(key)) return C.stopRes.get(key);
+  if (C.stopRes) return C.stopRes.get(key) || null;
   return stored ? S.store.get(key) || null : resultsAt(S, key);
 }
 export const integCards = S => S.ctx.cards().filter(a=> a.type === 'integ').map(a=> S.ctx.inst(a.id)).filter(Boolean);
@@ -392,7 +399,10 @@ export function convAll(U, S, C, e, res){
 /* What Analysis takes for a table record f (a sample) paired with its raw chromatograms,
    or null for one with none (the table, nothing said): { gas: { h2, o2 } in %mol (an
    array fixed, kept while nothing changes), how: { gas: 'cal' | 'transfer' | 'table' },
-   why: { gas: why the table }, k } or { why } (the table for every gas). */
+   why: { gas: why the table }, k } or { why } (the table for every gas). Its results not
+   all there, why as the card's status says it: its integration failed (`failed`, the job's
+   message: v584, to v583 "not done yet", the cards below not told), stopped by its Stop
+   (v582), or not done yet. */
 export function valuesFor(U, S, C, f){
   const tcd = f && f.mate && S.ctx.isTcd(f.mate) ? f.mate : null;
   if (!tcd) return null;
@@ -402,7 +412,10 @@ export function valuesFor(U, S, C, f){
   // (`integ`: the Integration card says it, which the card's alert names; gc-html.js srcAlertsHtml)
   if (n !== rows) return { why: `${plural(rows, 'injection')} in the table, ${plural(n, 'chromatogram')}`, integ: true };
   const res = resIn(S, C, keyOf(U, tcd, C.method));
-  if (!res || res.some(x=> !x)) return { why: C.halted ? 'its integration was stopped before its end' : 'its integration is not done yet', waiting: true };
+  if (!res || res.some(x=> !x)){
+    if (progressOf(U, S, C).state === 'failed') return { why: 'its integration failed', failed: S.failed, waiting: true };
+    return { why: C.halted ? 'its integration was stopped before its end' : 'its integration is not done yet', waiting: true };
+  }
   const vk = U.exactKey([keyOf(U, tcd, C.method), calKey(U, C), Object.keys(f.gas).map(k=> [k, U.objId(f.gas[k])]), U.objId(res)]);
   if (C.valuesKept.has(vk)) return C.valuesKept.get(vk);
   const out = sampleValues(U, S, C, f, res);
@@ -532,14 +545,16 @@ export function chromOf(U, o, method){
   const [c0, c1] = offEdge(U, ymin - pad5, ymax + pad5, -1, 0.03);
   return { k, tt, yy, lo, hi, c0, c1, R, r, curves };
 }
-/* A window's peaks as drawn, each on the baseline (`name`, `y`, its colour `col`: a gas's,
-   another's the next of PEAK_COLORS, `pc.ci` counting them, dotted), the legend's entries
-   ([colour, name, mark]) taken into `items` as they come. */
+/* A window's peaks as drawn, each on the baseline (`name`, the engine's, `label` as shown
+   (peakName), `y`, its colour `col`: a gas's, another's the next of PEAK_COLORS, `pc.ci`
+   counting them, dotted), the legend's entries ([colour, label, mark]) taken into `items` as
+   they come. */
 export function peakLines(S, wr, c, items, pc){
   return Object.entries(c.peaks || {}).map(([name, cv])=>{
-    const pk = (wr.peaks || []).find(x=> x.name === name), g = pk && pk.gas, col = g ? S.gasOf(g).color : PEAK_COLORS[pc.ci++ % PEAK_COLORS.length];
-    if (!items.some(x=> x[1] === name)) items.push([col, name, g ? '' : 'mk-dots']);
-    return { name, y: c.base ? cv.map((v, i)=> v + c.base[i]) : cv, col, dash: g ? undefined : '2,3' };
+    const pk = (wr.peaks || []).find(x=> x.name === name) || { name }, g = pk.gas, col = g ? S.gasOf(g).color : PEAK_COLORS[pc.ci++ % PEAK_COLORS.length];
+    const label = peakName(S.gasOf, pk);
+    if (!items.some(x=> x[1] === label)) items.push([col, label, g ? '' : 'mk-dots']);
+    return { name, label, y: c.base ? cv.map((v, i)=> v + c.base[i]) : cv, col, dash: g ? undefined : '2,3' };
   });
 }
 // The points the fit left out: a spike's (sp) a cross, a glitch zone's (ex) a ring.

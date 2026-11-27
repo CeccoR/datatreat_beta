@@ -9,7 +9,8 @@
    takes (v569, v570), bars saved wider than their slot open at 1 (v570), lines saved thinner
    than 0.2 at 0.2 (v571), and its grips and the colour picker take a mouse's primary button
    alone (v570); an export that fails says why in a compact error in its footer (v571). Its
-   presets are kept by the names typed as any other name, __proto__ and constructor too (v582). */
+   presets are kept by the names typed as any other name, __proto__ and constructor too (v582).
+   Its pickers are placed inside the page, short of its scrollbar (v584). */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { start, openModule, loadFiles, download, settle, keep } from './helpers.mjs';
@@ -674,6 +675,56 @@ test('plots composer: an export that fails says why, a compact error in the foot
     // (gone with the next drawing: a width typed)
     await typeAll(page, '2');
     assert.equal(await page.locator('.fig-backdrop .fig-msg').isHidden(), true);
+    await closeComposer(page);
+    assert.deepEqual(errors, []);
+    assert.deepEqual(await csp(), []);
+  } finally { await close(); }
+});
+
+/* v584: the composer's pickers placed inside the page, short of the room its scrollbar keeps
+   (utils.js viewport: the page's clientWidth; to v583 the window's innerWidth, their edge
+   under it): the colour and the palettes' beside their button, flipped to its left where they
+   would end past the page's edge less 8 px; the special characters', the fill's and the
+   alignment's under it, held 8, 6 and 130 px from it. Each button's box, as its picker reads it,
+   put at the page's right edge, the window's resize placing the picker again. A browser that
+   draws its scrollbars, the page's kept drawn under the composer (Chromium measures the gutter
+   a modal keeps as the page's: clientWidth then innerWidth, another browser may not). */
+test('plots composer: its pickers inside the page, short of its scrollbar (v584)', async ()=>{
+  const { page, errors, csp, close } = await env.page({ scrollbars: true });
+  try {
+    await openModule(page, 'gc');
+    await loadFiles(page, 'gc', env.fx.files.gc);
+    const keepBar = ()=> page.evaluate(()=>{ document.documentElement.style.overflowY = 'scroll'; });
+    const edge = async (btn, pop, kind)=>{
+      await page.locator(btn).first().click();
+      await page.waitForSelector(pop, { state: 'visible' });
+      const r = await page.evaluate(([btn, pop, kind])=>{
+        const b = document.querySelector(btn), el = document.querySelector(pop), cw = document.documentElement.clientWidth, g = innerWidth - cw, pw = el.offsetWidth;
+        const x = kind === 'beside' ? cw - 18 - pw + g/2 - 20 : cw - 4;
+        b.getBoundingClientRect = ()=> new window.DOMRect(x, 300, 20, 20);
+        window.dispatchEvent(new Event('resize'));
+        const left = el.getBoundingClientRect().left;
+        delete b.getBoundingClientRect;
+        window.dispatchEvent(new Event('resize'));
+        const want = { beside: x - pw - 10, chars: cw - pw - 8, fill: cw - pw - 6, align: cw - 130 }[kind];
+        return { g, cw, pw, left, want };
+      }, [btn, pop, kind]);
+      assert.ok(r.g > 0, `${pop}: a scrollbar's room kept: ${r.g} px`);
+      assert.ok(Math.abs(r.left - r.want) < 0.5, `${pop}: inside the page (${r.cw}), not the window: ${JSON.stringify(r)}`);
+      await page.locator(btn).first().click();
+      await page.waitForSelector(pop, { state: 'hidden' });
+    };
+    await composeGc(page, 'Svg1'); await keepBar();
+    await edge('.fig-backdrop .color-swatch[data-sw="0"]', '.cp-popup', 'beside');
+    await edge('.fig-backdrop .fig-pal', '.pp-popup:not(.pp-texpop)', 'beside');
+    await edge('.fig-backdrop [data-rich-act="chars"]', '.char-popup', 'chars');
+    // (the alignment's button, with the margins by hand)
+    await page.locator('.fig-backdrop input[data-k="plotAuto"]').uncheck(); await settle(page);
+    await edge('.fig-backdrop [data-align-btn]', '.fig-alignpop', 'align');
+    await closeComposer(page);
+    await composeGc(page, 'SvgBar');
+    await edge('.fig-backdrop [data-texpal]', '.pp-texpop', 'beside');
+    await edge('.fig-backdrop [data-fill]', '.fig-fillpop', 'fill');
     await closeComposer(page);
     assert.deepEqual(errors, []);
     assert.deepEqual(await csp(), []);

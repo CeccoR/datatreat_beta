@@ -386,7 +386,7 @@ test('a Stop holds its card\'s results as they were: another card of the same wi
   const { S, card } = instance(all, cards), A = card(cards[0]), B = card(cards[1]);
   const tcd = all[0].mate, key = M.keyOf(U, tcd, DEF), work = [MINI_RES[0], null, null];
   S.job = { total: 6, done: 1, name: 'mini_TCD.csv', works: new Map([[key, work]]) };
-  A.halted = true; A.stopRes = M.heldOf(U, S, A);
+  A.halted = true; A.stopRes = M.heldOf(S);
   assert.deepEqual([[...A.stopRes.keys()], A.stopRes.get(key), A.stopRes.get(key) === work], [[key], [MINI_RES[0], null, null], false], 'a copy of what it had');
   work[1] = MINI_RES[1];
   assert.deepEqual([M.resOf(U, S, A, tcd).res, M.resOf(U, S, B, tcd).res], [[MINI_RES[0], null, null], [MINI_RES[0], MINI_RES[1], null]], 'the job going on for B, not for A');
@@ -396,6 +396,51 @@ test('a Stop holds its card\'s results as they were: another card of the same wi
   assert.deepEqual([M.valuesFor(U, S, A, all[0]).why, typeof M.valuesFor(U, S, B, all[0]).why], ['its integration was stopped before its end', 'object'], 'B\'s values from its results (each gas why the table)');
   A.halted = false; A.stopRes = null;
   assert.deepEqual([M.resOf(U, S, A, tcd).res, M.leftUnder(U, S, A, A.method), M.progressOf(U, S, A).state], [MINI_RES, 0, 'done'], 'let go: the store\'s');
+});
+
+/* v584: a file the card stopped did not have at its Stop (taken out then, back since: an undo, its
+   box ticked again) as it was then: none of the results come since, the job's or the store's (to
+   v583 the store's, as they came, the card still stopped); one that had results then, those. */
+test('a Stop holds what there was at it: a file the card did not have then comes back with nothing come since (v584)', ()=>{
+  const all = [ROWS[2](), ROWS[0]()], cards = [{ id: 1, type: 'integ' }, { id: 2, type: 'integ' }];
+  const { S, card } = instance(all, cards), A = card(cards[0]), B = card(cards[1]);
+  const mini = all[0].mate, run = all[1].mate, kMini = M.keyOf(U, mini, DEF), kRun = M.keyOf(U, run, DEF), n = M.dataOf(S, run).cols.length;
+  const some = new Array(n).fill(null); some[0] = { gases: {}, windows: [] };
+  S.store.set(kMini, [MINI_RES[0], null, null]); S.store.set(kRun, some);
+  all[1].included = false;
+  A.halted = true; A.stopRes = M.heldOf(S);
+  all[1].included = true;
+  const full = new Array(n).fill({ gases: {}, windows: [] }), work = MINI_RES.slice();
+  S.job = { total: 3, done: 3, name: 'mini_TCD.csv', works: new Map([[kMini, work]]) }; S.store.set(kRun, full);
+  assert.deepEqual([M.resOf(U, S, A, run).res, M.resOf(U, S, B, run).res === full], [some, true], 'the file back: what it had at the Stop, the store\'s for the other card');
+  assert.deepEqual([M.resOf(U, S, A, mini).res, M.resOf(U, S, B, mini).res === work], [[MINI_RES[0], null, null], true]);
+  S.job = null;
+  assert.deepEqual([M.leftUnder(U, S, A, A.method), M.progressOf(U, S, A).state, M.valuesFor(U, S, A, all[1]).why], [2 + n - 1, 'stopped', 'its integration was stopped before its end']);
+  S.store.delete(kRun);
+  const C = card({ id: 3, type: 'integ' });
+  C.halted = true; C.stopRes = M.heldOf(S);
+  S.store.set(kRun, full);
+  assert.deepEqual([M.resOf(U, S, C, run).res, M.leftUnder(U, S, C, C.method)], [null, 2 + n], 'none there at its Stop: none');
+  A.halted = false; A.stopRes = null;
+  assert.deepEqual([M.resOf(U, S, A, run).res === full, M.progressOf(U, S, A).state], [true, 'left'], 'let go: the store\'s');
+});
+
+/* v584: an integration that failed: what Analysis takes of a file not integrated says it failed,
+   with the job's message (the cards below told at once, gc-integ.js runFailed; to v583 "not done
+   yet"), as the card's status says it; a job running again, not done yet; stopped, stopped. */
+test('a failure told to the cards below, with its message, as the card\'s status says it (v584)', ()=>{
+  const all = [ROWS[2]()], cards = [{ id: 1, type: 'integ' }];
+  const { S, card } = instance(all, cards), A = card(cards[0]);
+  S.failed = 'out of <memory>'; A.halted = true; A.stopRes = M.heldOf(S);
+  assert.equal(M.progressOf(U, S, A).state, 'failed');
+  assert.deepEqual(M.valuesFor(U, S, A, all[0]), { why: 'its integration failed', failed: 'out of <memory>', waiting: true });
+  S.failed = ''; A.halted = false; A.stopRes = null; S.job = { total: 3, done: 0, name: 'mini_TCD.csv', works: new Map() };
+  assert.deepEqual([M.progressOf(U, S, A).state, M.valuesFor(U, S, A, all[0]).why], ['running', 'its integration is not done yet']);
+  S.job = null; A.halted = true; A.stopRes = M.heldOf(S);
+  assert.deepEqual([M.progressOf(U, S, A).state, M.valuesFor(U, S, A, all[0]).why, 'failed' in M.valuesFor(U, S, A, all[0])], ['stopped', 'its integration was stopped before its end', false]);
+  // (its words in a line after a sample's name: no capital, no full stop; the card's status's as before)
+  assert.deepEqual(['The integration failed', 'The integration worker failed.', 'out of memory', '', null].map(H.failedWhy),
+    ['the integration failed', 'the integration worker failed', 'the integration failed: out of memory', 'the integration failed', 'the integration failed']);
 });
 
 test('the entries, their results and names; the concentrations; what Analysis takes; the suspicious rule', ()=>{
@@ -515,12 +560,14 @@ test('what the plots draw: the chromatogram over its residuals, the run overview
   const D = M.chromOf(U, { d: e.d, k: 1, R: M.resOf(U, S, C, e.tcd) }, DEF);
   assert.deepEqual([D.fail, D.lo, D.hi, D.tt.length, D.curves.length, D.c0 < D.c1], [undefined, 258, 341.6, 451, 1, true]);
   const items = [[M.C_RAW, 'raw', '']], pc = { ci: 0 }, lines = M.peakLines(S, D.curves[0].wr, D.curves[0].c, items, pc);
-  assert.deepEqual(lines.map(l=> [l.name, l.col, l.dash]), [['H2', GASES[0].color, undefined], ['O2', GASES[1].color, undefined], ['S310', M.PEAK_COLORS[0], '2,3']]);
+  // (v584: each named as Windows names it, H₂, its key the engine's name; to v583 "H2" shown)
+  assert.deepEqual(lines.map(l=> [l.name, l.label, l.col, l.dash]), [['H2', 'H₂', GASES[0].color, undefined], ['O2', 'O₂', GASES[1].color, undefined], ['S310', 'S310', M.PEAK_COLORS[0], '2,3']]);
+  assert.deepEqual(DEF.windows[0].peaks.map(pk=> M.peakName(S.gasOf, pk)), ['H₂', 'O₂', 'S310']);
   assert.equal(lines[0].y[100], D.curves[0].c.peaks.H2[100] + D.curves[0].c.base[100]);
   const dr = M.droppedOf(D.curves), ext = M.chromOf(U, { d: e.d, k: 2, R: M.resOf(U, S, C, e.tcd) }, DEF);
   assert.ok(dr.sp.x.includes(287.4), 'the spike left out');
   assert.ok(M.droppedOf(ext.curves).ex.x.length > 0 || M.bandsOf(ext.curves).length > 0, 'the glitch zone');
-  assert.deepEqual(M.legendItems(items, D.curves, dr).map(x=> x[1]), ['raw', 'model', 'baseline (with its step)', 'H2', 'O2', 'S310', 'spike left out', 'fit window']);
+  assert.deepEqual(M.legendItems(items, D.curves, dr).map(x=> x[1]), ['raw', 'model', 'baseline (with its step)', 'H₂', 'O₂', 'S310', 'spike left out', 'fit window']);
   const rs = M.residOf(U, D.curves);
   assert.ok(rs.rx.length > 200 && rs.r0 < 0 && rs.r1 > 0);
   assert.deepEqual([M.chromOf(U, { d: null }, DEF).fail, M.chromOf(U, { d: { error: 'x' } }, DEF).fail], ['read', 'read']);

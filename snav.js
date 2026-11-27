@@ -1,4 +1,5 @@
-import { esc } from './utils.js';
+import { esc, viewport } from './utils.js';
+import { menuAt } from './cards-model.js';
 
 /* =========================================================
    THE SAMPLE SELECTOR (v545; v546: its sizing)
@@ -71,15 +72,14 @@ export function snav(el, o){
     if (had && f) f.focus({ preventScroll: true });
   }
   // Under its anchor (above it where the page has no room below), its left edge on the
-  // anchor's.
+  // anchor's, inside the page short of its scrollbars as the kinds' menu (cards-model.js
+  // menuAt, v584: to v583 the window's innerWidth and innerHeight, under the scrollbar).
   function place(){
     if (!menu) return;
     if (!pick.isConnected || !pick.getClientRects().length){ close(); return; }
-    const r = pick.getBoundingClientRect(), w = menu.offsetWidth, h = menu.offsetHeight;
-    let top = r.bottom + 6;
-    if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 6);
-    menu.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, r.left)) + 'px';
-    menu.style.top = Math.max(8, top) + 'px';
+    const v = viewport(), at = menuAt(pick.getBoundingClientRect(), menu.offsetWidth, menu.offsetHeight, v.w, v.h, false);
+    menu.style.left = at.left + 'px';
+    menu.style.top = at.top + 'px';
   }
   function open(){
     if (menu || !count()) return;

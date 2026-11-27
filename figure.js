@@ -1,5 +1,5 @@
 import { svgEl, niceRun, fmtTick, SUB_DROP, TILT_DY } from './plot.js';
-import { colorPickerUI, palettePickerUI, CP_PALETTES, X_SVG, tiltFits, flashFieldInvalid, numRule, dropGap, esc, saveBlob, boxHtml } from './utils.js';
+import { colorPickerUI, palettePickerUI, CP_PALETTES, X_SVG, tiltFits, flashFieldInvalid, numRule, dropGap, esc, saveBlob, boxHtml, viewport } from './utils.js';
 import { tabOf, TABS } from './tabs.js';
 import { own, setOwn } from './db.js';
 import * as FL from './figure-layout.js';
@@ -1511,10 +1511,10 @@ const texPalettePicker = {
   _reposition(){
     if (!this.el || !this.anchor) return;
     const b = this.anchor.getBoundingClientRect();
-    const w = this.el.offsetWidth || 244, h = this.el.offsetHeight || 260;
+    const w = this.el.offsetWidth || 244, h = this.el.offsetHeight || 260, v = viewport();
     let left = b.right + 10, top = b.top - 4;
-    if (left + w > window.innerWidth - 8) left = b.left - w - 10;
-    if (top + h > window.innerHeight - 8) top = window.innerHeight - h - 8;
+    if (left + w > v.w - 8) left = b.left - w - 10;
+    if (top + h > v.h - 8) top = v.h - h - 8;
     this.el.style.left = Math.max(8, left) + 'px';
     this.el.style.top = Math.max(8, top) + 'px';
   },
@@ -1606,9 +1606,9 @@ const fillPicker = {
   _reposition(){
     if (!this.el || !this.anchor) return;
     const b = this.anchor.getBoundingClientRect();
-    const w = this.el.offsetWidth || 150, h = this.el.offsetHeight || 120;
-    this.el.style.left = Math.max(6, Math.min(window.innerWidth - w - 6, b.left)) + 'px';
-    this.el.style.top = Math.max(6, Math.min(window.innerHeight - h - 6, b.bottom + 4)) + 'px';
+    const w = this.el.offsetWidth || 150, h = this.el.offsetHeight || 120, v = viewport();
+    this.el.style.left = Math.max(6, Math.min(v.w - w - 6, b.left)) + 'px';
+    this.el.style.top = Math.max(6, Math.min(v.h - h - 6, b.bottom + 4)) + 'px';
   },
   close(){
     if (this._away) document.removeEventListener('pointerdown', this._away);
@@ -1662,7 +1662,7 @@ const alignPicker = {
   _reposition(){
     if (!this.el || !this.anchor) return;
     const b = this.anchor.getBoundingClientRect();
-    this.el.style.left = Math.max(6, Math.min(window.innerWidth - 130, b.left)) + 'px';
+    this.el.style.left = Math.max(6, Math.min(viewport().w - 130, b.left)) + 'px';
     this.el.style.top = (b.bottom + 4) + 'px';
   },
   close(){
@@ -1722,10 +1722,10 @@ const charPicker = {
   reposition(){
     if (!this.anchor) return;
     const r = this.anchor.getBoundingClientRect();
-    const pw = this.el.offsetWidth || 240, ph = this.el.offsetHeight || 200;
+    const pw = this.el.offsetWidth || 240, ph = this.el.offsetHeight || 200, v = viewport();
     let left = r.left, top = r.bottom + 6;
-    if (left + pw > window.innerWidth - 8) left = window.innerWidth - pw - 8;
-    if (top + ph > window.innerHeight - 8) top = r.top - ph - 6;
+    if (left + pw > v.w - 8) left = v.w - pw - 8;
+    if (top + ph > v.h - 8) top = r.top - ph - 6;
     this.el.style.left = Math.max(8, left) + 'px';
     this.el.style.top = Math.max(8, top) + 'px';
   },

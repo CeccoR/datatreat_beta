@@ -2456,6 +2456,12 @@ h5.instr-math-head { margin-top: 14px; padding-top: 10px; border-top: 1px solid 
    below them). The interval's group line runs over its two fields only. */
 .gc-param-wrap thead th { vertical-align: bottom; }
 .gc-param-wrap .gc-th { display: flex; align-items: last baseline; justify-content: space-between; gap: 8px; }
+/* A select in a header (m's m or A, p's unit) never wider than what its cell leaves it beside
+   the pill: a wider select of another system, or a larger type, cut with "…" (v584: to v583
+   as wide as it came, over the pill and out of its cell at 1000 px, where every column is at
+   its least). */
+.gc-param-wrap .gc-th > span:has(> select) { min-width: 0; }
+.gc-param-wrap .gc-th select { max-width: 100%; text-overflow: ellipsis; }
 /* The pill's ALL, capitals with no descender, sat 1.5 px above its box's middle
    (the line box keeps room under them): 1.5 px more padding on top and none below
    centres it, and with its baseline on the name's, the box on the name's capitals.

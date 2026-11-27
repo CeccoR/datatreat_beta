@@ -14,7 +14,7 @@
    words (gasOf) where they say a gas, and the cards' own instructions (cards.js cardInfo)
    where they end with them.
 ========================================================= */
-import { UNITS, CHI2_HIGH, sig, plural, fin, fitMarks, fullName, thumbPoints, levelsOf, windowName } from './gc-integ-model.js';
+import { UNITS, CHI2_HIGH, sig, plural, fin, fitMarks, fullName, thumbPoints, levelsOf, windowName, peakName } from './gc-integ-model.js';
 import { boxHtml, notesFor } from './alerts.js';
 
 /* ---- The instructions ---- */
@@ -91,10 +91,9 @@ const runHtml = (p, cls)=> `<div id="${p}Status" class="txt-meta rv-status ${cls
 /* ---- Windows: the fit windows' edges, with the peaks' nominal places ---- */
 /* A window's and its peaks' names as shown (v578: to v577 their keys, "H2O2", "H2"): a peak of
    a gas by the gas's words (gasOf(g).txt, its subscript: H₂), another as it is (S310); a window
-   by its gases', a hyphen between ("H₂-O₂"), else its key (gc-integ-model.js windowName, v582:
-   the chromatogram's lines and the CSVs name it so too). The keys themselves, the state's,
-   stay as they are. */
-const peakName = (gasOf, pk)=> pk.gas ? gasOf(pk.gas).txt : pk.name;
+   by its gases', a hyphen between ("H₂-O₂"), else its key (gc-integ-model.js windowName and
+   peakName, v582 and v584: the chromatogram's lines and the CSVs name the window so too, its
+   legend and its peaks' places the peaks). The keys themselves, the state's, stay as they are. */
 /* (m: the method shown; warn: its windows' intrusions (gc-integ-model.js intrusions), a
    compact warning under them (v571: to v570 an amber line); refused: a window's edges not
    taken, { wi, text }, its rule in red under that window (v571, ALERTS-REVIEW.md C19, G11: to
@@ -149,12 +148,14 @@ const suspiciousHtml = (u, fl)=> boxHtml('warn', fl.length ? `Suspicious: ${fl.m
 /* A run that failed (gc-integ.js S.failed, the pool's or the worker's message): in the card's
    status and in the calibration window's, a compact error (v571, ALERTS-REVIEW.md C17, X07:
    to v570 red text in the card, "Stopped…" in the window); a message that says it already, as
-   it is. */
-export function failedText(why){
+   it is. failedWhy, in a line after a name (the Production Rate cards', gc-html.js
+   srcAlertsHtml, v584), with no capital and no full stop. */
+export function failedWhy(why){
   const m = String(why == null ? '' : why).trim().replace(/[.\s]+$/, '');
-  if (!m || /^the integration failed$/i.test(m)) return 'The integration failed.';
-  return /^the integration (worker )?failed\b/i.test(m) ? m.charAt(0).toUpperCase() + m.slice(1) + '.' : `The integration failed: ${m}.`;
+  if (!m || /^the integration failed$/i.test(m)) return 'the integration failed';
+  return /^the integration (worker )?failed\b/i.test(m) ? m.charAt(0).toLowerCase() + m.slice(1) : `the integration failed: ${m}`;
 }
+export const failedText = why =>{ const t = failedWhy(why); return t.charAt(0).toUpperCase() + t.slice(1) + '.'; };
 // The windows a method's results come from, as Windows names them: "H₂-O₂ fit 268–326 s".
 export const windowsText = (gasOf, m)=> m.windows.map(w=> `${windowName(gasOf, w)} fit ${w.from}–${w.to} s`).join(', ');
 /* The words over Integrate (x: gc-integ-model.js progressOf's; '' where all is integrated:
