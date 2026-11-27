@@ -532,10 +532,77 @@ was proposed; nothing here is in the code yet.
   golden cases run through each tree's xrd-peaks.js, four by the browser session (the
   others act on what it does not reach or record). tests/peaksmodel.test.mjs keeps the
   calculations' tests, the wiring's and the markup's, and 40 cases as v560's xrd-peaks.js
-  gave them (golden digests). Still long (v561): `createFig` (fig.js, 552), `createDeck`
-  (cards.js, 515), `createXrd` (xrd.js, 488), `createIodo` (iodo.js, 407), `wireControls`
-  (figure.js, 372).
+  gave them (golden digests). Done for `createFig` (fig.js) and `createDeck` (cards.js) in
+  v562, one closure of 552 lines and one of 515. What the Custom module works out goes to
+  `fig-model.js` (a file's table read and kept by its bytes, the roles and the series they
+  make, the titles, what a series plots and its keeper, an axis's title, a file and a card as
+  a project holds them, the state saved, the series named and coloured, the trace list's
+  order, rows and steps, the plots' series that still are, the file on show and the files
+  with fewer columns, a plot's series plotted, an operation typed, Add series' files and
+  what Done gives, an XY plot's range and error bars, the bars, the boxes and their layout,
+  a plot's CSV), its markup to `fig-html.js` (a card's instructions and body, its series'
+  rows, the legends, the Data card's head, table and warning, the Add series window); what
+  the deck works out to `cards-model.js` (the kinds offered, a record made, a kind and an id
+  a state may hold, a record read and saved, the names settled and a name typed, the name
+  field's width, the menu's place, the scroll that brings a card back into view, a move's
+  places and order, the fold's timing and the box a card grows from), its markup to
+  `cards-html.js` (a card, the menu's kinds, the fold button's words). The page left in
+  `fig.js` and `cards.js`, no longer one closure: the Custom instance a state object (S),
+  the deck one (D), and the kinds' menu one (K), which the functions at module level take
+  (fig.js: `makeState`, `kitHooks`, `deckHooks`, `apiOf`, `wireDrop`, `wireData` with
+  `onRole`, `onNameIn`, `onNameKey`, `traceList` and `traceCb`, `removeTrace`, `rename`,
+  `renderData`, `paintTable`, `rolesChanged`, `paintPanel`, `buildCard`, `onNorm`, `onDel`,
+  `onOp`, `wirePick`, `openPick`, `closePick`, `drawCard`, `drawXY`, `drawBars`, `drawBoxes`;
+  cards.js: `makeDeck`, `apiOf`, `buildCard`, `mount`, `unmount`, `placeCards`, `wireCard`,
+  `leave`, `unghost`, `later`, `stepEnd`, `revealNow`, `quiet`, `setFold`, `startMove`,
+  `followMove`, `endMove`, `refreshNames`, `add`, `remove`, `onAdd`, `switchKind`, `load`,
+  `loadOne`; the menu's `openMenu`, `closeMenu`, `placeMenu`, `wireMenu`), the listeners in
+  their order, the deck's exports (`createDeck`, `cardInfo`, `fileSafe`, `nameDownloads`) as
+  they were. fig.js 776 lines to 493 (createFig 552 to 12, the longest function now 24,
+  traceCb), its model 400 and markup 100; cards.js 692 to 691 (createDeck 515 to 5, the
+  longest now 26, leave), its model 97 and markup 39. The same operations in the same
+  order: in the browser, the Custom module end to end (121 steps: six CSVs, one refused and
+  one twice, the Data card's arrows and list, roles of every kind, the roles alike, names
+  typed, Escape, Tab, emptied; the trace list left out, coloured, a palette, relabelled,
+  moved, a trace removed and undone; XY, bar and box cards, Add series' Done, Cancel,
+  Escape, a click outside, a file's box; normalisations, operations typed with a comma,
+  refused, the same value, an exponent; zoomed; a series taken out; renamed, switched,
+  folded, moved, closed, undone and redone; the composer's figure saved and undone; every
+  download; saved, exported, reloaded, a second tab; 14 old and malformed states) gave
+  v561's DOM, every plot's range and entries, field values, state, history, kept counts,
+  banners, focus, menus, downloads and CSV export at every step: 2541 fields, none
+  different (v561 against itself, none either); and the cards in DRS, XRPD, GC, EPR and
+  Custom (215 steps each run, the motion not reduced and reduced: "+" and its menu, a kind
+  switched, renamed, folded, moved and pressed by the grip, closed, undone and redone, cards
+  brought back below the window, steps taken while another's animations are held, saved,
+  reloaded, tabs switched, a second tab, 24 old and malformed states) gave v561's DOM, the
+  animations made (their keyframes and timing), state, history, focus and scroll at every
+  step: 4515 fields each, none different reduced; not reduced, two scrolls after a card
+  moved by its grip, 2 px apart, as v561 itself gives either from one run to the next
+  (v561 against itself, none different either way otherwise). In
+  Node, v561's fig.js and cards.js and these, each run from its source on a page of stubs
+  recording every markup, text, value, property, style, class, attribute, dataset write,
+  focus, listener (the document's and the window's too, with their signals), element made,
+  moved and cloned, animation made, cancelled and finished, microtask, frame and scroll, Plot
+  call: through 1000 random sessions of 80 steps each (1.6 and 1.5 million entries), none
+  different. Fourteen mutations of the new code were each caught by the Node sessions, eight
+  by the new tests, three by the golden cases run through each tree's page, six by the
+  browser sessions (a repeated name's suffix, the menu's gap, the reveal's margin, an XY
+  plot's padding, the words for series left out, a name typed in place drawing the head
+  anew; the others act on what they do not reach or record).
+  tests/figmodel.test.mjs and tests/cardsmodel.test.mjs keep the calculations' and markup's
+  tests and 40 cases each as v561 gave them (golden digests). Still long (v562): `createXrd`
+  (xrd.js, 488), `createIodo` (iodo.js, 407), `wireControls` (figure.js, 372).
   The others when work takes us into them.
+- **A card's kinds' menu left open through an undo (found in v562, as v561 has it).** A
+  card's title opens the kinds' menu; Ctrl+Z (or Ctrl+Y) while it is open loads the step
+  without closing it, and a kind then picked in it switches the record the menu was opened
+  for, which the step may have taken away: where its card is gone (an added card undone), the
+  pick throws (TypeError on `replaceWith`) and nothing else happens; where its id is back
+  as another kind (a switch undone), the card on show is rebuilt for the record no longer in
+  the deck, and what is done in it after (a name typed, its panel's fields) no longer reaches
+  the state. Proposed: a load closes the menu (or a pick acts only on a record still in the
+  deck). Left as it is meanwhile (a visible change).
 - **The browser storage is shared with every page of the same origin.** On GitHub Pages
   the app lives at `ceccor.github.io/datatreat_beta/`, and every project published under
   `ceccor.github.io` is the same origin: any of them can read and write DataTreat's

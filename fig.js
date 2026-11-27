@@ -1,10 +1,11 @@
-import { esc, registerModule, keeper, fixed, objId, exactKey, colorOf, isColor, csvNum, flashFieldInvalid, boxStats, meanArr, stdArr, barNames, X_SVG, removeFileAt } from './utils.js';
+import { esc, registerModule, keeper, objId, exactKey, colorOf, isColor, csvNum, flashFieldInvalid, boxStats, meanArr, stdArr, barNames, X_SVG, removeFileAt } from './utils.js';
 import { Plot } from './plot.js';
 import { cardInfo, fileSafe, nameDownloads } from './cards.js';
 import { moduleKit, wideCsv, isObj, ownKey, cardList } from './modkit.js';
 import { plotWrap, viewOf, setView, valueBars } from './modcharts.js';
-import { decodeText, textLines, readColumns, parseNum, isNum, nameUnit } from './textdata.js';
 import { snavHtml, snav } from './snav.js';
+import * as M from './fig-model.js';
+import * as H from './fig-html.js';
 
 /* =========================================================
    CUSTOM MODULE (v527; named Figure to v530: its key, 'fig', and its projects' kept)
@@ -42,735 +43,451 @@ import { snavHtml, snav } from './snav.js';
    root, a card's in its card, never in the page. It draws only on show, and its redraw
    draws all as it is shown; a tab shown again with nothing changed and at the same width
    draws nothing (its draw key). It has no job that runs on while hidden.
+
+   SPLIT (v562): what it works out that touches no page (a file's table and its roles, the
+   series and what they plot, a file and a card as a project holds them, the trace list's
+   rows and changes, the plots' series, ranges, bars, boxes and CSVs) in fig-model.js, its
+   words and markup in fig-html.js, both tested in Node. Here the page: the instance's
+   state (S), the Data card, the Plot cards, the Add series window and their listeners.
+   Each is a function at module level of S, not a closure inside createFig (to v561 one of
+   552 lines): what a listener holds is what it is handed.
 ========================================================= */
+/* utils.js's and modkit.js's helpers, which need a page to load, as the calculations and the
+   markup take them (fig-model.js U, fig-html.js u). A series' values are kept by its column
+   (utils.js keeper: fig-model.js dataOf). */
+const U = { isObj, ownKey, isColor, colorOf, objId, exactKey, dataKept: keeper('fig-series', 8), csvNum, boxStats, meanArr, stdArr, barNames };
+const HU = { esc, X_SVG, plotWrap };
+const FIG_INFO = H.figInfo(cardInfo(true, false));
+const P = H.P;
 
-/* ---- A file's table (pure: the module's, for every instance) ----
-   Read from its bytes, which are all a project keeps of it (beside its roles and its
-   series' names): kept by those bytes (the same array in a tab's states, its record and
-   another tab holding the file), so an undo, a wake or a project opened reads it once.
-   Its columns of numbers (each cell as parseNum reads it, NaN where it is none) fixed
-   (db.js): shared, never changed. */
-const tables = new WeakMap();
-function readTableText(text){
-  const t = readColumns(textLines(text));
-  if (!t) return null;
-  return { ...t, heads: t.head ? t.head.map(nameUnit) : null,
-    nums: Array.from({ length: t.n }, (_, c)=> fixed(t.rows.map(r=> parseNum(r[c])))) };
-}
-function tableOf(f){
-  const b = f && f.rawBytes;
-  if (!(b instanceof Uint8Array)) return null;
-  if (!tables.has(b)) tables.set(b, readTableText(decodeText(b)));
-  return tables.get(b);
-}
-
-/* ---- The columns' roles (Origin-like) ----
-   x, y, an error of x, an error of y, or none (''). Several x may be: each y belongs to the
-   x before it (none: the row number is its x), each error of y to the y before it, each
-   error of x to the x before it; one error at most a column. By default the first column
-   is x and the others y. */
-const ROLES = { x: 'x', y: 'y', ex: 'err x', ey: 'err y', '': '—' };
-const defRoles = n => Array.from({ length: n }, (_, i)=> i ? 'y' : 'x');
-/* Roles made to hold: an error with no column of its own before it, or one past the first
-   of its column, a y. */
-function fixRoles(r){
-  const out = r.slice();
-  let hasX = false, hasY = false, exUsed = false, eyUsed = false;
-  out.forEach((v, i)=>{
-    if (v === 'x'){ hasX = true; exUsed = false; }
-    else if (v === 'y'){ hasY = true; eyUsed = false; }
-    else if (v === 'ey'){ if (!hasY || eyUsed){ out[i] = 'y'; hasY = true; eyUsed = false; } else eyUsed = true; }
-    else if (v === 'ex'){ if (!hasX || exUsed){ out[i] = 'y'; hasY = true; eyUsed = false; } else exUsed = true; }
-  });
-  return out;
-}
-/* Column i given role v: an error set where its column already had one turns that one,
-   the error it had, into a y (and the roles made to hold: fixRoles). */
-function setRole(roles, i, v){
-  const r = roles.slice();
-  r[i] = v;
-  if (v === 'ey' || v === 'ex'){
-    const base = v === 'ey' ? 'y' : 'x';
-    let o = i - 1;
-    while (o >= 0 && r[o] !== base) o--;
-    if (o >= 0) for (let j = o + 1; j < r.length && r[j] !== base; j++) if (j !== i && r[j] === v) r[j] = 'y';
-  }
-  return fixRoles(r);
-}
-// The series of some roles, one a y: its column, its x (-1: the row number) and errors (-1: none).
-// (an x's error is its own wherever it stands after it, before the next x)
-function seriesCols(roles){
-  const out = [], exOf = new Map();
-  let x = -1, last = null;
-  roles.forEach((v, i)=>{
-    if (v === 'x') x = i;
-    else if (v === 'ex'){ if (x >= 0) exOf.set(x, i); }
-    else if (v === 'y') out.push(last = { col: i, x, ey: -1 });
-    else if (v === 'ey' && last) last.ey = i;
-  });
-  return out.map(s=> ({ ...s, ex: exOf.has(s.x) ? exOf.get(s.x) : -1 }));
-}
-// The roles of `src` given to a file of n columns, by position; those beyond it as by default.
-const rolesLike = (src, n)=> fixRoles(defRoles(n).map((d, c)=> c < src.length ? src[c] : d));
-/* A file's first roles: with a line of series' titles over its header (textdata.js
-   readColumns), each title opens a group, its first column the x and the others, up to the
-   next title, its y ("series 1",,,"series 2": x y y x); else the defaults. */
-const firstRoles = t => t.titles ? fixRoles(t.titles.map(v=> v !== '' ? 'x' : 'y')) : defRoles(t.n);
-/* A column's name from the titles: its group's title, with the column's own name when the
-   group has several columns past its x ('' with no titles). */
-function titleName(t, c){
-  if (!t.titles) return '';
-  let g = c;
-  while (g >= 0 && t.titles[g] === '') g--;
-  if (g < 0) return '';
-  let end = g + 1;
-  while (end < t.n && t.titles[end] === '') end++;
-  const h = t.heads && t.heads[c] && t.heads[c].name;
-  return end - g > 2 ? `${t.titles[g]} – ${h || 'column ' + (c + 1)}` : t.titles[g];
-}
-
-/* ---- What a series plots: its values divided by the plot's normalisation (`div`: 1 for
-   none, its own largest |y| for local, the largest of the plot's series for global), then
-   multiplied by its scale, and, in an XY plot, its offset added. A bar chart's and a box
-   plot's have no offset. To v528 each series had its own normalisation, and an XY plot's
-   series a crop in x. Kept by the series' column (utils.js keeper: while a state, a tab
-   asleep or a history holds the file) under its other columns and its operations: a tab
-   woken, an undo, a redraw and the CSVs take it as made. ---- */
-const OPS = { xy: ['scale', 'offset'], bar: ['scale'], box: ['scale'] };
-const DEF_OPS = { scale: 1, offset: 0 };
-const NORMS = { none: 'None (data as they are)', local: 'Local (max of each)', global: 'Global (max of all)' };
-const dataKept = keeper('fig-series', 8);
-const maxAbs = a =>{ let m = 0; for (const v of a) if (Math.abs(v) > m) m = Math.abs(v); return m; };
-function dataOf(kind, t, s, r, div = 1){
-  const o = { div, scale: r.scale, offset: kind === 'xy' ? r.offset : 0 };
-  return dataKept(t.nums[s.col], exactKey([kind, objId(t), s.x, s.ex, s.ey, o]), ()=>{
-    const Y = t.nums[s.col], X = s.x >= 0 ? t.nums[s.x] : null, EX = s.ex >= 0 ? t.nums[s.ex] : null, EY = s.ey >= 0 ? t.nums[s.ey] : null;
-    const xs = [], ys = [], exs = [], eys = [], cats = [];
-    for (let i = 0; i < Y.length; i++){
-      const y = Y[i], x = X ? X[i] : i + 1;
-      if (!Number.isFinite(y)) continue;
-      if (kind === 'xy' && !Number.isFinite(x)) continue;
-      xs.push(x); ys.push(y);
-      exs.push(EX && Number.isFinite(EX[i]) ? Math.abs(EX[i]) : NaN);
-      eys.push(EY && Number.isFinite(EY[i]) ? Math.abs(EY[i]) : NaN);
-      if (kind === 'bar') cats.push(s.x < 0 ? String(i + 1) : Number.isFinite(X[i]) && isNum(t.rows[i][s.x]) ? String(X[i]) : String(t.rows[i][s.x]).trim());
-    }
-    const m = o.scale / o.div;
-    return { xs, ys: ys.map(v=> v*m + o.offset), exs, eys: eys.map(e=> e*Math.abs(m)), cats };
-  });
-}
-// A plot's series' divisors (dataOf `div`) under its normalisation.
-function divsOf(kind, norm, list){
-  if (norm !== 'local' && norm !== 'global') return list.map(()=> 1);
-  const peaks = list.map(e=> maxAbs(dataOf(kind, e.s.t, e.s, DEF_OPS).ys));
-  const all = Math.max(0, ...peaks);
-  return peaks.map(p=> (norm === 'local' ? p : all) || 1);
-}
-
-/* ---- An axis's title: the columns' name and unit when those that have them share them ---- */
-function axisTitle(parts){
-  parts = parts.filter(p=> p.name || p.unit);
-  const names = [...new Set(parts.map(p=> p.name))], units = [...new Set(parts.map(p=> p.unit))];
-  const name = names.length === 1 ? names[0] : '', unit = units.length === 1 ? units[0] : '';
-  return name && unit ? `${name} (${unit})` : name || (unit ? `(${unit})` : '');
-}
-// A value as a plot's label writes it (3 significant digits; a CSV's: csvNum).
-const sig = v => String(+v.toPrecision(3));
-const headOf = (t, c)=> c < 0 ? { name: 'Row', unit: '' } : t.heads && t.heads[c] ? t.heads[c] : { name: '', unit: '' };
-
-/* ---- A card's kinds, instructions and markup ---- */
-const KINDS = { xy: 'XY plot', bar: 'Bar chart', box: 'Box plot' };
-const FIG_INFO = `A plot of the series chosen under <b>Series</b>, from any of the files: <b>+ Add series</b> opens the list of the series included in the trace list (each y the Data card sets is a trace), by file, each named as the Data card names it: those ticked are in the plot (a file's box ticks or clears all its series). <b>Normalization</b> is the plot's: <b>none</b>, <b>local</b> (each series divided by its own largest |y|) or <b>global</b> (all divided by the largest of them); then each series is multiplied by its scale (×) and, in an XY plot, its offset (+) added. An <b>XY plot</b> draws each series against its x (the row number where it has none), with its error bars. A <b>bar chart</b> takes the series' x as categories (text, or numbers as they read: 1,0 is 1), its y as the bar and its error of y as the error bar; a category shared by series has their bars side by side. A <b>box plot</b> takes each series as a group, its values down the rows (its x not used), named as the series. A series whose file is removed, or whose column is no longer a y, leaves the plot. The figure composer of the plot's toolbar composes its figure, kept with the card in the project. ${cardInfo(true, false)}`;
-const P = a => 'fig' + a.id;
-/* (v531: as the Data card, a .pside: the plot on the left under its row of tools, the column
-   beside it spanning the plot's height exactly: its head and normalisation at the top, the
-   series scrolling in their box, + Add series at the foot, its bottom on the plot's; with
-   no series yet, an empty box of the plot's size in its place) */
-const cardBody = a => `
-      <div class="pside fig-pside">
-        <div class="plot-nav-row pside-nav"></div>
-        <div class="pside-plot" id="${P(a)}Box">${plotWrap(P(a) + 'Svg', { mod: 'fig', csv: 'fig_plot.csv', name: 'Plot.svg', legend: P(a) + 'Legend' })}
-          <div class="txt-meta fig-empty" id="${P(a)}Empty">No series in this plot yet: + Add series picks them.</div>
-        </div>
-        <div class="pside-under"><div id="${P(a)}Legend" class="legend"></div></div>
-        <div class="pside-col fig-side">
-          <div class="txt-mini param-head cap-title"><span>Series</span></div>
-          <div class="param-grid">
-            <label class="txt-label" for="${P(a)}Norm">Normalization</label>
-            <select id="${P(a)}Norm" class="pg-field" title="none: the data as they are; local: each series divided by its own largest |y|; global: all by the largest of them">${Object.entries(NORMS).map(([k, l])=> `<option value="${k}">${l}</option>`).join('')}</select>
-          </div>
-          <div class="fig-scroll fig-ser-list" id="${P(a)}List"></div>
-          <button type="button" class="btn plot-action-btn" id="${P(a)}Add" title="Choose the series of this plot, by file">+ Add series</button>
-        </div>
-      </div>`;
-// A field of an operation, its value as the record holds it.
-const opField = (k, label, v, title)=> `<label class="fig-op" title="${title}"><span>${label}</span><input type="text" inputmode="decimal" autocomplete="off" data-op="${k}" value="${esc(String(v))}"></label>`;
-
-/* ---- What a state may hold (modkit RESTORED) ---- */
-const finiteOr = (v, d)=> Number.isFinite(v) ? v : d;
-const refsOk = v => Array.isArray(v) ? v.filter(r=> isObj(r) && typeof r.file === 'string' && Number.isInteger(r.col) && r.col >= 0) : [];
-// (a v527–v528 series' own normalisation and crop let go: refsOk, normIn)
-const refsIn = v => refsOk(v).map(r=> ({ file: r.file, col: r.col, scale: finiteOr(r.scale, 1), offset: finiteOr(r.offset, 0) }));
-/* A plot's normalisation; a v527–v528 card has none, its series theirs: local when every
-   one was normalised (an XY plot's or a bar chart's), else none. */
-function normIn(c){
-  if (ownKey(NORMS, c.norm)) return c.norm;
-  const rs = refsOk(c.series);
-  return c.norm === undefined && (c.type === 'xy' || c.type === 'bar') && rs.length && rs.every(r=> r.norm === true) ? 'local' : 'none';
-}
-const figIn = v => isObj(v) && isObj(v.scalars) && Array.isArray(v.series) ? v : null;
-
+/* =========================================================
+   THE INSTANCE: its state S, which every function below takes:
+     key, root, layer, shown, $  its context (utils.js makeInstance: shown() whether its tab
+                          is on show) and its elements by id, in root
+     stale, drawnAt       hidden, nothing is drawn: `stale` marks it to be drawn whole as it
+                          is shown, `drawnAt` the width it was last drawn whole at (its draw key)
+     kit, allFiles        the module (modkit.js) and every file loaded, in list order, { name,
+                          label, color, rawBytes, roles (a role a column), names (the series'
+                          names typed, by column), colors, out }
+     same                 the roles of the file on show go to every file
+     shownName, fileNext  the file the Data card shows (and a wake's: showNext)
+     order                the trace list's order, by the series' keys (fig-model.js tracesOf)
+     fileNav              the Data card's file selector (snav.js)
+     pick, pickBody       the Add series window, its files' box
+     pickFor, pickFrom    the card it is open for, the element focused before it
+     onPickKey            its Escape (a document listener while it is open)
+     deck                 the Plot cards (cards.js)
+========================================================= */
 // A Custom tab's instance (utils.js makeInstance: ctx { key, root, layer, shown }).
-function createFig({ key, root, layer, shown }){
+function createFig(ctx){
+  const S = makeState(ctx);
+  S.kit = moduleKit('fig', kitHooks(S));
+  S.allFiles = S.kit.all;
+  wireDrop(S);
+  wireData(S);
+  wirePick(S);
+  S.deck = S.kit.deck(deckHooks(S));
+  // A new project starts with no plot: + adds one, of the kind chosen.
+  S.deck.start([]);
+  return apiOf(S);
+}
+function makeState({ key, root, layer, shown }){
   const $ = id => root.querySelector('#' + id);
   // The file selector of the Data card (snav.js), its markup first: found by its ids after.
   $('figFileNav').innerHTML = snavHtml({ prev: 'figFilePrev', idx: 'figFileIdx', next: 'figFileNext', name: 'figFileName', what: 'file', keys: false });
-  // Hidden, nothing is drawn: `stale` marks it to be drawn whole as it is shown, `drawnAt`
-  // the width it was last drawn whole at (its draw key).
-  let stale = false, drawnAt = '';
-  const drawable = ()=> shown() || !(stale = true);
-  /* The module (modkit.js): every file loaded, in list order, { name, label, color,
-     rawBytes, roles (a role a column), names (the series' names typed, by column) }, and
-     the included ones, `files`; the cards' series and figures in the history, and whether
-     the roles of the file on show go to every file (`same`). */
-  let same = false;
-  let shownName = null, fileNext = null;   // the file the Data card shows (and a wake's: showNext)
-  // The trace list's order, by the series' keys (keyOf; a file of no series by keyOf(name,
-  // -1)), set as the list is reordered (none: the files' order, each its columns'); a
-  // series not in it goes after those that are. A file's series left out of the analysis
-  // are its record's `out`, by column.
-  let order = [];
-  const kit = moduleKit('fig', {
-    root, key, layer,
-    traces: cb => traceList(cb),
-    alerts: p =>{ $('figAlerts').innerHTML = p.invalid + p.upload; },
-    refresh: afterFilesChange,
+  const S = { key, root, layer, shown, $, stale: false, drawnAt: '', same: false, shownName: null, fileNext: null, order: [],
+    kit: null, allFiles: null, fileNav: null, pick: null, pickBody: null, pickFor: null, pickFrom: null, deck: null };
+  S.onPickKey = e => onPickKey(S, e);
+  return S;
+}
+// What the module kit is given (modkit.js o).
+function kitHooks(S){
+  return {
+    root: S.root, key: S.key, layer: S.layer,
+    traces: cb => traceList(S, cb),
+    alerts: p =>{ S.$('figAlerts').innerHTML = p.invalid + p.upload; },
+    refresh: ()=> afterFilesChange(S),
     // A label or a colour changed: the Data card's list and the series' files say it anew.
-    redraw: ()=>{ renderData(); cards().forEach(a=> paintPanel(a)); updateAll(true); },
-    cleared: ()=>{ shownName = null; order = []; },
-    snapshot: ()=> ({ same, ...(order.length ? { order: order.slice() } : {}), cards: cards().map(a=> ({ ...deck.saved(a), series: a.series.map(r=> ({ ...r })), norm: a.norm, fig: a.fig })) }),
-    // A file as a restore takes it: its table read from its bytes (none: left out), its
-    // roles one a column (else the defaults) made to hold, its names by column.
-    file: f =>{
-      const t = tableOf(f);
-      if (!t) return null;
-      const roles = Array.isArray(f.roles) && f.roles.length === t.n && f.roles.every(r=> ownKey(ROLES, r)) ? fixRoles(f.roles) : firstRoles(t);
-      const names = {};
-      if (isObj(f.names)) for (const k of Object.keys(f.names)) if (/^\d+$/.test(k) && +k < t.n && typeof f.names[k] === 'string' && f.names[k].trim()) names[k] = f.names[k];
-      // (a file left out by v531, the list's row its own: each of its series left out)
-      const out = f.included === false ? seriesCols(roles).map(c=> c.col)
-        : Array.isArray(f.out) ? [...new Set(f.out.filter(c=> Number.isInteger(c) && c >= 0 && c < t.n))] : [];
-      // (v534: its series' colours, by column, those picked; the others their place's)
-      const colors = {};
-      if (isObj(f.colors)) for (const k of Object.keys(f.colors)) if (/^\d+$/.test(k) && +k < t.n && isColor(f.colors[k])) colors[k] = f.colors[k];
-      const g = { ...f, roles, names, colors };
-      delete g.included; delete g.held; delete g.out;
-      if (!Object.keys(colors).length) delete g.colors;
-      return out.length ? { ...g, out } : g;
-    },
-    restore: s =>{
-      same = s.same === true;
-      order = Array.isArray(s.order) ? s.order.filter(k=> typeof k === 'string') : [];
-      if (fileNext){ if (allFiles.some(f=> f.name === fileNext)) shownName = fileNext; fileNext = null; }
-      deck.load(cardList(s.cards, KINDS) || [], c=> ({ series: refsIn(c.series), norm: normIn(c), fig: figIn(c.fig) }), a=> paintPanel(a));
-    },
-    redrawTab: ()=>{
-      const at = String(root.clientWidth);
-      if (!stale && at === drawnAt) return;
-      stale = false; drawnAt = at;
-      if (allFiles.length){ deck.fitNames(); updateAll(true); }
-    },
+    redraw: ()=>{ renderData(S); S.deck.records.forEach(a=> paintPanel(S, a)); updateAll(S, true); },
+    cleared: ()=>{ S.shownName = null; S.order = []; },
+    snapshot: ()=> M.stateOf(S.same, S.order, S.deck.records, S.deck.saved),
+    // A file as a restore takes it (fig-model.js fileIn).
+    file: f => M.fileIn(U, f),
+    restore: s => restore(S, s),
+    redrawTab: ()=> redrawTab(S),
     // One CSV a plot with series, named after it: what it plots.
-    csv: ()=> cards().map(a=> ({ a, text: cardCsv(a) })).filter(c=> c.text).map(({ a, text })=> ({ name: `${fileSafe(a.name)} - fig_plot.csv`, text })),
-  });
-  const { all: allFiles } = kit;
+    csv: ()=> S.deck.records.map(a=> ({ a, text: cardCsv(S, a) })).filter(c=> c.text).map(({ a, text })=> ({ name: `${fileSafe(a.name)} - fig_plot.csv`, text })),
+  };
+}
+// What the deck is given (cards.js o).
+function deckHooks(S){
+  return {
+    kinds: M.KINDS, title: '', info: ()=> FIG_INFO, body: a => H.cardBody(a, HU), make: ()=> ({ series: [], norm: 'none', fig: null }),
+    build: (a, card)=> buildCard(S, a, card), drop: ()=>{}, autoName: a=> `Plot ${a.id}`, named: a => named(S, a),
+    added: a=> drawCard(S, a),
+    switched: a=>{ paintPanel(S, a); drawCard(S, a); },
+    wake: a=> drawCard(S, a, true),
+  };
+}
+// What it gives utils.js and tabs.js.
+function apiOf(S){
+  return {
+    // The file the Data card shows: kept as the tab sleeps and in its record (tabs.js).
+    shows(){ return M.showsOf(S.allFiles, S.shownName); },
+    showNext(v){ S.fileNext = M.showNextIn(U, v); },
+    destroy(){ closePick(S, false); S.pick.remove(); S.kit.destroy(); },
+  };
+}
+// (its tab not on show: not drawn, drawn whole as it is shown)
+const drawable = S => S.shown() || !(S.stale = true);
+function restore(S, s){
+  S.same = s.same === true;
+  S.order = M.orderIn(s.order);
+  if (S.fileNext){ if (S.allFiles.some(f=> f.name === S.fileNext)) S.shownName = S.fileNext; S.fileNext = null; }
+  S.deck.load(cardList(s.cards, M.KINDS) || [], c=> M.cardIn(U, c), a=> paintPanel(S, a));
+}
+function redrawTab(S){
+  const at = String(S.root.clientWidth);
+  if (!S.stale && at === S.drawnAt) return;
+  S.stale = false; S.drawnAt = at;
+  if (S.allFiles.length){ S.deck.fitNames(); updateAll(S, true); }
+}
 
-  // Files dropped: each read as a table (textdata.js), its roles its titles' or the
-  // defaults (firstRoles), or the file on show's with `same`; the table kept by the file's bytes.
-  kit.dropText(text =>{
-    const t = readTableText(text);
-    return t ? { roles: firstRoles(t), names: {}, table: t } : { error: 'no column of numbers found' };
+/* ---- The files ---- */
+// Files dropped: each read as a table (textdata.js), its roles its titles' or the
+// defaults (firstRoles), or the file on show's with `same`; the table kept by the file's bytes.
+function wireDrop(S){
+  S.kit.dropText(text =>{
+    const t = M.readTableText(text);
+    return t ? { roles: M.firstRoles(t), names: {}, table: t } : { error: 'no column of numbers found' };
   }, had =>{
-    allFiles.slice(had).forEach(f=>{ tables.set(f.rawBytes, f.table); delete f.table; });
-    const src = shownFile();
-    if (same && src) allFiles.slice(had).forEach(f=>{ if (f !== src) f.roles = rolesLike(src.roles, tableOf(f).n); });
-    afterFilesChange();
+    S.allFiles.slice(had).forEach(f=> M.keepTable(f));
+    const src = shownFile(S);
+    if (S.same && src) M.giveRoles(S.allFiles.slice(had), src);
+    afterFilesChange(S);
   });
+}
+function afterFilesChange(S){
+  S.kit.showFiles();
+  S.$('figAnalyses').style.display = S.allFiles.length ? 'block' : 'none';
+  M.pruneCards(S.allFiles, S.deck.records);
+  renderData(S);
+  S.deck.records.forEach(a=> paintPanel(S, a));
+  updateAll(S);
+  S.kit.commit();
+}
+// The series (fig-model.js seriesOfFile), the trace list's (tracesOf), those included (seriesMapOf).
+const traces = S => M.tracesOf(U, S.allFiles, S.order);
+const seriesMap = S => M.seriesMapOf(traces(S));
+// The trace list (modkit.js o.traces): its rows, and the kit's callbacks (cb) with its own.
+function traceList(S, cb){
+  const ts = traces(S);
+  const rows = M.traceRows(ts);
+  return { rows, cb: { ...cb, ...traceCb(S, ts, cb) } };
+}
+function traceCb(S, ts, cb){
+  return {
+    onInclude(i, on){ if (ts[i]){ M.setOut(ts[i], on); afterFilesChange(S); } },
+    onIncludeAll(on){ ts.forEach(t=> M.setOut(t, on)); afterFilesChange(S); },
+    // A series' colour picked, or the palette's given to all in the list's order: the
+    // plots' lines, bars and boxes, and their legends, follow (a step).
+    onColorChange(i, c){ const t = ts[i]; if (t && t.s && isColor(c)){ M.setColor(t, c); repaint(S); } },
+    onPaletteChange(colors){
+      const cs = colors.filter(isColor);
+      if (!cs.length) return;
+      M.setPalette(ts, cs);
+      repaint(S);
+    },
+    onReorder(from, to){ S.order = M.reordered(ts, from, to); afterFilesChange(S); },
+    // (a series renamed as in the Data card: empty, or as its header names it, back to that name)
+    onLabelChange(i, v){
+      const t = ts[i];
+      if (!t) return;
+      if (!t.s){ t.f.label = v; afterFilesChange(S); return; }
+      rename(S, t.f, t.s.col, v, t.s.def);
+    },
+    onRemove: i => removeTrace(S, ts[i], cb),
+  };
+}
+/* A trace removed: its column, and its error's, no longer used (the Data card's roles,
+   —); its file's last, or a file of none, the file removed. */
+function removeTrace(S, t, cb){
+  if (!t) return;
+  if (M.whole(t)){ removeFileAt(S.allFiles, S.allFiles.indexOf(t.f), []); if (!S.allFiles.length) cb.onRemoveAll(); else afterFilesChange(S); return; }
+  M.dropSeries(t);
+  afterFilesChange(S);
+}
+/* A series renamed, in the trace list or in place over its columns in the Data card (one
+   name). From the Data card (`inPlace`) its fields there take the name and the head is
+   not drawn anew, so the focus, gone on to another field, stays there. */
+function rename(S, f, col, v0, def, inPlace){
+  const { v, names } = M.namesWith(f.names, col, v0, def);
+  f.names = names;
+  if (inPlace) S.$('figHead').querySelectorAll(`thead input[data-col="${col}"]`).forEach(inp=>{ inp.value = v || def; });
+  S.kit.showFiles();
+  if (!inPlace) renderData(S);
+  S.deck.records.forEach(a=> paintPanel(S, a));
+  updateAll(S, true);
+  S.kit.commit();
+}
+// The colours changed: the list, the plots and their legends drawn again, a step.
+function repaint(S){
+  S.kit.showFiles();
+  S.deck.records.forEach(a=> paintPanel(S, a));
+  updateAll(S, true);
+  S.kit.commit();
+}
 
-  function afterFilesChange(){
-    kit.showFiles();
-    $('figAnalyses').style.display = allFiles.length ? 'block' : 'none';
-    prune();
-    renderData();
-    cards().forEach(a=> paintPanel(a));
-    updateAll();
-    kit.commit();
+/* ---- The Data card: the file on show (its arrows, as the other modules' samples: a view,
+   no step of the history), the roles of all files alike on its line, and the file's
+   table across the card, a role over each column and its series' names over them
+   (fig-html.js headHtml, nameCells) ---- */
+const shownFile = S => M.shownFileOf(S.allFiles, S.shownName);
+function renderData(S){
+  const card = S.$('figDataCard');
+  card.style.display = S.allFiles.length ? '' : 'none';
+  const f = shownFile(S);
+  if (!f) return;
+  S.shownName = f.name;
+  const fi = S.allFiles.indexOf(f), t = M.tableOf(f);
+  S.fileNav.update();
+  S.$('figSame').checked = S.same;
+  const ss = M.seriesOfFile(U, S.allFiles, f, fi);
+  paintTable(S, t, H.headHtml(ss, f.roles, t, HU));
+  S.$('figWarn').innerHTML = H.warnHtml(M.shortOf(S.allFiles, f, t, S.same), f, t, HU);
+}
+// The head: the series' names over their columns, the roles, the header. The rows, all
+// of them, built once a file shown (its table's), its scroll kept while it stays.
+function paintTable(S, t, head){
+  const box = S.$('figHead');
+  if (box._t === t && box.querySelector('thead')) box.querySelector('thead').innerHTML = head;
+  else {
+    box._t = t;
+    box.innerHTML = H.tableHtml(t, head, HU);
+    box.scrollTop = 0; box.scrollLeft = 0;
   }
-
-  /* ---- The series: every y of every file, by its file and column. Its number in its file
-     ("Series M (Cols a,b)": its x's column and its own) follows the roles; its name is
-     the one typed, else its title's (titleName), its header's, or "Series M". Its colour
-     (v534) the one picked in the trace list (its file's `colors`, by column), else the
-     palette's at its place among the series of all files, in the files' order. ---- */
-  const keyOf = (name, col)=> name + '\n' + col;
-  function seriesOfFile(f, fi){
-    const t = tableOf(f);
-    let k = 0;
-    for (let j = 0; j < fi; j++) k += seriesCols(allFiles[j].roles).length;
-    return seriesCols(f.roles).map((s, m)=>{
-      const auto = `Series ${m + 1}`, cols = s.x >= 0 ? `Cols ${s.x + 1},${s.col + 1}` : `Col ${s.col + 1}`;
-      const given = Object.prototype.hasOwnProperty.call(f.names, s.col) ? f.names[s.col] : '';
-      const def = titleName(t, s.col) || headOf(t, s.col).name || auto;
-      const color = f.colors && ownKey(f.colors, String(s.col)) ? f.colors[s.col] : colorOf(k + m);
-      return { ...s, f, t, fi, m, key: keyOf(f.name, s.col), auto, cols, def, name: given || def, color };
-    });
-  }
-  const isOut = (f, col)=> Array.isArray(f.out) && f.out.includes(col);
-  // The series included in the analysis, by key, in the trace list's order.
-  function seriesMap(){
-    const m = new Map();
-    traces().forEach(t=>{ if (t.s && !isOut(t.f, t.s.col)) m.set(t.s.key, t.s); });
-    return m;
-  }
-  /* ---- The trace list: a row a series (its trace), in `order`; a file of none a row of
-     its own (its name: renamed, the file's label). ---- */
-  function traces(){
-    const ts = allFiles.flatMap((f, fi)=>{ const ss = seriesOfFile(f, fi); return ss.length ? ss.map(s=> ({ f, s, key: s.key })) : [{ f, s: null, key: keyOf(f.name, -1) }]; });
-    if (!order.length) return ts;
-    const at = new Map(order.map((k, i)=> [k, i])), rank = t => at.has(t.key) ? at.get(t.key) : Infinity;
-    return ts.map((t, i)=> [t, i]).sort((a, b)=> rank(a[0]) - rank(b[0]) || a[1] - b[1]).map(e=> e[0]);
-  }
-  function traceList(cb){
-    const ts = traces();
-    // (a series' colour its own; a file of none has none, nor a swatch)
-    const rows = ts.map(({ f, s })=> ({ name: s ? `${f.name} (${s.cols})` : f.name, src: f.name, label: s ? s.name : f.label, color: s ? s.color : '', rawBytes: f.rawBytes,
-      ...(s && isOut(f, s.col) ? { included: false } : {}) }));
-    const setOut = (t, on)=>{ if (!t.s) return; const o = new Set(t.f.out || []); if (on) o.delete(t.s.col); else o.add(t.s.col); if (o.size) t.f.out = [...o]; else delete t.f.out; };
-    return { rows, cb: { ...cb,
-      onInclude(i, on){ if (ts[i]){ setOut(ts[i], on); afterFilesChange(); } },
-      onIncludeAll(on){ ts.forEach(t=> setOut(t, on)); afterFilesChange(); },
-      // A series' colour picked, or the palette's given to all in the list's order: the
-      // plots' lines, bars and boxes, and their legends, follow (a step).
-      onColorChange(i, c){ const t = ts[i]; if (t && t.s && isColor(c)){ t.f.colors = { ...(t.f.colors || {}), [t.s.col]: c }; repaint(); } },
-      onPaletteChange(colors){
-        const cs = colors.filter(isColor);
-        if (!cs.length) return;
-        ts.filter(t=> t.s).forEach((t, k)=>{ t.f.colors = { ...(t.f.colors || {}), [t.s.col]: cs[k % cs.length] }; });
-        repaint();
-      },
-      onReorder(from, to){ const k = ts.map(t=> t.key), [m] = k.splice(from, 1); k.splice(to, 0, m); order = k; afterFilesChange(); },
-      // (a series renamed as in the Data card: empty, or as its header names it, back to that name)
-      onLabelChange(i, v){
-        const t = ts[i];
-        if (!t) return;
-        if (!t.s){ t.f.label = v; afterFilesChange(); return; }
-        rename(t.f, t.s.col, v, t.s.def);
-      },
-      /* A trace removed: its column, and its error's, no longer used (the Data card's roles,
-         —); its file's last, or a file of none, the file removed. */
-      onRemove(i){
-        const t = ts[i];
-        if (!t) return;
-        if (!t.s || seriesCols(t.f.roles).length < 2){ removeFileAt(allFiles, allFiles.indexOf(t.f), []); if (!allFiles.length) cb.onRemoveAll(); else afterFilesChange(); return; }
-        const r = t.f.roles.slice();
-        r[t.s.col] = '';
-        if (t.s.ey >= 0) r[t.s.ey] = '';
-        t.f.roles = fixRoles(r);
-        if (isOut(t.f, t.s.col)) setOut(t, true);
-        afterFilesChange();
-      },
-    } };
-  }
-  /* A series renamed, in the trace list or in place over its columns in the Data card (one
-     name). From the Data card (`inPlace`) its fields there take the name and the head is
-     not drawn anew, so the focus, gone on to another field, stays there. */
-  function rename(f, col, v0, def, inPlace){
-    const v = v0.trim(), names = { ...f.names };
-    if (!v || v === def) delete names[col]; else names[col] = v;
-    f.names = names;
-    if (inPlace) $('figHead').querySelectorAll(`thead input[data-col="${col}"]`).forEach(inp=>{ inp.value = v || def; });
-    kit.showFiles();
-    if (!inPlace) renderData();
-    cards().forEach(a=> paintPanel(a));
-    updateAll(true);
-    kit.commit();
-  }
-  // The colours changed: the list, the plots and their legends drawn again, a step.
-  function repaint(){
-    kit.showFiles();
-    cards().forEach(a=> paintPanel(a));
-    updateAll(true);
-    kit.commit();
-  }
-  /* A plot keeps the series that still are (a y of a file loaded, included or not) and lets
-     the others go, without a word: a file removed, a column no longer a y. */
-  function prune(){
-    const ys = new Set(allFiles.flatMap(f=> seriesCols(f.roles).map(s=> keyOf(f.name, s.col))));
-    cards().forEach(a=>{ if (a.series.some(r=> !ys.has(keyOf(r.file, r.col)))) a.series = a.series.filter(r=> ys.has(keyOf(r.file, r.col))); });
-  }
-
-  /* ---- The Data card: the file on show (its arrows, as the other modules' samples: a view,
-     no step of the history), the roles of all files alike on its line, and the file's
-     table across the card, a role over each column and its series' names over them ---- */
-  /* The line of the series' names over the head: each series' name over its columns (its
-     x, its y, their errors), one cell across them, a field where it is typed over (v534:
-     to v533 the names were also listed beside the table); a column no series has, or an x
-     (or its error) that several share, blank. A series whose columns another's split has
-     its name over each of its runs. */
-  function nameCells(ss, n){
-    const by = Array.from({ length: n }, ()=> new Set());
-    ss.forEach((s, k)=> [s.x, s.ex, s.col, s.ey].forEach(c=>{ if (c >= 0 && c < n) by[c].add(k); }));
-    const own = by.map(b=> b.size === 1 ? [...b][0] : -1), out = [];
-    for (let c = 0; c < n;){
-      let e = c + 1;
-      while (e < n && own[e] === own[c]) e++;
-      const span = e - c > 1 ? ` colspan="${e - c}"` : '';
-      if (own[c] < 0) out.push(`<th${span}></th>`);
-      else {
-        const s = ss[own[c]], tip = `${s.auto} (${s.cols})`;
-        out.push(`<th${span} class="fig-name"><input type="text" class="fig-name-in" data-col="${s.col}" value="${esc(s.name)}" placeholder="${esc(s.def)}" title="${esc(tip)}" aria-label="${esc(`Name of ${tip}`)}" autocomplete="off" spellcheck="false"></th>`);
-      }
-      c = e;
-    }
-    return out.join('');
-  }
-  const shownFile = ()=> allFiles.find(f=> f.name === shownName) || allFiles[0] || null;
-  function renderData(){
-    const card = $('figDataCard');
-    card.style.display = allFiles.length ? '' : 'none';
-    const f = shownFile();
-    if (!f) return;
-    shownName = f.name;
-    const fi = allFiles.indexOf(f), t = tableOf(f);
-    fileNav.update();
-    $('figSame').checked = same;
-    const roleSel = (r, c)=> `<select data-col="${c}" aria-label="Role of column ${c + 1}">${Object.entries(ROLES).map(([k, l])=> `<option value="${k}"${k === r ? ' selected' : ''}>${l}</option>`).join('')}</select>`;
-    const ss = seriesOfFile(f, fi);
-    // The head: the series' names over their columns, the roles, the header. The rows, all
-    // of them, built once a file shown (its table's), its scroll kept while it stays.
-    const head = `<tr class="fig-names">${nameCells(ss, t.n)}</tr><tr class="fig-roles">${f.roles.map((r, c)=> `<th>${roleSel(r, c)}</th>`).join('')}</tr>`
-      + (t.head ? `<tr class="fig-hd">${t.head.map(h=> `<th>${esc(h)}</th>`).join('')}</tr>` : '');
-    const box = $('figHead');
-    if (box._t === t && box.querySelector('thead')) box.querySelector('thead').innerHTML = head;
-    else {
-      box._t = t;
-      box.innerHTML = `<table class="fig-cols"><thead>${head}</thead><tbody>`
-        + t.rows.map(r=> `<tr>${r.map(c=> `<td>${esc(c)}</td>`).join('')}</tr>`).join('') + `</tbody></table>`;
-      box.scrollTop = 0; box.scrollLeft = 0;
-    }
-    // (the roles of all files alike: a file with fewer columns than the one on show said)
-    const short = same ? allFiles.filter(g=> g !== f && tableOf(g).n < t.n) : [];
-    $('figWarn').innerHTML = short.length ? `<div class="alert warn">⚠ Same roles for all files: ${short.map(g=> esc(`${g.label} has ${tableOf(g).n} column${tableOf(g).n > 1 ? 's' : ''}`)).join(', ')}, fewer than the ${t.n} of ${esc(f.label)}; the roles of the columns past its own do not apply to it.</div>` : '';
-  }
-  // The roles changed: given to every file (same), the plots' series that are gone let go.
-  function rolesChanged(){
-    const src = shownFile();
-    if (same && src) allFiles.forEach(g=>{ if (g !== src) g.roles = rolesLike(src.roles, tableOf(g).n); });
-    prune();
-    kit.showFiles();
-    renderData();
-    cards().forEach(a=> paintPanel(a));
-    updateAll(true);
-    kit.commit();
-  }
-  // (the file on show: a view, no step)
-  const stepFile = d =>{ const n = allFiles.length, f = shownFile(); if (n && f){ shownName = allFiles[(allFiles.indexOf(f) + d + n) % n].name; renderData(); } };
-  $('figFilePrev').addEventListener('click', ()=> stepFile(-1));
-  $('figFileNext').addEventListener('click', ()=> stepFile(1));
+}
+// The roles changed: given to every file (same), the plots' series that are gone let go.
+function rolesChanged(S){
+  const src = shownFile(S);
+  if (S.same && src) M.giveRoles(S.allFiles, src);
+  M.pruneCards(S.allFiles, S.deck.records);
+  S.kit.showFiles();
+  renderData(S);
+  S.deck.records.forEach(a=> paintPanel(S, a));
+  updateAll(S, true);
+  S.kit.commit();
+}
+// (the file on show: a view, no step)
+function stepFile(S, d){ const n = S.allFiles.length, f = shownFile(S); if (n && f){ S.shownName = S.allFiles[(S.allFiles.indexOf(f) + d + n) % n].name; renderData(S); } }
+const shownAt = S => Math.max(0, S.allFiles.indexOf(shownFile(S)));
+function wireData(S){
+  S.$('figFilePrev').addEventListener('click', ()=> stepFile(S, -1));
+  S.$('figFileNext').addEventListener('click', ()=> stepFile(S, 1));
   // (its list: any file, straight)
-  const fileNav = snav($('figFileNav').querySelector('.snav'), { count: ()=> allFiles.length, index: ()=> Math.max(0, allFiles.indexOf(shownFile())),
-    label: i=> allFiles[i].label, title: i=> allFiles[i].name, go: i=> stepFile(i - Math.max(0, allFiles.indexOf(shownFile()))) });
-  $('figSame').addEventListener('change', e=>{ same = e.target.checked; rolesChanged(); });
-  $('figHead').addEventListener('change', e=>{
-    const sel = e.target.closest('select[data-col]'), f = shownFile();
-    if (!sel || !f || !ownKey(ROLES, sel.value)) return;
-    f.roles = setRole(f.roles, +sel.dataset.col, sel.value);
-    rolesChanged();
-  });
+  S.fileNav = snav(S.$('figFileNav').querySelector('.snav'), { count: ()=> S.allFiles.length, index: ()=> shownAt(S),
+    label: i=> S.allFiles[i].label, title: i=> S.allFiles[i].name, go: i=> stepFile(S, i - shownAt(S)) });
+  S.$('figSame').addEventListener('change', e=>{ S.same = e.target.checked; rolesChanged(S); });
+  S.$('figHead').addEventListener('change', e=> onRole(S, e));
   /* A series renamed over its columns, taken as the field is left (or on Enter): empty, or
      as its header names it, it goes back to that name; Escape puts back the one it had. */
-  $('figHead').addEventListener('focusin', e=>{ if (e.target.matches('input[data-col]')) e.target.dataset.was = e.target.value; });
-  $('figHead').addEventListener('change', e=>{
-    const inp = e.target.closest('input[data-col]'), f = shownFile();
-    if (!inp || !f || inp.value === inp.dataset.was) return;
-    inp.dataset.was = inp.value;
-    rename(f, +inp.dataset.col, inp.value, inp.placeholder, true);
-  });
-  $('figHead').addEventListener('keydown', e=>{
-    const inp = e.target.closest('input[data-col]');
-    if (!inp) return;
-    if (e.key === 'Enter'){ e.preventDefault(); inp.blur(); }
-    else if (e.key === 'Escape' && inp.dataset.was != null){ e.preventDefault(); e.stopPropagation(); inp.value = inp.dataset.was; inp.blur(); }
-  });
+  S.$('figHead').addEventListener('focusin', e=>{ if (e.target.matches('input[data-col]')) e.target.dataset.was = e.target.value; });
+  S.$('figHead').addEventListener('change', e=> onNameIn(S, e));
+  S.$('figHead').addEventListener('keydown', onNameKey);
+}
+function onRole(S, e){
+  const sel = e.target.closest('select[data-col]'), f = shownFile(S);
+  if (!sel || !f || !ownKey(M.ROLES, sel.value)) return;
+  f.roles = M.setRole(f.roles, +sel.dataset.col, sel.value);
+  rolesChanged(S);
+}
+function onNameIn(S, e){
+  const inp = e.target.closest('input[data-col]'), f = shownFile(S);
+  if (!inp || !f || inp.value === inp.dataset.was) return;
+  inp.dataset.was = inp.value;
+  rename(S, f, +inp.dataset.col, inp.value, inp.placeholder, true);
+}
+function onNameKey(e){
+  const inp = e.target.closest('input[data-col]');
+  if (!inp) return;
+  if (e.key === 'Enter'){ e.preventDefault(); inp.blur(); }
+  else if (e.key === 'Escape' && inp.dataset.was != null){ e.preventDefault(); e.stopPropagation(); inp.value = inp.dataset.was; inp.blur(); }
+}
 
-  /* ---- The Plot cards (cards.js): each its kind, its series (by file and column, each with
-     its scale and offset), its normalisation and its figure ---- */
-  // A card's series that are plotted (included in the trace list), with their names made unique
-  // in it (a name two files' series share: with the file's label) and their colours (v534:
-  // the trace list's; to v533 by their place in the plot).
-  function plotted(a, map = seriesMap()){
-    const used = new Set();
-    return a.series.map(r=> ({ r, s: map.get(keyOf(r.file, r.col)) })).filter(e=> e.s).map(e=>{
-      let name = e.s.name, n = 2;
-      if (used.has(name)) name = `${e.s.name} (${e.s.f.label})`;
-      while (used.has(name)) name = `${e.s.name} (${n++})`;
-      used.add(name);
-      return { ...e, name, color: e.s.color };
-    });
-  }
-  // The card's normalisation and list of series (drawn whether or not on show).
-  function paintPanel(a, card = deck.cardOf(a)){
-    if (!card) return;
-    const list = plotted(a), ops = OPS[a.type];
-    card.querySelector('#' + P(a) + 'Norm').value = a.norm;
-    card.querySelector('#' + P(a) + 'Add').disabled = !seriesMap().size;
-    // (a row each, as the parameters': the name on three fifths, the scale and offset on two)
-    card.querySelector('#' + P(a) + 'List').innerHTML = list.map(({ r, s, name })=> `
-          <div class="fig-ser" data-key="${esc(s.key)}">
-            <div class="fig-ser-head"><button type="button" class="an-ic fig-ser-x" data-act="del" title="Take this series out of the plot" aria-label="Take ${esc(name)} out of the plot">${X_SVG(13)}</button>
-              <span class="fig-ser-name" title="${esc(`${s.f.label}: ${s.auto} (${s.cols})`)}">${esc(name)}</span></div>
-            <div class="fig-ops">${ops.includes('scale') ? opField('scale', '×', r.scale, 'Scale: every value multiplied by it, after the normalization') : ''}${
-              ops.includes('offset') ? opField('offset', '+', r.offset, 'Offset: added to every y, after the scale') : ''}</div>
-          </div>`).join('') + (a.series.length > list.length ? `<div class="txt-meta fig-ser-out">${a.series.length - list.length} series left out of the analysis not shown.</div>` : '');
-  }
-  function buildCard(a, card){
-    const list = card.querySelector('#' + P(a) + 'List');
-    card.querySelector('#' + P(a) + 'Add').addEventListener('click', ()=> openPick(a));
-    card.querySelector('#' + P(a) + 'Norm').addEventListener('change', e=>{
-      if (!ownKey(NORMS, e.target.value) || e.target.value === a.norm) return;
-      a.norm = e.target.value;
-      drawCard(a); kit.commit();
-    });
-    const refOf = el =>{ const row = el.closest('.fig-ser'); return row ? a.series.find(r=> keyOf(r.file, r.col) === row.dataset.key) : null; };
-    list.addEventListener('click', e=>{
-      const b = e.target.closest('[data-act="del"]'), r = b && refOf(b);
-      if (!r) return;
-      a.series = a.series.filter(x=> x !== r);
-      paintPanel(a); drawCard(a); kit.commit();
-    });
-    // An operation taken as it is confirmed: a number; else the field shakes and shows the
-    // record's value again.
-    list.addEventListener('change', e=>{
-      const el = e.target.closest('[data-op]'), r = el && refOf(el);
-      if (!r) return;
-      const k = el.dataset.op, raw = el.value.trim(), v = parseNum(raw);
-      if (!/^[+-]?(\d+([.,]\d*)?|[.,]\d+)([eE][+-]?\d+)?$/.test(raw) || !Number.isFinite(v)){
-        flashFieldInvalid(el); el.value = String(r[k]); return;
-      }
-      el.value = String(v);
-      if (Object.is(r[k], v)) return;
-      a.series = a.series.map(x=> x === r ? { ...r, [k]: v } : x);
-      drawCard(a); kit.commit();
-    });
-    list.addEventListener('keydown', e=>{ if (e.key === 'Enter' && e.target.matches('input[type="text"]')) e.target.blur(); });
-    paintPanel(a, card);
-  }
+/* ---- The Plot cards (cards.js): each its kind, its series (by file and column, each with
+   its scale and offset), its normalisation and its figure ---- */
+// The card's normalisation and list of series (drawn whether or not on show).
+function paintPanel(S, a, card = S.deck.cardOf(a)){
+  if (!card) return;
+  const list = M.plotted(a, seriesMap(S)), ops = M.OPS[a.type];
+  card.querySelector('#' + P(a) + 'Norm').value = a.norm;
+  card.querySelector('#' + P(a) + 'Add').disabled = !seriesMap(S).size;
+  card.querySelector('#' + P(a) + 'List').innerHTML = H.serListHtml(a, list, ops, HU);
+}
+function buildCard(S, a, card){
+  const list = card.querySelector('#' + P(a) + 'List');
+  card.querySelector('#' + P(a) + 'Add').addEventListener('click', ()=> openPick(S, a));
+  card.querySelector('#' + P(a) + 'Norm').addEventListener('change', e=> onNorm(S, a, e));
+  list.addEventListener('click', e=> onDel(S, a, e));
+  list.addEventListener('change', e=> onOp(S, a, e));
+  list.addEventListener('keydown', e=>{ if (e.key === 'Enter' && e.target.matches('input[type="text"]')) e.target.blur(); });
+  paintPanel(S, a, card);
+}
+function onNorm(S, a, e){
+  if (!ownKey(M.NORMS, e.target.value) || e.target.value === a.norm) return;
+  a.norm = e.target.value;
+  drawCard(S, a); S.kit.commit();
+}
+// The series of a row of the card's list.
+const refOf = (a, el)=>{ const row = el.closest('.fig-ser'); return row ? a.series.find(r=> M.keyOf(r.file, r.col) === row.dataset.key) : null; };
+function onDel(S, a, e){
+  const b = e.target.closest('[data-act="del"]'), r = b && refOf(a, b);
+  if (!r) return;
+  a.series = a.series.filter(x=> x !== r);
+  paintPanel(S, a); drawCard(S, a); S.kit.commit();
+}
+// An operation taken as it is confirmed: a number; else the field shakes and shows the
+// record's value again (fig-model.js opIn).
+function onOp(S, a, e){
+  const el = e.target.closest('[data-op]'), r = el && refOf(a, el);
+  if (!r) return;
+  const k = el.dataset.op, v = M.opIn(el.value.trim());
+  if (v === null){ flashFieldInvalid(el); el.value = String(r[k]); return; }
+  el.value = String(v);
+  if (Object.is(r[k], v)) return;
+  a.series = a.series.map(x=> x === r ? { ...r, [k]: v } : x);
+  drawCard(S, a); S.kit.commit();
+}
+function named(S, a){
+  const card = S.deck.cardOf(a);
+  if (card) nameDownloads(card.querySelector('.plot-wrap'), `${fileSafe(a.name)}.svg`, `${fileSafe(a.name)} - fig_plot.csv`);
+}
 
-  /* ---- Add series: a window of the series of every file included, by file, those of the
-     plot ticked; a file's box ticks or clears all its own, and shows a square when some
-     are ticked. Done gives the plot those ticked (the ones it had in their places, the new
-     after them in the list's order), a step; Cancel, Escape or a click outside, nothing. ---- */
-  const pick = document.createElement('div');
+/* ---- Add series: a window of the series of every file included, by file, those of the
+   plot ticked; a file's box ticks or clears all its own, and shows a square when some
+   are ticked. Done gives the plot those ticked (the ones it had in their places, the new
+   after them in the list's order: fig-model.js pickedSeries), a step; Cancel, Escape or a
+   click outside, nothing. ---- */
+function wirePick(S){
+  const pick = S.pick = document.createElement('div');
   pick.className = 'modal-backdrop fig-pick';
   pick.style.display = 'none';
-  pick.innerHTML = `<div class="modal-box fig-pick-box" role="dialog" aria-modal="true" aria-label="Add series" tabindex="-1">
-      <h3 class="txt-head" style="margin:0 0 4px">Add series</h3>
-      <p class="txt-meta fig-pick-for" style="margin:0 0 8px"></p>
-      <div class="fig-pick-body"></div>
-      <div class="dt-modal-foot"><button type="button" class="btn" data-cancel>Cancel</button><button type="button" class="btn primary" data-done>Done</button></div>
-    </div>`;
-  layer.appendChild(pick);
-  const pickBody = pick.querySelector('.fig-pick-body');
-  let pickFor = null, pickFrom = null;
-  function openPick(a){
-    if (pickFor) return;
-    pickFor = a; pickFrom = document.activeElement;
-    const on = new Set(a.series.map(r=> keyOf(r.file, r.col)));
-    pick.querySelector('.fig-pick-for').textContent = `Ticked: the series of ${a.name}.`;
-    // (by file, in the order of the trace list, a file where its first series is)
-    const by = new Map();
-    for (const s of seriesMap().values()){ if (!by.has(s.f)) by.set(s.f, []); by.get(s.f).push(s); }
-    pickBody.innerHTML = [...by].map(([f, ss])=> `
-        <div class="fig-pick-file">
-          <label class="fig-pick-row fig-pick-head"><input type="checkbox" data-file aria-label="All the series of ${esc(f.label)}"><b>${esc(f.label)}</b></label>
-          ${ss.map(s=> `<label class="fig-pick-row"><input type="checkbox" data-key="${esc(s.key)}"${on.has(s.key) ? ' checked' : ''}><span>${esc(s.auto)} <span class="txt-meta">(${esc(s.cols)})</span></span><span class="fig-pick-name">${esc(s.name)}</span></label>`).join('')}
-        </div>`).join('');
-    pickBody.querySelectorAll('.fig-pick-file').forEach(syncPickFile);
-    pick.style.display = 'flex';
-    document.addEventListener('keydown', onPickKey, true);
-    pick.querySelector('.modal-box').focus();
-  }
-  // A file's box: ticked with all its series, empty with none, the square with some.
-  function syncPickFile(box){
-    const ss = [...box.querySelectorAll('input[data-key]')], n = ss.filter(c=> c.checked).length, all = box.querySelector('input[data-file]');
-    all.checked = n === ss.length;
-    all.indeterminate = n > 0 && n < ss.length;
-  }
-  function closePick(done){
-    const a = pickFor;
-    if (!a) return;
-    pickFor = null;
-    pick.style.display = 'none';
-    document.removeEventListener('keydown', onPickKey, true);
-    if (pickFrom && pickFrom.isConnected) pickFrom.focus();
-    pickFrom = null;
-    if (!done || !cards().includes(a)) return;
-    const want = [...pickBody.querySelectorAll('input[data-key]')].filter(c=> c.checked).map(c=> c.dataset.key), set = new Set(want);
-    const listed = new Set([...pickBody.querySelectorAll('input[data-key]')].map(c=> c.dataset.key)), map = seriesMap();
-    // (a series of a file left out, not in the window, stays)
-    const kept = a.series.filter(r=>{ const k = keyOf(r.file, r.col); return !listed.has(k) || set.has(k); });
-    const had = new Set(kept.map(r=> keyOf(r.file, r.col)));
-    const next = [...kept, ...want.filter(k=> !had.has(k) && map.has(k)).map(k=> ({ file: map.get(k).f.name, col: map.get(k).col, ...DEF_OPS }))];
-    if (next.length === a.series.length && next.every((r, i)=> r === a.series[i])) return;
-    a.series = next;
-    paintPanel(a); drawCard(a); kit.commit();
-  }
-  function onPickKey(e){ if (e.key === 'Escape' && pick.isConnected){ e.stopPropagation(); closePick(false); } }
-  pickBody.addEventListener('change', e=>{
+  pick.innerHTML = H.PICK_HTML;
+  S.layer.appendChild(pick);
+  S.pickBody = pick.querySelector('.fig-pick-body');
+  S.pickBody.addEventListener('change', e=>{
     const box = e.target.closest('.fig-pick-file');
     if (!box) return;
     if (e.target.matches('input[data-file]')) box.querySelectorAll('input[data-key]').forEach(c=>{ c.checked = e.target.checked; });
     syncPickFile(box);
   });
   pick.addEventListener('click', e=>{
-    if (e.target === pick || e.target.closest('[data-cancel]')) closePick(false);
-    else if (e.target.closest('[data-done]')) closePick(true);
+    if (e.target === pick || e.target.closest('[data-cancel]')) closePick(S, false);
+    else if (e.target.closest('[data-done]')) closePick(S, true);
   });
+}
+function openPick(S, a){
+  if (S.pickFor) return;
+  S.pickFor = a; S.pickFrom = document.activeElement;
+  const on = new Set(a.series.map(r=> M.keyOf(r.file, r.col)));
+  S.pick.querySelector('.fig-pick-for').textContent = H.pickFor(a.name);
+  // (by file, in the order of the trace list, a file where its first series is)
+  S.pickBody.innerHTML = H.pickBodyHtml(M.pickGroups(seriesMap(S)), on, HU);
+  S.pickBody.querySelectorAll('.fig-pick-file').forEach(syncPickFile);
+  S.pick.style.display = 'flex';
+  document.addEventListener('keydown', S.onPickKey, true);
+  S.pick.querySelector('.modal-box').focus();
+}
+// A file's box: ticked with all its series, empty with none, the square with some.
+function syncPickFile(box){
+  const ss = [...box.querySelectorAll('input[data-key]')], n = ss.filter(c=> c.checked).length, all = box.querySelector('input[data-file]');
+  all.checked = n === ss.length;
+  all.indeterminate = n > 0 && n < ss.length;
+}
+function closePick(S, done){
+  const a = S.pickFor;
+  if (!a) return;
+  S.pickFor = null;
+  S.pick.style.display = 'none';
+  document.removeEventListener('keydown', S.onPickKey, true);
+  if (S.pickFrom && S.pickFrom.isConnected) S.pickFrom.focus();
+  S.pickFrom = null;
+  if (!done || !S.deck.records.includes(a)) return;
+  const boxes = ()=> [...S.pickBody.querySelectorAll('input[data-key]')];
+  const want = boxes().filter(c=> c.checked).map(c=> c.dataset.key), listed = new Set(boxes().map(c=> c.dataset.key));
+  const next = M.pickedSeries(a.series, want, listed, seriesMap(S));
+  if (!next) return;
+  a.series = next;
+  paintPanel(S, a); drawCard(S, a); S.kit.commit();
+}
+function onPickKey(S, e){ if (e.key === 'Escape' && S.pick.isConnected){ e.stopPropagation(); closePick(S, false); } }
 
-  function named(a){
-    const card = deck.cardOf(a);
-    if (card) nameDownloads(card.querySelector('.plot-wrap'), `${fileSafe(a.name)}.svg`, `${fileSafe(a.name)} - fig_plot.csv`);
-  }
-  const deck = kit.deck({
-    kinds: KINDS, title: '', info: ()=> FIG_INFO, body: cardBody, make: ()=> ({ series: [], norm: 'none', fig: null }),
-    build: buildCard, drop: ()=>{}, autoName: a=> `Plot ${a.id}`, named,
-    added: a=> drawCard(a),
-    switched: a=>{ paintPanel(a); drawCard(a); },
-    wake: a=> drawCard(a, true),
-  });
-  const cards = ()=> deck.records;
-
-  // Every card unfolded drawn; a folded one as it comes back (wake).
-  function updateAll(preserveView){
-    cards().forEach(a=>{ if (!deck.isFolded(a)) drawCard(a, preserveView); });
-    if (shown()){ stale = false; drawnAt = String(root.clientWidth); }
-  }
-  // (its tab not on show: not drawn, drawn whole as it is shown)
-  function drawCard(a, preserveView){
-    const card = deck.cardOf(a);
-    if (!card || !drawable()) return;
-    const list = plotted(a), svg = card.querySelector('#' + P(a) + 'Svg'), legend = card.querySelector('#' + P(a) + 'Legend');
-    card.querySelector('#' + P(a) + 'Empty').style.display = list.length ? 'none' : '';
-    svg.closest('.plot-wrap').style.display = list.length ? '' : 'none';
-    if (!list.length){ legend.innerHTML = ''; return; }
-    const prev = preserveView ? viewOf(svg._plot) : null;
-    const divs = divsOf(a.type, a.norm, list), data = list.map((e, k)=> dataOf(a.type, e.s.t, e.s, e.r, divs[k]));
-    if (a.type === 'xy') drawXY(svg, list, data, prev, a.norm);
-    else if (a.type === 'bar') drawBars(svg, list, data, legend);
-    else drawBoxes(svg, list, data);
-    if (a.type !== 'bar') legend.innerHTML = list.map(e=> `<span><i${a.type === 'box' ? ' class="mk-box"' : ''} style="background:${e.color}"></i>${esc(e.name)}</span>`).join('');
-    // The composer's figure kept with the card (figure.js recallKept): its closing a step.
-    if (svg._plot) svg._plot.figure = {
-      load: ()=> a.fig,
-      save: snap =>{ if (JSON.stringify(snap) !== JSON.stringify(a.fig)){ a.fig = snap; kit.commit(); } },
-    };
-  }
-  function drawXY(svg, list, data, prev, norm){
-    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
-    data.forEach(d=> d.xs.forEach((x, i)=>{
-      const ex = d.exs[i] || 0, ey = d.eys[i] || 0, y = d.ys[i];
-      x0 = Math.min(x0, x - ex); x1 = Math.max(x1, x + ex); y0 = Math.min(y0, y - ey); y1 = Math.max(y1, y + ey);
-    }));
-    if (!Number.isFinite(x0)){ x0 = 0; x1 = 1; y0 = 0; y1 = 1; }
-    const pad = (y1 - y0) * 0.05 || Math.abs(y1) * 0.05 || 1;
-    const plot = new Plot(svg, { xlabel: axisTitle(list.map(e=> headOf(e.s.t, e.s.x))), ylabel: axisTitle(list.map(e=> headOf(e.s.t, e.s.col))) });
-    plot.setRange(x0, x1, y0 - pad, y1 + pad);
-    setView(plot, prev, list.map(e=> e.s.key + JSON.stringify(e.r)).join('\n') + '\n' + norm);
-    plot.drawAxes();
-    list.forEach((e, k)=>{
-      const d = data[k], sx = [], sy = [];
-      // (the error bars, segments in the series' colour: x ± its error, y ± its own)
-      d.xs.forEach((x, i)=>{
-        const y = d.ys[i];
-        if (d.eys[i] > 0){ sx.push(x, x); sy.push(y - d.eys[i], y + d.eys[i]); }
-        if (d.exs[i] > 0){ sx.push(x - d.exs[i], x + d.exs[i]); sy.push(y, y); }
-      });
-      if (sx.length) plot.segments(sx, sy, e.color, 1, { label: e.name + ' (errors)', key: e.s.key + '\nerr' });
-      plot.line(d.xs, d.ys, e.color, 1.5, undefined, { label: e.name, key: e.s.key });
-    });
-    plot.attachTools(svg.closest('.plot-wrap'));
-  }
-  /* Bars: the categories of all the series, in the order they first come, each series' bar
-     (the first value of a category, should it come twice) and its error in them. */
-  function drawBars(svg, list, data, legend){
-    const cats = [], at = new Map();
-    data.forEach(d=> d.cats.forEach(c=>{ if (!at.has(c)){ at.set(c, cats.length); cats.push(c); } }));
-    const series = list.map((e, k)=>{
-      const vals = cats.map(()=> NaN), errs = cats.map(()=> NaN), d = data[k];
-      d.cats.forEach((c, i)=>{ const j = at.get(c); if (Number.isNaN(vals[j])){ vals[j] = d.ys[i]; errs[j] = d.eys[i]; } });
-      return { name: e.name, color: e.color, vals, errs };
-    });
-    const big = Math.max(...series.flatMap(m=> m.vals).filter(Number.isFinite).map(Math.abs), 0);
-    const digits = big > 0 ? Math.max(0, Math.min(6, 2 - Math.floor(Math.log10(big)))) : 2;
-    valueBars(svg, { cats: cats.map(c=> ({ label: c, name: c })), series, digits, yLabel: esc(axisTitle(list.map(e=> headOf(e.s.t, e.s.col)))), legend });
-  }
-  /* Boxes: one a series, its values down the rows, named as the series, with the mean ± the
-     standard deviation above it. */
-  function drawBoxes(svg, list, data){
-    const st = data.map(d=>{ const b = boxStats(d.ys); return b && { ...b, mean: meanArr(d.ys), err: d.ys.length > 1 ? stdArr(d.ys) : NaN }; });
-    const n = list.length, tops = st.filter(Boolean).map(b=> Math.max(b.hi, ...b.out)), bots = st.filter(Boolean).map(b=> Math.min(b.lo, ...b.out));
-    const mctx = document.createElement('canvas').getContext('2d');
-    mctx.font = "10px 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
-    const r = svg.getBoundingClientRect(), W = r.width || 640;
-    const fit = barNames(mctx, list.map(e=> e.name), Math.max(60, W - 75), 55);
-    const bottom = Math.round(26 + Math.max(0, ...fit.labels.map(l=> mctx.measureText(l).width)) * fit.sin);
-    const lo = Math.min(0, ...bots), hi = Math.max(...tops, 0), span = (hi - lo) || 1;
-    // (room above the tallest box for its label, upright: the plot's height less the label's)
-    const label = b => Number.isFinite(b.err) ? `${sig(b.mean)}±${sig(b.err)}` : sig(b.mean);
-    const plotH = (r.height || 420) - 15 - bottom, reserve = 12 + Math.max(0, ...st.filter(Boolean).map(b=> mctx.measureText(label(b)).width));
-    const y0 = lo < 0 ? lo - 0.08*span : 0, y1 = Math.max(hi + 0.15*span, y0 + (hi - y0) / (plotH > reserve ? 1 - reserve/plotH : 0.5));
-    const plot = new Plot(svg, { xlabel: '', ylabel: axisTitle(list.map(e=> headOf(e.s.t, e.s.col))), noXTickLabels: true, noXGrid: true, yGrid: true, margin: { l: 55, r: 20, t: 15, b: bottom } });
-    plot.setRange(0, n + 1, y0, y1);
-    plot.drawAxes();
-    const hw = Math.min(16, (W - 75)/(n + 1)*0.3);
-    list.forEach((e, k)=>{
-      const b = st[k];
-      if (b){
-        plot.box(k + 1, b, e.color, hw, 0, { label: e.name });
-        plot.barLabel(k + 1, Math.max(b.hi, ...b.out), label(b), { gap: 6 });
-      }
-      plot.tickLabel(k + 1, fit.labels[k], fit.rot, e.name, e.s.key);
-    });
-    plot.attachTools(svg.closest('.plot-wrap'));
-  }
-
-  // A card's CSV: what it plots, a series' columns beside the others' ('' with none).
-  function cardCsv(a){
-    const list = plotted(a);
-    if (!list.length) return '';
-    const cols = [], divs = divsOf(a.type, a.norm, list);
-    list.forEach((e, k)=>{
-      const d = dataOf(a.type, e.s.t, e.s, e.r, divs[k]), t = e.s.t;
-      if (a.type === 'xy'){
-        cols.push({ h: `${e.name} - ${axisTitle([headOf(t, e.s.x)]) || 'x'}`, v: d.xs.map(csvNum) }, { h: e.name, v: d.ys.map(csvNum) });
-        if (e.s.ex >= 0) cols.push({ h: `${e.name} - err x`, v: d.exs.map(csvNum) });
-        if (e.s.ey >= 0) cols.push({ h: `${e.name} - err y`, v: d.eys.map(csvNum) });
-      } else if (a.type === 'bar'){
-        cols.push({ h: `${e.name} - category`, v: d.cats }, { h: e.name, v: d.ys.map(csvNum) });
-        if (e.s.ey >= 0) cols.push({ h: `${e.name} - err y`, v: d.eys.map(csvNum) });
-      } else cols.push({ h: e.name, v: d.ys.map(csvNum) });
-    });
-    return wideCsv(cols);
-  }
-
-  // A new project starts with no plot: + adds one, of the kind chosen.
-  deck.start([]);
-
-  return {
-    // The file the Data card shows: kept as the tab sleeps and in its record (tabs.js).
-    shows(){ return allFiles.length > 1 && shownName && shownName !== allFiles[0].name ? { file: shownName } : null; },
-    showNext(v){ fileNext = isObj(v) && typeof v.file === 'string' ? v.file : null; },
-    destroy(){ closePick(false); pick.remove(); kit.destroy(); },
+/* ---- The plots ---- */
+// Every card unfolded drawn; a folded one as it comes back (wake).
+function updateAll(S, preserveView){
+  S.deck.records.forEach(a=>{ if (!S.deck.isFolded(a)) drawCard(S, a, preserveView); });
+  if (S.shown()){ S.stale = false; S.drawnAt = String(S.root.clientWidth); }
+}
+// (its tab not on show: not drawn, drawn whole as it is shown)
+function drawCard(S, a, preserveView){
+  const card = S.deck.cardOf(a);
+  if (!card || !drawable(S)) return;
+  const list = M.plotted(a, seriesMap(S)), svg = card.querySelector('#' + P(a) + 'Svg'), legend = card.querySelector('#' + P(a) + 'Legend');
+  card.querySelector('#' + P(a) + 'Empty').style.display = list.length ? 'none' : '';
+  svg.closest('.plot-wrap').style.display = list.length ? '' : 'none';
+  if (!list.length){ legend.innerHTML = ''; return; }
+  const prev = preserveView ? viewOf(svg._plot) : null;
+  const divs = M.divsOf(U, a.type, a.norm, list), data = list.map((e, k)=> M.dataOf(U, a.type, e.s.t, e.s, e.r, divs[k]));
+  if (a.type === 'xy') drawXY(svg, list, data, prev, a.norm);
+  else if (a.type === 'bar') drawBars(svg, list, data, legend);
+  else drawBoxes(svg, list, data);
+  if (a.type !== 'bar') legend.innerHTML = H.legendHtml(a.type, list, HU);
+  // The composer's figure kept with the card (figure.js recallKept): its closing a step.
+  if (svg._plot) svg._plot.figure = {
+    load: ()=> a.fig,
+    save: snap =>{ if (JSON.stringify(snap) !== JSON.stringify(a.fig)){ a.fig = snap; S.kit.commit(); } },
   };
+}
+function drawXY(svg, list, data, prev, norm){
+  const R = M.xyRange(data);
+  const plot = new Plot(svg, { xlabel: M.xTitle(list), ylabel: M.yTitle(list) });
+  plot.setRange(R.x0, R.x1, R.y0, R.y1);
+  setView(plot, prev, M.viewKey(list, norm));
+  plot.drawAxes();
+  list.forEach((e, k)=>{
+    const d = data[k], E = M.errBars(d);
+    if (E.sx.length) plot.segments(E.sx, E.sy, e.color, 1, { label: e.name + ' (errors)', key: e.s.key + '\nerr' });
+    plot.line(d.xs, d.ys, e.color, 1.5, undefined, { label: e.name, key: e.s.key });
+  });
+  plot.attachTools(svg.closest('.plot-wrap'));
+}
+// Bars (fig-model.js barsOf): a series a colour, side by side in each category.
+function drawBars(svg, list, data, legend){
+  valueBars(svg, { ...M.barsOf(list, data), yLabel: esc(M.yTitle(list)), legend });
+}
+// Boxes (fig-model.js boxStatsOf, boxLayout): their names measured in the plot's font.
+function drawBoxes(svg, list, data){
+  const st = M.boxStatsOf(U, data);
+  const mctx = document.createElement('canvas').getContext('2d');
+  mctx.font = "10px 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
+  const L = M.boxLayout(U, list, st, mctx, svg.getBoundingClientRect());
+  const plot = new Plot(svg, { xlabel: '', ylabel: M.yTitle(list), noXTickLabels: true, noXGrid: true, yGrid: true, margin: { l: 55, r: 20, t: 15, b: L.bottom } });
+  plot.setRange(0, L.n + 1, L.y0, L.y1);
+  plot.drawAxes();
+  list.forEach((e, k)=>{
+    const b = st[k];
+    if (b){
+      plot.box(k + 1, b, e.color, L.hw, 0, { label: e.name });
+      plot.barLabel(k + 1, Math.max(b.hi, ...b.out), M.boxLabel(b), { gap: 6 });
+    }
+    plot.tickLabel(k + 1, L.fit.labels[k], L.fit.rot, e.name, e.s.key);
+  });
+  plot.attachTools(svg.closest('.plot-wrap'));
+}
+// A card's CSV: what it plots, a series' columns beside the others' ('' with none).
+function cardCsv(S, a){
+  const list = M.plotted(a, seriesMap(S));
+  if (!list.length) return '';
+  return wideCsv(M.csvCols(U, a, list));
 }
 registerModule('fig', createFig);
