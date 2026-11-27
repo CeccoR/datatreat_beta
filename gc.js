@@ -1,7 +1,7 @@
 import { settings, fmtNum, csvLine, cumtrapz, maxArr, minArr, meanArr, stdArr, alertHtml, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, esc, registerModule, keeper, objId, exactKey } from './utils.js';
 import { Plot, svgEl } from './plot.js';
 import { cardInfo, fileSafe, nameDownloads } from './cards.js';
-import { moduleKit, wideCsv, isObj, num, numStr, oneOf, dateOf, arrOf, without, cardList } from './modkit.js';
+import { moduleKit, wideCsv, isObj, num, oneOf, dateOf, arrOf, without, cardList } from './modkit.js';
 import { CSV_ICON, plotWrap, viewOf, setView, viewKey, chipRow, toggleChip, valueBars } from './modcharts.js';
 import { autoPair } from './filelist-model.js';
 import { sideOf } from './gc-pair.js';
@@ -32,7 +32,7 @@ import * as H from './gc-html.js';
 ========================================================= */
 // utils.js's and modkit.js's helpers the model takes (gc-model.js U), and what the markup
 // takes (gc-html.js u).
-const U = { settings, fmtNum, csvLine, cumtrapz, maxArr, minArr, meanArr, stdArr, objId, exactKey, num, numStr, oneOf, dateOf, arrOf, without, wideCsv };
+const U = { settings, fmtNum, csvLine, cumtrapz, maxArr, minArr, meanArr, stdArr, objId, exactKey, num, oneOf, dateOf, arrOf, without, wideCsv };
 const HU = { esc, num, plotWrap, CSV_ICON, alertHtml };
 const GC_INFO = H.gcInfo(cardInfo(false, true));
 
@@ -188,15 +188,14 @@ function snapshotOf(S){
   const sv = S.integ.saved();
   return { cards: cards(S).map(a=> ({ ...S.deck.saved(a), ...S.live.get(a.id).snapshot() })), ...(sv ? { integ: sv } : {}) };
 }
-/* A project from before the cards had one analysis, its settings at the top level. A card
-   built afresh takes its settings when its analysis is made (init), its per-sample arrays
-   without the entries of the files the restore left out (gc-model.js cardsOf, initOf). The
-   files' samples as they should be (relink): a project from before them, each file its
-   own. */
+/* The cards (none, one of the defaults, as a new project starts). A card built afresh takes its
+   settings when its analysis is made (init), its per-sample arrays without the entries of the
+   files the restore left out (gc-model.js cardsOf, initOf). The files' samples as they should
+   be (relink): a project from before them, each file its own. */
 function restoreState(S, s, gone){
   M.relink(S.all);
   S.integ.load(s.integ);
-  S.deck.load(M.cardsOf(s, cardList(s.cards, M.KINDS)), src=> ({ init: M.initOf(U, src, gone) }), a=>{ S.live.get(a.id).restore(a.init); delete a.init; });
+  S.deck.load(M.cardsOf(cardList(s.cards, M.KINDS)), src=> ({ init: M.initOf(U, src, gone) }), a=>{ S.live.get(a.id).restore(a.init); delete a.init; });
   // (what its cards showed, given as its tab woke or the page was reloaded: showNext)
   if (S.cardsNext){ const v = S.cardsNext; S.cardsNext = null; each(S, (c, a)=>{ if (isObj(v[a.id])) c.showNext(v[a.id]); }); }
 }

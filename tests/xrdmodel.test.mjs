@@ -8,8 +8,9 @@
    name, no arrays, variance factors of another length); a project from before the cards
    migrated (the standard among the samples, left out, the sample on show); a kind's
    settings and the entries of the files left out; the files read, those lost and their
-   places, the sample on show; the cards' records and their settings by kind; the slots, a
-   held entry read; (v577) a file left out's CIF by its card's pool in the state saved, read
+   places, the sample on show; the cards' records and their settings by kind; the slots;
+   v583: an old project's file whose bytes are numbers (to v483), one left out under v477's
+   key, read as files of no bytes and entries of none; (v577) a file left out's CIF by its card's pool in the state saved, read
    back whole; a run's results and instruments patched into a state (a card's, the
    standard's, nothing new); what it shows and is given back; the patterns a drop loads; the
    markup escaped. Then 40 cases (random files of synthetic scans dropped twice, a state put
@@ -55,7 +56,7 @@ export const dec = b => new TextDecoder().decode(b);
 export const enc = s => new TextEncoder().encode(s);
 // A file's bytes read (the page's XML, here JSON of its scans: new objects at each reading).
 export const read = { n: 0 };
-export function scansOf(b){ read.n++; try { return JSON.parse(dec(b instanceof Uint8Array ? b : Uint8Array.from(b))).scans; } catch(e){ return [{ error: 'not well-formed XML' }]; } }
+export function scansOf(b){ read.n++; try { return JSON.parse(dec(b)).scans; } catch(e){ return [{ error: 'not well-formed XML' }]; } }
 export const sampleOf = b =>{ let j; try { j = JSON.parse(dec(b)); } catch(e){ return ''; } const s = j.sample || {}; const t = k => typeof s[k] === 'string' ? s[k].trim() : ''; return t('name') || t('id'); };
 export const U = { isObj: PAGE.isObj, colorOf: PAGE.colorOf, scansOf };
 export const HU = { esc: PAGE.esc, X_SVG: PAGE.X_SVG, fileAlertHtml: PAGE.fileAlertHtml, fileLine: PAGE.fileLine };
@@ -145,9 +146,23 @@ test('a project restored: migrated, its files read, those lost, the sample on sh
   assert.deepEqual(M.cardIn(U, { states: { scherrer: { perParams: [1, 2] }, rietveld: 5, constructor: {}, x: {} } }, new Set([0])), { states: { scherrer: { perParams: [2], manualPeaks: [], removedPeaks: [], shared: {} } } });
 });
 
+/* v583: an old project's files as this version reads them. Made here as older versions saved
+   them: a file's bytes as numbers (to v483), a file left out holding its entries under 'k' + the
+   slot's key (to v477). */
+test('an old project: bytes as numbers none, entries under an old key none (v583)', ()=>{
+  const b = enc(JSON.stringify({ scans: [scan([1, 2, 3], [5, 6, 7])] }));
+  let f;
+  read.n = 0;
+  assert.doesNotThrow(()=>{ f = M.keptFile(U, { name: 'a.xrdml', label: 'mine', rawBytes: [...b], x: [1, 2, 3], y: [4, 5, 6], included: false, held: { 'kA1:params': { w: 3 } } }, 0, '#1'); });
+  // no bytes: not read, its data the project's, said so; its label its own
+  assert.deepEqual([f.rawBytes, f.x, f.y, f.label, read.n, M.keptScans(f)], [null, [1, 2, 3], [4, 5, 6], 'mine', 0, null]);
+  assert.equal(H.openedNote(f), 'its bytes are not stored: its data are those the project holds');
+  // its entries under the old key: none read (the slot's default made), those under the key of now kept
+  const s = { perParams: [], manualPeaks: [], removedPeaks: [], shared: { w: 2 } }, [params] = M.keptSlots('A1', s);
+  assert.deepEqual([params.make(f.held[params.key], f), params.make({ w: 5 }, f)], [{ w: 2 }, { w: 5 }]);
+});
+
 test('the cards\' states: slots, a run\'s results patched in, what it shows', ()=>{
-  const sl = M.heldAs({ key: 'A1:params', arr: [], make: (v, f)=> ({ v, f: !!f }) });
-  assert.deepEqual(sl.make(undefined, { held: { 'kA1:params': 7 } }), { v: 7, f: true }); assert.deepEqual(sl.make(3, { held: {} }), { v: 3, f: true });
   const s = { perParams: [], manualPeaks: [], removedPeaks: [], shared: { w: 2 } }, ks = M.keptSlots('A4', s);
   assert.deepEqual(ks.map(k=> k.key), ['A4:params', 'A4:manual', 'A4:removed']); assert.deepEqual(ks[0].make(), { w: 2 }); assert.deepEqual(ks[1].make([1]), [1]);
   assert.equal(M.prefixOf({ type: 'scherrer', id: 3 }), 'xrdA3'); assert.equal(M.prefixOf({ type: 'rietveld', id: 3 }), 'xrdR3');

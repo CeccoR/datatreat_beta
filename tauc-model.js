@@ -5,11 +5,10 @@
    the notes), the reflectance from F(R); the curves smoothed and differentiated over the
    points that have a value, the window scan and its linear fit, E_g from the two Tauc fits,
    E_U and the Tauc baseline's part of the subtracted one's error, the suggestion's lines;
-   a card's parameters and lines (all and one, as the fields take them, a project's to v514,
-   v515 to v519's widths in eV as points, a file taken back in), the panel's state saved and
-   read back, the cards' references, a project from before the cards; what the plots and
-   charts draw (the ranges, the traces, a fit's lines, the Results' labels and series); the
-   CSVs. Taken out of v555's tauc.js with their operations in their order: the same numbers
+   a card's parameters and lines (all and one, as the fields take them, a file taken back
+   in), the panel's state saved and read back, a file read again from its bytes, the cards'
+   references; what the plots and charts draw (the ranges, the traces, a fit's lines, the
+   Results' labels and series); the CSVs. Taken out of v555's tauc.js with their operations in their order: the same numbers
    to the last bit.
 
    utils.js's and modkit.js's helpers, which need a page to load, are handed in as one
@@ -22,8 +21,8 @@
    default and the combined lines); the page adds the rest (its elements, the suggestion and
    the results an Urbach card reads off its reference).
 ========================================================= */
-import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from './textdata.js';
-import { boxSmooth } from './smooth.js';
+import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS, decodeText } from './textdata.js';
+import { heldLine } from './alerts.js';
 
 /* Energies are hν = hc/λ, hc in eV·nm to the digits a third decimal of E_g needs: 1240 put
    every energy 0.013% high. A spectrum's energies are made once for its array of
@@ -133,33 +132,6 @@ export function scanRegr(U, hv, Ys, M, x1, x2, Yraw, strict){
           bestIdx:best.bestIdx, varM:r.varM, varB:r.varB, covMB:r.covMB, n:idx.length};
 }
 
-/* ---- v515's window choice, for the projects saved by v515 to v519 (spanned, toPoints) ----
-   Their regression windows were widths in eV: a window W wide slid through the interval
-   (from each of its points every point up to W above it, while its end was in it, a point
-   within 10⁻⁹ eV of the end in it), fitted where it held 3 points with a value spread over
-   half its width at least, the one with the least NRMSE/R² on the curve smoothed by a box
-   w wide (smooth.js boxSmooth) chosen. Its points, `bestIdx` of v515's scanRegr, are what
-   the width spanned there: kept here to convert those projects, and for nothing else. */
-export function scanW(U, hv, Ys, W, x1, x2){
-  const lo = Math.min(x1, x2), hi = Math.max(x1, x2), TOL = 1e-9, sel = [];
-  for (let i = 0; i < hv.length; i++) if (hv[i] >= lo && hv[i] <= hi && isFinite(Ys[i])) sel.push(i);
-  sel.sort((a, b)=> hv[a] - hv[b]);
-  const E = sel.map(i=> hv[i]);
-  let best = [], bs = Infinity;
-  for (let s = 0, e = 0; s < E.length && E[s] + W <= hi + TOL; s++){
-    if (e < s) e = s;
-    while (e + 1 < E.length && E[e+1] <= E[s] + W + TOL) e++;
-    if (e - s < 2 || E[e] - E[s] < W/2 - TOL) continue;
-    // (in the points' own order, as v515 fitted them)
-    const b = sel.slice(s, e+1);
-    if (b[0] > b[b.length-1]) b.reverse();
-    const yb = b.map(i=> Ys[i]), r = U.fitLinear(b.map(i=> hv[i]), yb), range = Math.max(...yb) - Math.min(...yb);
-    const score = (range > 0 ? r.rmse/range : Infinity)/r.R2;
-    if (score < bs){ bs = score; best = b; }
-  }
-  return best;
-}
-
 /* Eg from the two Tauc fits: where the Tauc line crosses the x-axis, and where it
    crosses the baseline. Each error is the fit's own (co)variances carried through
    the formula, every term scaled by the t factor of the fit it comes from. */
@@ -248,13 +220,9 @@ export function curvatureEdge(U, c, p){
 /* ---- The parameters ---- */
 /* The fields of the parameters, by key: the exponent, A, and the numbers of points, N,
    the curve's smoothing, N2, the derivative's, M and M2, the regression windows (the
-   spec's windows say which is whose), to v514 and from v520 again. v515 to v519 kept
-   widths in eV in their place, w, w2, W and W2 (EV: toPoints); LEAST, the fewest points
-   each takes. */
+   spec's windows say which is whose). */
 export const FIELD = { a:'A', N:'N', N2:'N2', M:'M', M2:'M2' };
 export const CLAMP = { a: v => v, N: clampN, N2: clampN, M: clampM, M2: clampM };
-export const EV = { N:'w', N2:'w2', M:'W', M2:'W2' }, LEAST = { N: 1, N2: 1, M: 2, M2: 2 };
-export const median = a =>{ const s = a.slice().sort((x, y)=> x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m-1] + s[m])/2; };
 /* The Tauc exponents, as [F(R)·hν]^a: the transition each stands for (`name`, the
    card's automatic name), and how it is written where it shows (the select, the
    axes); a fraction as such. */
@@ -273,11 +241,8 @@ export const URBACH_COLOR = '#ff7f0e';
 export const URB_SUB_COLORS = { curve: '#b46cff', fit: '#00acc1' };
 export const TAUC_COLORS = { regs: '#ff5050', regs2: '#d050ff' };
 /* The defaults, in points (v514's, and from v520 again): no smoothing, the derivative's
-   over 20, the Tauc region's window 25, the baseline's 100, the Urbach region's 25. v515
-   to v519's in eV, for the states they saved (toPoints): 0, 0.15, 0.2 and 0.5; the Urbach
-   card's 0, 0.15 and 0.15. */
+   over 20, the Tauc region's window 25, the baseline's 100, the Urbach region's 25. */
 export const TAUC_DEF = { a:0.5, N:1, N2:20, M:25, M2:100 }, URB_DEF = { N:1, N2:20, M:25 };
-export const TAUC_EV = { w:0, w2:0.15, W:0.2, W2:0.5 }, URB_EV = { w:0, w2:0.15, W:0.15 };
 // The analyses' kinds, as the menus list them; the card titles set them in capitals.
 export const KINDS = { tauc: 'Tauc Plot', urbach: 'Urbach Energy' };
 // Where Urbach lines rest with nothing to go by: a quarter and three quarters in.
@@ -291,7 +256,7 @@ const kindSpec = s => ({ ...s, lineKeys: s.windows.flatMap(w=> [w.lo, w.hi]) });
 export const TAUC = kindSpec({
   kind: 'tauc',
   keys: ['a','N','N2','M','M2'],
-  defaults: TAUC_DEF, evDefaults: TAUC_EV,
+  defaults: TAUC_DEF,
   curve: (fr, hv, p)=> Math.pow(fr*hv, p.a),
   // The exponent changes the curve the edge is found on, so the lines follow it.
   suggestOn: ['a'],
@@ -313,7 +278,7 @@ export const TAUC = kindSpec({
 export const URBACH = kindSpec({
   kind: 'urbach',
   keys: ['N','N2','M'],
-  defaults: URB_DEF, evDefaults: URB_EV,
+  defaults: URB_DEF,
   curve: fr => fr > 0 ? Math.log(fr) : NaN,
   zeroFloor: false,
   windows: [
@@ -424,8 +389,8 @@ export const clone = o => JSON.parse(JSON.stringify(o));
    - columns not named, or not one way only: the file is not loaded, and the alert says
      why (the error).
    The points that are no physical value are left out (drsPoints). The file itself is
-   kept as it came (rawBytes), for its download; a project keeps what was read, and opens
-   as it was. One with no point left is not loaded, and the alert says so (one whose rows
+   kept as it came (rawBytes), for its download, and read again as a project opens
+   (restoredFile). One with no point left is not loaded, and the alert says so (one whose rows
    all had an empty cell went without a word, to v494). To v509 every file was read from
    its first two columns, the second as a header above it said: F(R) with no header (two
    bare columns of numbers), %R under a line naming it (a JASCO export's YUNITS,%R), and
@@ -585,26 +550,38 @@ export function leftText(left){
    To v501 the files of a non-standard format were named, no more. A file in the standard
    format has no word on how it was read: the file list's note says it (to v501 an R% file
    was said here, the Cary's own export as well; to v501 a header naming R% or F(R)
-   anywhere above the data was a standard format). A file with no header naming F(R) or %R
-   is refused (from v510): only a project saved before holds one, read as F(R), and says
-   so as it did (none). */
-const WARNS = { R: 'not a standard format: its header names the reflectance in %, read as %R', F: 'not a standard format: its header names F(R), read as F(R)',
-  none: 'no header naming the columns F(R) or R%: read as F(R)' };
-export const warnOf = f => f.read === 'R%' ? 'R' : f.head ? 'F' : 'none';
+   anywhere above the data was a standard format). */
+const WARNS = { R: 'not a standard format: its header names the reflectance in %, read as %R', F: 'not a standard format: its header names F(R), read as F(R)' };
 export function fileNotes(f){
-  return { read: f.warn ? [WARNS[warnOf(f)]] : [], check: f.left && Object.keys(LEFT).some(k=> f.left[k] > 0) ? [leftText(f.left)] : [] };
+  return { read: f.warn ? [WARNS[f.read === 'R%' ? 'R' : 'F']] : [], check: f.left && Object.keys(LEFT).some(k=> f.left[k] > 0) ? [leftText(f.left)] : [] };
 }
-/* A file as a restore takes it (modkit RESTORED): its wavelengths and F(R), the points
-   with both a finite number and a wavelength above 0 (none: left out, null); how it was
-   read, and the points left out at its load, as its notes say them. tauc.js keeps its
-   spectrum (keepSpectrum) and makes its energies from its wavelengths (withHv: a project
-   to v517 holds them too, not read). */
-export function restoredFile(U, f){
+/* A file's bytes read (readDrs), kept by them: a drop's reading, and the file read again as a
+   project opens (restoredFile), once a page. */
+const readings = new WeakMap();
+export const readingOf = (bytes, text)=>{ if (!readings.has(bytes)) readings.set(bytes, readDrs(text === undefined ? decodeText(bytes) : text)); return readings.get(bytes); };
+/* A file as a restore takes it (modkit RESTORED): its bytes a Uint8Array, or none (null);
+   read again from them (readingOf), what they read as its spectrum and how it was read (READ),
+   the rest of the record as it is. Where they read as none (bytes not stored, or ones the
+   reader refuses: heldNote says so), the spectrum it holds: its wavelengths and F(R), the
+   points with both a finite number and a wavelength above 0 (none: left out, null); how it was
+   read (a format not standard, `warn`, with the column read, `read` or `head`), and the points
+   left out at its load, as its notes say them. tauc.js keeps its spectrum (keepSpectrum) and
+   makes its energies from its wavelengths (withHv). */
+const READ = ['wl', 'FR', 'warn', 'read', 'head', 'left'];
+export function restoredFile(U, f0){
+  const f = f0.rawBytes != null && !(f0.rawBytes instanceof Uint8Array) ? { ...f0, rawBytes: null } : f0, r = f.rawBytes ? readingOf(f.rawBytes) : null;
+  if (r && !r.error){ const g = { ...f }; for (const k of READ) if (k in r) g[k] = r[k]; else delete g[k]; return g; }
   const p = U.finitePairs(f.wl, f.FR, x=> x > 0);
   if (!p || !p[0].length) return null;
-  const { read, head, left, hv: _hv, ...g } = f, n = U.isObj(left) ? Object.keys(LEFT).filter(k=> U.num(left[k], 0) > 0) : [];
-  return { ...g, wl: p[0], FR: p[1], warn: f.warn === true, ...(read === 'R%' ? { read } : {}), ...(head === true && f.warn === true && read !== 'R%' ? { head } : {}),
+  const { read, head, left, ...g } = f, n = U.isObj(left) ? Object.keys(LEFT).filter(k=> U.num(left[k], 0) > 0) : [], col = f.warn === true && read !== 'R%' && head === true;
+  return { ...g, wl: p[0], FR: p[1], warn: f.warn === true && (read === 'R%' || col), ...(read === 'R%' ? { read } : {}), ...(col ? { head } : {}),
     ...(n.length ? { left: Object.fromEntries(n.map(k=> [k, left[k]])) } : {}) };
+}
+/* What a project opened says of a file plotted from the spectrum it holds, not read again from
+   its bytes (restoredFile: none stored, or what the reader says of them), or ''. */
+export function heldNote(f){
+  const b = f.rawBytes instanceof Uint8Array ? f.rawBytes : null, r = b && readingOf(b);
+  return r && !r.error ? '' : heldLine(b && r.error);
 }
 
 /* The reflectance in percent from F(R), whatever the file's second column was read as:
@@ -639,13 +616,10 @@ export const okParam = (k, v)=> Number.isFinite(v) && PARAM_OK[k](v);
 export const okLines = (U, spec, l)=> U.isObj(l) && spec.lineKeys.every(k=> Number.isFinite(l[k]));
 export const paramsIn = (U, spec, o)=>{ const out = {}; if (U.isObj(o)) for (const k of spec.keys) if (okParam(k, o[k])) out[k] = o[k]; return out; };
 export const linesIn = (U, spec, l)=> okLines(U, spec, l) ? Object.fromEntries(spec.lineKeys.map(k=> [k, l[k]])) : {};
-// (a sample's own widths in eV, v515 to v519, as points at its spectrum in one mode:
-// toPoints; `evSh` the common ones its state held)
-function perIn(U, spec, P, files, p, i, evSh){
+// A sample's own entry: its parameters and its lines.
+function perIn(U, spec, p){
   const o = paramsIn(U, spec, p);
   if (U.isObj(p) && okLines(U, spec, p.vlines)) o.vlines = linesIn(U, spec, p.vlines);
-  const ev = evIn(U, spec, p);
-  if (P.mode === 'per' && files[i] && Object.keys(ev).length) Object.assign(o, ownPoints(U, spec, P, ev, o, files[i], evSh));
   return o;
 }
 // Resolve the effective params for a given file index
@@ -676,90 +650,21 @@ export function vlinesFor(U, spec, P, files, i){
 // hv, with its parameters p and between its lines vl.
 export const fitsOf = (U, spec, p, vl, c, hv)=> spec.windows.map(w=> scanRegr(U, hv, c.Ys, p[w.M], vl[w.lo], vl[w.hi], c.Yraw));
 
-/* ---- Projects and tabs saved by v515 to v519: widths in eV ----
-   They held the smoothing, the derivative's smoothing and the regression windows as
-   widths in eV, w, w2, W and W2, in place of N, N2, M and M2 (EV): told apart by that, as
-   v515 told v514's. Each becomes the points it spanned where it acted. Equal to v515's
-   default for it (spec.evDefaults: Tauc 0, 0.15, 0.2 and 0.5 eV, Urbach 0, 0.15 and
-   0.15 eV), v514's default (spec.defaults). Any other, on each sample (spanned): a
-   regression window, the points of the window v515 chose there (scanW, on the curve as
-   v515 smoothed it, between the sample's lines); a smoothing, and a window with none
-   chosen, the width over the energy step at the middle of the spectrum (the middle
-   point's, in energy order, to its two neighbours). In all mode the common value is the
-   median over the samples (of those with a window chosen, if any), in one mode each
-   sample's own at its spectrum; rounded, at least LEAST; with no sample to count on,
-   the default. The form kept after is v514's, points. */
-// The widths in eV an object holds in place of its points, by the points' keys.
-const evOk = (K, v)=> Number.isFinite(v) && (K[0] === 'M' ? v > 0 : v >= 0);
-export const evIn = (U, spec, o)=>{ const out = {}; if (U.isObj(o)) for (const K of spec.keys) if (K in EV && !(K in o) && evOk(K, o[EV[K]])) out[K] = o[EV[K]]; return out; };
-// The widths in eV a sample was analysed with: its own, else the common ones, else
-// v515's defaults; and the exponent a.
-export const evSettings = (spec, sh, own, a)=>{ const e = { ...spec.evDefaults, a }; for (const K in sh) e[EV[K]] = sh[K]; for (const K in own) e[EV[K]] = own[K]; return e; };
-// What each width of `e` spanned in points of the spectrum f between the lines vl (none:
-// the default ones on its span), and `got`, the windows for which v515 chose one.
-export function spanned(U, spec, f, e, vl){
-  const hv = hvOf(f.wl), out = { got: {} };
-  if (!okLines(U, spec, vl)){ const lo = U.minArr(hv); vl = spec.defaultLines(lo, U.maxArr(hv) - lo); }
-  const E = hv.filter(Number.isFinite).sort((x, y)=> x - y), m = E.length >> 1, lo = Math.max(0, m-1), hi = Math.min(E.length-1, m+1);
-  const st = hi > lo ? (E[hi] - E[lo])/(hi - lo) : NaN;
-  for (const K of spec.keys) if (K in EV) out[K] = e[EV[K]]/st;
-  const Yraw = f.FR.map((v, k)=> spec.curve(v, hv[k], e)), Ys = onFinite(Yraw, hv, (v, x)=> boxSmooth(x, v, e.w));
-  spec.windows.forEach(w=>{ const n = scanW(U, hv, Ys, e[EV[w.M]], vl[w.lo], vl[w.hi]).length; if (n){ out[w.M] = n; out.got[w.M] = true; } });
-  return out;
-}
-// The widths of `ev` as points: v515's default, v514's; else the median of what each
-// spanned on the samples `at()` counts it on, rounded, at least LEAST.
-export function toPoints(spec, ev, at){
-  const out = {}, c = Object.keys(ev).some(K=> ev[K] !== spec.evDefaults[EV[K]]) ? at() : [];
-  for (const K in ev){
-    if (ev[K] === spec.evDefaults[EV[K]]){ out[K] = spec.defaults[K]; continue; }
-    const v = c.filter(o=> isFinite(o[K])), got = v.filter(o=> o.got[K]), x = (got.length ? got : v).map(o=> o[K]);
-    out[K] = x.length ? Math.max(LEAST[K], Math.round(median(x))) : spec.defaults[K];
-  }
-  return out;
-}
-// The lines sample i is read between (none made yet: those its card would make).
-function linesOf(U, spec, P, files, i){
-  if (P.mode === 'shared' && !spec.ownLines){ if (okLines(U, spec, P.sharedVlines)) return P.sharedVlines; const [lo, hi] = unionHv(U, files); return spec.defaultLines(lo, hi - lo); }
-  return U.isObj(P.per[i]) && okLines(U, spec, P.per[i].vlines) ? P.per[i].vlines : spec.ownLines && okLines(U, spec, P.sharedVlines) ? P.sharedVlines : null;
-}
-// A sample's own widths `ev` as points at its spectrum f (those it lacks, the common
-// ones `evSh`), with its exponent and lines in `o`.
-const ownPoints = (U, spec, P, ev, o, f, evSh)=> toPoints(spec, ev, ()=> [spanned(U, spec, f, evSettings(spec, evSh, ev, okParam('a', o.a) ? o.a : P.shared.a),
-  okLines(U, spec, o.vlines) ? o.vlines : spec.ownLines && okLines(U, spec, P.sharedVlines) ? P.sharedVlines : null)]);
-/* A file taken back in (the file list's slot): the entry it left with; one saved by v515
-   to v519, its widths in eV, as points at its spectrum in one mode, dropped in all mode
-   (where the common ones are used). */
-export function backEntry(U, spec, P, v, f){
-  const o = v ? {...v, vlines: v.vlines ? {...v.vlines} : undefined} : {}, ev = evIn(U, spec, v);
-  Object.values(EV).forEach(k=>{ delete o[k]; });
-  if (P.mode === 'per' && f && Array.isArray(f.wl) && Object.keys(ev).length) Object.assign(o, ownPoints(U, spec, P, ev, o, f, {}));
-  return o;
-}
-
 // Per-sample slots follow the file list (added, removed, moved, left out: tauc.js slots).
 export const fitPer = (P, files)=>{ if (P.per.length !== files.length) P.per = files.map((_,i)=> P.per[i] || {}); };
 const clonePer = p => ({...p, vlines: p && p.vlines ? {...p.vlines} : undefined});
 export const panelSnapshot = P =>({ mode: P.mode, shared: {...P.shared}, sharedVlines: {...P.sharedVlines}, per: P.per.map(clonePer), suggested: P.suggested });
 /* A card's settings put back (each value as paramsIn, linesIn and perIn take it: a
-   project read in may hold anything; the widths in eV of one saved by v515 to v519 as
-   points: toPoints), the per-sample list then fitted to the files. */
+   project read in may hold anything), the per-sample list then fitted to the files. */
 export function restorePanel(U, spec, P, s0, files){
-  const s = U.isObj(s0) ? s0 : {}, evSh = evIn(U, spec, s.shared);
+  const s = U.isObj(s0) ? s0 : {};
   P.mode = s.mode === 'per' ? 'per' : 'shared';   // older snapshots stored a per-field object
   P.shared = { ...spec.defaults, ...paramsIn(U, spec, s.shared) };
-  P.sharedVlines = linesIn(U, spec, s.sharedVlines || s.vlines);
-  P.per = Array.isArray(s.per) ? s.per.map((q, i)=> perIn(U, spec, P, files, q, i, evSh)) : files.map(()=>({}));
-  // Snapshots from before the flag had their lines suggested whenever they had any: the
-  // common ones, or a sample's own (an Urbach card's always, a card in one mode's; up to
-  // v568 the common ones alone counted, and the samples' own were placed anew).
+  P.sharedVlines = linesIn(U, spec, s.sharedVlines);
+  P.per = Array.isArray(s.per) ? s.per.map(q=> perIn(U, spec, q)) : files.map(()=>({}));
+  // A state with no flag: the lines it holds, the common ones or a sample's own, are the
+  // user's, placed (kept, not suggested again); none, not placed yet.
   P.suggested = s.suggested != null ? !!s.suggested : isFinite(P.sharedVlines.v1) || P.per.some(q=> U.isObj(q) && U.isObj(q.vlines));
-  // Backward compatibility with pre-all/one snapshots (params stored by input id,
-  // passed on keyed by the field's suffix: the cards' ids are not the ones they had).
-  if (U.isObj(s.params)){
-    for (const k of spec.keys){ const v = s.params[FIELD[k]], x = k === 'a' ? parseFloat(v) : +v; if (v != null && okParam(k, x)) P.shared[k] = x; }
-  }
-  if (Object.keys(evSh).length) Object.assign(P.shared, toPoints(spec, evSh, ()=> files.map((f, i)=> spanned(U, spec, f, evSettings(spec, evSh, {}, P.shared.a), linesOf(U, spec, P, files, i)))));
   fitPer(P, files);
 }
 
@@ -896,17 +801,6 @@ export function taucName(as){
 // by the default rule while `refAuto` is on. `states` keeps the settings of the kind
 // not on show.
 export const newFields = ()=> ({ ref: null, refAuto: true, egSel: EG_METHODS.map(m=>m.key), states: {} });
-// Projects from before the analysis cards had one Tauc analysis, kept at the top
-// level, and an Urbach one beside it: the Tauc card comes first, and the Urbach one,
-// if it was on, follows it, read against it.
-export function legacyAnalyses(s){
-  const params = s.params ? Object.fromEntries(Object.entries(s.params)
-    .filter(([k])=> /^tauc(?!U)/.test(k)).map(([k, v])=> [k.slice(4), v])) : undefined;
-  const list = [{ id: 1, type: 'tauc', egSel: s.egSel,
-    states: { tauc: { mode: s.mode, shared: s.shared, sharedVlines: s.sharedVlines, vlines: s.vlines, per: s.per, suggested: s.suggested, params } } }];
-  if (s.urbachOn === true) list.push({ id: 2, type: 'urbach', states: { urbach: s.urbach || {} } });
-  return list;
-}
 /* A card's own fields as a state holds them, each as it should be (modkit RESTORED): the
    settings of a kind the module has, each an object, its per-sample list an array (the
    file list keeps a kind's not on show aligned too: slots) without the entries of the

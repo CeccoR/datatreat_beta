@@ -639,7 +639,7 @@ export function restoreInto(U, S, s){
   S.groups = [];
   groupsIn(U, s.groups, S.groups);
   S.figures = {};
-  figuresIn(U, s, S.groups, S.figures);
+  figuresIn(U, s, S.figures);
   return { lost, cur: Number.isInteger(s.cur) && s.cur > 0 ? s.cur : 0 };
 }
 // A file's bytes and their id as a state holds them ({ id, bytes }, or { id, b64 } to
@@ -661,21 +661,17 @@ function fileIn(U, f, f0, r){
   keepSeen(f);
   if (f0.included !== false) delete f.included;
   if ('held' in f && !U.isObj(f.held)) delete f.held;
-  // The crop: in the image's pixels; one saved (to v487) on an image whose pixels are
-  // made square now was in the pixels as acquired: brought to the square ones.
-  const c0 = U.isObj(f0.crop) ? f0.crop : {};
-  let crop = ['x', 'y', 'w', 'h'].every(k=> isNum(c0[k])) ? { x: c0.x, y: c0.y, w: c0.w, h: c0.h } : defaultCrop(r);
-  if (r.squared && f0.sq !== true){
-    const q = r.squared, kx = r.width/q.width, ky = r.imageH/q.imageH;
-    crop = f0.cropDef === true ? defaultCrop(r) : { x: crop.x*kx, y: crop.y*ky, w: crop.w*kx, h: crop.h*ky };
-    f.aspect = null;
-  }
+  // The crop: in the image's pixels, made square where they are not, a crop so marked (`sq`);
+  // one not so marked on such an image is not in those: the default crop, its ratio free.
+  const c0 = U.isObj(f0.crop) ? f0.crop : {}, inPx = !r.squared || f0.sq === true;
+  const crop = inPx && ['x', 'y', 'w', 'h'].every(k=> isNum(c0[k])) ? { x: c0.x, y: c0.y, w: c0.w, h: c0.h } : defaultCrop(r);
+  if (!inPx) f.aspect = null;
   if (r.squared) f.sq = true; else delete f.sq;
   f.crop = validCrop(crop, r, Object.keys(ASPECTS).includes(f.aspect) ? ASPECTS[f.aspect] : null) ? crop : fitCrop(crop, r.width, r.imageH, null);
   if (!Object.keys(ASPECTS).includes(f.aspect)) f.aspect = aspectOf(f.crop.w, f.crop.h);
   const a0 = U.isObj(f0.adj) ? f0.adj : {};
   f.adj = { b: inRange(a0.b, -100, 100, 0), c: inRange(a0.c, 0.05, 20, 1), g: inRange(a0.g, 0.05, 20, 1) };
-  f.cropDef = typeof f0.cropDef === 'boolean' ? f0.cropDef && isDefaultCrop(U, f) : isDefaultCrop(U, f);
+  f.cropDef = typeof f0.cropDef === 'boolean' && inPx ? f0.cropDef && isDefaultCrop(U, f) : isDefaultCrop(U, f);
   f.adjDef = typeof f0.adjDef === 'boolean' ? f0.adjDef && isAdjDef(f.adj) : isAdjDef(f.adj);
 }
 // The groups (into `groups`): ids that are names, once; each image in one group.
@@ -692,11 +688,9 @@ function groupsIn(U, list, groups){
     groups.push(g);
   }
 }
-// The figures, by group (into `figures`). A project saved before v440 had one figure for
-// all the groups: each group starts from it, its file named after the group.
-function figuresIn(U, s, groups, figures){
+// The figures, by group (into `figures`).
+function figuresIn(U, s, figures){
   if (U.isObj(s.figures)) for (const [k, v] of Object.entries(JSON.parse(JSON.stringify(s.figures)))) if (isKey(k) && U.isObj(v)) figures[k] = v;
-  if (!s.figures && U.isObj(s.figure)) for (const g of groups){ const f = JSON.parse(JSON.stringify(s.figure)); delete f.file; figures[g.id] = f; }
 }
 
 /* ---- What it shows beside its state (sem.js shows, showNext) ---- */

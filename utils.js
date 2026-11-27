@@ -987,10 +987,8 @@ function wireListDownloads({ wrap, files }){
       const d = downloadOf(LIST_U, f);
       // (a banner, as every other word of the page's: to v566 the browser's alert())
       if (d.missing){ confirmBanner('“' + d.name + '”: its original bytes are not stored in this browser any more: it cannot be downloaded.', 'OK'); return; }
-      if (d.one){
-        if (d.one.bytes != null) downloadBytes(d.one.name, d.one.bytes);
-        else downloadBlob(d.one.name, d.one.text);
-      } else downloadZip(d.zip, d.entries);
+      if (d.one) downloadBytes(d.one.name, d.one.bytes);
+      else downloadZip(d.zip, d.entries);
     });
   });
   const dlAll = wrap.querySelector('.download-all');

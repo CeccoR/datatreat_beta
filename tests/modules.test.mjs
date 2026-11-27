@@ -7,8 +7,8 @@
      is refused with, where it would end an interval before it starts (30c);
    - EPR: a .DSC with fewer than two points refused, with why; spectra all flat drawn under
      the global normalisation (30e);
-   - GC: the temperature T of the flow, all/one, 25 °C by default, 0 °C in a project saved
-     before it; V_m = RT/P; in the table and the CSVs (37);
+   - GC: the temperature T of the flow, all/one, 25 °C by default, in a project saved before
+     it too (v583: to v582 0 °C); V_m = RT/P; in the table and the CSVs (37);
    - DRS: R% recognised by its header and read as F(R) = (1 − R)²/2R; the standard format
      the Cary 5000's layout alone (the name, then "Wavelength (nm)" and "%R" or "F(R)" on the
      second line, the data from the third), any other file said with how it was read, from
@@ -205,7 +205,7 @@ test('30e: EPR does not plot a .DSC of fewer than two points, saying why (v581: 
   } finally { await close(); }
 });
 
-test('37: GC takes the flow at its temperature, 25 °C by default, 0 °C in a project saved before', async ()=>{
+test('37: GC takes the flow at its temperature, 25 °C by default, in a project saved before T too', async ()=>{
   const { page, errors, close } = await env.page();
   try {
     await openModule(page, 'gc');
@@ -227,17 +227,18 @@ test('37: GC takes the flow at its temperature, 25 °C by default, 0 °C in a pr
     // all/one: one sample at 25 °C of its own, the shared field off.
     await page.click('#tab-gc .gc-toggle[data-pair="t"]'); await settle(page);
     assert.equal((await moduleState(page, 'gc')).cards[0].tMode, 'one');
-    // A project saved before T: no T in its state, 0 °C, and its rates as they were.
+    // A project saved before T: no T in its state, the default, 25 °C (v583: to v582 0 °C, its
+    // rates as they were), its rates worked out at it.
     const st = await encoded(page, 'gc');
     for (const k of ['tMode', 'tShared', 'Ts']) delete st.cards[0][k];
     assert.equal(await restore(page, 'gc', st), 'ok');
-    assert.equal(await page.inputValue(shared), '0');
-    assert.ok(Math.abs((await mean()).h2 - at0.h2) < 1e-4, 'an old project keeps its rates');
+    assert.equal(await page.inputValue(shared), '25');
+    assert.ok(Math.abs((await mean()).h2 - at25.h2) < 1e-4, 'an old project\'s rates at 25 °C');
     // A file added to it in one mode starts at 25 °C, as a new file does.
     await page.click('#tab-gc .gc-toggle[data-pair="t"]'); await settle(page);
     await loadFiles(page, 'gc', [env.fx.files.gc[1]]);
     const c = (await moduleState(page, 'gc')).cards[0];
-    assert.deepEqual([c.tMode, c.Ts], ['one', [0, 25]]);
+    assert.deepEqual([c.tMode, c.Ts], ['one', [25, 25]]);
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });
@@ -384,11 +385,12 @@ test('DRS: a Cary %R export loads with no alert, the file list says how each fil
     // (six decimals: within half the last of the value written)
     R.slice(1).forEach((r, i)=> assert.ok(Math.abs(+r[1] - cary.R[i]) <= 5.000001e-7 && +r[0] === cary.wl[i], `reflectance_R.csv row ${i + 1}: ${r}`));
     assert.deepEqual(await page.evaluate(()=> document.getElementById('taucResSvgR')._plot._stored.filter(e=> e.type === 'line').map(e=> e.key)), ['cary.csv', 'nonstd.csv']);
-    // A project from before the reading was kept (no `read`): F(R), as it was read.
+    // A project from before the reading was kept (no `read`): read again from its files' bytes,
+    // each as it reads now (v583: to v582 F(R), as it was read).
     const s = await encoded(page, 'tauc');
     s.files.forEach(f=>{ delete f.read; });
     assert.equal(await restore(page, 'tauc', s), 'ok');
-    assert.deepEqual(await page.$$eval('#taucFileTableWrap td.note-cell', cs=> cs.map(c=> c.textContent)), ['F(R)', 'F(R)', 'F(R)']);
+    assert.deepEqual(await page.$$eval('#taucFileTableWrap td.note-cell', cs=> cs.map(c=> c.textContent)), ['%R', 'F(R)', 'F(R)']);
     // The R (%) plot's figure composer opens with the samples' traces.
     await page.locator('#taucResSvgR').locator('xpath=..').locator('button[title="Figure composer (advanced export)"]').click();
     await page.waitForSelector('.fig-backdrop .fig-svg path');

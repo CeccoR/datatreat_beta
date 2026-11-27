@@ -1,9 +1,9 @@
 /* The trace list's calculations (filelist-model.js) and markup (filelist-html.js) in Node, no
    browser (v564, out of v563's utils.js renderUnifiedFileList, the list every module shows):
-   a trace's original files (its bytes under its file's own name, a pair's files, legacy text,
-   none; a file whose bytes are gone), what its download gives (the file, a zip of a pair's,
-   or why not), the list's zip (each file once, by its bytes or its name, the ones not
-   available left out); where a row dragged lands (the gaps beside it none), a point outside a
+   a trace's original files (its bytes under its file's own name, a pair's files, none; a file
+   whose bytes are gone; v583: the decoded text older sessions held, none), what its download
+   gives (the file, a zip of a pair's, or why not), the list's zip (each file once, by its
+   bytes, the ones not available left out); where a row dragged lands (the gaps beside it none), a point outside a
    row, which of a row's two files a point is on, a press that moved; the head (the include-all
    box, the palette's button or its place, the note's header escaped), a row (its box, its
    colour or its place, its name's field and tooltip, FILE as its file or its parts with their
@@ -48,22 +48,23 @@ test('a trace\'s files, its download, the list\'s zip', ()=>{
   const bytes = B(1, 2, 3);
   assert.deepEqual(M.originalsOf(U, { name: 'a.csv', rawBytes: bytes }), [{ name: 'a.csv', bytes }]);
   assert.deepEqual(M.originalsOf(U, { name: 'Sample (scan 2)', src: 'run.xy', rawBytes: bytes }), [{ name: 'run.xy', bytes }], 'under its file\'s own name');
-  assert.deepEqual(M.originalsOf(U, { name: 'a', src: '', raw: 'text' }), [{ name: 'a', text: 'text' }], 'an empty src: its own name');
+  assert.deepEqual(M.originalsOf(U, { name: 'a', src: '', rawBytes: bytes }), [{ name: 'a', bytes }], 'an empty src: its own name');
+  // (the decoded text of older sessions, `raw`, a part's `data` or `text`: no bytes, none)
   const pair = { name: 's', rawFiles: [{ name: 's.dsc', bytes }, { name: 's.dta', data: 'D' }, { name: 's.x', text: 'T' }, { name: 's.gone' }] };
-  assert.deepEqual(M.originalsOf(U, pair), [{ name: 's.dsc', bytes }, { name: 's.dta', text: 'D' }, { name: 's.x', text: 'T' }, { name: 's.gone', text: undefined }]);
-  assert.deepEqual(M.lostOf(U, pair), ['s.gone']);
-  assert.deepEqual([M.originalsOf(U, { name: 'n' }), M.originalsOf(U, { name: 'n', rawFiles: [], rawBytes: null, raw: null })], [[], []]);
+  assert.deepEqual(M.originalsOf(U, pair), [{ name: 's.dsc', bytes }, { name: 's.dta' }, { name: 's.x' }, { name: 's.gone' }]);
+  assert.deepEqual(M.lostOf(U, pair), ['s.dta', 's.x', 's.gone']);
+  assert.deepEqual([M.originalsOf(U, { name: 'n' }), M.originalsOf(U, { name: 'n', rawFiles: [], rawBytes: null, raw: 'text' })], [[], []]);
   // the download: the file, a zip of several, or why not (the first not available; none: the trace's name)
   assert.deepEqual(M.downloadOf(U, { name: 'a.csv', rawBytes: bytes }), { one: { name: 'a.csv', bytes } });
-  assert.deepEqual(M.downloadOf(U, { name: 'a.csv', raw: '' }), { one: { name: 'a.csv', text: '' } });
+  assert.deepEqual(M.downloadOf(U, { name: 'a.csv', raw: '' }), { missing: true, name: 'a.csv' });
   assert.deepEqual(M.downloadOf(U, { name: 'p', rawFiles: [{ name: 'p.dsc', bytes }, { name: 'p.dta', bytes }] }), { zip: 'p.zip', entries: [{ name: 'p.dsc', bytes }, { name: 'p.dta', bytes }] });
-  assert.deepEqual(M.downloadOf(U, pair), { missing: true, name: 's.gone' });
+  assert.deepEqual(M.downloadOf(U, pair), { missing: true, name: 's.dta' });
   assert.deepEqual(M.downloadOf(U, { name: 'n' }), { missing: true, name: 'n' });
   assert.deepEqual(M.downloadOf(U, {}), { missing: true, name: undefined }, 'no name at all: still missing');
-  // the zip: each file once (the same bytes, or the same name with text), none of a trace with a file gone
+  // the zip: each file once (the same bytes), none of a trace with a file gone
   const other = B(9);
-  assert.deepEqual(M.zipEntries(U, [{ name: 'a', rawBytes: bytes }, { name: 'b', src: 'a', rawBytes: bytes }, { name: 'c', rawBytes: other }, pair, { name: 't', raw: 'x' }, { name: 't', raw: 'y' }]),
-    [{ name: 'a', bytes }, { name: 'c', bytes: other }, { name: 't', text: 'x' }]);
+  assert.deepEqual(M.zipEntries(U, [{ name: 'a', rawBytes: bytes }, { name: 'b', src: 'a', rawBytes: bytes }, { name: 'c', rawBytes: other }, pair, { name: 't', raw: 'x' }]),
+    [{ name: 'a', bytes }, { name: 'c', bytes: other }]);
   assert.deepEqual(M.zipEntries(U, [{ name: 'n' }, pair]), []);
 });
 

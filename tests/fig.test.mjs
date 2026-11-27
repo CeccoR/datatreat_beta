@@ -12,8 +12,8 @@
    no swatch, the column's title (its letters) from the plot's top edge (CLAUDE.md, v549); the file list's colours hidden, their place kept;
    the composer of a card opened and its figure kept with the card; the project saved and
    opened again; a tab asleep and woken as it was; a file removed taking its series out of
-   the plots. A v528 project, its series normalised each and cropped, opening with the plot's
-   normalisation local where all were, else none, and no crop.
+   the plots (v583: the test of a v528 project, its series normalised each and cropped, gone with
+   that reading: tests/figmodel.test.mjs reads one as any card of no normalisation).
    v531: the module named Custom where it shows; the Data card's table whole (every row), in a
    box of a Plot card's chart's size scrolling both ways, its head (the series' names over
    their columns, the roles, the header) staying at its top; the roles' box on the file's
@@ -33,7 +33,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { start, openModule, loadFiles, settle, undo, moduleState, history, saveAs, openProject, exportProject, importProject, projectFile, download, tabLabels, firstTop } from './helpers.mjs';
+import { start, openModule, loadFiles, settle, undo, moduleState, history, saveAs, openProject, download, tabLabels, firstTop } from './helpers.mjs';
 
 let env, dir;
 before(async ()=>{
@@ -324,32 +324,6 @@ test('Figure: three CSVs, the Data card, titles, roles, names, XY / bar / box ca
     assert.deepEqual(await page.$$eval('#fig1List .fig-ser-name', s=> s.map(e=> e.textContent)), ['Series 1']);
     for (let k = 0; k < steps; k++) await undo(page);
     assert.deepEqual(await cardSeries(page), S.cards.map(c=> c.series.map(r=> `${r.file}#${r.col}`)));
-    assert.deepEqual(errors, []);
-  } finally { await close(); }
-});
-
-test('Figure: a v528 project, its series normalised each and cropped, opens with the plot\'s normalisation and no crop', async ()=>{
-  const { page, errors, close } = await env.page();
-  try {
-    await openModule(page, 'fig');
-    await loadFiles(page, 'fig', [path.join(dir, 'a.csv'), path.join(dir, 'b.csv')]);
-    await addCard(page, 'xy');
-    await pick(page, 1, [['a', 'Signal'], ['b', 'Series 1']]);
-    await addCard(page, 'bar');
-    await pick(page, 2, [['a', 'Signal'], ['b', 'Series 1']]);
-    const { obj } = await exportProject(page);
-    // As v528 wrote it: no plot's normalisation, each series its own and its crop.
-    const st = JSON.parse(JSON.stringify(obj.state)), cs = st.cards || st.module?.cards;
-    assert.ok(Array.isArray(cs), 'the cards in the project');
-    cs.forEach((c, i)=>{ delete c.norm; c.series = c.series.map((r, k)=> ({ ...r, norm: i === 0 || k === 0, xlo: 2, xhi: 4 })); });
-    await importProject(page, projectFile(env, 'fig528.datatreat', { ...obj, title: 'fig528', appVersion: 'v528', state: st }, { sign: true }));
-    await openProject(page, 'fig', 'fig528');
-    const s = await moduleState(page, 'fig');
-    assert.deepEqual(s.cards.map(c=> c.norm), ['local', 'none'], 'local where every series was normalised, else none');
-    assert.deepEqual(s.cards.flatMap(c=> c.series.map(r=> Object.keys(r).sort().join())), Array(4).fill('col,file,offset,scale'), 'no crop, no normalisation of its own');
-    const lines = await stored(page, 1, 'line');
-    assert.deepEqual(lines.map(l=> l.xs.length), [6, 7], 'not cropped');
-    assert.deepEqual(r2(lines.map(l=> Math.max(...l.ys))), [1, 1], 'each to its own maximum');
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });

@@ -52,35 +52,13 @@ const FIG_DEF = {
   bars: {},
   ink: '#ffffff', outline: true, outlineColor: null, font: 'Inter',
 };
-const CORNER = { tl: ['top', 'left'], tr: ['top', 'right'], bl: ['bottom', 'left'], br: ['bottom', 'right'] };
-// The settings filled with the defaults wherever a project lacks them; those of
-// v439–v448 (a corner or a side as one position, a height from the layout) read anew.
-// (A corner is one of CORNER's own keys: 'toString' or 'constructor' as a position, in
-// a damaged project, threw here, and the figure did not open, to v487.)
-const isCorner = p => typeof p === 'string' && Object.prototype.hasOwnProperty.call(CORNER, p);
+// The settings filled with the defaults wherever a project lacks them (sane: each as the
+// composer can draw it).
 function withDefaults(f){
   const o = { ...FIG_DEF, ...(f || {}) };
   for (const k of ['label', 'letter', 'bar']) o[k] = { ...FIG_DEF[k], ...((f || {})[k] || {}) };
   // (an order that is not a list, 5 or {}, threw on slice, to v487)
   o.order = Array.isArray(f && f.order) ? f.order.slice() : []; o.names = { ...(f && f.names || {}) }; o.bars = { ...(f && f.bars || {}) };
-  const old = f && f.label && f.label.pos;
-  if (old && !['in', 'out'].includes(old)){
-    const L = o.label; L.auto = false; L.orient = 'h';
-    if (isCorner(old)){ L.pos = 'in'; [L.va, L.ha] = CORNER[old]; }
-    else if (old === 'above' || old === 'below'){ L.pos = 'out'; L.va = old === 'above' ? 'top' : 'bottom'; L.ha = 'left'; }
-    else { L.pos = 'out'; L.orient = 'v'; L.ha = old; L.va = 'center'; }
-  }
-  for (const k of ['letter', 'bar']){
-    const p = f && f[k] && f[k].pos;
-    if (!p || ['in', 'out'].includes(p)) continue;
-    const X = o[k];
-    if (isCorner(p)){ X.pos = 'in'; [X.va, X.ha] = CORNER[p]; }
-    else { X.pos = 'out'; X.va = p === 'below' ? 'bottom' : 'top'; X.ha = k === 'bar' ? 'right' : 'left'; if (p === 'left' || p === 'right'){ X.va = 'bottom'; X.ha = p; } }
-  }
-  if (/^m/.test(o.align || '')) o.align = 'c' + o.align[1];   // v449 wrote the middle row as m
-  if (f && f.hAuto === false && f.hmm > 0) o.hmm = f.hmm;
-  else if (f && 'hAuto' in f) o.hmm = null;
-  delete o.hAuto;
   return sane(o);
 }
 /* The settings as the composer can draw them, whatever a project holds (a file edited

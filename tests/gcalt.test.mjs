@@ -252,10 +252,11 @@ test('the info alert: for the alternative alone, a circled i in azure in both th
     const st = await encoded(page);
     await restore(page, st);
     assert.deepEqual(await infoAlert(page), [INFO_HEAD, 'twin-alt.txt'], 'reopened');
-    // By hand: anything but true says nothing; a name is text.
+    // By hand, in records of no bytes (v583: one with its bytes is read again from them, its
+    // record's own fields none): anything but true says nothing; a name is text.
     const edited = JSON.parse(JSON.stringify(st)), { seen: _, ...f0 } = edited.files.find(f=> f.name === MAIN_NAME);
-    edited.files = [PAYLOAD, 'true', 1, null, {}].map((v, i)=> ({ ...f0, altExport: v, name: `${PAYLOAD} ${i}.txt` }));
-    edited.files.push({ ...f0, name: PAYLOAD + '.txt' });
+    edited.files = [PAYLOAD, 'true', 1, null, {}].map((v, i)=> ({ ...f0, rawBytes: null, altExport: v, name: `${PAYLOAD} ${i}.txt` }));
+    edited.files.push({ ...f0, rawBytes: null, name: PAYLOAD + '.txt' });
     await restore(page, edited);
     assert.equal(await page.locator('#gcFileTableWrap tr.file-row').count(), 6);
     assert.deepEqual(await infoAlert(page), [INFO_HEAD, `${PAYLOAD}.txt`]);

@@ -257,8 +257,6 @@ export const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
 export const isArr = v => Array.isArray(v) || (ArrayBuffer.isView(v) && !(v instanceof DataView));
 // A finite number `ok` takes, or the default.
 export const num = (v, d, ok = ()=> true)=> Number.isFinite(v) && ok(v) ? v : d;
-// A number as an older state may hold it, in a string too (a field's value: '12').
-export const numStr = v => typeof v === 'string' && v.trim() ? +v : v;
 // One of `opts`, or the first.
 export const oneOf = (v, opts)=> opts.includes(v) ? v : opts[0];
 // A key of `o`'s own: 'constructor', 'toString' and the like are none.

@@ -368,8 +368,7 @@ function instrOf(f){
   if (f.instr && Array.isArray(f.instr.monochromators) && (f.instr.meas || 0) === k) return f.instr;
   let ins;
   try {
-    // (the bytes come back from a saved state, or a tab switch, as a plain array)
-    const b = f.rawBytes, u8 = b == null ? null : b instanceof Uint8Array ? b : ArrayBuffer.isView(b) ? new Uint8Array(b.buffer, b.byteOffset, b.byteLength) : Array.isArray(b) ? Uint8Array.from(b) : null;
+    const b = f.rawBytes, u8 = b == null ? null : b instanceof Uint8Array ? b : ArrayBuffer.isView(b) ? new Uint8Array(b.buffer, b.byteOffset, b.byteLength) : null;
     // the bytes as they are: the reader finds their encoding (UTF-16 too)
     ins = u8 && u8.length ? readXrdmlInstrumentText(u8, k) : null;
   } catch(e){ ins = null; }

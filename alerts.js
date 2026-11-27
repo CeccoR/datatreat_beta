@@ -53,6 +53,11 @@ function seenIn(v){
 export const keepSeen = g =>{ const s = seenIn(g.seen); if (s) g.seen = s; else delete g.seen; return g; };
 // A record marked: a copy, a state's own objects never changed.
 const withMarks = (f, marks)=> ({ ...f, seen: [...(Array.isArray(f.seen) ? f.seen : []), ...marks] });
+/* What a project opened says of a file whose data it holds, not read again from the file's own
+   bytes (ALERTS-REVIEW.md U8; in the box 'opened', `{file}: {what}.`): bytes not stored (`why`
+   none: gone from this browser, or never held as bytes), or bytes the reader refuses (`why` its
+   reason). Its data are then those the project holds. */
+export const heldLine = why => `${why ? 'its bytes no longer read: ' + why : 'its bytes are not stored'}: its data are those the project holds`;
 // A live record and one of a state the same file: its name, and its bytes where it has them.
 export const sameFile = (a, b)=> a.name === b.name && (a.rawBytes || null) === (b.rawBytes || null);
 // The records a state holds under its keys (each a list of them or one), marked by `mark`

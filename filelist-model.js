@@ -9,23 +9,20 @@
 ========================================================= */
 
 /* A trace's original files, byte for byte: its bytes in `rawBytes`, or a `rawFiles` list
-   (e.g. EPR's .dsc + .dta pair), or legacy decoded text in `raw` (older sessions); under
-   its file's own name, `src`, where the trace has a name of its own. A part of a list with
-   neither bytes nor text (its bytes not stored in this browser any more, v517) is there,
-   with neither: not available (lostOf), as a file of no bytes is. To v516 it went into the
-   zip as an empty file, with no word. */
+   (e.g. EPR's .dsc + .dta pair); under its file's own name, `src`, where the trace has a name
+   of its own. A part of a list with no bytes (its bytes not stored, v517) is there, without
+   them: not available (lostOf), as a file of no bytes is. To v516 it went into the zip as an
+   empty file, with no word. */
 export function originalsOf(U, f){
-  if (f.rawFiles && f.rawFiles.length)
-    return f.rawFiles.map(rf=> rf.bytes != null ? { name:rf.name, bytes:rf.bytes } : { name:rf.name, text:rf.data ?? rf.text });
+  if (f.rawFiles && f.rawFiles.length) return f.rawFiles.map(rf=> rf.bytes != null ? { name:rf.name, bytes:rf.bytes } : { name:rf.name });
   if (f.rawBytes != null) return [{ name:U.fileOf(f), bytes:f.rawBytes }];
-  if (f.raw != null) return [{ name:U.fileOf(f), text:f.raw }];
   return [];
 }
-export const lostOf = (U, f)=> originalsOf(U, f).filter(o=> o.bytes == null && o.text == null).map(o=> o.name);
+export const lostOf = (U, f)=> originalsOf(U, f).filter(o=> o.bytes == null).map(o=> o.name);
 
 /* What a trace's download gives: { missing, name } a file not available, by its name (the
-   trace's, with none at all), { one } its one file (bytes or text), or { zip, entries } its
-   files in a zip named after its file. */
+   trace's, with none at all), { one } its one file, or { zip, entries } its files in a zip
+   named after its file. */
 export function downloadOf(U, f){
   const orig = originalsOf(U, f), lost = lostOf(U, f);
   if (!orig.length || lost.length) return { missing: true, name: lost[0] || f.name };
@@ -34,11 +31,11 @@ export function downloadOf(U, f){
 }
 
 // Every file of the list's traces that is available, each once however many of its traces
-// are listed (by its bytes, or its name): the download-all's zip.
+// are listed (by its bytes): the download-all's zip.
 export function zipEntries(U, files){
   const seen = new Set();
   return files.filter(f=> !lostOf(U, f).length).flatMap(f=> originalsOf(U, f))
-    .filter(o=>{ const k = o.bytes != null ? o.bytes : 'name:' + o.name; if (seen.has(k)) return false; seen.add(k); return true; });
+    .filter(o=>{ if (seen.has(o.bytes)) return false; seen.add(o.bytes); return true; });
 }
 
 /* A row dragged (from) over the gap g (utils.js dropGap: before row g, n after the last):

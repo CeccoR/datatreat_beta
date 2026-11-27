@@ -169,16 +169,11 @@ export const KINDS = { xy: 'XY plot', bar: 'Bar chart', box: 'Box plot' };
 
 /* ---- What a state may hold (modkit RESTORED) ---- */
 const finiteOr = (v, d)=> Number.isFinite(v) ? v : d;
-const refsOk = (U, v)=> Array.isArray(v) ? v.filter(r=> U.isObj(r) && typeof r.file === 'string' && Number.isInteger(r.col) && r.col >= 0) : [];
-// (a v527–v528 series' own normalisation and crop let go: refsOk, normIn)
-export const refsIn = (U, v)=> refsOk(U, v).map(r=> ({ file: r.file, col: r.col, scale: finiteOr(r.scale, 1), offset: finiteOr(r.offset, 0) }));
-/* A plot's normalisation; a v527–v528 card has none, its series theirs: local when every
-   one was normalised (an XY plot's or a bar chart's), else none. */
-export function normIn(U, c){
-  if (U.ownKey(NORMS, c.norm)) return c.norm;
-  const rs = refsOk(U, c.series);
-  return c.norm === undefined && (c.type === 'xy' || c.type === 'bar') && rs.length && rs.every(r=> r.norm === true) ? 'local' : 'none';
-}
+// A card's series: each its file, column, scale and offset (any other field of a series none).
+export const refsIn = (U, v)=> Array.isArray(v) ? v.filter(r=> U.isObj(r) && typeof r.file === 'string' && Number.isInteger(r.col) && r.col >= 0)
+  .map(r=> ({ file: r.file, col: r.col, scale: finiteOr(r.scale, 1), offset: finiteOr(r.offset, 0) })) : [];
+// A plot's normalisation: one of its own, else none.
+export const normIn = (U, c)=> U.ownKey(NORMS, c.norm) ? c.norm : 'none';
 export const figIn = (U, v)=> U.isObj(v) && U.isObj(v.scalars) && Array.isArray(v.series) ? v : null;
 // A Plot card as a state holds it, read (cards.js load's `read`).
 export const cardIn = (U, c)=> ({ series: refsIn(U, c.series), norm: normIn(U, c), fig: figIn(U, c.fig) });
@@ -192,9 +187,7 @@ export function fileIn(U, f){
   const roles = Array.isArray(f.roles) && f.roles.length === t.n && f.roles.every(r=> U.ownKey(ROLES, r)) ? fixRoles(f.roles) : firstRoles(t);
   const names = {};
   if (U.isObj(f.names)) for (const k of Object.keys(f.names)) if (/^\d+$/.test(k) && +k < t.n && typeof f.names[k] === 'string' && f.names[k].trim()) names[k] = f.names[k];
-  // (a file left out by v531, the list's row its own: each of its series left out)
-  const out = f.included === false ? seriesCols(roles).map(c=> c.col)
-    : Array.isArray(f.out) ? [...new Set(f.out.filter(c=> Number.isInteger(c) && c >= 0 && c < t.n))] : [];
+  const out = Array.isArray(f.out) ? [...new Set(f.out.filter(c=> Number.isInteger(c) && c >= 0 && c < t.n))] : [];
   // (v534: its series' colours, by column, those picked; the others their place's)
   const colors = {};
   if (U.isObj(f.colors)) for (const k of Object.keys(f.colors)) if (/^\d+$/.test(k) && +k < t.n && U.isColor(f.colors[k])) colors[k] = f.colors[k];

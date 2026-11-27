@@ -413,6 +413,8 @@ test('an EPR pair whose .DTA bytes are not stored: its download says so, not a z
     await page.waitForSelector('.pwa-confirm.show');
     assert.equal((await banner(page)).text, 'Your open tabs: 1 of their files is not stored in this browser any more: it comes back without its bytes.');
     await answer(page, 'ok');
+    // (v583, U8: its spectrum the one the tab holds, said under the drop zone)
+    assert.match(await page.locator('#eprAlerts').innerText(), /Opened, to check:\s*e1\.DTA \+ e1\.DSC: its bytes are not stored: its data are those the project holds\./);
     let got = null;
     page.once('download', ()=> got = 'downloaded');
     await page.locator('#eprFileTableWrap .dl-file').nth(0).click();

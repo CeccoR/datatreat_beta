@@ -5,11 +5,12 @@
    against its derivatives taken so, the curves over the points that have a value, the
    suggestion's edge; a file read (the standard format, the Cary's %R, a header naming its
    columns, points left out, a file refused) and the reflectance from F(R); a card's
-   parameters and lines (all and one, values that are no number, a project's to v514 by its
-   fields' ids, v515 to v519's widths in eV as points, a file taken back in, the all/one
-   toggle, the fields, the suggestion), the references, the cards of a project from before
-   them, the Results' words, series and ranges; the cards' markup and alerts, every label
-   escaped. Then the fixtures as v555's page analysed them (its CSVs, every byte, at two
+   parameters and lines (all and one, values that are no number, a file taken back in, the
+   all/one toggle, the fields, the suggestion), the references, the Results' words, series
+   and ranges; the cards' markup and alerts, every label escaped; v583: an old project (the
+   fields of v514, the widths in eV of v515 to v519, the common lines under their old key,
+   energies held, bytes as arrays, bytes gone or refused), its old fields ignored, the
+   defaults in their place, its spectra read again from their bytes, a file without them said. Then the fixtures as v555's page analysed them (its CSVs, every byte, at two
    steps of a session: two spectra and the Tauc card; four and an Urbach card read against
    it), and 36 cases (random spectra, saved states, suggestions, a reference, the CSVs) as
    v555's tauc.js gave them, run from its source on a page of stubs: their digests in
@@ -78,7 +79,7 @@ function panel(kind, files, ref = null){
     },
     autoSuggestAll: ()=> M.autoSuggestAll(U, spec, P, files, curves),
     suggestAt: i => M.suggestAt(U, spec, P, files, i, curves),
-    back: (v, f)=> M.backEntry(U, spec, P, v, f),
+    back: v => M.copyPer(v),
     fit: ()=> M.fitPer(P, files),
     snapshot: ()=> M.panelSnapshot(P),
     restore: s => M.restorePanel(U, spec, P, s, files),
@@ -171,9 +172,9 @@ test('a file read: the standard format, the Cary\'s %R, a header naming its colu
   assert.deepEqual(M.readDrs('Wavelength (eV),F(R)\n3.5,0.5\n'), { error: 'its header names the wavelength in another unit than nm (Wavelength (eV))' });
   assert.deepEqual(M.readDrs('Wavelength,F(R),%R\n350,0.5,40\n'), { error: 'which columns to read cannot be told: its header names both F(R) and %R' });
   assert.deepEqual(M.readDrs('Wavelength,F(R)\n350,-1\n'), { error: 'no point with a physical value: 1 point left out: 1 with F(R) < 0' });
-  // A file a project holds: its points with a finite number and a wavelength above 0, its
-  // notes as they were (a field of no kind left out).
-  const g = M.restoredFile(U, { name: 'x', wl: [350, -1, 351, 352], FR: [0.5, 0.4, NaN, 0.6], warn: true, head: true, left: { neg: 2, zz: 3, r: 'x' }, hv: [1] });
+  // A file a project holds without its bytes: its points with a finite number and a wavelength
+  // above 0, its notes as they were (a field of no kind left out).
+  const g = M.restoredFile(U, { name: 'x', wl: [350, -1, 351, 352], FR: [0.5, 0.4, NaN, 0.6], warn: true, head: true, left: { neg: 2, zz: 3, r: 'x' } });
   assert.deepEqual(g, { name: 'x', wl: [350, 352], FR: [0.5, 0.6], warn: true, head: true, left: { neg: 2 } });
   assert.equal(M.restoredFile(U, { wl: [-1], FR: [1] }), null);
   assert.ok(Number.isNaN(M.reflOf(-0.1)));
@@ -181,7 +182,7 @@ test('a file read: the standard format, the Cary\'s %R, a header naming its colu
   assert.equal(M.withHv({ wl: [1239.842] }).hv[0], 1);
 });
 
-test('a card\'s parameters and lines: all and one, values that are no number, v514\'s fields, v515 to v519\'s widths in eV, a file taken back in, the toggle, the fields, the suggestion', ()=>{
+test('a card\'s parameters and lines: all and one, values that are no number, a file taken back in, the toggle, the fields, the suggestion', ()=>{
   const files = [loaded('drs1.csv', drsCsv({ Eg: 3.2 })), loaded('drs2.csv', drsCsv({ Eg: 2.9, A: 45, seed: 4 }))];
   const T = panel('tauc', files);
   T.restore({ mode: 'per', shared: { a: 2, N: 'x', M: 1 }, sharedVlines: { v1: 2, v2: 3, v3: 1.5, v4: 1.9 }, per: [{ N: 4, M2: 1e9, vlines: { v1: 2.5 } }, 'q'] });
@@ -195,20 +196,10 @@ test('a card\'s parameters and lines: all and one, values that are no number, v5
   assert.deepEqual([T.per[1].N, T.per[1].vlines], [4, T.sharedVlines]);
   M.storeValues(T, 1, M.fieldValues(T.spec.keys, k=> ({ a: '0.5', N: '2.6', N2: 'x', M: '1', M2: '80' })[k]));
   assert.deepEqual(T.params(1), { a: 0.5, N: 3, N2: 1, M: 2, M2: 80 });
-  // v514's fields by their ids (a project from before all/one).
-  T.restore({ params: { A: '2', N: '4', N2: 'x', M: '30', M2: '-1' } });
-  assert.deepEqual(T.shared, { a: 2, N: 4, N2: 20, M: 30, M2: 100 });
-  // v515 to v519's widths in eV: v515's defaults v514's, a smoothing over the middle step.
-  T.restore({ shared: { a: 0.5, w: 0, w2: 0.15, W: 0.2, W2: 0.5 } });
-  assert.deepEqual(T.shared, M.TAUC_DEF);
-  const midStep = f =>{ const E = f.hv.slice().sort((a, b)=> a - b), m = E.length >> 1; return (E[m+1] - E[m-1])/2; };
-  T.restore({ shared: { w: 0.03, w2: 0.15, W: 0.25, W2: 0.5 }, sharedVlines: { v1: 2.95, v2: 3.6, v3: 2.1, v4: 2.85 } });
-  assert.equal(T.shared.N, Math.max(1, Math.round(M.median(files.map(f=> 0.03/midStep(f))))));
-  assert.ok(Number.isInteger(T.shared.M) && T.shared.M >= 2 && T.shared.N2 === 20 && T.shared.M2 === 100, JSON.stringify(T.shared));
-  // A file taken back in: its entry, in eV, as points at its spectrum in one mode, dropped in all.
-  assert.deepEqual(T.back({ N: 3, W: 0.2, vlines: { v1: 1 } }, files[0]), { N: 3, vlines: { v1: 1 } });
-  T.mode = 'per';
-  assert.deepEqual(Object.keys(T.back({ W: 0.25 }, files[0])).sort(), ['M', 'vlines']);
+  // A file taken back in: the entry it left with, copied.
+  const left = { N: 3, vlines: { v1: 1 } }, back = T.back(left);
+  assert.deepEqual(back, left);
+  assert.ok(back !== left && back.vlines !== left.vlines);
   // The suggestion: one set for all (the edges' union, the baseline below the lowest), each its own in one.
   const A = panel('tauc', files);
   A.autoSuggestAll();
@@ -249,15 +240,45 @@ test('a project from before the suggestion\'s flag: lines saved, common or a sam
   assert.deepEqual(W.per[0].vlines, { v1: 2, v2: 2.8 });
 });
 
-test('the references, a project from before the cards, the Results\' words, series and ranges', ()=>{
+/* v583: an old project opens as this version reads it, its spectra read again from their bytes.
+   Made here as older versions saved it: a file whose bytes read as another spectrum than the one
+   it holds (an older reader's), its energies held too (to v517); one whose bytes are numbers (to
+   v483), read as F(R) with no header (to v509); one whose bytes are gone; one whose bytes the
+   reader refuses; a card's settings with the common lines under their old key, the fields by
+   their ids (to v514) and the widths in eV (v515 to v519). */
+test('an old project: old fields ignored, the defaults, its spectra read again from their bytes, a file without them said (v583)', ()=>{
+  const b1 = new Uint8Array(drsCsv({ Eg: 3.2 })), b2 = new Uint8Array(drsCsv({ Eg: 2.9, A: 45, seed: 4 })), now = loaded('drs1.csv', b1);
+  const old = [{ name: 'drs1.csv', label: 'mine', color: '#123', wl: [400, 500], FR: [1, 2], hv: [3.1, 2.48], warn: true, rawBytes: b1 },
+    { name: 'drs2.csv', label: 'b', wl: [400, 500, 600], FR: [1, 2, 3], warn: true, rawBytes: [...b2] },
+    { name: 'drs3.csv', label: 'c', wl: [400, 500, 600], FR: [1, 2, 3], rawBytes: null },
+    { name: 'drs4.csv', label: 'd', wl: [400, 500], FR: [1, 2], rawBytes: new TextEncoder().encode('350,0.5\n351,0.6\n') }];
+  let files;
+  assert.doesNotThrow(()=>{ files = old.map(f=> M.withHv(M.restoredFile(U, f))); });
+  // read again from its bytes: the spectrum they read as now, how; its label and colour its own; its energies made anew
+  assert.deepEqual([files[0].wl, files[0].FR, files[0].warn, files[0].label, files[0].color, files[0].hv], [now.wl, now.FR, false, 'mine', '#123', now.hv]);
+  assert.ok(!Object.keys(files[0]).includes('hv'), 'its energies no field of its own');
+  // bytes as numbers: none; the spectrum it holds, read so by no reader of now: no word of how
+  assert.deepEqual([files[1].rawBytes, files[1].wl, files[1].warn, M.fileNotes(files[1]).read], [null, [400, 500, 600], false, []]);
+  assert.deepEqual(files.map(M.heldNote), ['', 'its bytes are not stored: its data are those the project holds', 'its bytes are not stored: its data are those the project holds',
+    'its bytes no longer read: no header naming its columns: the wavelength in nm, and F(R) or %R: its data are those the project holds']);
+  assert.deepEqual(files[3].wl, [400, 500]);
+  // a card's settings: the old fields ignored, the defaults; its lines and parameters of now kept
+  const T = panel('tauc', files.slice(0, 2)), lines = { v1: 2.95, v2: 3.6, v3: 2.1, v4: 2.85 };
+  T.restore({ mode: 'per', vlines: { v1: 1, v2: 2, v3: 3, v4: 4 }, params: { A: '2', N: '4' }, shared: { w: 0.03, W: 0.25, W2: 0.5 }, per: [{ W: 0.2, M2: 80, vlines: lines }, { w2: 0.1 }], suggested: true });
+  assert.deepEqual([T.shared, T.sharedVlines, T.per], [M.TAUC_DEF, {}, [{ M2: 80, vlines: lines }, {}]]);
+  // its fits worked out again from the spectrum read from its bytes: as a project of now's
+  const F = panel('tauc', [now, files[1]]);
+  F.restore({ mode: 'per', per: [{ M2: 80, vlines: lines }, {}], suggested: true });
+  assert.equal(canon(T.analyze(0)), canon(F.analyze(0)));
+  assert.ok(Number.isFinite(T.analyze(0).Eg));
+});
+
+test('the references, the Results\' words, series and ranges', ()=>{
   const recs = [{ id: 1, type: 'urbach', ref: 3, refAuto: false }, { id: 2, type: 'tauc' }, { id: 3, type: 'urbach', ref: null, refAuto: true },
     { id: 4, type: 'urbach', ref: 2, refAuto: false }, { id: 5, type: 'tauc' }, { id: 6, type: 'urbach', ref: 2, refAuto: true }];
   const by = id => recs.find(a=> a.id === id) || null;
   assert.deepEqual(M.fixRefs(recs, by).map(a=> a.id), [1, 3, 6]);
   assert.deepEqual(recs.map(a=> [a.ref, a.refAuto]), [[null, true], [undefined, undefined], [2, true], [2, false], [undefined, undefined], [5, true]]);
-  assert.deepEqual(M.legacyAnalyses({ params: { taucA: '2', taucUN: '9' }, mode: 'per', egSel: ['b'], urbachOn: true }),
-    [{ id: 1, type: 'tauc', egSel: ['b'], states: { tauc: { mode: 'per', shared: undefined, sharedVlines: undefined, vlines: undefined, per: undefined, suggested: undefined, params: { A: '2' } } } },
-     { id: 2, type: 'urbach', states: { urbach: {} } }]);
   assert.deepEqual(M.readAnalysis(U, { egSel: ['z'], ref: 2.5, refAuto: 0, states: { tauc: { per: [1, 2, 3] }, urbach: 5, gone: {}, constructor: {} } }, new Set([1])),
     { ref: null, refAuto: true, egSel: ['x', 'b'], states: { tauc: { per: [1, 3] } } });
   assert.equal(M.taucName([2, 2]), 'Tauc: allowed direct');
@@ -295,7 +316,6 @@ test('the cards\' markup and alerts, every label escaped', ()=>{
   assert.ok(['R1', 'R2', 'R3', 'R4', 'RS', 'RA4'].every(k=> ru.includes(`id="an5${k}"`)) && ru.includes('cap-row'));
   assert.ok(H.taucInfo('<b>x</b>').endsWith(' <b>x</b>') && H.urbachInfo('Y').includes('E<sub>U</sub> = 1 / slope'));
   assert.equal(H.readNote({ read: 'R%', warn: false }, HU), '<span title="second column read as the reflectance in %, converted to F(R)">%R</span>');
-  assert.equal(H.readNote({ warn: true }, HU), '<span title="second column read as F(R), with no header naming it">F(R)</span>');
   assert.equal(H.readNote({ warn: true, head: true }, HU), '<span title="the F(R) column its header names, read as F(R); not a standard format">F(R)</span>');
   // (v567: an error, no result; to v566 a warning)
   assert.equal(H.negWarnHtml([{ label: '<i>a' }, { label: 'b' }], [-1, 2], 'E<sub>g</sub>', HU), '<div class="alert bad">✕ Negative E<sub>g</sub> for:<br>&lt;i&gt;a</div>');
@@ -350,13 +370,16 @@ function cases(){
     return { name: 's' + k + '.csv', label: 's' + k, wl, FR };
   };
   const params = keys => Object.fromEntries(keys.filter(()=> u() < 0.8).map(k=> [k, k === 'a' ? pick([0.5, 2, 2/3, 1/3, 'x']) : pick([ri(1, 9), ri(2, 60), ri(2, 150), 0, 'y', null])]));
-  const ev = keys => Object.fromEntries(keys.filter(k=> k !== 'a' && u() < 0.5).map(k=> [M.EV[k], pick([0, 0.03, 0.15, 0.2, 0.5, 0.1, -1])]));
+  // (the widths in eV of v515 to v519, under their names then: an old field, ignored)
+  const EV = { N: 'w', N2: 'w2', M: 'W', M2: 'W2' }, ev = keys => Object.fromEntries(keys.filter(k=> k !== 'a' && u() < 0.5).map(k=> [EV[k], pick([0, 0.03, 0.15, 0.2, 0.5, 0.1, -1])]));
   const lines = (keys, f)=>{ if (u() < 0.15) return pick([null, {}]); const lo = Math.min(...f.wl.map(x=> 1239.842/x)), hi = Math.max(...f.wl.map(x=> 1239.842/x)); return Object.fromEntries(keys.map(k=> [k, lo + u()*(hi - lo)])); };
   const state = (S, files)=> ({ mode: pick(['shared', 'per']), shared: { ...params(S.keys), ...(u() < 0.4 ? ev(S.keys) : {}) }, sharedVlines: lines(S.lineKeys, files[0]),
     per: files.map(f=> u() < 0.1 ? null : { ...params(S.keys), ...(u() < 0.3 ? ev(S.keys) : {}), vlines: lines(S.lineKeys, f) }), suggested: pick([true, false, undefined]) });
   return Array.from({ length: 36 }, (_, c)=>{
     const files = Array.from({ length: ri(1, 3) }, (_, k)=> spectrum(c*10 + k));
     return { files, tauc: state(M.TAUC, files), urbach: state(M.URBACH, files), suggest: pick(['all', 'one', 'none']), at: ri(0, files.length - 1), ref: u() < 0.75,
+      // (backFile: the spectrum a file taken back in had, read till v582: drawn still, so that the
+      // cases' random numbers stay as they were)
       back: { ...params(M.TAUC.keys), ...ev(M.TAUC.keys), vlines: { v1: 2.5, v2: 3, v3: 1.8, v4: 2.2 } }, backFile: spectrum(c*10 + 9) };
   });
 }
@@ -369,8 +392,7 @@ function runCase(c, mk){
   if (c.suggest === 'all'){ T.autoSuggestAll(); W.autoSuggestAll(); }
   else if (c.suggest === 'one'){ T.suggestAt(c.at); W.suggestAt(c.at); }
   look();
-  const bf = M.withHv({ ...c.backFile });
-  out.push(T.back(JSON.parse(JSON.stringify(c.back)), bf), W.back(JSON.parse(JSON.stringify(c.back)), bf));
+  out.push(T.back(JSON.parse(JSON.stringify(c.back))), W.back(JSON.parse(JSON.stringify(c.back))));
   out.push(T.csvs('t'), W.csvs('u'));
   return canon(out);
 }

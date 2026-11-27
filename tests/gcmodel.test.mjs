@@ -8,9 +8,10 @@
    rate over the interval against a hand calculation, by mass and by area, the Results' series
    cut to the interval, the mean by sample and its SD; the plots' ranges and interval lines; a
    card's parameters (all and one, the toggle refused with the words a value typed gets, the
-   state read back: projects with one interval, paired modes, before T, p, the delay, the
-   normalisation and O₂, malformed values), files as a project holds them (a table, raw
-   chromatograms, pairs), the replicates' links (a head removed, chains, a name twice, a walk
+   state read back, malformed values), files as a project holds them (a table read again from
+   its bytes, raw chromatograms, pairs); v583: an old project (before the cards, one interval,
+   paired modes, before T, the single gas selector, bytes as arrays, bytes lost), its old
+   fields ignored, the defaults in their place, its tables read again from their bytes; the replicates' links (a head removed, chains, a name twice, a walk
    through a select), the pairs' rows; the cards' markup, the parameter table and the alerts,
    every label escaped. Then the fixtures as v556's page analysed them (its CSVs, every byte,
    at two steps of a session: the two fixtures dropped; five more files of every form), and
@@ -55,7 +56,7 @@ function decl(file, name){
 }
 const UN = ['esc', 'fmtNum', 'csvField', 'csvJoin', 'csvLine', 'cumtrapz', 'meanArr', 'stdArr', 'maxArr', 'minArr', 'X_SVG', 'ALERT_ICON', 'markOf', 'seenFor', 'notesFor', 'alertHtml', 'FILE_ALERT', 'fileAlertHtml', 'fileLine', 'notesHtml', 'exactKey'];
 const IN_ALERTS = new Set(['ALERT_ICON', 'markOf', 'seenFor', 'notesFor']);
-const KN = ['isObj', 'isArr', 'num', 'numStr', 'oneOf', 'dateOf', 'arrOf', 'without', 'wideCsv'];
+const KN = ['isObj', 'isArr', 'num', 'oneOf', 'dateOf', 'arrOf', 'without', 'wideCsv'];
 const CN = ['PLOT_DL_ICON', 'CSV_ICON', 'plotWrap'];
 // (the CSVs' settings as a fresh page has them; a decimal comma where a case asks for one)
 const settings = { decimal: '.', field: ';' };
@@ -64,7 +65,7 @@ const PAGE = new Function('settings', [...UN.map(n=> decl(IN_ALERTS.has(n) ? 'al
 const ids = new WeakMap();
 let nid = 0;
 const objId = o => o == null || typeof o !== 'object' ? String(o) : ids.get(o) || (ids.set(o, ++nid), nid);
-const U = { settings, objId, ...Object.fromEntries(['fmtNum', 'csvLine', 'cumtrapz', 'maxArr', 'minArr', 'meanArr', 'stdArr', 'exactKey', 'num', 'numStr', 'oneOf', 'dateOf', 'arrOf', 'without', 'wideCsv'].map(k=> [k, PAGE[k]])) };
+const U = { settings, objId, ...Object.fromEntries(['fmtNum', 'csvLine', 'cumtrapz', 'maxArr', 'minArr', 'meanArr', 'stdArr', 'exactKey', 'num', 'oneOf', 'dateOf', 'arrOf', 'without', 'wideCsv'].map(k=> [k, PAGE[k]])) };
 const HU = { esc: PAGE.esc, num: PAGE.num, plotWrap: PAGE.plotWrap, CSV_ICON: PAGE.CSV_ICON, alertHtml: PAGE.alertHtml };
 // The drop zone's boxes of what the reading of the files said, as modkit.js draws them.
 const boxes = all => PAGE.notesHtml(H.fileNotes(all, HU), w=> 'gc-dismiss-' + w);
@@ -130,7 +131,9 @@ const BAD = csv('Injection date,H2 (B) [%Mol]\n' + ['2/28/2025 9:00:00 AM', '2/3
 const NAMED = csv('Injection Date,H2 (A) [%Mol],O2 (A) [%Mol]\n' + ['13/Nov/26 14:13:01', '13/November/2026 14:43', 'Nov/13/2026 15:13:30', '13/nov/26 15:43', '31/Nov/2026 16:00', '13/NOV/2026 16:13:59']
   .map((d, i)=> `${d},${(0.05 + 0.02*i).toFixed(3)},${(0.03 + 0.007*i).toFixed(3)}`).join('\n') + '\n');
 // A file as a drop makes it: read (gc-model.js readGc), named, labelled by its name.
-const rec = (name, text, color = '#000')=>{ const d = M.readGc(text); return d && !d.error ? { name, label: name.replace(/\.[^.]+$/, ''), ...d, color } : d; };
+// A table as the page loads it (modkit.js dropText): what it reads as, its bytes beside.
+const enc = t => new TextEncoder().encode(t);
+const rec = (name, text, color = '#000')=>{ const d = M.readGc(text); return d && !d.error ? { name, label: name.replace(/\.[^.]+$/, ''), ...d, color, rawBytes: enc(text) } : d; };
 const fixture = (k, o)=> decodeText(new Uint8Array(gcCsv(o)));
 
 /* A card as gc.js composes the model: its tables (no Integration card above), its mean rates,
@@ -261,7 +264,7 @@ test('the flow, the rates and the production by hand, by mass and by area; the m
   assert.equal(M.seriesName('A', M.GASES[1], M.GASES), 'A O₂'); assert.equal(M.seriesName('A', M.GASES[1], [M.GASES[1]]), 'A');
 });
 
-test('a card\'s parameters: all and one, the toggle and its refusal, the state read back from every version, malformed values', ()=>{
+test('a card\'s parameters: all and one, the toggle and its refusal, the state read back, malformed values', ()=>{
   const files = [rec('a.csv', fixture(0, { h2: [0.05, 0.12], o2: [0.02, 0.05], seed: 7 })), rec('b.csv', fixture(1, { h2: [0.08, 0.07], seed: 8 }))];
   const P = M.newParams(files);
   assert.equal(M.flipMode(P, files, 'm'), null);
@@ -283,13 +286,8 @@ test('a card\'s parameters: all and one, the toggle and its refusal, the state r
   const s = M.snapshotOf(P), Q = M.newParams(files);
   M.restoreParams(U, Q, JSON.parse(JSON.stringify(s)), files);
   assert.deepEqual(M.snapshotOf(Q), s);
-  // The oldest projects: one interval (plateau), m and Q per sample; paired modes; before T (0 °C), p, the delay, the normalisation, O₂.
-  const R = M.newParams(files);
-  M.restoreParams(U, R, { plateauStart: ' 0.5 ', plateauEnd: '3', ms: [10, 'x'], gasMode: { a: 'h2' } }, files);
-  assert.deepEqual([R.mMode, R.qMode, R.startMode, R.startShared, R.endShared, R.ms, R.tShared, R.pShared, R.normBy, R.pUnit, R.delayAuto, R.gasSel], ['one', 'one', 'all', 0.5, 3, [10, 15], 0, M.P_ATM, 'm', 'atm', true, { a: ['h2'], r: ['h2', 'o2'] }]);
-  M.restoreParams(U, R, { mqMode: 'one', intMode: 'one', startShared: 2, startArr: [1], Ts: [30] }, files);
-  assert.deepEqual([R.mMode, R.qMode, R.startMode, R.endMode, R.startArr, R.endArr, R.tShared, R.Ts], ['one', 'one', 'one', 'one', [1, 2], [24, 24], 25, [30, 25]]);
   // Malformed: each value as it should be.
+  const R = M.newParams(files);
   M.restoreParams(U, R, { mMode: 'x', mShared: -1, qShared: 0, tShared: -300, pShared: 1e307*M.P_ATM, Ps: [0, 2e5], pUnit: 'hPa', normBy: 'volume', delayMan: -2, As: ['1', 3], aShared: 0, lightOnDates: ['x', 0], gasSel: { a: ['co2'] } }, files);
   assert.deepEqual([R.mMode, R.mShared, R.qShared, R.tShared, R.pShared, R.Ps, R.pUnit, R.normBy, R.delayMan, R.As, R.aShared, R.lightOnDates.map(iso), R.gasSel],
     ['all', 15, 2, 25, M.P_ATM, [M.P_ATM, 2e5], 'atm', 'm', 60.6, [1, 3], 1, [iso(M.firstInjection(files[0])), '1970-01-01T00:00:00'], { a: [], r: ['h2', 'o2'] }]);
@@ -304,9 +302,44 @@ test('a card\'s parameters: all and one, the toggle and its refusal, the state r
   assert.deepEqual(sl.map(x=> x.make(-1)).map(v=> v instanceof Date ? iso(v) : v), [15, 1, 2, -1, M.P_ATM, -1, -1, '1969-12-31T23:59:59']);
   assert.deepEqual(sl.slice(0, 2).map(x=> x.make(null)), [null, null], 'a mass and an area held none, none');
   assert.deepEqual(sl.map(x=> x.make('x')).slice(5), [0, 24, null]);
-  // A project from before the cards: its settings its one card's, the entries of the files left out dropped.
-  assert.deepEqual(M.cardsOf({ ms: [1, 2, 3] }, null), [{ ms: [1, 2, 3], id: 1, type: 'rate' }]);
+  // The cards: none, one of the defaults; a card's settings, the entries of the files left out dropped.
+  assert.deepEqual(M.cardsOf(null), [{ id: 1, type: 'rate' }]);
   assert.deepEqual(M.initOf(U, { ms: [1, 2, 3], mShared: 5 }, new Set([1])), { ms: [1, 3], mShared: 5 });
+});
+
+/* v583: an old project opens as this version reads it, its tables read again from their
+   bytes. Made here as older versions saved it: its settings at the top level (no cards), one
+   interval (plateauStart/End, strings), the paired modes (mqMode, intMode), the single gas
+   selector (gasMode), no temperature (0 °C to v582); a table whose bytes read as other
+   injections than it holds (an older reader's), one whose bytes are numbers (to v483), one
+   whose bytes are gone, one whose bytes the reader refuses. */
+test('an old project: old fields ignored, the defaults, its tables read again from their bytes, a table without them said (v583)', ()=>{
+  const ta = decodeText(new Uint8Array(gcCsv({ h2: [0.05, 0.12], o2: [0.02, 0.05], seed: 7 }))), tb = decodeText(new Uint8Array(gcCsv({ h2: [0.08, 0.07], seed: 8 })));
+  const a = rec('a.csv', ta), b = rec('b.csv', tb), stale = { injDates: [new Date(2020, 0, 1)], gas: { h2: [9] }, emptyRows: 3 };
+  const old = { plateauStart: ' 0.5 ', plateauEnd: '3', mqMode: 'one', intMode: 'one', gasMode: { a: 'h2' }, ms: [10, 'x'], files: [
+    { ...a, ...stale, label: 'mine', junk: 1 }, { ...b, rawBytes: [...b.rawBytes] }, { ...b, name: 'c.csv', rawBytes: null }, { ...stale, name: 'z.csv', label: 'z', rawBytes: enc('no table here\n') }] };
+  let files;
+  assert.doesNotThrow(()=>{ files = old.files.map(f=> M.fileIn(U, f)); });
+  // its bytes read again: the injections they read as now; its label and other fields its own
+  assert.deepEqual([files[0].injDates, files[0].gas, files[0].emptyRows, files[0].label, files[0].junk], [a.injDates, a.gas, a.emptyRows, 'mine', 1]);
+  // bytes as numbers, gone, refused: the injections it holds, said so
+  assert.deepEqual([files[1].rawBytes, files[1].gas, files[2].gas, files[3].injDates], [null, b.gas, b.gas, stale.injDates]);
+  assert.deepEqual(files.map(M.heldOf), ['', ...Array(2).fill('its bytes are not stored: its data are those the project holds'),
+    'its bytes no longer read: ' + M.NOT_GC + ': its data are those the project holds']);
+  // the cards: one of the defaults, its settings the defaults (25 °C, every gas, all), the old fields none
+  const tables = files.slice(0, 3), [c0] = M.cardsOf(null), P = M.newParams(tables);
+  M.restoreParams(U, P, M.initOf(U, c0, new Set()), tables);
+  assert.deepEqual(M.snapshotOf(P), M.snapshotOf(M.newParams(tables)));
+  // an old card's settings: its old keys ignored, the mass kept (a parameter there still is)
+  const Q = M.newParams(tables), E = M.newParams(tables);
+  M.restoreParams(U, Q, old, tables);
+  E.ms = [10, 15, 15];
+  assert.deepEqual(M.snapshotOf(Q), M.snapshotOf(E));
+  assert.deepEqual([Q.mMode, Q.qMode, Q.startMode, Q.endMode, Q.startShared, Q.endShared, Q.tShared, Q.gasSel], ['all', 'all', 'all', 'all', 0, 24, 25, { a: ['h2', 'o2'], r: ['h2', 'o2'] }]);
+  // the rates worked out from those tables, at 25 °C: as a new project's
+  assert.deepEqual(card(Q, tables).csvs, card(E, tables).csvs);
+  assert.ok(card(Q, tables).costResults.every(c=> Number.isFinite(c.rate.h2)), 'a rate for each');
+  assert.ok(M.molarVolume(Q.tShared, Q.pShared) > 24.46 && M.molarVolume(Q.tShared, Q.pShared) < 24.47, '25 °C, 1 atm');
 });
 
 test('files as a project holds them, the replicates\' links, the pairs', ()=>{
@@ -363,7 +396,7 @@ test('a pair\'s note marked for its issue: paired wrongly again with another fil
   const all = [tb('a.csv'), tb('b.csv'), tb('c.csv'), tc('t_TCD.csv'), tc('u_TCD.csv')], files = all.slice(0, 3);
   const hist = { states: [{ files: all.map(f=> ({ ...f })) }], patch(fn){ this.states = this.states.map(fn); } };
   const pair = (...rows)=> M.regroup(all, files, [], rows.map(r=> r.map(n=> all.flatMap(M.rowFiles).find(f=> f.name === n))));
-  const said = ()=> H.fileNotes(all, HU).filter(n=> PAGE.notesFor([n], n.what).length).map(n=> n.line.replace(/ Drag.*$/, ''));
+  const said = ()=> H.fileNotes(all, HU).filter(n=> n.what === 'check' && PAGE.notesFor([n], n.what).length).map(n=> n.line.replace(/ Drag.*$/, ''));
   const dismiss = ()=> markSeen(hist, H.fileNotes(all, HU), 'check');
   pair(['a.csv', 'b.csv'], ['c.csv'], ['t_TCD.csv'], ['u_TCD.csv']);
   const AB = 'A: two tables paired (a.csv, b.csv): the first is used, as it is alone; b.csv is ignored.', T = 't_TCD.csv: raw chromatograms with no table: shown in Integration, left out of Analysis, with no injection times.';
@@ -445,11 +478,13 @@ test('the cards\' markup, the parameter table and the alerts, every label escape
   assert.equal(A, PAGE.alertHtml('warn', 'Loaded, to check:', ['x.csv: 2 rows left out: their injection date does not exist.',
     'x.csv: 1 empty H<sub>2</sub> cell: each of those injections is left out of that gas only, its rate, production and mean from the injections with a value.',
     'x.csv: 1 row with no gas value left out.'], 'gc-dismiss-check')
+    // (v583: a table with no bytes, plotted from the injections the project holds, U8)
+    + PAGE.alertHtml('warn', 'Opened, to check:', ['x.csv: its bytes are not stored: its data are those the project holds.'], 'gc-dismiss-opened')
     + PAGE.alertHtml('info', 'How these files were read:', ['x.csv: dates read as day/month.', 'x.csv: the alternative export (Inject Time, Amount in ppm).'], 'gc-dismiss-read'));
   assert.equal(boxes([{ ...f, seen: ['read'] }]), A.slice(0, A.indexOf('<div class="alert info"')), 'how they were read, dismissed');
-  assert.equal(boxes([{ ...f, seen: ['read', 'check'] }]), '', 'dismissed');
+  assert.equal(boxes([{ ...f, seen: ['read', 'check', 'opened'] }]), '', 'dismissed');
   for (const seen of ['check read', [['check', 'read']], { check: true }, null]) assert.equal(boxes([{ ...f, seen }]), A, 'a project\'s .json: a mark that is none marks nothing');
-  assert.ok(!boxes([{ ...f, gas: {}, dayMonth: 'yes', badDates: 2.5, emptyRows: 'x', altExport: 1 }]), 'a project\'s .json: only true and a whole count');
+  assert.ok(!boxes([{ ...f, gas: {}, dayMonth: 'yes', badDates: 2.5, emptyRows: 'x', altExport: 1, seen: ['opened'] }]), 'a project\'s .json: only true and a whole count');
   const tcd = { name: '<t>_TCD.csv', label: 'T', tcd: { n: 1 } };
   assert.match(boxes([tcd, { ...f, mate: { ...f, name: 'y.csv' } }]), /&lt;t&gt;_TCD\.csv: raw chromatograms with no table: shown in Integration, left out of Analysis, with no injection times\.[\s\S]*&lt;b&gt;&amp;&quot;: two tables paired \(x\.csv, y\.csv\)/);
   const all = [f, { ...f, name: 'h.csv', label: 'H' }, { ...f, name: 'm.csv', label: 'M', sample: 'h.csv' }, tcd];
@@ -516,7 +551,7 @@ function cases(){
 function runCase(c){
   settings.decimal = c.decimal;
   try {
-    const all = c.files.map((x, k)=>{ const d = M.readGc(x.text); return d && !d.error ? M.fileIn(U, { name: x.name, label: x.name.replace(/\.[^.]+$/, ''), ...d, color: '#' + k, ...(x.included === false ? { included: false, held: {} } : {}), ...(x.sample ? { sample: x.sample } : {}) }) : null; }).filter(Boolean);
+    const all = c.files.map((x, k)=>{ const d = M.readGc(x.text); return d && !d.error ? M.fileIn(U, { name: x.name, label: x.name.replace(/\.[^.]+$/, ''), ...d, color: '#' + k, rawBytes: enc(x.text), ...(x.included === false ? { included: false, held: {} } : {}), ...(x.sample ? { sample: x.sample } : {}) }) : null; }).filter(Boolean);
     M.relink(all);
     const files = all.filter(f=> f.included !== false && M.isTable(f)), P = M.newParams(files);
     M.restoreParams(U, P, JSON.parse(JSON.stringify(c.st)), files);

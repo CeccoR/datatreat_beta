@@ -27,6 +27,7 @@ import { Worker } from 'node:worker_threads';
 import { fileURLToPath } from 'node:url';
 import * as L from '../figure-layout.js';
 import * as FM from '../figure-model.js';
+import { own, setOwn } from '../db.js';
 
 const UPDATE = !!process.env.UPDATE_GOLDEN || process.env.npm_lifecycle_event === 'test:update';
 const GOLDEN = path.join(path.dirname(fileURLToPath(import.meta.url)), 'golden', 'figlayout.json');
@@ -605,7 +606,8 @@ test('the legends, the shared titles, the tiles, the colours, the symbols, the r
    figure.js needs a page to load (utils.js, plot.js), so its source is run here as it
    stands, its imports handed in: figure-layout.js and figure-model.js themselves, plot.js's
    svgEl, niceRun, fmtTick, SUB_DROP and TILT_DY and utils.js's tiltFits, CP_PALETTES, esc
-   and X_SVG from their source, the rest (pickers, the tabs) inert. The page: elements that
+   and X_SVG from their source, db.js's own and setOwn (v583: v582's import of them made this
+   test throw), the rest (pickers, the tabs) inert. The page: elements that
    keep their attributes in the order they were set, their text and their children, and a
    canvas that measures text a fixed width a character. */
 class El {
@@ -636,7 +638,7 @@ const UTIL = new Function(decl('utils.js', 'tiltFits') + '\n' + ['esc', 'CP_PALE
 /* figure.js's source (or another's: an older version's, given as text), run with its imports
    handed in; gives its drawFigure and the model's setter. */
 function loadFigure(src = fs.readFileSync(new URL('../figure.js', import.meta.url), 'utf8')){
-  const from = { './plot.js': PLOT, './utils.js': UTIL, './tabs.js': { tabOf: () => null, TABS: [] }, './figure-layout.js': L, './figure-model.js': FM };
+  const from = { './plot.js': PLOT, './utils.js': UTIL, './tabs.js': { tabOf: () => null, TABS: [] }, './db.js': { own, setOwn }, './figure-layout.js': L, './figure-model.js': FM };
   const names = [], values = [];
   src = src.replace(/^import\s+(?:\*\s+as\s+(\w+)|\{([^}]*)\})\s+from\s+'([^']+)';\n/gm, (m, ns, list, mod) => {
     if (ns){ names.push(ns); values.push(from[mod]); }

@@ -6,8 +6,7 @@
    Stores
      sessions — saved projects, keyed by id.
      tabs     — the open project tabs, keyed by id: the working state that comes
-                back on the next load. Replaces the old one-draft-per-module
-                'drafts' store, whose records are migrated into tabs on upgrade.
+                back on the next load.
      bytes    — the files' own bytes (v517): a Uint8Array each, keyed by its SHA-256 in
                 hex, written once whatever number of projects and tabs hold it. A record
                 of sessions or tabs holds the hashes in its state, and in refs (indexed:
@@ -59,22 +58,7 @@ function idb(){
         const os = db.createObjectStore(STORE, { keyPath:'id' });
         os.createIndex('module', 'module', { unique:false });
       }
-      if (!db.objectStoreNames.contains(TABS_STORE)){
-        const os = db.createObjectStore(TABS_STORE, { keyPath:'id' });
-        // Carry the pre-tabs autosave drafts over as open tabs, so upgrading
-        // users find their work where they left it instead of on a blank app.
-        if (db.objectStoreNames.contains('drafts')){
-          const old = t.objectStore('drafts').getAll();
-          old.onsuccess = ()=>{
-            (old.result||[]).forEach((d, i)=>{
-              if (!d || !d.state) return;
-              os.put({ id: 'migrated-' + d.module, module: d.module, title: d.title || '',
-                       projectId: d.id || null, dirty: !!d.dirty, order: i,
-                       state: d.state, updatedAt: d.updatedAt || Date.now() });
-            });
-          };
-        }
-      }
+      if (!db.objectStoreNames.contains(TABS_STORE)) db.createObjectStore(TABS_STORE, { keyPath:'id' });
       // (v4: the bytes, and the hashes each record holds indexed; the records already
       // stored are left as they are, read in their own form, written in the new at their
       // next write)
@@ -237,7 +221,7 @@ const uid = ()=> Date.now().toString(36) + Math.random().toString(36).slice(2, 8
 // plain arrays, for older DataTreats), and of IndexedDB's records to v516. Up to v470
 // bytes became plain arrays everywhere, 9 bytes stored for each and read back as an
 // Array, not as the Uint8Array the module had; such records still decode, as the arrays
-// they hold.
+// they hold, which no module takes for a file's bytes (the file has none: it is said so).
 const B64_CHUNK = 0x8000;   // String.fromCharCode over megabytes at once overflows the stack
 function toB64(b){
   if (b.toBase64) return b.toBase64();   // (the browser's own, where it has one: the same text, sooner)
