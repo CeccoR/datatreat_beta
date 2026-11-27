@@ -6,16 +6,10 @@
    defaults, at windows chosen in all mode and in one mode (a spectrum at 2 nm among them);
    the suggestion places the lines where v514 did (on a step edge at 1 nm, as v514, the whole
    span). A project saved to v514 opens as v514 opened it: its points kept, its E_g v514's
-   (all mode through Projects › Import, one mode, values that are no number, a project from
-   before the cards). One saved by v515 to v519, its widths in eV, opens in points: a width
-   at v515's default, v514's default; a window, the points of the window v519 chose for the
-   sample (the field showed them, '≈ N pts'), in all mode their median over the samples; a
-   smoothing, the width over the energy step at the middle of the spectrum, in all mode its
-   median; rounded, at least the least; values that are no number, the defaults; a width
-   beside its points, the points; a file left out, converted as it is taken back in; a
-   card's kept settings of the other kind, as it is switched. v514's numbers were taken on
-   v514's app (git show 82b2939), v519's points on v519's (git show 34e9906); the tests up
-   to the conversion pass on v514's app as they are. */
+   (all mode through Projects › Import, one mode, values that are no number); v583: one from
+   before the cards (its fields by their ids, its lines at the top) opens with one Tauc card of
+   the defaults, its old fields ignored, as v583 dropped the widths in eV of v515 to v519 (to
+   v582 converted to points). v514's numbers were taken on v514's app (git show 82b2939). */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { start, openModule, loadFiles, settle, moduleState, exportProject, projectFile, importProject, openProject, download, readZip } from './helpers.mjs';
@@ -60,7 +54,7 @@ const restore = (page, st)=> page.evaluate(async st=>{
 const encoded = page => page.evaluate(async ()=>{ const u = await import('./utils.js'), db = await import('./db.js'); return db.encode(u.getModuleState('tauc')); });
 
 /* A state as a project saves it: a Tauc card and an Urbach one read against it, their
-   settings as given (points to v514, widths in eV from v515 to v519), on lines of their own
+   settings as given, on lines of their own
    (the Tauc ones common, the Urbach ones each sample's), `files` the state's own. */
 const LINES = { v1: 2.95, v2: 3.6, v3: 2.1, v4: 2.85 }, URB = [{ v1: 2.6, v2: 3.2 }, { v1: 2.3, v2: 2.9 }];
 const card = (id, type, states, ref = null)=> ({ id, type, base: '', nameAuto: true, collapsed: false, ref, refAuto: true, egSel: ['x', 'b'], urbSel: { b: ['p', 's'] }, states });
@@ -202,79 +196,16 @@ test('DRS: a project saved to v514 opens as v514 opened it: its points kept, its
     assert.deepEqual([await shared(page), await shared(page, 1)], [{ a: 0.5, N: 1, N2: 20, M: 25, M2: 50.4 }, { N: 1, N2: 20, M: 25 }]);
     assert.equal(await val(page, 'an1M2'), '50');
     assert.equal((await csvs(page)).eg, V514.BAD);
-    // A project from before the cards: one Tauc analysis, its fields' values by their ids.
+    // A project from before the cards (one Tauc analysis, its fields' values by their ids, its
+    // lines at the top, v583): those ignored, one Tauc card of the defaults, as a state that
+    // holds one card of no settings gives.
+    await restore(page, { files: f, analyses: [{ id: 1, type: 'tauc' }] }); await settle(page);
+    const def = (await csvs(page)).eg;
     await restore(page, { files: f, params: { taucA: '0.5', taucN: '4', taucN2: '20', taucM: '30', taucM2: '100' }, vlines: LINES }); await settle(page);
-    assert.deepEqual(await shared(page), { a: 0.5, N: 4, N2: 20, M: 30, M2: 100 });
-    assert.equal((await csvs(page)).eg, V514.ALL);
+    assert.deepEqual([(await states(page)).length, await shared(page)], [1, { a: 0.5, N: 1, N2: 20, M: 25, M2: 100 }]);
+    assert.equal((await csvs(page)).eg, def);
+    assert.equal(def.trim().split('\n').length, 3, 'E_g of each sample');
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });
 
-/* ---- Saved by v515 to v519: widths in eV ----
-   The points of the windows v519 chose, as its fields showed them for each sample ('≈ N
-   pts'), in these states: ALL, all mode on the first spectrum and the second at 2 nm, Tauc
-   W 0.25 eV (the baseline's 0.5, the default), Urbach W 0.2; ONE, one mode, Tauc W 0.3 and
-   0.15, W2 0.45 and 0.5, Urbach W 0.25 and 0.1; KIND, an Urbach card's settings kept on a
-   Tauc card, W 0.2, shown as it was switched. */
-const V519 = { ALL: { M: [26, 13], U: [27, 17] }, ONE: { M: [32, 8], M2: [101, 57], U: [36, 9] }, KIND: [29, 18] };
-const median = a =>{ const s = a.slice().sort((x, y)=> x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m-1] + s[m])/2; };
-// A spectrum's energy step at its middle: the middle point's, in energy order, to its two neighbours.
-const midStep = wl =>{ const E = wl.map(x=> 1239.842/x).sort((a, b)=> a - b), m = E.length >> 1; return (E[m+1] - E[m-1])/2; };
-
-test('DRS: a project saved by v515 to v519, its widths in eV, opens in points: v515\'s defaults v514\'s, a window the points v519 chose, a smoothing over the middle step', async ()=>{
-  const { page, errors, close } = await env.page();
-  try {
-    await openModule(page, 'tauc');
-    // All mode, through the Projects list: the median over the samples.
-    await loadFiles(page, 'tauc', [env.fx.files.tauc[0], d2h]);
-    const { obj } = await exportProject(page), st = obj.state.files.map(f=> midStep(f.wl));
-    await importProject(page, projectFile(env, 'v519all.datatreat', { ...obj, title: 'v519all', appVersion: 'v519', state: saved(obj.state.files, { tauc: { w: 0.03, w2: 0.1, W: 0.25, W2: 0.5 }, urbach: { w: 0, w2: 0.15, W: 0.2 } }) }, { sign: true }));
-    await openProject(page, 'tauc', 'v519all');
-    const pt = (w, s)=> Math.round(median(s.map(x=> w/x)));
-    assert.deepEqual([await shared(page), await shared(page, 1)], [{ a: 0.5, N: pt(0.03, st), N2: pt(0.1, st), M: Math.round(median(V519.ALL.M)), M2: 100 }, { N: 1, N2: 20, M: Math.round(median(V519.ALL.U)) }]);
-    assert.deepEqual([pt(0.03, st), pt(0.1, st), Math.round(median(V519.ALL.M)), Math.round(median(V519.ALL.U))], [5, 17, 20, 22]);
-    assert.deepEqual(await Promise.all(['an1N', 'an1N2', 'an1M', 'an1M2'].map(id=> val(page, id))), ['5', '17', '20', '100']);
-    // Saved again, in points: v514's form.
-    const s2 = (await exportProject(page)).obj.state.analyses.map(a=> a.states[a.type].shared);
-    assert.deepEqual(s2, [{ a: 0.5, N: 5, N2: 17, M: 20, M2: 100 }, { N: 1, N2: 20, M: 22 }]);
-
-    // One mode: each sample's own at its spectrum (one Urbach entry with W alone, the common
-    // ones for the rest).
-    await openModule(page, 'tauc');
-    await loadFiles(page, 'tauc', [env.fx.files.tauc[0], d2h]);
-    const files = (await encoded(page)).files, one = { tauc: { w: 0, w2: 0.15, W: 0.2, W2: 0.5 }, urbach: { w: 0, w2: 0.15, W: 0.15 },
-      per: [{ w: 0.03, w2: 0.15, W: 0.3, W2: 0.45 }, { w: 0.05, w2: 0.2, W: 0.15, W2: 0.5 }], perU: [{ w: 0, w2: 0, W: 0.25 }, { W: 0.1 }] };
-    await restore(page, saved(files, one)); await settle(page);
-    const want = [[{ a: 0.5, N: Math.round(0.03/st[0]), N2: 20, M: V519.ONE.M[0], M2: V519.ONE.M2[0] }, { a: 0.5, N: Math.round(0.05/st[1]), N2: Math.round(0.2/st[1]), M: V519.ONE.M[1], M2: 100 }],
-      [{ N: 1, N2: 1, M: V519.ONE.U[0] }, { M: V519.ONE.U[1] }]];
-    assert.deepEqual(await per(page), want);
-    assert.deepEqual([await shared(page), await shared(page, 1)], [{ a: 0.5, N: 1, N2: 20, M: 25, M2: 100 }, { N: 1, N2: 20, M: 25 }], 'the common ones at v515\'s defaults: v514\'s');
-    await page.click('#an1Next'); await settle(page);
-    assert.deepEqual(await Promise.all(['an1N', 'an1N2', 'an1M', 'an1M2', 'an2N', 'an2N2', 'an2M'].map(id=> val(page, id))), ['6', '22', '8', '100', '1', '20', '9']);
-
-    // A file left out with its entries in eV, in one mode: converted as it is taken back in.
-    await openModule(page, 'tauc');
-    await loadFiles(page, 'tauc', [env.fx.files.tauc[0], d2h]);
-    const f3 = (await encoded(page)).files, st3 = saved(f3, one);
-    const [t, u] = st3.analyses.map(a=> Object.values(a.states)[0].per);
-    st3.files = [f3[0], { ...f3[1], included: false, held: { '1:tauc': t[1], '2:urbach': u[1] } }];
-    t.splice(1, 1); u.splice(1, 1);
-    await restore(page, st3); await settle(page);
-    assert.deepEqual((await per(page)).map(c=> c.length), [1, 1]);
-    await page.click('#taucFileTableWrap tr.file-row:nth-child(2) .file-incl'); await settle(page);
-    assert.deepEqual(await per(page), want);
-
-    // Values that are no number, or out of range: the defaults; a width beside its points: the points.
-    await restore(page, saved(f3, { tauc: { w: 'x', w2: -1, W: null, W2: 0 }, urbach: { N: 4, w: 0.5, W: '0.2' } })); await settle(page);
-    assert.deepEqual([await shared(page), await shared(page, 1)], [{ a: 0.5, N: 1, N2: 20, M: 25, M2: 100 }, { N: 4, N2: 20, M: 25 }]);
-
-    // A card's settings of the kind it is not showing, in eV: converted as it is switched.
-    const st4 = saved(f3, { tauc: { w: 0, w2: 0.15, W: 0.2, W2: 0.5 }, urbach: { w: 0, w2: 0.15, W: 0.15 } });
-    st4.analyses = [card(1, 'tauc', { ...st4.analyses[0].states, urbach: { mode: 'shared', shared: { w: 0.02, w2: 0.15, W: 0.2 }, sharedVlines: {}, per: URB.map(v=> ({ vlines: v })), suggested: true } })];
-    await restore(page, st4); await settle(page);
-    assert.deepEqual(await shared(page), { a: 0.5, N: 1, N2: 20, M: 25, M2: 100 });
-    await page.click('#tab-tauc .an-card .an-type'); await page.click('.an-menu:not([hidden]) [data-kind="urbach"]'); await settle(page);
-    assert.deepEqual(await shared(page), { N: pt(0.02, st), N2: 20, M: Math.round(median(V519.KIND)) });
-    assert.deepEqual(errors, []);
-  } finally { await close(); }
-});

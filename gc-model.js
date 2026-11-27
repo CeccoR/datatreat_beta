@@ -8,13 +8,13 @@
    samples; the pairs' rows; a card's parameters (all and one, the injection delay, mass or
    area), its tables (each gas's times, flows, rates and production), its mean rates over
    the interval and by sample, the Results' series cut to the interval, what its plots draw
-   (the ranges, the interval lines, the bars), its CSVs, its state saved and read back (the
-   projects of every version before). Taken out of v556's gc.js with their operations in
+   (the ranges, the interval lines, the bars), its CSVs, its state saved and read back (a
+   table read again from its bytes). Taken out of v556's gc.js with their operations in
    their order: the same numbers to the last bit.
 
    utils.js's and modkit.js's helpers, which need a page to load, are handed in as one
    object, U = { settings, fmtNum, csvLine, cumtrapz, maxArr, minArr, meanArr, stdArr, objId,
-   exactKey, num, numStr, oneOf, dateOf, arrOf, without, wideCsv } (gc.js U).
+   exactKey, num, oneOf, dateOf, arrOf, without, wideCsv } (gc.js U).
 
    A card's settings are its parameters P (newParams; gc.js's card holds them): the
    per-sample arrays ms, As, Qs, Ts, Ps, startArr, endArr, lightOnDates, aligned with the
@@ -22,11 +22,11 @@
    each parameter's all/one mode and shared value; what the rates are normalised by (normBy,
    m or A), p's unit, the injection delay, and the gases each section draws (gasSel).
 ========================================================= */
-import { textLines, readTable, parseNum, width, commonWidth } from './textdata.js';
+import { textLines, readTable, parseNum, width, commonWidth, decodeText } from './textdata.js';
 import { readTcd } from './gc-tcd.js';
 import { looksTcd } from './gc-pair.js';
 import { fixed } from './db.js';
-import { keepSeen, inKeys } from './alerts.js';
+import { keepSeen, inKeys, heldLine } from './alerts.js';
 
 /* ---- The gases, the flow and the pressure (pure: the module's, for every instance) ---- */
 // Axis titles. The SVG form carries the superscripts (g⁻¹, cm⁻², h⁻¹); the plain form is
@@ -80,14 +80,12 @@ export const hasGas = (f, k)=> !!f.gas[k] && !f.gas[k].every(noValue);
 export const INJ_DELAY_AUTO = 60.6;
 /* The molar volume the flow Q is turned into moles with: an ideal gas at the temperature
    T (°C) and the absolute pressure p the flow is measured at, V_m = R·T/p, 22.414 L/mol
-   at 0 °C and 1 atm, 24.465 at 25 °C. T is each card's, all/one as m and Q are: 25 °C in
-   a new card and for a new file, 0 °C in a project saved before it existed, whose rates
-   were worked out at 22.41396954 L/mol (to v500, whatever the flow meter's). p the same
-   way: 1 atm in a new card, for a new file and in a project saved before it, whose rates
-   were worked out at it (to v500 p was 1 atm, fixed). */
+   at 0 °C and 1 atm, 24.465 at 25 °C. T is each card's, all/one as m and Q are: 25 °C
+   where none is given (a new card, a new file, a project that holds none). p the same way:
+   1 atm where none is given. */
 export const R_ATM = 0.0820573661;    // R, L·atm/(mol·K)
 export const molarVolume = (T, p)=> R_ATM*(T + 273.15)/(p/P_ATM);
-export const T_NEW = 25, T_OLD = 0, okT = v => v >= -273;
+export const T_NEW = 25, okT = v => v >= -273;
 /* p is kept in Pa, as typed in its unit; the unit, the card's, is only how it is shown
    and written, so switching it never moves the pressure. Each unit's size in Pa is a
    fraction, so that a value typed goes to Pa and back exactly where it can (760 Torr is
@@ -262,9 +260,13 @@ const isArr = v => Array.isArray(v) || (ArrayBuffer.isView(v) && !(v instanceof 
 export const isTcd = f => isObj(f) && isObj(f.tcd);
 export const isTable = f => isObj(f) && isArr(f.injDates) && isObj(f.gas);
 export const hasTcd = r => isTcd(r) || (isObj(r) && isTcd(r.mate));
+/* A table's bytes read (readGc), kept by them: a drop's reading (readGcAny), and the file read
+   again as a project opens (tableIn), once a page. */
+const readings = new WeakMap();
+const tableRead = (bytes, text)=>{ if (!readings.has(bytes)) readings.set(bytes, readGc(text === undefined ? decodeText(bytes) : text)); return readings.get(bytes); };
 // (`seen(bytes, read)`: readTcd's result, for the Integration cards: gc-integ.js prime)
 export function readGcAny(text, bytes, seen){
-  if (!looksTcd(text)) return readGc(text);
+  if (!looksTcd(text)) return bytes instanceof Uint8Array ? tableRead(bytes, text) : readGc(text);
   const d = readTcd(text);
   if (d.error) return { error: `raw chromatograms that cannot be read: ${d.error}` };
   seen(bytes, d);
@@ -280,11 +282,17 @@ export function firstInjection(f){
 }
 
 /* ---- A file as a restore takes it (modkit RESTORED) ---- */
-/* A table's record: its injections, each with a date that is one, and the columns of the
-   gases it has beside them, a cell that is no number an empty one; none of either, it is
-   left out. A record that is all that already is kept as it is: the empty-cell and the
-   dates' alerts dismissed stay so (gc.js seen.check and seen.read mark its gases). */
-export function tableIn(U, f){
+/* A table's record: its bytes a Uint8Array, or none (null); read again from them (tableRead),
+   what they read as its injections and gases, the rest of the record as it is. Where they read
+   as no table (bytes not stored, or ones the reader refuses: heldOf says so), the injections it
+   holds, each with a date that is one, and the columns of the gases it has beside them, a cell
+   that is no number an empty one; none of either, it is left out. A record that is all that
+   already is kept as it is: the empty-cell and the dates' alerts dismissed stay so (its marks,
+   `seen`). */
+const READ = ['injDates', 'gas', 'emptyRows', 'dayMonth', 'badDates', 'monthNames', 'altExport'];
+export function tableIn(U, f0){
+    const f = f0.rawBytes != null && !(f0.rawBytes instanceof Uint8Array) ? { ...f0, rawBytes: null } : f0, t = f.rawBytes ? tableRead(f.rawBytes) : null;
+    if (isTable(t)){ const g = { ...f }; for (const k of READ) if (k in t) g[k] = t[k]; else delete g[k]; return g; }
     if (!isArr(f.injDates) || !isObj(f.gas)) return null;
     const n = f.injDates.length, ks = Object.keys(f.gas), emptyRows = U.num(f.emptyRows, 0, v=> v >= 0);
     if (n && ks.length && f.injDates.every(d=> U.dateOf(d) === d) && ks.every(k=> GASES.some(g=> g.key === k) && Array.isArray(f.gas[k]) && f.gas[k].length === n)){
@@ -309,6 +317,12 @@ export function oneIn(U, f){
   keepSeen(g);
   if (isTcd(g)) return { ...g, tcd: { n: U.num(g.tcd.n, 0, v=> Number.isInteger(v) && v >= 0) }, rawBytes: g.rawBytes instanceof Uint8Array ? g.rawBytes : null };
   return tableIn(U, g);
+}
+/* What a project opened says of a table whose injections it holds, not read again from its
+   bytes (tableIn: none stored, or what the reader says of them), or ''. */
+export function heldOf(f){
+  const b = f.rawBytes instanceof Uint8Array ? f.rawBytes : null, t = b && tableRead(b);
+  return isTable(t) ? '' : heldLine(b && (t && t.error || NOT_GC));
 }
 // (a file as a pair's second: its box is the row's, not its own)
 export const loose = r =>{ const { included: _i, mate: _m, ...x } = r; return x; };
@@ -920,33 +934,18 @@ export function snapshotOf(P){
    value that was no number drew NaN). */
 export function restoreParams(U, P, s0, files){
   const s = isObj(s0) ? s0 : {}, n = files.length, GK = GASES.map(g=> g.key), mode = v => U.oneOf(v, ['all', 'one']), pos = v => v > 0;
-  // Projects saved before O2 existed, or under the older single-mode selector.
-  const fromMode = m => GK.includes(m) ? [m] : GK, sel = v => Array.isArray(v) ? GK.filter(k=> v.includes(k)) : GK;
-  const gm = isObj(s.gasMode) ? s.gasMode : {};
-  P.gasSel = isObj(s.gasSel) ? { a: sel(s.gasSel.a), r: sel(s.gasSel.r) } : { a: fromMode(gm.a), r: fromMode(gm.r) };
+  const sel = v => Array.isArray(v) ? GK.filter(k=> v.includes(k)) : GK, gs = isObj(s.gasSel) ? s.gasSel : {};
+  P.gasSel = { a: sel(gs.a), r: sel(gs.r) };
   P.ms = U.arrOf(s.ms, n, v=> qtyIn(U, v, 15)); P.Qs = U.arrOf(s.Qs, n, v=> U.num(v, 2, pos));
   P.lightOnDates = U.arrOf(s.lightOnDates, n, (v, i)=> U.dateOf(v) || firstInjection(files[i]));
   // Projects from before the delay existed take it too, on Auto: the timestamps they
   // were computed from are just as late.
   P.delayAuto = s.delayAuto !== false;
   P.delayMan = U.num(s.delayMan, INJ_DELAY_AUTO, v=> v >= 0);
-  if (s.mMode !== undefined || s.intMode !== undefined){
-    // Current format: independent per-parameter modes; or paired-mode projects
-    // (mqMode / intMode), migrated to independent modes.
-    if (s.mMode !== undefined){ P.mMode = mode(s.mMode); P.qMode = mode(s.qMode); P.startMode = mode(s.startMode); P.endMode = mode(s.endMode); }
-    else { P.mMode = P.qMode = mode(s.mqMode); P.startMode = P.endMode = mode(s.intMode); }
-    P.mShared = qtyIn(U, s.mShared, 15); P.qShared = U.num(s.qShared, 2, pos); P.startShared = U.num(s.startShared, 0); P.endShared = U.num(s.endShared, 24);
-  } else {
-    // Migrate the oldest projects: a single global interval → interval 'all' mode.
-    P.mMode='one'; P.qMode='one'; P.startMode='all'; P.endMode='all';
-    P.mShared=15; P.qShared=2;
-    P.startShared = U.num(U.numStr(s.plateauStart), 0); P.endShared = U.num(U.numStr(s.plateauEnd), 24);
-  }
+  P.mMode = mode(s.mMode); P.qMode = mode(s.qMode); P.startMode = mode(s.startMode); P.endMode = mode(s.endMode);
+  P.mShared = qtyIn(U, s.mShared, 15); P.qShared = U.num(s.qShared, 2, pos); P.startShared = U.num(s.startShared, 0); P.endShared = U.num(s.endShared, 24);
   P.startArr = U.arrOf(s.startArr, n, v=> U.num(v, P.startShared)); P.endArr = U.arrOf(s.endArr, n, v=> U.num(v, P.endShared));
-  // A project from before the temperature (none in its state) keeps the 0 °C its rates
-  // were worked out at: the field shows it, and it can be changed.
-  const T0 = ['tMode', 'tShared', 'Ts'].some(k=> k in s) ? T_NEW : T_OLD;
-  P.tMode = mode(s.tMode); P.tShared = U.num(s.tShared, T0, okT); P.Ts = U.arrOf(s.Ts, n, v=> U.num(v, P.tShared, okT));
+  P.tMode = mode(s.tMode); P.tShared = U.num(s.tShared, T_NEW, okT); P.Ts = U.arrOf(s.Ts, n, v=> U.num(v, P.tShared, okT));
   // One from before the pressure was worked out at 1 atm, where a new card starts too.
   P.pMode = mode(s.pMode); P.pShared = U.num(s.pShared, P_ATM, okP); P.Ps = U.arrOf(s.Ps, n, v=> U.num(v, P.pShared, okP));
   P.pUnit = U.oneOf(s.pUnit, Object.keys(P_UNITS));
@@ -955,9 +954,9 @@ export function restoreParams(U, P, s0, files){
   P.normBy = U.oneOf(s.normBy, PER);
   P.aMode = mode(s.aMode); P.aShared = qtyIn(U, s.aShared, 1); P.As = U.arrOf(s.As, n, v=> qtyIn(U, v, 1));
 }
-/* A project from before the cards had one analysis, its settings at the top level: its
-   card's record, as cards.js loads one (`cards` the state's own list, read: modkit
-   cardList), and a card's settings as its analysis takes them when it is made (init): its
-   per-sample arrays without the entries of the files the restore left out (`gone`). */
-export const cardsOf = (s, cards)=> cards || [{ ...s, id: 1, type: 'rate' }];
+/* The cards' records, as cards.js loads them (`cards` the state's own list, read: modkit
+   cardList; none, one of the defaults, as a new project starts), and a card's settings as its
+   analysis takes them when it is made (init): its per-sample arrays without the entries of the
+   files the restore left out (`gone`). */
+export const cardsOf = cards => cards || [{ id: 1, type: 'rate' }];
 export const initOf = (U, src, gone)=> ({ ...src, ...Object.fromEntries(PER_SAMPLE.filter(k=> k in src).map(k=> [k, U.without(src[k], gone)])) });

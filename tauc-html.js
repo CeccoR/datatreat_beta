@@ -8,7 +8,7 @@
    esc, modcharts.js's plot box, snav.js's sample selector: tauc.js HU), and the cards'
    own instructions (cards.js cardInfo) where they end with them.
 ========================================================= */
-import { EXPONENTS, URB_SUB_COLORS, warnOf } from './tauc-model.js';
+import { EXPONENTS, URB_SUB_COLORS } from './tauc-model.js';
 
 // A raised run in an svg label (the plot's axis titles).
 export const sup = v => `<tspan baseline-shift="super" font-size="8">${v}</tspan>`;
@@ -160,8 +160,8 @@ export function resHtml(a, u){
    project saved before the R% reading holds none: F(R), as it was read. */
 const READS = { R: ['%R', 'read as the reflectance in %, converted to F(R)'], F: ['F(R)', 'read as F(R)'] };
 export function readNote(f, u){
-  const [t, how] = READS[f.read === 'R%' ? 'R' : 'F'], w = f.warn && warnOf(f);
-  const title = !w ? `second column ${how}` : w === 'none' ? `second column ${how}, with no header naming it` : `the ${t} column its header names, ${how}; not a standard format`;
+  const [t, how] = READS[f.read === 'R%' ? 'R' : 'F'];
+  const title = !f.warn ? `second column ${how}` : `the ${t} column its header names, ${how}; not a standard format`;
   return `<span title="${u.esc(title)}">${u.esc(t)}</span>`;
 }
 

@@ -8,8 +8,9 @@
    named by their magnification, an excluded image deciding nothing, moved, a new one, reset
    with their figures and settings kept), what the figure takes of an image at common and own
    scale; the state saved and read back (as saved, a v517 project's base64, ids made again,
-   files twice or lost, a crop of pixels made square since, malformed values everywhere); the
-   alerts' lines; the Image box, the groups and the options, every name escaped. Then the three
+   files twice or lost, malformed values everywhere); v583: an old project (a crop of pixels
+   made square since, one figure for every group, bytes as arrays), its old fields ignored, the
+   defaults in their place; the alerts' lines; the Image box, the groups and the options, every name escaped. Then the three
    fixtures as v557's page analysed them (its CSV, every byte), and 60 cases (random images,
    states and a few steps each: the crop typed, re-ratioed and reset, links, the scope and
    settings, groups moved, renamed, scaled, added, removed and reset, files left out,
@@ -384,7 +385,7 @@ test('groups: placed by pixel size and named, an excluded image deciding nothing
 });
 
 /* ---- The state ---- */
-test('the state: saved and read back, a v517 project, ids made again, files twice or lost, pixels made square since, malformed values', ()=>{
+test('the state: saved and read back, a v517 project, ids made again, files twice or lost, malformed values', ()=>{
   const S = loaded('a', 'f', 'e');
   S.allFiles[0].crop = { x: 4, y: 5, w: 70, h: 66 }; S.allFiles[0].cropDef = false; S.allFiles[0].linked = true;
   S.figures = { g1: { wmm: 120 } };
@@ -406,15 +407,6 @@ test('the state: saved and read back, a v517 project, ids made again, files twic
   assert.equal(alertsOf(W),
     PAGE.alertHtml('warn', 'Opened, to check:', ['2 files left out: their stored bytes no longer read.'], 'sem-dismiss-invalid'));
   assert.equal(H.lostLine(1), '1 file left out: its stored bytes no longer read.');
-  // Pixels made square since the crop was saved (to v487, in the pixels as acquired): brought
-  // to the square ones; its default kept the default.
-  const r = info(S.allFiles[1]), q = r.squared;
-  assert.ok(q && r.width === 110 && r.imageH === 101);
-  const X = newS();
-  restore(X, { files: [{ ...s.files[1], sq: undefined, cropDef: false, crop: { x: 10, y: 10, w: 80, h: 60 }, aspect: '4:3' }] });
-  assert.deepEqual([X.allFiles[0].crop, X.allFiles[0].sq, X.allFiles[0].aspect], [{ x: 10, y: Math.round(10*101/84), w: 80, h: Math.round(60*101/84) }, true, 'free']);
-  restore(X, { files: [{ ...s.files[1], sq: undefined, cropDef: true, crop: { x: 10, y: 10, w: 80, h: 60 } }] });
-  assert.deepEqual([X.allFiles[0].crop, X.allFiles[0].cropDef], [{ x: 0, y: 0, w: 110, h: 101 }, true]);
   // A crop at its ratio under 64 px, where the image cannot hold both (v569), read back as it
   // was; with no ratio, or another, widened to 64 px as before.
   const hf = fileOf('h'), hr = info(hf);
@@ -446,12 +438,6 @@ test('the state: saved and read back, a v517 project, ids made again, files twic
   restore(P0, { files: s.files, groupInt: JSON.parse('{"__proto__": {"mode": "none", "def": false}, "constructor": {}, "": {}}'), groups: [{ id: 'mode', members: s.files.map(f=> f.raw.id) }] });
   assert.equal(Object.getPrototypeOf(P0.groupInt), Object.prototype);
   assert.deepEqual([Object.keys(P0.groupInt), P0.groupInt.mode, M.intOf(P0, P0.allFiles[0])], [[], undefined, P0.intensity]);
-  // A project of before v440: its one figure each of its groups', but for its file's name.
-  const Z = newS(); restore(Z, { files: s.files, groups: s.groups, figure: { wmm: 140, file: 'old' } });
-  assert.deepEqual(Z.figures, { g3: { wmm: 140 }, g2: { wmm: 140 }, g1: { wmm: 140 } });
-  assert.notEqual(Z.figures.g1, Z.figures.g2);
-  restore(Z, { files: s.files, figure: { wmm: 140 } });
-  assert.deepEqual(Z.figures, {}, 'none for the groups made after');
   for (const junk of [null, 'x', [], {}, { files: 'x' }]){ const J = newS(); restore(J, junk); assert.deepEqual([J.allFiles, J.groups, J.intensity, J.cur], [[], [], M.INT_DEF, 0]); }
   // The ids a state holds; the same bytes.
   assert.deepEqual([...M.idsIn({ a: [{ id: 'x', bytes: 1 }, { id: 'y', b64: '' }], b: { c: { id: 'z' } }, d: new Uint8Array(3) })], ['x', 'y']);
@@ -463,6 +449,28 @@ test('the state: saved and read back, a v517 project, ids made again, files twic
   assert.deepEqual(M.nextOf({ img: 'i', ed: { id: 'q', k: 2, cx: 1, cy: 2, z: 1 } }), { ed: { id: 'q', k: 2, cx: 1, cy: 2 }, img: 'i' });
   assert.deepEqual(M.nextOf({ img: 3, ed: { id: 'q', k: 0, cx: 1, cy: 2 } }), { ed: null, img: null });
   assert.deepEqual(M.nextOf(null), { ed: null, img: null });
+});
+
+/* v583: an old project opens as this version reads it. Made here as older versions saved it: a
+   crop in the pixels as acquired of an image whose pixels are made square now (to v487, no
+   `sq`), one figure for every group (`figure`, to v439), an image's bytes as numbers (to v483). */
+test('an old project: old fields ignored, the defaults in their place (v583)', ()=>{
+  const S = loaded('a', 'f', 'e'), s = M.snapshotOf(S), r = info(S.allFiles[1]);
+  assert.ok(r.squared && r.width === 110 && r.imageH === 101 && s.files[1].sq === true);
+  const old = { ...s, figure: { wmm: 140, file: 'old' }, figures: undefined,
+    files: [s.files[0], { ...s.files[1], sq: undefined, cropDef: false, crop: { x: 10, y: 10, w: 80, h: 60 }, aspect: '4:3' }, { ...s.files[2], raw: { id: s.files[2].raw.id, bytes: [...s.files[2].raw.bytes] } }] };
+  const X = newS();
+  assert.doesNotThrow(()=> restore(X, old));
+  // the crop of no square pixels: the default, its ratio free, the default's box ticked; one of now kept
+  assert.deepEqual([X.allFiles[1].crop, X.allFiles[1].sq, X.allFiles[1].aspect, X.allFiles[1].cropDef], [{ x: 0, y: 0, w: 110, h: 101 }, true, 'free', true]);
+  const Y = newS(); restore(Y, { files: [{ ...s.files[1], cropDef: false, crop: { x: 10, y: 10, w: 80, h: 70 }, aspect: 'free' }] });
+  assert.deepEqual([Y.allFiles[0].crop, Y.allFiles[0].cropDef], [{ x: 10, y: 10, w: 80, h: 70 }, false]);
+  // the one figure: none of a group's (each its default); the image of no bytes left out, said
+  assert.deepEqual([X.figures, X.allFiles.length], [{}, 2]);
+  assert.equal(alertsOf(X), PAGE.alertHtml('warn', 'Opened, to check:', ['1 file left out: its stored bytes no longer read.'], 'sem-dismiss-invalid'));
+  // what it shows worked out from the images: their curves and CSV as a project of now's with those crops
+  const N = newS(); restore(N, { ...s, files: [s.files[0], { ...s.files[1], cropDef: true }] });
+  assert.deepEqual(M.csvOf(U, X), M.csvOf(U, N));
 });
 
 /* ---- The markup ---- */

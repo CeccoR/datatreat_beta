@@ -106,7 +106,7 @@ function createTauc({ key, root, layer, shown }){
   };
   S.kit = moduleKit('tauc', kitHooks(S, key, layer));
   S.allFiles = S.kit.all; S.files = S.kit.files;
-  S.kit.dropText(M.readDrs, had => filesDropped(S, had));
+  S.kit.dropText((text, bytes)=> M.readingOf(bytes, text), had => filesDropped(S, had));
   S.resList = S.$('taucResList');
   S.resList.addEventListener('click', e=> chipClicked(S, e));
   S.deck = S.kit.deck(deckHooks(S));
@@ -165,10 +165,12 @@ function kitHooks(S, key, layer){
 /* What the reading of the files said under the drop zone (modkit.js notes): the points left
    out (a warning to check) and how files of no standard format were read (an info), a line a
    file, worked out from the files there are (tauc-model.js fileNotes; to v566 one warning,
-   "Verify how these files were read:"). Each file's until its box's × (v572: to v571 the box's
-   until the next drop, undo or restore). */
-const fileNotes = S => ['check', 'read'].flatMap(what=> S.allFiles.map(f=> [f, M.fileNotes(f)[what]]).filter(([, n])=> n.length)
-  .map(([f, n])=> ({ what, line: esc(fileLine(f.name, n.join('; '))), files: [f] })));
+   "Verify how these files were read:"); the files a project opened plotted from the spectrum
+   it holds, not from their bytes (a warning, U8: heldNote). Each file's until its box's ×
+   (v572: to v571 the box's until the next drop, undo or restore). */
+const fileNotes = S => [...['check', 'read'].flatMap(what=> S.allFiles.map(f=> [f, M.fileNotes(f)[what]]).filter(([, n])=> n.length)
+  .map(([f, n])=> ({ what, line: esc(fileLine(f.name, n.join('; '))), files: [f] }))),
+  ...S.allFiles.map(f=> [f, M.heldNote(f)]).filter(([, n])=> n).map(([f, n])=> ({ what: 'opened', line: esc(fileLine(f.name, n)), files: [f] }))];
 /* ---- Undo/redo (kit.snapshot): every analysis card, its kind, name, fold, reference,
    and the line positions and parameters of both its kinds, beside the files' records
    (their spectra shared by reference). ---- */
@@ -184,7 +186,7 @@ function restoreState(S, s, gone){
   // (a wake's or a reload's: the sample its tab showed, by its file's name, else its place)
   const next = S.sampleNext;
   if (next){ const k = S.files.findIndex(f=> f.name === next.name); S.currIndex = k >= 0 ? k : num(next.sample, 0, Number.isInteger); S.sampleNext = null; }
-  loadAnalyses(S, cardList(s.analyses, M.KINDS) || M.legacyAnalyses(s), gone);
+  loadAnalyses(S, cardList(s.analyses, M.KINDS) || [{ id: 1, type: 'tauc' }], gone);
 }
 // A card of a kind there is no more (the debug defect band, taken out) is left out
 // (deck.load), as are the settings a card kept for one (readAnalysis). A card kept
@@ -234,7 +236,6 @@ function makePanel(S, spec, card){
     return exactKey([spec.kind, objId(S.files[k].wl), spec.keys.map(x=> p[x]), spec.lineKeys.map(x=> vl[x]), spec.refKey ? spec.refKey(k) : null]);
   };
   P.analyze = k => analyze(S, P, V, k);
-  P.back = (v, f)=> M.backEntry(U, spec, P, v, f);
   P.autoSuggestAll = ()=> M.autoSuggestAll(U, spec, P, S.files, curves);
   P.suggestAt = i => M.suggestAt(U, spec, P, S.files, i, curves);
   // Push the current sample's stored params into the input fields
@@ -697,15 +698,13 @@ function eachKeptState(S, fn){
 // The same lists, each named by its card and kind, for the file list to keep
 // aligned with the included files. A file brought back in gets the parameters and
 // lines it left with, in each card that was there then; in a card added since, it
-// starts from the card's defaults, as a file uploaded into it does. (A panel's own
-// entry of a project of v515 to v519, in eV, is converted as it comes back: P.back; one
-// of a kind not on show, when that kind is restored.)
+// starts from the card's defaults, as a file uploaded into it does.
 function slots(S){
   const out = [];
   cards(S).forEach(a=>{
     Object.entries(a.states).forEach(([k, s])=>{ if (k !== a.type && s && s.per) out.push({ key: a.id + ':' + k, arr: s.per, make: M.copyPer }); });
     const P = panelOf(S, a);
-    if (P) out.push({ key: a.id + ':' + a.type, arr: P.per, make: P.back });
+    if (P) out.push({ key: a.id + ':' + a.type, arr: P.per, make: M.copyPer });
   });
   return out;
 }

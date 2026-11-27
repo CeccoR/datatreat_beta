@@ -6,19 +6,20 @@
    list's rows (v581, as GC's: a .DTA and its .DSC, paired by their names or by a file's grip,
    a half alone waiting for its partner), each one's record, what it reads as and what is said
    of it; a spectrum's arrays fixed and kept by its .DTA's bytes; a file and a card as a
-   project holds them (the smoothing of before v510 a number of points) and the state saved;
+   project holds them (a row read again from its files' bytes) and the state saved;
    the smoothing width typed and the points it spans; the stacking each normalisation draws,
    the plot's options and range; the CSV's columns. Taken out of v562's epr.js (createEpr,
    one closure of 245 lines, and the functions round it) with their operations in their
    order: the same values to the last bit.
 
    utils.js's and modkit.js's helpers, which need a page to load, are handed in as one
-   object, U = { num, numStr, normOf, finitePairs, cardList, maxArr, minArr, fmtNum,
-   fmtData } (epr.js U).
+   object, U = { num, normOf, finitePairs, cardList, maxArr, minArr, fmtNum, fmtData }
+   (epr.js U).
 ========================================================= */
 import { meanStep, widthText, ptsNum, ptsText } from './smooth.js';
 import { fixed } from './db.js';
 import { decodeText } from './textdata.js';
+import { heldLine } from './alerts.js';
 
 /* ---- A spectrum kept (pure: the module's, for every instance) ----
    Its field and intensities, which nothing changes once read: fixed (db.js), the same
@@ -225,6 +226,13 @@ export function rowNote(r){
   if (x.alone) return { key: 'alone', line: `${fs[0].name}: ${x.why}: not plotted until it is paired; drop it, or drag one onto it by its own grip.` };
   return { key: 'pair:' + fs[1].name, line: `${fs[0].name} + ${fs[1].name}: ${x.why}: not plotted${x.why.startsWith('two ') ? '; drag a file by its own grip to pair it' : ''}.` };
 }
+/* What a project opened says of a row plotted from the spectrum it holds, not read again from
+   its files' bytes (fileIn: none stored, or none the reader takes), or '': named by its files. */
+export function heldNote(r){
+  if (!isSpectrum(r)) return '';
+  const fs = rowFiles(r), x = readRow(fs);
+  return x.b ? '' : `${fs.map(f=> f.name).join(' + ')}: ${heldLine(fs.every(f=> f.bytes instanceof Uint8Array) ? x.why : null)}.`;
+}
 /* How a file was read, said under the drop zone (utils.js FILE ALERTS, v567: to v566 with
    no word), or '': a spectrum with no microwave frequency is drawn on the field measured, and
    the plot has no g axis. Named by its .DSC, as its record keeps it (rawFiles), else by its
@@ -237,36 +245,30 @@ export const readNote = f =>{
 
 /* ---- A card's kinds and defaults; the state ---- */
 export const KINDS = { spectra: 'Stacked Spectra' };
-// (the smoothing a width in mT, 0.2 about 10 points of a 1024-point, 20-mT sweep; to v510
-// a number of points, `smooth`, 10: readCard converts it)
+// (the smoothing a width in mT, 0.2 about 10 points of a 1024-point, 20-mT sweep)
 export const DEF = { norm: 'global', smoothW: 0.2 };
-/* A file as a restore takes it (modkit RESTORED): its field and intensities, the points
-   where both are numbers, two at least, the arrays its file's bytes already have where they
-   are the same (keepSpectrum); with none, what its files read as (readRow: a spectrum, or a
-   row not plotted); none of either, it is left out. Its files in the list's order. */
+/* A file as a restore takes it (modkit RESTORED): its files in the list's order, the bytes of
+   each a Uint8Array or none (null); what they read as (readRow), its spectrum read again from
+   them, or a row not plotted. Where they read as none and the file holds its field and
+   intensities (bytes not stored, or ones the reader refuses: heldNote says so), those are its
+   spectrum, the points where both are numbers, two at least; none of either, it is left out. A
+   spectrum kept by its .DTA's bytes (keepSpectrum). */
+const bytesIn = x => x && typeof x === 'object' && x.bytes != null && !(x.bytes instanceof Uint8Array) ? { ...x, bytes: null } : x;
 export function fileIn(U, f){
-  const g = Array.isArray(f.rawFiles) ? { ...f, rawFiles: ordered(f.rawFiles) } : f, p = U.finitePairs(g.b, g.a);
+  const g = Array.isArray(f.rawFiles) ? { ...f, rawFiles: ordered(f.rawFiles.map(bytesIn)) } : f;
+  const fs = Array.isArray(g.rawFiles) ? g.rawFiles.filter(kindAt) : [], r = fs.length ? readRow(ordered(fs)) : null;
+  if (r && r.b) return keepSpectrum({ ...g, b: r.b, a: r.a, rescaled: r.rescaled });
+  const p = U.finitePairs(g.b, g.a);
   if (p && p[0].length > 1) return keepSpectrum({ ...g, b: p[0], a: p[1], rescaled: g.rescaled !== false });
-  const { b: _b, a: _a, rescaled: _r, ...w } = g, fs = Array.isArray(g.rawFiles) ? g.rawFiles.filter(kindAt) : [];
   if (!fs.length) return null;
-  const r = readRow(ordered(fs));
-  return r.b ? keepSpectrum({ ...w, b: r.b, a: r.a, rescaled: r.rescaled }) : w;
+  const { b: _b, a: _a, rescaled: _r, ...w } = g;
+  return w;
 }
-// The cards a state holds; a project from before the cards had one analysis, its settings
-// at the top level.
-export const cardsIn = (U, s)=> U.cardList(s.cards, KINDS) || [{ id: 1, type: 'spectra', norm: s.norm, smooth: s.smooth }];
-/* A card's settings in the history: its normalization and smoothing width (stateOf),
-   a number from 0, else the default. Up to v510 the smoothing was a number of points,
-   `smooth` (a whole number from 1, a string in a project from before the cards; modkit
-   RESTORED): it becomes N times the median step of the spectra, as it was on those at
-   that step (to rounding, for an even N; N = 1, none, is 0), the others smoothed by
-   the ratio of their steps; with no spectrum, or no such number, the default. */
-export function readCard(U, files, s){
-  const st = files.map(f=> meanStep(f.b)).sort((x, y)=> x - y), med = st[st.length >> 1];
-  const N = Math.round(U.num(U.numStr(s.smooth), NaN, v=> v >= 1));
-  const w = 'smoothW' in s ? U.num(s.smoothW, NaN, v=> v >= 0) : N === 1 ? 0 : N*med;
-  return { norm: U.normOf(s.norm), smoothW: Number.isFinite(w) ? w : DEF.smoothW };
-}
+// The cards a state holds; none, one of the defaults, as a new project starts.
+export const cardsIn = (U, s)=> U.cardList(s.cards, KINDS) || [{ id: 1, type: 'spectra' }];
+// A card's settings in the history: its normalization and smoothing width (stateOf), a
+// number from 0, else the default.
+export const readCard = (U, s)=> ({ norm: U.normOf(s.norm), smoothW: U.num(s.smoothW, DEF.smoothW, v=> v >= 0) });
 // The module's state saved: each card's record (cards.js saved) with its settings.
 export const stateOf = (recs, saved)=> ({ cards: recs.map(a=> ({ ...saved(a), norm: a.norm, smoothW: a.smoothW })) });
 

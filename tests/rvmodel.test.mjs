@@ -224,9 +224,10 @@ test('the instrument read once from the file\'s own bytes; a result written; the
   const f = pattern('s00.xrdml', xrdml(0)), i1 = M.instrOf(f);
   assert.equal(M.instrOf(f), i1, 'kept on the file');
   assert.deepEqual([i1.lam1, i1.lam2, i1.ratio, i1.radius, i1.monochromators], [1.540598, 1.544426, 0.5, 240, []]);
-  // (bytes come back from a saved state as a plain array; one read before v426 lacks the monochromators: read again)
-  const g = { ...pattern('s00.xrdml', xrdml(0)), rawBytes: Array.from(xrdml(0)) };
-  assert.equal(M.instrOf(g).lam1, 1.540598);
+  // (bytes as numbers, as a .json of v473–v483 holds them: no bytes, nothing read, v583; one
+  // read before v426 lacks the monochromators: read again)
+  assert.equal(M.instrOf({ ...pattern('s00.xrdml', xrdml(0)), rawBytes: Array.from(xrdml(0)) }), null);
+  const g = pattern('s00.xrdml', xrdml(0));
   const old = { lam1: 1.5, monochromator: false };
   g.instr = old;
   assert.notEqual(M.instrOf(g), old);

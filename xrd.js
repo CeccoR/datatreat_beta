@@ -66,7 +66,7 @@ async function readFile(f){
 }
 // A file's bytes, of a project, read again (xrd-model.js readAgain): its scans, or why not.
 function scansOf(b){
-  const xml = new DOMParser().parseFromString(decodeXml(b instanceof Uint8Array ? b : Uint8Array.from(b)), 'text/xml');
+  const xml = new DOMParser().parseFromString(decodeXml(b), 'text/xml');
   return xml.getElementsByTagName('parsererror').length ? [{ error: 'not well-formed XML' }] : readXrdmlScans(xml);
 }
 /* The sample's name the file gives (XRDML: <sample>'s <name>, else its <id>), or '': the
@@ -203,18 +203,14 @@ const eachCard = (S, fn)=> cards(S).forEach(a=>{ const e = S.live.get(a.id); if 
 // Every card's per-sample arrays (a Scherrer card's, and those it keeps while it is a
 // Rietveld one), for the file list to keep aligned with the included files. A file left
 // out holds its entries under the card's keys, the same whichever kind the card is, so
-// they come back with it after a switch (up to v477 the kept ones were 'kA' + id: left
-// out under one kind and taken in under the other, a file's per-sample parameters and
-// peaks started afresh). A file held so by an earlier version is read under either.
+// they come back with it after a switch.
 function slots(S){
   const out = [];
   cards(S).forEach(a=>{
     const e = S.live.get(a.id), key = 'A' + a.id;
-    if (a.type === 'scherrer' && e) out.push(...e.inst.slots(key).map(M.heldAs));
+    if (a.type === 'scherrer' && e) out.push(...e.inst.slots(key));
     const s = a.states.scherrer;
-    if (a.type !== 'scherrer' && s){
-      out.push(...M.keptSlots(key, s).map(M.heldAs));
-    }
+    if (a.type !== 'scherrer' && s) out.push(...M.keptSlots(key, s));
   });
   return out;
 }

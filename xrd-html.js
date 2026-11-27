@@ -7,6 +7,7 @@
    What they need from the page is handed in, u = { esc, X_SVG, fileAlertHtml, fileLine }
    (utils.js's: xrd.js HU).
 ========================================================= */
+import { heldLine } from './alerts.js';
 
 /* ---- The instrumental standard's windows ---- */
 // A window (its id, its title, its instructions): a head with its ×, what is under it
@@ -70,14 +71,16 @@ export const dropAlerts = (invalid, already, u)=> ({
   upload: u.fileAlertHtml('dup', already, 'xrd-dismiss-upload') });
 /* What a project opened found in a pattern, to check, or '': read again from its own bytes,
    its arrays changed (xrd-model.js readAgain, oldData: the points left out that an older
-   version kept, or its minimum subtracted); no file kept and its lowest point exactly 0. A
-   project read in may hold anything: only a whole count, or true, says. */
+   version kept, or its minimum subtracted); no file kept: its data those the project holds
+   (U8), or, its lowest point exactly 0, that its minimum may have been subtracted. A project
+   read in may hold anything: only a whole count, or true, says. */
 export function openedNote(f){
   const d = f.oldData, n = d && d.dropped;
   if (Number.isInteger(n) && n > 0) return `read again from the file itself, ${n} point${n > 1 ? 's' : ''} whose values are no finite number left out: the project held ${n > 1 ? 'them' : 'it'}, as an older version did. Results refined before are from those: refine again`;
   if (d && d.minimum === true) return 'read again from the file itself: the project held its data as an older version had read them, with their minimum subtracted. Results refined before are from those: refine again';
+  if (f.rawBytes instanceof Uint8Array) return '';
   let lo = Infinity; for (const v of f.y || []) if (v < lo) lo = v;
-  return !f.rawBytes && lo === 0 ? 'its lowest point is exactly 0 and the project does not hold the file itself: its minimum may have been subtracted, as an older version did, which the Rietveld weights would take for the counts; load the file again' : '';
+  return lo === 0 ? 'its lowest point is exactly 0 and the project does not hold the file itself: its minimum may have been subtracted, as an older version did, which the Rietveld weights would take for the counts; load the file again' : heldLine(null);
 }
 /* What the reading of the files said (alerts.js notes, v572: worked out from the patterns in
    the list, each until its box's ×; to v571 the drop's words and the restore's, gone at the

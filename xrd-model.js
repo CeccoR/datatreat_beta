@@ -85,7 +85,7 @@ export const freshOf = (r, existing)=> r.pats.filter(q=> !(q.f.src && existing.h
    their order. (reread: the module's, above) */
 export function readAgain(U, f){
   const b = f.rawBytes;
-  if (!b || typeof b !== 'object' || !/\.(xrdml|xml)$/i.test(f.name || '')) return fixedArrs(ascending({ ...f }));
+  if (!(b instanceof Uint8Array) || !/\.(xrdml|xml)$/i.test(f.name || '')) return fixedArrs(ascending({ ...f }));
   let all = reread.get(b);
   if (!all){
     try { all = U.scansOf(b); } catch (e){ all = [{ error: String(e && e.message || e) }]; }
@@ -130,6 +130,8 @@ export function keptFile(U, f, i, color){
   if (!U.isObj(f)) return null;
   const name = typeof f.name === 'string' && f.name ? f.name : `file ${i+1}`;
   const g = keepSeen({ ...f, name, label: typeof f.label === 'string' ? f.label : name.replace(/\.[^.]+$/, ''), color: typeof f.color === 'string' ? f.color : color });
+  // (its bytes a Uint8Array, else none: numbers in their place are no file's)
+  if (g.rawBytes != null && !(g.rawBytes instanceof Uint8Array)) g.rawBytes = null;
   if (!(isArr(g.varMul) && isArr(g.y) && g.varMul.length === g.y.length)) delete g.varMul;
   let r;
   try { r = readAgain(U, g); } catch (e){ return null; }
@@ -199,10 +201,8 @@ export const cardsIn = (U, s)=> Array.isArray(s.cards) ? s.cards.filter(c=> U.is
 export const cardIn = (U, src, gone)=> ({ states: Object.fromEntries(Object.entries(clone(U.isObj(src.states) ? src.states : {})).filter(([k])=> isKind(k)).map(([k, v])=> [k, keptState(U, k, v, gone)]).filter(([, v])=> v)) });
 
 /* ---- The cards' states ---- */
-// A slot's entries copied (copyArr); a slot that also reads a file's entry held by an
-// earlier version under 'k' + its key (heldAs: slots, in xrd.js).
+// A slot's entries copied.
 export const copyArr = v => Array.isArray(v) ? v.slice() : [];
-export const heldAs = sl => ({ ...sl, make: (v, f)=> sl.make(v === undefined && f && f.held ? f.held['k' + sl.key] : v, f) });
 /* The per-sample slots of the Scherrer settings a Rietveld card keeps (s), under its key; its
    samples' CIFs too where it has them (v575: a state of an older version has none, nor any
    CIF, and keeps it so for its note: xrd-peaks-model.js readState). A CIF's entry refers to

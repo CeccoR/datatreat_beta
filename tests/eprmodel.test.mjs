@@ -8,8 +8,9 @@
    waiting; a file dragged by its grip pairing, swapping, standing alone; each row's record,
    its label, colour and inclusion kept from the row its first file headed; what is said of a
    row not plotted, keyed by its issue); a spectrum's arrays fixed and shared by its bytes; a file and a card as a project holds them (points not numbers left
-   out, the smoothing of before v510 in points, a project from before the cards), the state
-   saved; the smoothing width typed and the points it spans; the smoothed columns and the
+   out, a row read again from its files' bytes), the state saved; v583: an old project (before
+   the cards, the smoothing in points, bytes as arrays, bytes lost), its old fields ignored, the
+   defaults in their place, its spectra read again from their bytes, a row without them said; the smoothing width typed and the points it spans; the smoothed columns and the
    stacking under each normalisation (flat spectra too), the plot's options and the CSV's
    columns; the markup. Then 40 cases (random pairs of every form, ones that cannot be read and
    lone halves among them, v581: rows of the list, not plotted; one to three cards, their
@@ -53,11 +54,11 @@ function decl(file, name){
   return rest.slice(0, end).replace(/^export /, '');
 }
 const UN = ['COLORS', 'colorOf', 'nextColor', 'esc', 'fmtNum', 'fmtData', 'csvField', 'csvJoin', 'csvLine', 'maxArr', 'minArr', 'NORM_OPTIONS', 'normOf'];
-const MK = ['isObj', 'isArr', 'num', 'numStr', 'ownKey', 'cardList', 'finitePairs', 'wideCsv'];
+const MK = ['isObj', 'isArr', 'num', 'ownKey', 'cardList', 'finitePairs', 'wideCsv'];
 export const PAGE = new Function('settings', [...UN.map(n=> decl('utils.js', n)), ...MK.map(n=> decl('modkit.js', n)),
   decl('modcharts.js', 'PLOT_DL_ICON'), decl('modcharts.js', 'plotWrap'), decl('cards.js', 'cardInfo'), decl('cards.js', 'fileSafe')].join('\n')
   + `\nreturn { ${[...UN, ...MK].join(', ')}, plotWrap, cardInfo, fileSafe };`)({ decimal: '.', field: ';' });
-export const U = { num: PAGE.num, numStr: PAGE.numStr, normOf: PAGE.normOf, finitePairs: PAGE.finitePairs, cardList: PAGE.cardList, maxArr: PAGE.maxArr, minArr: PAGE.minArr, fmtNum: PAGE.fmtNum, fmtData: PAGE.fmtData };
+export const U = { num: PAGE.num, normOf: PAGE.normOf, finitePairs: PAGE.finitePairs, cardList: PAGE.cardList, maxArr: PAGE.maxArr, minArr: PAGE.minArr, fmtNum: PAGE.fmtNum, fmtData: PAGE.fmtData };
 export const HU = { plotWrap: PAGE.plotWrap, NORM_OPTIONS: PAGE.NORM_OPTIONS };
 // Arrays of numbers by digest (each number as it reads, -0 too); a value with them in canon.
 export const dg = a => a == null ? String(a) : sha(Array.from(a, v=> Object.is(v, -0) ? '-0' : String(v)).join(',')).slice(0, 16);
@@ -223,19 +224,47 @@ test('a spectrum kept by its bytes; a file and a card as a project holds them; t
   assert.equal(M.fileIn(U, { b: [1, NaN], a: [1, 2] }), null);
   assert.equal(M.fileIn(U, { b: 'x', a: [1] }), null);
   assert.equal(M.fileIn(U, { b: [1, 2], a: [1, 2] }).rescaled, true);
-  // the cards: of the kinds there are; a project from before them one card of its settings
-  assert.deepEqual(M.cardsIn(U, { norm: 'local', smooth: '5' }), [{ id: 1, type: 'spectra', norm: 'local', smooth: '5' }]);
+  // the cards: of the kinds there are; none, one of the defaults
+  assert.deepEqual(M.cardsIn(U, {}), [{ id: 1, type: 'spectra' }]);
   assert.deepEqual(M.cardsIn(U, { cards: [null, { type: 'pie' }, { id: 'x', type: 'spectra' }, { id: 2 }] }), [{ type: 'spectra' }, { id: 2 }]);
-  // a card's settings: the width from 0; the points of before v510 as N median steps (1: none)
-  const files = [{ b: [0, 0.1, 0.2] }, { b: [0, 0.2, 0.4] }, { b: [0, 0.3, 0.6] }];
-  assert.deepEqual(M.readCard(U, files, { norm: 'local', smoothW: 0.5 }), { norm: 'local', smoothW: 0.5 });
-  assert.deepEqual(M.readCard(U, files, { norm: 'x', smoothW: -1 }), { norm: 'global', smoothW: 0.2 });
-  near(M.readCard(U, files, { smooth: '5' }).smoothW, 1);
-  assert.equal(M.readCard(U, files, { smooth: 1 }).smoothW, 0);
-  assert.equal(M.readCard(U, [], { smooth: 4 }).smoothW, 0.2);
-  assert.equal(M.readCard(U, files, { smooth: 'q' }).smoothW, 0.2);
+  // a card's settings: the width from 0
+  assert.deepEqual(M.readCard(U, { norm: 'local', smoothW: 0.5 }), { norm: 'local', smoothW: 0.5 });
+  assert.deepEqual(M.readCard(U, { norm: 'x', smoothW: -1 }), { norm: 'global', smoothW: 0.2 });
   assert.deepEqual(M.stateOf([{ id: 1, type: 'spectra', base: '', nameAuto: true, collapsed: false, norm: 'none', smoothW: 0, x: 1 }], saved),
     { cards: [{ id: 1, type: 'spectra', base: '', nameAuto: true, collapsed: false, norm: 'none', smoothW: 0 }] });
+});
+
+/* v583: an old project opens as this version reads it, its spectra read again from their files'
+   bytes. Made here as an older version saved it: no cards (its normalisation and smoothing at
+   the top level), the smoothing in points (`smooth`, to v510, a string as a field held it), a
+   row whose bytes are its .DTA's and .DSC's and whose spectrum is not what they read as now (an
+   older reader's), one whose bytes are numbers (to v483), one whose .DTA's bytes are gone. */
+test('an old project: old fields ignored, the defaults, its spectra read again from their bytes, a row without them said (v583)', ()=>{
+  const a = pairBytes('A'), b = pairBytes('B'), c = pairBytes('C'), now = M.readRow([file('a.DTA', a.dta), file('a.DSC', a.dsc)]);
+  const old = { norm: 'local', smooth: '5', files: [
+    { name: 'a', label: 'mine', color: '#123', rawFiles: [file('a.DSC', a.dsc), file('a.DTA', a.dta)], b: [1, 2, 3], a: [9, 9, 9], rescaled: false, junk: 1 },
+    { name: 'b', label: 'b', color: '#456', rawFiles: [file('b.DTA', [...b.dta]), file('b.DSC', [...b.dsc])], b: [1, 2, 3], a: [4, 5, 7] },
+    { name: 'c', label: 'c', color: '#789', rawFiles: [file('c.DTA', null), file('c.DSC', c.dsc)], b: [1, 2, 3], a: [4, 5, 6] }] };
+  let files;
+  assert.doesNotThrow(()=>{ files = old.files.map(f=> M.fileIn(U, f)); });
+  // the cards: one of the defaults, its smoothing's width the default, the old fields none
+  const recs = M.cardsIn(U, old);
+  assert.deepEqual(recs, [{ id: 1, type: 'spectra' }]);
+  assert.deepEqual(M.readCard(U, { ...recs[0], smooth: '5' }), { norm: M.DEF.norm, smoothW: M.DEF.smoothW });
+  const rec = recIn(recs[0], c=> M.readCard(U, c), M.KINDS, Object.keys(M.KINDS)), st = M.stateOf([rec], saved).cards[0];
+  assert.deepEqual([st.norm, st.smoothW, 'smooth' in st], ['global', 0.2, false]);
+  // its bytes read again: the spectrum they read as now, the label, colour and other fields its own
+  assert.deepEqual([files[0].b, files[0].a, files[0].rescaled, files[0].label, files[0].color], [now.b, now.a, true, 'mine', '#123']);
+  assert.equal(M.heldNote(files[0]), '');
+  // bytes as numbers, or gone: no bytes (its download none), its spectrum the one it holds, said so
+  assert.deepEqual(files[1].rawFiles.map(x=> x.bytes), [null, null]);
+  assert.deepEqual([files[1].b, files[1].a, files[2].b, files[2].a], [[1, 2, 3], [4, 5, 7], [1, 2, 3], [4, 5, 6]]);
+  assert.deepEqual(files.map(M.heldNote), ['', 'b.DTA + b.DSC: its bytes are not stored: its data are those the project holds.', 'c.DTA + c.DSC: its bytes are not stored: its data are those the project holds.']);
+  // bytes the reader refuses: the spectrum it holds, why said
+  const bad = pairBytes('bad', { n: 99 }), r = M.fileIn(U, { name: 'x', rawFiles: [file('x.DTA', bad.dta), file('x.DSC', bad.dsc)], b: [1, 2], a: [3, 4] });
+  assert.deepEqual([r.b, M.heldNote(r)], [[1, 2], 'x.DTA + x.DSC: its bytes no longer read: its .DTA holds fewer than the 99 points its .DSC gives: its data are those the project holds.']);
+  // what the card draws, from the spectra so read
+  assert.equal(M.ptsOf([files[0]], 0.2).t, M.ptsOf([{ b: now.b }], 0.2).t);
 });
 
 test('the smoothing width typed, and the points it spans', ()=>{
@@ -337,7 +366,7 @@ export function loadCase(c){
 const filesOf = S => S.all.filter(f=> f.included !== false && M.isSpectrum(f));
 function restoreCase(S, s){
   S.all = s.files.map(f=>{ const g = { ...f, name: f.name, label: f.label, color: f.color }; delete g.included; delete g.held; return M.fileIn(U, g); }).filter(Boolean);
-  S.recs = M.cardsIn(U, s).map(src=> recIn(src, c=> M.readCard(U, filesOf(S), c), M.KINDS, Object.keys(M.KINDS)));
+  S.recs = M.cardsIn(U, s).map(src=> recIn(src, c=> M.readCard(U, c), M.KINDS, Object.keys(M.KINDS)));
   settleNames(S.recs, Object.keys(M.KINDS), ()=> 'Spectra');
 }
 export function stepCase(S, [k, a, b]){

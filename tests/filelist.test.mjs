@@ -10,8 +10,8 @@
    v532: each row a trace, its FILE the file it comes from: an XRPD file of two scans two
    traces showing the same file, each named after the sample the file names, each one's
    download the file's own bytes, the head's zip the file once; a GC file one trace, a
-   sample with both its gases; a project of v531 (a Custom file left out, labels, an order)
-   opening as it was.
+   sample with both its gases; a project of v531 (labels, an order) opening as it was, a Custom
+   file it left out whole with its series in (v583).
    v534: the names' column headed LABEL again (TRACE v532–v533), in Custom's list too, its
    series each with its colour's swatch and the palette's button. */
 import { test, before, after } from 'node:test';
@@ -199,8 +199,8 @@ test('GC: a trace a sample, with both its gases', async ()=>{
 });
 
 // A project saved by v531: its labels (a Cary's the file's, as then), a file left out and its
-// order kept; Custom's file left out, its series each a trace left out.
-test('a project of v531 opens as it was: labels, inclusion, order; Custom\'s file left out, its series left out', async ()=>{
+// order kept; Custom's file left out whole, an old field (v583), its series in.
+test('a project of v531 opens as it was: labels, inclusion, order; Custom\'s file left out whole, an old field, its series in (v583)', async ()=>{
   const { page, errors, close } = await env.page();
   const enc = mod => page.evaluate(async mod=>{ const u = await import('./utils.js'), db = await import('./db.js'); return db.encode(u.getModuleState(mod)); }, mod);
   const put = (mod, st)=> page.evaluate(async ([mod, st])=>{ const u = await import('./utils.js'), db = await import('./db.js'); u.restoreModuleState(mod, db.decode(st)); for (let i = 0; i < 2; i++) await new Promise(r=> requestAnimationFrame(r)); }, [mod, st]);
@@ -216,7 +216,8 @@ test('a project of v531 opens as it was: labels, inclusion, order; Custom\'s fil
     assert.deepEqual(await rows(page, 'tauc'), [['second', 'drs2.csv', true], ['cary', 'cary.csv', true], ['drs1', 'drs1.csv', false]]);
     assert.deepEqual(await page.locator('#tab-tauc .an-card [id$="Idx"]').first().textContent(), '1/2', 'the two included analysed');
 
-    // Custom: a.csv (3 series), b.csv left out by v531 (its 2 series), as v531 saved them.
+    // Custom: a.csv (3 series), b.csv left out by v531 (its 2 series), as v531 saved them: a
+    // file's own inclusion is no field of now, its series in (v583: to v582 each left out).
     const a = 'Time (s),Signal (mV),err,Ref [mV]\n1,2,3,4\n2,3,4,5\n3,4,5,6\n', b = '1;2;3\n2;3;4\n';
     await openModule(page, 'fig');
     await loadFiles(page, 'fig', [{ name: 'a.csv', mimeType: 'text/csv', buffer: Buffer.from(a) }, { name: 'b.csv', mimeType: 'text/csv', buffer: Buffer.from(b) }], 5);
@@ -224,7 +225,7 @@ test('a project of v531 opens as it was: labels, inclusion, order; Custom\'s fil
     fs0.files[1] = { ...fs0.files[1], included: false, held: {} };
     fs0.files[0] = { ...fs0.files[0], names: { 1: 'Mine' } };
     await put('fig', fs0);
-    assert.deepEqual(await rows(page, 'fig'), [['Mine', 'a.csv', true], ['err', 'a.csv', true], ['Ref', 'a.csv', true], ['Series 1', 'b.csv', false], ['Series 2', 'b.csv', false]]);
+    assert.deepEqual(await rows(page, 'fig'), [['Mine', 'a.csv', true], ['err', 'a.csv', true], ['Ref', 'a.csv', true], ['Series 1', 'b.csv', true], ['Series 2', 'b.csv', true]]);
     assert.deepEqual(await page.$$eval('#figFileTableWrap thead th', ts=> ts.map(t=> t.textContent.trim())), ['', '', 'LABEL', 'FILE', '', ''], 'Custom: LABEL');
     assert.deepEqual([await page.locator('#figFileTableWrap button.color-swatch').count(), await page.locator('#figFileTableWrap button.palette-pick-btn').count()], [5, 1], 'Custom: a colour a series, the palette');
     assert.deepEqual(errors, []);

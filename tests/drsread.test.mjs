@@ -16,8 +16,9 @@
      wavelength in another unit ("(eV)", "in eV", its words under spaces too), two columns
      of either kind, two samples side by side, a header split by one separator over data
      split by another.
-   A project saved before, holding a file the rule now refuses, opens as it was: its data
-   (kept in the project, not read again) and its note. In Node: readTable gives the header
+   A project saved before opens with its files read again from their bytes (v583: to v582 as
+   it was, its data and its note): one the reader takes, as it reads it now; one it refuses
+   (no header), its data those the project holds, said so. In Node: readTable gives the header
    function the separator, and takes the header's width from it when it says one. */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -162,17 +163,19 @@ test('no columns found, or not one way only: refused, and why said, escaped', as
   } finally { await close(); }
 });
 
-test('a project saved before, holding a file read with no header: opened as it was', async ()=>{
+test('a project saved before, holding files read with no header: read again from their bytes, or its data said', async ()=>{
   const { page, errors, close } = await env.page();
   try {
     await openModule(page, 'tauc');
     await drop(page, [file('ref.csv', ref), file('fr.csv', 'Wavelength,F(R)\n' + body((w, f)=> [w, f]))]);
-    // The record v509 made of two bare columns: read as F(R), its warning with no header named;
-    // the file's bytes those two columns. Not read again: its data and its note as they were.
+    // Records as v509 made them: read as F(R), its warning with no header named (no `head`), 300
+    // points. The first's bytes a file the reader takes now (its header names F(R)), the second's
+    // two bare columns, which it refuses.
     const st = await page.evaluate(async ()=>{ const u = await import('./utils.js'), db = await import('./db.js'); return db.encode(u.getModuleState('tauc')); });
-    const f = st.files[1];
-    delete f.head; f.name = 'noheader.csv'; f.label = 'noheader';
-    f.wl = f.wl.slice(0, 300); f.FR = f.FR.slice(0, 300);
+    const f = st.files[1], bare = { ...f, name: 'bare.csv', label: 'bare', rawBytes: { __t: 'u8', v: Buffer.from(body((w, f)=> [w, f])).toString('base64') } };
+    for (const g of [f, bare]){ delete g.head; g.wl = g.wl.slice(0, 300); g.FR = g.FR.slice(0, 300); }
+    f.name = 'noheader.csv'; f.label = 'noheader';
+    st.files.push(bare);
     const r = await page.evaluate(async st=>{
       const u = await import('./utils.js'), db = await import('./db.js');
       try { u.restoreModuleState('tauc', db.decode(st)); } catch(e){ return 'threw: ' + e.message; }
@@ -182,10 +185,13 @@ test('a project saved before, holding a file read with no header: opened as it w
     assert.equal(r, 'ok');
     await settle(page);
     const s = await moduleState(page, 'tauc', true);
-    assert.deepEqual(s.files.map(f=> [f.name, f.wl.length, f.warn, f.read, f.head]), [['ref.csv', 551, false, undefined, undefined], ['noheader.csv', 300, true, undefined, undefined]]);
-    assert.deepEqual(s.files[1].FR, D.slice(0, 300).map(r=> +r[1]));
-    assert.match(await page.locator('#taucAlerts').innerText(), /^How these files were read:\s*noheader\.csv: no header naming the columns F\(R\) or R%: read as F\(R\)\.\s*$/);
-    assert.deepEqual(await page.$$eval('#taucFileTableWrap td.note-cell [title]', s=> s.map(e=> e.title)), ['second column read as F(R)', 'second column read as F(R), with no header naming it']);
+    assert.deepEqual(s.files.map(f=> [f.name, f.wl.length, f.warn, f.read, f.head]), [['ref.csv', 551, false, undefined, undefined], ['noheader.csv', 551, true, undefined, true], ['bare.csv', 300, false, undefined, undefined]]);
+    assert.deepEqual([s.files[1].FR, s.files[2].FR], [D.map(r=> +r[1]), D.slice(0, 300).map(r=> +r[1])]);
+    const said = await page.locator('#taucAlerts').innerText();
+    assert.match(said, /Opened, to check:\s*bare\.csv: its bytes no longer read: no header naming its columns: the wavelength in nm, and F\(R\) or %R: its data are those the project holds\./);
+    assert.match(said, /How these files were read:\s*noheader\.csv: not a standard format: its header names F\(R\), read as F\(R\)\./);
+    assert.deepEqual(await page.$$eval('#taucFileTableWrap td.note-cell [title]', s=> s.map(e=> e.title)),
+      ['second column read as F(R)', 'the F(R) column its header names, read as F(R); not a standard format', 'second column read as F(R)']);
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });

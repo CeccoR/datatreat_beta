@@ -7,9 +7,10 @@
    same results (v510's FWHMs here); steps that differ under all, that chip to one, a width
    per pattern, and a note; points per sample, N = 1, values that are no number, a file
    left out (its step counted: taken back in, the points v510 gave it, the shared ones
-   under all), a Rietveld card's Scherrer settings, an EPR card and a project from before
-   the cards. The CSV headers give the widths. An EPR spectrum with a value that is no
-   number smooths the others as a project reopened does. At 320 px, in both themes, and in
+   under all), a Rietveld card's Scherrer settings (v583: an EPR card's points, and an EPR
+   project from before the cards, ignored: the default width, one card of the defaults). The
+   CSV headers give the widths. An EPR spectrum with a value that is no
+   number smooths the others, the project reopened the same (v583: read again from its bytes). At 320 px, in both themes, and in
    a narrow side column, the points stay in their field, muted, the value whole beside or
    above them, nothing past the edge. */
 import { test, before, after } from 'node:test';
@@ -340,7 +341,7 @@ test('XRPD: files left out of a project to v510 come back with the points v510 g
   } finally { await close(); }
 });
 
-test('EPR: the smoothing width in mT, its points (a range at different steps), the CSV header, and projects to v510', async ()=>{
+test('EPR: the smoothing width in mT, its points (a range at different steps), the CSV header, and projects to v510 (v583: their points ignored)', async ()=>{
   const { page, errors, close } = await env.page();
   try {
     await openModule(page, 'epr');
@@ -359,29 +360,26 @@ test('EPR: the smoothing width in mT, its points (a range at different steps), t
     assert.ok(h.includes('Smoothed_sample one (w=0.4 mT)') && h.includes('Smoothed_half (w=0.4 mT)'), JSON.stringify(h));
     await enter(page, 'epr1Smooth', 0);
     assert.equal(await pts(page, 'epr1Smooth'), 'off');
-    // Projects to v510: the points at the spectra's median step (here, e1's alone).
+    // Projects to v510, their smoothing in points (`smooth`): an old field, ignored, the width the
+    // default (v583: to v582 the points at the spectra's median step).
     await page.locator('#eprFileTableWrap .file-incl').nth(1).click(); await settle(page);
-    const step = 20/1023;
     await reopen(page, 'epr', 'Old EPR', s=>{
       const c = s.cards[0]; delete c.smoothW;
       s.cards = [{ ...c, smooth: 10 }, { ...c, id: 2, smooth: 1 }, { ...c, id: 3, smooth: 'abc' }];
     });
     let cs = (await moduleState(page, 'epr')).cards;
-    near(cs[0].smoothW, 10*step, 1e-15, 'N 10');
-    assert.deepEqual([cs[1].smoothW, cs[2].smoothW], [0, 0.2], 'N = 1: none; no number: the default');
-    assert.deepEqual([await val(page, 'epr1Smooth'), await pts(page, 'epr1Smooth'), await pts(page, 'epr2Smooth')], ['0.1955', '≈ 10 pts', 'off']);
-    assert.ok((await csvs(page))['Spectra - epr_spectra.csv'][0].includes('Smoothed_sample one (w=0.1955 mT)'));
-    // One from before the cards: its settings at the top.
+    assert.deepEqual(cs.map(c=> [c.smoothW, 'smooth' in c]), [[0.2, false], [0.2, false], [0.2, false]]);
+    assert.deepEqual([await val(page, 'epr1Smooth'), await pts(page, 'epr1Smooth'), await pts(page, 'epr2Smooth')], ['0.2', '≈ 10 pts', '≈ 10 pts']);
+    assert.ok((await csvs(page))['Spectra - epr_spectra.csv'][0].includes('Smoothed_sample one (w=0.2 mT)'));
+    // One from before the cards, its settings at the top: ignored, one card of the defaults.
     await reopen(page, 'epr', 'Older EPR', s=>{ delete s.cards; s.smooth = 4; s.norm = 'local'; });
     cs = (await moduleState(page, 'epr')).cards;
-    assert.equal(cs.length, 1);
-    near(cs[0].smoothW, 4*step, 1e-15, 'N 4');
-    assert.equal(cs[0].norm, 'local');
+    assert.deepEqual(cs.map(c=> [c.type, c.smoothW, c.norm]), [['spectra', 0.2, 'global']]);
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });
 
-test('EPR: a value that is no number in a spectrum: the others smoothed without it, as the project reopened has them', async ()=>{
+test('EPR: a value that is no number in a spectrum: the others smoothed without it, the project reopened the same', async ()=>{
   const { page, errors, close } = await env.page();
   try {
     await openModule(page, 'epr');
@@ -390,10 +388,11 @@ test('EPR: a value that is no number in a spectrum: the others smoothed without 
     const fresh = col((await csvs(page))['Spectra - epr_spectra.csv']);
     const bad = fresh.map((v, i)=> [i, v]).filter(([, v])=> !Number.isFinite(parseFloat(String(v).replace(',', '.'))));
     assert.deepEqual(bad.map(([i])=> i), [500], 'the point itself alone');
-    // Reopened, the pair that is no number left out: the same smoothing of the others.
+    // Reopened: read again from its files' bytes, as loaded (v583: to v582 from the arrays the
+    // project held, the pair that is no number left out).
     await reopen(page, 'epr', 'EPR no number', ()=>{});
     const back = col((await csvs(page))['Spectra - epr_spectra.csv']);
-    assert.deepEqual(back, fresh.filter((_, i)=> i !== 500));
+    assert.deepEqual(back, fresh);
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });

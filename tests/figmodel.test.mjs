@@ -6,8 +6,10 @@
    its titles, the roles given to every file; what a series plots (its points with a y and
    an x, a bar's category, its errors) under a plot's normalisation (none, local, global),
    scale and offset, kept by its column; an axis's title; a file as a project holds it (its
-   roles, names, colours and series left out, of v531 and v534, malformed) and a Plot card
-   (v527–v528's own normalisations, malformed), the module's state saved; the series of a
+   roles, names, colours and series left out, of v534, malformed) and a Plot card
+   (malformed), the module's state saved; v583: an old project (a file left out whole, to
+   v531; a card's series each normalised and cropped, v527–v528; bytes as arrays), its old
+   fields ignored, the defaults in their place; the series of a
    file named (typed, its title's, its header's, "Series M") and coloured (picked, the
    palette's by its place), the trace list's order and rows, a trace included and left out,
    its colour, the palette, moved, renamed, taken out (its column, its error; its file's last:
@@ -128,14 +130,11 @@ test('a file read and kept by its bytes; a file and a card as a project holds th
   // A file as a restore takes it.
   const g = M.fileIn(U, { name: 'a.csv', rawBytes: b, roles: ['x', 'ey', 'y', 'y'], names: { 1: 'One', 2: '  ', 9: 'x', a: 'b', 3: 5 }, colors: { 1: '#ff0000', 2: 'red', 7: '#00ff00' }, out: [3, 3, -1, 2.5, 9], held: {} });
   assert.deepEqual([g.roles, g.names, g.colors, g.out, 'held' in g], [['x', 'y', 'y', 'y'], { 1: 'One' }, { 1: '#ff0000' }, [3], false]);
-  const h = M.fileIn(U, { name: 'a.csv', rawBytes: b, roles: ['x', 'zz', 'y', 'y'], included: false, colors: { 2: 'bad' } });
-  assert.deepEqual([h.roles, h.out, 'colors' in h, 'included' in h], [['x', 'y', 'y', 'y'], [1, 2, 3], false, false], 'v531 left out: each of its series');
+  const h = M.fileIn(U, { name: 'a.csv', rawBytes: b, roles: ['x', 'zz', 'y', 'y'], colors: { 2: 'bad' } });
+  assert.deepEqual([h.roles, 'out' in h, 'colors' in h], [['x', 'y', 'y', 'y'], false, false]);
   assert.equal(M.fileIn(U, { name: 'x.csv' }), null, 'no bytes: left out');
   assert.equal(M.fileIn(U, { rawBytes: bytes('words\n') }), null);
-  // A card: v527–v528's own normalisations (local where every one was), malformed.
-  assert.equal(M.normIn(U, { type: 'xy', series: [{ file: 'a', col: 1, norm: true }, { file: 'a', col: 2, norm: true }] }), 'local');
-  assert.equal(M.normIn(U, { type: 'xy', series: [{ file: 'a', col: 1, norm: true }, { file: 'a', col: 2 }] }), 'none');
-  assert.equal(M.normIn(U, { type: 'box', series: [{ file: 'a', col: 1, norm: true }] }), 'none');
+  // A card: its normalisation, malformed.
   assert.equal(M.normIn(U, { type: 'xy', norm: 'global' }), 'global');
   assert.equal(M.normIn(U, { type: 'xy', norm: 'toString', series: [] }), 'none');
   assert.deepEqual(M.cardIn(U, { series: [{ file: 'a', col: 1, scale: '2', offset: NaN, crop: [0, 1] }, { file: 3, col: 1 }, { file: 'b', col: -1 }, null], norm: 'local', fig: { scalars: {}, series: [] } }),
@@ -151,6 +150,25 @@ test('a file read and kept by its bytes; a file and a card as a project holds th
   const two = [{ name: 'a.csv' }, { name: 'b.csv' }];
   assert.deepEqual([M.showsOf(two, 'b.csv'), M.showsOf(two, 'a.csv'), M.showsOf(two.slice(0, 1), 'a.csv'), M.showsOf(two, null)], [{ file: 'b.csv' }, null, null, null]);
   assert.deepEqual([M.showNextIn(U, { file: 'x' }), M.showNextIn(U, { file: 3 }), M.showNextIn(U, 'x')], ['x', null, null]);
+});
+
+/* v583: an old project opens as this version reads it. Made here as older versions saved it: a
+   file left out whole (`included: false`, to v531), a Plot card of v527–v528 (no normalisation
+   of its own, each series normalised and cropped), a file's bytes as numbers (to v483). */
+test('an old project: old fields ignored, the defaults in their place (v583)', ()=>{
+  const b = bytes(A_CSV);
+  let f;
+  assert.doesNotThrow(()=>{ f = M.fileIn(U, { name: 'a.csv', label: 'a', rawBytes: b, roles: ['x', 'y', 'ey', 'y'], included: false, held: { k: 1 } }); });
+  // the file's own inclusion none: every series of it in, as a file loaded now
+  assert.deepEqual(['included' in f, 'held' in f, 'out' in f, f.roles], [false, false, false, ['x', 'y', 'ey', 'y']]);
+  assert.equal(M.fileIn(U, { name: 'b.csv', rawBytes: [...b] }), null, 'its bytes numbers: none, left out');
+  // the card: no normalisation, none; the series' own normalisation and crop ignored
+  const c = M.cardIn(U, { type: 'xy', series: [{ file: 'a.csv', col: 1, norm: true, xlo: 2, xhi: 4 }, { file: 'a.csv', col: 3, norm: true }] });
+  assert.deepEqual(c, { series: [{ file: 'a.csv', col: 1, scale: 1, offset: 0 }, { file: 'a.csv', col: 3, scale: 1, offset: 0 }], norm: 'none', fig: null });
+  // what it plots: its table's points, whole, as a card of now with no normalisation
+  const list = M.plotted({ type: 'xy', ...c }, M.seriesMapOf(M.tracesOf(U, [f], [])));
+  assert.deepEqual(M.divsOf(U, 'xy', c.norm, list), [1, 1]);
+  assert.deepEqual(list.map(e=> M.dataOf(U, 'xy', e.s.t, e.s, e.r).ys), [[11.5, 13, 16], [3.25, 3.5, 3.75, 4]]);
 });
 
 test('the series and the trace list: names, colours, order, included, coloured, moved, renamed, taken out', ()=>{

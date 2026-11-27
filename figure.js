@@ -1024,7 +1024,6 @@ function settingsSnapshot(){
     ? { keep: [], rest: e.rest, bx: F.series[i].xs.slice() }
     : { keep: [], rest: e.rest });
   snap.cats = F.cats.map(c=>({ x: c.x, key: c.key }));
-  snap.ownDivNames = true;      // see applySettings
   return snap;
 }
 /* Which saved entry each entry of the plot is, by key: a series or a sample keeps its
@@ -1092,14 +1091,6 @@ function applySettings(snap){
       s.divOf = s.xs.map(x=> div.get(x) || 0);
     }
     if (s.rename) s.label = s.rename;
-  });
-  // Settings from before v328, when an unnamed first division showed the series'
-  // name, typed-over one included: it is given that name, so the legend reads as it
-  // did when the settings were saved.
-  if (!snap.ownDivNames) F.series.forEach(s=>{
-    if (s.kind !== 'bar' || !s.rename || (divsOf(s)[0] && divsOf(s)[0].name)) return;
-    s.divs = divsOf(s).slice();
-    s.divs[0] = { ...s.divs[0], name: s.rename };
   });
   const slots = F.series.map((_, i)=> i).filter(i=> pair[i] >= 0);
   const order = slots.slice().sort((a, b)=> pair[a] - pair[b]).map(i=> F.series[i]);

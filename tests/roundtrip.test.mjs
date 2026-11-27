@@ -1,15 +1,16 @@
 /* Projects keep their files' bytes: a saved project (IndexedDB: the record holds each file's
-   SHA-256, the bytes a store of their own, v517), the page reloaded,
-   a .datatreat export (signed, base64) imported back, a record in the old format (bytes as
-   an array of numbers, to v470) and a v473–v483 .json export (bytes as arrays, no header)
-   all give each file back byte for byte from its download button. Files that are not a
-   project are refused, doubtful ones asked about. */
+   SHA-256, the bytes a store of their own, v517), the page reloaded, a .datatreat export
+   (signed, base64) imported back, all give each file back byte for byte from its download
+   button. A record in the old format (bytes as an array of numbers, to v470) and a v473–v483
+   .json export (bytes as arrays, no header) open with files of no bytes (v583: to v582 read
+   as bytes): their patterns from the data the project holds, said so, their download none.
+   Files that are not a project are refused, doubtful ones asked about. */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import { start, openModule, loadFiles, saveAs, tabLabels, download, idb, ready, settle, exportProject, signature,
-  projectFile, importProject, openProject } from './helpers.mjs';
+  projectFile, importProject, openProject, banner, answer } from './helpers.mjs';
 
 let env;
 before(async ()=>{ env = await start(); });
@@ -21,7 +22,21 @@ const same = (buf, p, what)=> assert.ok(buf.equals(fs.readFileSync(p)), what + '
 const asArrays = v => Array.isArray(v) ? v.map(asArrays) : v && typeof v === 'object'
   ? (v.__t === 'u8' ? [...Buffer.from(v.v, 'base64')] : Object.fromEntries(Object.entries(v).map(([k, x])=> [k, asArrays(x)]))) : v;
 
-test('XRPD: saved, reloaded, exported, imported, old formats: the originals byte for byte', async ()=>{
+// A project of bytes as arrays opened: its two patterns there, each said to be the project's
+// data (ALERTS-REVIEW.md U8), its download none.
+async function noBytes(page){
+  await settle(page);
+  assert.equal(await page.locator('#xrdFileTableWrap tr.file-row').count(), 2);
+  const said = await page.locator('#xrdAlerts').innerText();
+  assert.match(said, /Opened, to check:/);
+  assert.equal((said.match(/: its bytes are not stored: its data are those the project holds\./g) || []).length, 2, said);
+  await page.locator('#xrdFileTableWrap .dl-file').nth(0).click();
+  await page.waitForSelector('.pwa-confirm.show');
+  assert.equal((await banner(page)).text, '“s00.xrdml”: its original bytes are not stored in this browser any more: it cannot be downloaded.');
+  await answer(page, 'ok');
+}
+
+test('XRPD: saved, reloaded, exported, imported, old formats: the originals byte for byte, or none', async ()=>{
   const { page, errors, close } = await env.page();
   const [s0, s1] = env.fx.files.xrd;
   try {
@@ -53,13 +68,14 @@ test('XRPD: saved, reloaded, exported, imported, old formats: the originals byte
     assert.equal(await importProject(page, f), null, 'a signed file imports with no question');
     await openProject(page, 'xrd', 'RT copy');
     same((await dlFile(page, 'xrd', 1)).buf, s1, 'imported .datatreat, s01');
-    // A v473–v483 .json export (bytes as arrays, no header, no signature): asked, opens whole.
+    // A v473–v483 .json export (bytes as arrays, no header, no signature): asked, opens; its
+    // files of no bytes, their patterns the project's, said so; their download none.
     const old = { datatreat_session: 1, module: 'xrd', title: 'RT v483', createdAt: 1, updatedAt: 1, state: asArrays(ex.obj.state) };
     const asked = await importProject(page, projectFile(env, 'xrd_RT_v483.json', old), { expectDoubt: true });
     assert.match(asked.text, /does not end in \.datatreat.*no DataTreat signature/);
     await openProject(page, 'xrd', 'RT v483');
-    same((await dlFile(page, 'xrd', 0)).buf, s0, 'v483 .json export, s00');
-    // A record stored in the old format (to v470: bytes as arrays) still opens and downloads.
+    await noBytes(page);
+    // A record stored in the old format (to v470: bytes as arrays): the same.
     await page.evaluate(async rec=>{
       const db = await new Promise(res=>{ const r = indexedDB.open('datatreat'); r.onsuccess = ()=> res(r.result); });
       await new Promise(res=>{ const t = db.transaction('sessions', 'readwrite'); t.objectStore('sessions').put(rec); t.oncomplete = res; });
@@ -67,8 +83,7 @@ test('XRPD: saved, reloaded, exported, imported, old formats: the originals byte
     }, { ...rec, id: 'oldfmt', title: 'Old format', refs: [], state: asArrays(ex.obj.state) });
     await page.click('#nav button[data-tab="home"]');
     await openProject(page, 'xrd', 'Old format');
-    same((await dlFile(page, 'xrd', 0)).buf, s0, 'old-format record, s00');
-    same((await dlFile(page, 'xrd', 1)).buf, s1, 'old-format record, s01');
+    await noBytes(page);
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });

@@ -3,7 +3,7 @@ import { autoPair } from './filelist-model.js';
 import { boxSmooth, widthText } from './smooth.js';
 import { Plot } from './plot.js';
 import { cardInfo, fileSafe, nameDownloads } from './cards.js';
-import { moduleKit, wideCsv, num, numStr, finitePairs, cardList } from './modkit.js';
+import { moduleKit, wideCsv, num, finitePairs, cardList } from './modkit.js';
 import { plotWrap, swatchLegend, viewOf, setView, viewKey } from './modcharts.js';
 import * as M from './epr-model.js';
 import * as H from './epr-html.js';
@@ -31,7 +31,7 @@ import * as H from './epr-html.js';
 ========================================================= */
 // utils.js's and modkit.js's helpers the model takes (epr-model.js U), and what the markup
 // takes (epr-html.js u).
-const U = { num, numStr, normOf, finitePairs, cardList, maxArr, minArr, fmtNum, fmtData };
+const U = { num, normOf, finitePairs, cardList, maxArr, minArr, fmtNum, fmtData };
 const HU = { plotWrap, NORM_OPTIONS };
 const EPR_INFO = H.eprInfo(cardInfo(false, false));
 const P = H.P;
@@ -123,7 +123,7 @@ function apiOf(S){
 }
 // A state put back: its cards (a card kept, its fields showing its record).
 function restore(S, s){
-  return S.deck.load(M.cardsIn(U, s), c => M.readCard(U, S.files, c), a=>{
+  return S.deck.load(M.cardsIn(U, s), c => M.readCard(U, c), a=>{
     const card = S.deck.cardOf(a);
     card.querySelector('#' + P(a) + 'Norm').value = a.norm;
     showW(S, a, card);
@@ -162,10 +162,12 @@ async function onDrop(S, fileList){
 }
 // The list's records made of its rows (epr-model.js regroup), a new row its colour after the others'.
 const regroup = (S, rows)=> M.regroup(S.allFiles, rows, nextColor);
-// What the reading of the rows said: those not plotted, to check; the spectra read on the field measured.
+// What the reading of the rows said: those not plotted, to check; those a project opened plotted
+// from the spectrum it holds, not from their files' bytes (U8); the spectra read on the field measured.
 function notesOf(S){
   const out = [];
   S.allFiles.forEach(r=>{ const n = M.rowNote(r); if (n) out.push({ what: 'check', key: n.key, line: esc(n.line), files: [r] }); });
+  S.allFiles.forEach(r=>{ const t = M.heldNote(r); if (t) out.push({ what: 'opened', line: esc(t), files: [r] }); });
   S.allFiles.forEach(r=>{ const t = M.readNote(r); if (t) out.push({ what: 'read', line: esc(t), files: [r] }); });
   return out;
 }

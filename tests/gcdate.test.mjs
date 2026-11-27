@@ -200,9 +200,11 @@ test('a project reopened says it again but for the files dismissed; one edited b
     // Not marked, said again.
     await restore(page, { ...st, files: st.files.map(({ seen: _, ...f })=> f) });
     assert.deepEqual([await datesAlert(page), await dmAlert(page)], [[CHECK, 'feb30.csv: 1 row left out: its injection date does not exist.'], [READ, 'dm.csv: dates read as day/month.']], 'reopened: said again');
-    // By hand: anything but true and a whole count above 0 says nothing; a name is text.
+    // By hand, in records of no bytes (v583: one with its bytes is read again from them, its
+    // record's own fields none): anything but true and a whole count above 0 says nothing; a
+    // name is text.
     const notTrue = [PAYLOAD, 'true', 1, null, {}], notCount = [PAYLOAD, '3', 1.5, -2, 0, true, null, { n: 3 }];
-    const edited = JSON.parse(JSON.stringify(st)), [f0, f1] = edited.files.map(({ seen: _, ...f })=> f);
+    const edited = JSON.parse(JSON.stringify(st)), [f0, f1] = edited.files.map(({ seen: _, ...f })=> ({ ...f, rawBytes: null }));
     edited.files = [...notTrue.map(v=> ({ dayMonth: v })), ...notCount.map(v=> ({ badDates: v }))].map((o, i)=> ({ ...(i % 2 ? f1 : f0), dayMonth: undefined, badDates: undefined, ...o, name: `${PAYLOAD} ${i}.csv` }));
     edited.files.push({ ...f0, name: PAYLOAD + '.csv', dayMonth: true, badDates: 2 });
     await restore(page, edited);
