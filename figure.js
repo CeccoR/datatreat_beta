@@ -1,5 +1,5 @@
 import { svgEl, niceRun, fmtTick, SUB_DROP, TILT_DY } from './plot.js';
-import { colorPickerUI, palettePickerUI, CP_PALETTES, X_SVG, tiltFits, flashFieldInvalid, numRule, dropGap, esc, saveBlob, boxHtml, viewport } from './utils.js';
+import { colorPickerUI, palettePickerUI, CP_PALETTES, X_SVG, tiltFits, flashFieldInvalid, numRule, dropGap, esc, saveBlob, boxHtml, viewport, wireRowMenu, ctlMenu } from './utils.js';
 import { tabOf, TABS } from './tabs.js';
 import { own, setOwn } from './db.js';
 import * as FL from './figure-layout.js';
@@ -1196,9 +1196,9 @@ function divisionsHtml(s, i){
   const many = divs.length > 1;
   const group = (d, k)=>`
     <div class="fig-dgroup" data-dg="${i}:${k}">
-      <div class="fig-dgroup-h">
+      <div class="fig-dgroup-h"${many ? ' tabindex="-1" aria-haspopup="menu"' : ''}>
         ${many
-          ? `<button type="button" class="fig-divx" data-deldiv="${i}:${k}" title="Remove this division">${X_SVG(13)}</button>`
+          ? `<button type="button" class="fig-divx is-danger" data-deldiv="${i}:${k}" title="Remove this division">${X_SVG(13)}</button>`
           : '<span class="fig-divx-gap"></span>'}
         <button class="color-swatch" data-dsw="${i}:${k}" data-color="${esc(divColor(s,k))}" style="background:${esc(divColor(s,k))}" title="Pick the colour of this division"></button>
         <button type="button" class="fig-fill" data-fill="${i}:${k}" title="How this division's bars are filled">${fillPreview(divTexture(s,k), divInv(s,k))}</button>
@@ -1864,7 +1864,7 @@ function controlsHtml(){
     ${num('Rows','rows',1,8)}${num('Columns','cols',1,8)}
     <div class="fig-panels">
       ${F.panels.map((p,i)=>`
-        <div class="fig-panel" data-p="${i}">
+        <div class="fig-panel" data-p="${i}" tabindex="-1" aria-haspopup="menu">
           <b>P${i+1}</b>
           <label>row${numField(`data-pk="r" data-p="${i}"`, p.r+1, 1, F.rows)}</label>
           <label>col${numField(`data-pk="c" data-p="${i}"`, p.c+1, 1, F.cols)}</label>
@@ -2543,6 +2543,10 @@ function wireControls(){
   });
   controlsEl.addEventListener('change', e=>{ if (e.target.tagName === 'SELECT') refresh(false); });
   controlsEl.addEventListener('click', onControlsClick);
+  // A panel's row and a division's head (one it can lose): a menu of its × (v587, utils.js
+  // wireRowMenu), named by the panel, by the division's name.
+  wireRowMenu(controlsEl, { rows: '.fig-panel', ...ctlMenu('[data-del-panel]'), label: r => 'Panel ' + (+r.dataset.p + 1) });
+  wireRowMenu(controlsEl, { rows: '.fig-dgroup-h[aria-haspopup]', ...ctlMenu('.fig-divx'), label: r => r.querySelector('[data-dk]').value || 'Division' });
 }
 
 /* Not while the composer closes either: the focused field, thrown away with it, fires

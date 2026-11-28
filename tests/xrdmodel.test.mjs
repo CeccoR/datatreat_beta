@@ -99,9 +99,8 @@ test('a file read again: by its bytes (once), its arrays theirs whatever it held
   assert.deepEqual([moved.x, moved.y, moved.varMul, H.openedNote(moved)], [same.x, same.y, same.varMul, '']);
   assert.equal(M.readAgain(U, { name: 'a.xrdml', rawBytes: b, scan: 1, x: [4, 5, 6, 7], y: [1, 2, 3, 4] }).y.join(), '1,2,3');
   assert.equal(M.readAgain(U, { name: 'a.xrdml', rawBytes: b, scan: 7, x: [3, 2], y: [1, 2] }).x.join(), '2,3');
-  // no bytes, or a file not read again (no XRDML name): its arrays as held; said where it has none
+  // no bytes: its arrays as held, said so
   assert.equal(H.openedNote(M.readAgain(U, { name: 'a.txt', y: [0, 1], x: [1, 2] })), 'its bytes are not stored: its data are those the project holds');
-  assert.equal(H.openedNote(M.readAgain(U, { name: 'a.txt', rawBytes: b, y: [0, 1], x: [1, 2] })), '');
   assert.equal(M.readAgain(U, { name: 'b.xrdml', rawBytes: enc('<no'), y: [1, 1], x: [1, 2] }).y.join(), '1,1');
   const bad = enc('q'); M.keepScans(bad, [{ error: 'x' }]); read.n = 0; M.readAgain(U, { name: 'c.xrdml', rawBytes: bad, x: [1, 2], y: [1, 2] }); assert.equal(read.n, 0);
   // as a restore takes it
@@ -152,9 +151,9 @@ test('an old project: bytes as numbers none, entries under an old key none (v583
   // no bytes: not read, its data the project's, said so; its label its own
   assert.deepEqual([f.rawBytes, f.x, f.y, f.label, read.n, M.keptScans(f)], [null, [1, 2, 3], [4, 5, 6], 'mine', 0, null]);
   assert.equal(H.openedNote(f), 'its bytes are not stored: its data are those the project holds');
-  // its entries under the old key: none read (the slot's default made), those under the key of now kept
-  const s = { perParams: [], manualPeaks: [], removedPeaks: [], shared: { w: 2 } }, [params] = M.keptSlots('A1', s);
-  assert.deepEqual([params.make(f.held[params.key], f), params.make({ w: 5 }, f)], [{ w: 2 }, { w: 5 }]);
+  // its entries under the old key: none read (the slot's default made, a new one's: v587), those under the key of now kept
+  const s = { perParams: [], manualPeaks: [], removedPeaks: [], shared: { pkHeight: 2 } }, [params] = M.keptSlots('A1', s);
+  assert.deepEqual([params.make(f.held[params.key], f), params.make({ w: 5 }, f)], [{ pkHeight: 2, blOn: true }, { w: 5 }]);
 });
 
 /* v586: an old project as this version reads it. Made here as older versions saved it: no
@@ -183,10 +182,33 @@ test('an old project: before the cards, arrays read otherwise, no CIFs: a new pr
   assert.deepEqual([sc.cif, slot.make({ file: 'a.cif', cif: 'data_a' }), sc.cifTexts], [[], { file: 'a.cif', ref: 0 }, ['data_a']]);
 });
 
+/* v587: a file read again from its bytes whatever its name: the reader takes an XRDML
+   measurement by what it holds (xrd.js readFile), so a file dropped under another name loaded
+   (a .txt, none, an .xy, a .csv, a .raw, a .ras): its arrays its bytes', read once, kept by them.
+   Bytes that do not read (columns of numbers, as an .xy holds): its arrays as held, why said
+   under the drop zone as of any file (fileNotes, the same check: "scan 1 not read: …"). To v586
+   a file not named .xrdml or .xml was not read again: its arrays as held, nothing said. */
+test('a file read again from its bytes whatever its name; bytes that do not read, its arrays as held and why said (v587)', ()=>{
+  const b = enc(JSON.stringify({ scans: [scan([1, 2, 3], [5, 6, 7])] })), xy = enc('10 5\n11 6\n');
+  read.n = 0;
+  for (const name of ['scan.txt', 'scan', 'scan.xy', 'scan.csv', 'scan.raw', 'scan.ras']){
+    const f = M.readAgain(U, { name, rawBytes: b, x: [1, 2, 3], y: [4, 5, 6] });
+    assert.deepEqual([f.x, f.y, H.openedNote(f)], [[1, 2, 3], [5, 6, 7], ''], name);
+  }
+  assert.equal(read.n, 1, 'read once, kept by its bytes');
+  const g = M.readAgain(U, { name: 'p.xy', label: 'P', rawBytes: xy, x: [10, 11], y: [5, 6] });
+  assert.deepEqual([g.x, g.y, H.openedNote(g)], [[10, 11], [5, 6], '']);
+  assert.deepEqual(H.fileNotes([g], null, M.keptScans, HU).map(n=> [n.what, n.line]), [['check', 'p.xy: scan 1 not read: not well-formed XML.']]);
+});
+
 test('the cards\' states: slots, a run\'s results patched in, what it shows', ()=>{
-  const s = { perParams: [], manualPeaks: [], removedPeaks: [], cif: [], shared: { w: 2 } }, ks = M.keptSlots('A4', s);
-  assert.deepEqual(ks.map(k=> k.key), ['A4:params', 'A4:manual', 'A4:removed', 'A4:cif']); assert.deepEqual(ks[0].make(), { w: 2 }); assert.deepEqual(ks[1].make([1]), [1]);
+  const s = { perParams: [], manualPeaks: [], removedPeaks: [], cif: [], shared: { pkHeight: 2, w: 2 } }, ks = M.keptSlots('A4', s);
+  // (a sample's settings of none, and those of a file added, a new one's: the shared values, as a
+  // Scherrer card's own, v587: xrd-peaks-model.js newEntry; to v586 a copy of the shared object)
+  assert.deepEqual(ks.map(k=> k.key), ['A4:params', 'A4:manual', 'A4:removed', 'A4:cif']); assert.deepEqual(ks[0].make(), { pkHeight: 2, blOn: true }); assert.deepEqual(ks[1].make([1]), [1]);
   assert.deepEqual([ks[3].make({ file: 'a.cif', cif: 'data_a' }), s.cifTexts, ks[3].out({ file: 'a.cif', ref: 0 }), ks[3].make()], [{ file: 'a.cif', ref: 0 }, ['data_a'], { file: 'a.cif', cif: 'data_a' }, null]);
+  M.keptAdd(s);
+  assert.deepEqual([s.perParams, s.manualPeaks, s.removedPeaks, s.cif], [[{ pkHeight: 2, blOn: true }], [[]], [[]], [null]]);
   assert.equal(M.prefixOf({ type: 'scherrer', id: 3 }), 'xrdA3'); assert.equal(M.prefixOf({ type: 'rietveld', id: 3 }), 'xrdR3');
   const a = { type: 'rietveld', states: { scherrer: { p: [1] }, rietveld: { q: 1 }, z: null } }, o = M.otherStates(a);
   assert.deepEqual(o, { scherrer: { p: [1] } }); assert.notEqual(o.scherrer, a.states.scherrer);
@@ -267,7 +289,8 @@ test('the markup: the standard\'s window and file, its alerts, the drop\'s, a re
   M.keepScans(b1, [scan([1, 2], [1, 2]), { error: 'no scan data' }, scan([1, 2], [1, 2], { notes: ['n<'] })]);
   M.keepScans(b2, [scan([1, 2], [1, 2], { notes: ['intensities in cps with no counting time: 0.5 s per point estimated from the noise, for the weights'] })]);
   assert.equal(M.keptScans({ name: 'f (scan 1).xrdml', rawBytes: b1 }).length, 3);
-  assert.deepEqual([M.keptScans({ name: 'f.txt', rawBytes: b1 }), M.keptScans({ name: 'f.xrdml' }), M.keptScans({ name: 'f.xrdml', rawBytes: enc('h') })], [null, null, null]);
+  // (whatever its name, v587: to v586 none for a file not named .xrdml or .xml)
+  assert.deepEqual([M.keptScans({ name: 'f.txt', rawBytes: b1 }).length, M.keptScans({ name: 'f.xrdml' }), M.keptScans({ name: 'f.xrdml', rawBytes: enc('h') })], [3, null, null]);
   const p1 = { name: 'f (scan 1).xrdml', src: 'f.xrdml', scan: 0, rawBytes: b1, y: [0] }, p3 = { name: 'f (scan 3).xrdml', src: 'f.xrdml', scan: 2, rawBytes: b1 };
   const g = { name: 'g.xrdml', label: 'G', rawBytes: b2 }, o = { name: 'o', label: 'O<', y: [3, 0, 1] }, q = { name: 'q.xrdml', label: 'Q', y: [3, 1] }, std = { name: 's.xrdml', y: [0] };
   const box = (all, st, lost)=> PAGE.notesHtml(H.fileNotes(all, st, M.keptScans, HU), w=> 'xrd-dismiss-' + w, { opened: lost ? [lost] : [] });

@@ -272,7 +272,7 @@ function addPattern(S, p, existing){
     const e = S.live.get(a.id);
     if (a.type === 'scherrer' && e) e.inst.addFile();
     const s = a.states.scherrer;
-    if (a.type !== 'scherrer' && s){ s.perParams.push({...s.shared}); s.manualPeaks.push([]); s.removedPeaks.push([]); s.cif.push(null); }
+    if (a.type !== 'scherrer' && s) M.keptAdd(s);
   });
 }
 

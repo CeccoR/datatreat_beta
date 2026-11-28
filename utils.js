@@ -1222,11 +1222,22 @@ function openRowMenu(L, row, at){
   wireOpenMenu(rowMenuOn);
   el.querySelector('[data-ctl]').focus({ preventScroll: true });
 }
-/* (its own listeners go with it; those on the document and the window come off with ac. A
-   scroll closes it where it moves its row: a scroll event comes a frame after its scroll, one
-   from before the menu opened then, as a row scrolled into view by the press, v585) */
+/* Whether a scroll has moved `el` since this was asked: the page's or a box's it is in (their
+   offsets). What hangs from it (a row's menu, a field's rule) goes as a scroll moves it, and
+   only then: a scroll event comes a frame after its scroll, so one from before it was shown
+   (its row or its field scrolled into view by the press) moved nothing since (v585 the menu,
+   then by its box; v587 the rule too, which such an event took away at once). The offsets, not
+   its box: a field refused shakes (style.css field-shake), its box moving under no scroll.
+   → moved() */
+function movedSince(el){
+  const at = ()=>{ const o = []; for (let p = el.parentElement; p; p = p.parentElement) o.push(p.scrollLeft, p.scrollTop); return o.join(); };
+  const was = at();
+  return ()=> at() !== was;
+}
+/* (its own listeners go with it; those on the document and the window come off with ac; a
+   scroll closes it where it moves its row: movedSince) */
 function wireOpenMenu({ el, row, ac }){
-  const signal = ac.signal, was = row.getBoundingClientRect(), moved = ()=>{ const r = row.getBoundingClientRect(); return r.top !== was.top || r.left !== was.left; };
+  const signal = ac.signal, moved = movedSince(row);
   el.addEventListener('click', e=>{ const b = e.target.closest('[data-ctl]'); if (b && b.getAttribute('aria-disabled') !== 'true') pickRowItem(b.dataset.ctl); });
   el.addEventListener('contextmenu', e=> e.preventDefault());
   menuKeys(el, '[data-ctl]', closeRowMenu, signal);
@@ -2464,8 +2475,9 @@ function runProgress(wrap, frac){
    not obvious (`rule`: what it takes, a sentence), a red line under it says the rule for a
    moment; never a banner or a warning box. The line floats under the field, over what
    follows (fixed, in the page's top layer), so that nothing in its card moves; it goes as
-   the field is typed in, at the next press anywhere, as the page scrolls or the window
-   changes, or after 4 s. One at a time. (To v570 the flash alone.) */
+   the field is typed in, at the next press anywhere, as a scroll moves the field (movedSince:
+   v587, to v586 any scroll event, one a frame late from the field's own scroll into view too)
+   or the window changes, or after 4 s. One at a time. (To v570 the flash alone.) */
 let _ruleEl = null;
 function dropRule(){ if (_ruleEl){ const r = _ruleEl; _ruleEl = null; r._off(); r.remove(); } }
 function flashFieldInvalid(el, rule){
@@ -2486,12 +2498,12 @@ function flashFieldInvalid(el, rule){
   r.style.left = Math.max(4, Math.min(b.left, viewport().w - r.offsetWidth - 4)) + 'px';
   r.style.top = (b.bottom + 3) + 'px';
   // (not as the field is left: a value is refused as it is, its change coming just before)
-  const gone = ()=>{ if (_ruleEl === r) dropRule(); }, t = setTimeout(gone, 4000);
+  const gone = ()=>{ if (_ruleEl === r) dropRule(); }, t = setTimeout(gone, 4000), moved = movedSince(el), scrolled = ()=>{ if (moved()) gone(); };
   el.addEventListener('input', gone);
   window.addEventListener('pointerdown', gone, true);
-  window.addEventListener('scroll', gone, true);
+  window.addEventListener('scroll', scrolled, true);
   window.addEventListener('resize', gone);
-  r._off = ()=>{ clearTimeout(t); el.removeEventListener('input', gone); window.removeEventListener('pointerdown', gone, true); window.removeEventListener('scroll', gone, true); window.removeEventListener('resize', gone); };
+  r._off = ()=>{ clearTimeout(t); el.removeEventListener('input', gone); window.removeEventListener('pointerdown', gone, true); window.removeEventListener('scroll', scrolled, true); window.removeEventListener('resize', gone); };
 }
 /* The rule of a numeric field (guardNumericInput's bounds), said under it when a value is
    refused: none where it has no bound (a number: obvious). A least bound under any number

@@ -279,7 +279,7 @@ was proposed; nothing here is in the code yet.
 
 ## General
 
-- **Backward compatibility under the rule (CLAUDE.md, v583, v586 and v588: stages 1 to 3 of 4 done).**
+- **Backward compatibility under the rule (CLAUDE.md, v583, v586, v587 and v588: stages 1 to 3 of 4 done).**
   An old project is opened by redoing the calculations with the current engine, from the
   parameters that still exist and the original data; no code is kept for old formats. An
   inventory of the code for old projects, made on v576 (outside the repository), staged it in
@@ -313,22 +313,31 @@ was proposed; nothing here is in the code yet.
   ticked, as new ones are, their values the defaults (no longer deduced from the values);
   keepSpectrum (DRS, EPR) gone, the readings kept by the bytes sharing the arrays; a DRS or GC
   reader that throws on a project's bytes keeps the data the project holds, said with why (to
-  v585 the file was left out). Done in v588 (stage 3, GC Integration and Calibration): every
-  result is kept under the engine's id (gc-tcd.js ENGINE_ID, in its key beside the file's bytes
-  and the method; a test holds the engine's files' hash beside it, so that the engine cannot
+  v585 the file was left out). Done in v587, what v586 left: an Urbach card's common lines (to
+  v568) are no parameter any more, not read (tauc-model.js restorePanel; to v586 kept and counted
+  as lines placed), so a card saved with them and none of its samples' own is a new card's state
+  and its lines are suggested as it opens, as a card added's (tauc.js restoreState, `fresh`; to
+  v586 the default lines); a Scherrer card's sample of no settings of its own gets the shared
+  values whatever the way in (xrd-peaks-model.js `newEntry`: a card made with its files there had
+  `{blOn: true}`, one there before them the shared values, the same results); an XRPD file is read
+  again from its bytes whatever its name (xrd-model.js readAgain and keptScans: the reader takes
+  an XRDML measurement by what it holds, so a file dropped as `.txt` or with no extension loads;
+  to v586 one not named `.xrdml` or `.xml` kept the arrays the project held), bytes that do not
+  read keeping them, said as for any file. Done in v588 (stage 3, GC Integration and Calibration):
+  every result is kept under the engine's id (gc-tcd.js ENGINE_ID, in its key beside the file's
+  bytes and the method; a test holds the engine's files' hash beside it, so that the engine cannot
   change under the same id): a project's results of another engine, or of none (saved to v587,
-  v544's keys among them), are not taken, and its files are integrated again as it opens, with
-  the windows its results came from (windows edited stay pending); a project of this engine fits
+  v544's keys among them), are not taken, and its files are integrated again as it opens, with the
+  windows its results came from (windows edited stay pending); a project of this engine fits
   nothing, nor do an undo, a redo or a tab woken. A calibration of v544–v548 (raw chromatograms
-  with no table) is none, its levels with it: the window shows its drop zone alone (its box
-  "saved by an older version without its GC table", the standards named by column and a table
-  naming them gone: normKey, noTrap, inCal, calNotes). With no standards the window keeps
-  nothing of those removed, hidden or not (v585 left their rows under the drop zone). Kept as
-  the current format: the overview's gas saved as a list of one (every version from v544 writes
-  it). Left: stage 4 (Rietveld's results recomputed at their refined parameters; with it the
-  instruments' and results' messages saved as words alone, xrd-rv-model.js msgOf, INSTR_INFO).
-  Kept by decision: a DRS card's lines saved without the `suggested` flag are the user's, not
-  suggested again.
+  with no table) is none, its levels with it: the window shows its drop zone alone (its box "saved
+  by an older version without its GC table", the standards named by column and a table naming them
+  gone: normKey, noTrap, inCal, calNotes). With no standards the window keeps nothing of those
+  removed, hidden or not (v585 left their rows under the drop zone). Kept as the current format:
+  the overview's gas saved as a list of one (every version from v544 writes it). Left: stage 4
+  (Rietveld's results recomputed at their refined parameters; with it the instruments' and
+  results' messages saved as words alone, xrd-rv-model.js msgOf, INSTR_INFO). Kept by decision: a
+  DRS card's lines saved without the `suggested` flag are the user's, not suggested again.
 
 - **Warnings and errors, reviewed by kind.** The map of every message the app shows was
   made again from the code at v565 (331 entries) and the rules agreed (R1–R4: a kind for
@@ -983,9 +992,20 @@ was proposed; nothing here is in the code yet.
   list's renderer closed it to v584), and a scroll closes it only where it moves its row: a
   scroll event comes a frame after its scroll, so a row scrolled into view by the press closed
   the menu as it opened. Each of the four lists asked for has actions on its rows, so each has
-  the menu. Left: other lists with a × on their rows have none yet, XRPD's peaks table (*Remove
-  peak*), Iodometry's calibration standards (*Remove this standard*), the composer's panels
-  (*Remove panel*): the same `wireRowMenu` and `ctlMenu` would give it them.
+  the menu. Done in v587, the lists left with a × on their rows (the same `wireRowMenu` and
+  `ctlMenu`, the × red, `is-danger`, where it was not): XRPD's peaks table (*Remove peak*, a
+  sample's card and the standard's window), Iodometry's calibration standards (*Remove standard
+  n*), a Custom card's series (*Take {series} out of the plot*), the composer's panels (*Remove
+  panel*) and divisions (*Remove this division*, a series of more than one). With them the
+  floating rule of a value refused (utils.js flashFieldInvalid) goes on a scroll only where it
+  moves its field, as the menu does (`movedSince`, shared: the offsets of the page and of the
+  boxes the row or field is in, not its box, which a refused field's shake moves); to v586 the
+  scroll that brought the field into view, its event a frame late, took it away at once
+  (gcnorm's refusals took their fields into view first). Left, with actions of their rows but
+  no ×: the composer's series rows (draw, legend, colour, fill: settings, as the trace list's
+  colour and name, which its menu leaves out), SEM's groups (the scale, Figure composer, an
+  empty one's Remove) and the pickers' own palettes (a × each, in a popup that a press outside
+  closes).
 - **A helper copied (v582's review, done in v584).** iodo-model.js had its own `width` (a line's
   fields up to its last not empty), textdata.js's to the character: it imports that one.
 - **A last cell empty read as a column missing (Custom; GC's alternative export; v582, done).**

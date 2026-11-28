@@ -1,4 +1,4 @@
-import { esc, registerModule, keeper, objId, exactKey, colorOf, isColor, csvNum, flashFieldInvalid, boxStats, meanArr, stdArr, barNames, X_SVG, removeFileAt } from './utils.js';
+import { esc, registerModule, keeper, objId, exactKey, colorOf, isColor, csvNum, flashFieldInvalid, boxStats, meanArr, stdArr, barNames, X_SVG, removeFileAt, wireRowMenu, ctlMenu } from './utils.js';
 import { Plot } from './plot.js';
 import { cardInfo, fileSafe, nameDownloads } from './cards.js';
 import { moduleKit, wideCsv, isObj, ownKey, cardList } from './modkit.js';
@@ -330,6 +330,8 @@ function buildCard(S, a, card){
   list.addEventListener('click', e=> onDel(S, a, e));
   list.addEventListener('change', e=> onOp(S, a, e));
   list.addEventListener('keydown', e=>{ if (e.key === 'Enter' && e.target.matches('input[type="text"]')) e.target.blur(); });
+  // A series' row: a menu of its × (v587, utils.js wireRowMenu), named by the series.
+  wireRowMenu(list, { rows: '.fig-ser', ...ctlMenu('.fig-ser-x'), label: r => r.querySelector('.fig-ser-name').textContent });
   paintPanel(S, a, card);
 }
 function onNorm(S, a, e){

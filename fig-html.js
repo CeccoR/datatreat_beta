@@ -40,10 +40,11 @@ export const cardBody = (a, u)=> `
 const opField = (k, label, v, title, u)=> `<label class="fig-op" title="${title}"><span>${label}</span><input type="text" inputmode="decimal" autocomplete="off" data-op="${k}" value="${u.esc(String(v))}"></label>`;
 /* A card's series (list: fig-model.js plotted), a row each, as the parameters': the name on
    three fifths, the scale and offset (ops, its kind's) on two; those of its series left out
-   of the analysis counted under them. */
+   of the analysis counted under them. A row takes the focus and has a menu of its × (red as a
+   removal's: v587, fig.js buildCard). */
 export const serListHtml = (a, list, ops, u)=> list.map(({ r, s, name })=> `
-          <div class="fig-ser" data-key="${u.esc(s.key)}">
-            <div class="fig-ser-head"><button type="button" class="an-ic fig-ser-x" data-act="del" title="Take this series out of the plot" aria-label="Take ${u.esc(name)} out of the plot">${u.X_SVG(13)}</button>
+          <div class="fig-ser" data-key="${u.esc(s.key)}" tabindex="-1" aria-haspopup="menu">
+            <div class="fig-ser-head"><button type="button" class="an-ic fig-ser-x is-danger" data-act="del" title="Take this series out of the plot" aria-label="Take ${u.esc(name)} out of the plot">${u.X_SVG(13)}</button>
               <span class="fig-ser-name" title="${u.esc(`${s.f.label}: ${s.auto} (${s.cols})`)}">${u.esc(name)}</span></div>
             <div class="fig-ops">${ops.includes('scale') ? opField('scale', '×', r.scale, 'Scale: every value multiplied by it, after the normalization', u) : ''}${
               ops.includes('offset') ? opField('offset', '+', r.offset, 'Offset: added to every y, after the scale', u) : ''}</div>

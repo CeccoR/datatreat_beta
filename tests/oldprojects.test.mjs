@@ -149,6 +149,26 @@ test('SEM: a figure of v439–v449 (positions as corners and sides, the middle r
   } finally { await close(); }
 });
 
+/* v587: an Urbach card as versions to v568 saved it: its lines common (sharedVlines), none of
+   its samples' own, no flag. Its common lines no parameter any more: the card's state a new
+   card's, its lines suggested on its reference's regions as those of a card added now (to v586
+   its common lines counted as placed: the default lines, kept with them). */
+test('DRS: an Urbach card of common lines (to v568): its lines suggested as a card added now has them (v587)', async ()=>{
+  const { page, errors, close } = await env.page();
+  try {
+    await reopenOld(page, 'tauc', env.fx.files.tauc, 'Urbach old', st=>{
+      const t = st.analyses[0];
+      st.analyses.push({ ...t, id: 2, type: 'urbach', ref: 1, refAuto: true, states: { urbach: { mode: 'shared', shared: {}, sharedVlines: { v1: 2.5, v2: 2.7 }, per: t.states.tauc.per.map(()=> ({})) } } });
+    });
+    await page.click('#taucAddAn'); await page.click('.an-menu:not([hidden]) [data-kind="urbach"]'); await settle(page);
+    const a = (await moduleState(page, 'tauc')).analyses, old = a[1].states.urbach, added = a[2].states.urbach;
+    assert.deepEqual([a.map(k=> [k.type, k.ref]), old.sharedVlines, old.suggested], [[['tauc', null], ['urbach', 1], ['urbach', 1]], {}, true]);
+    assert.deepEqual(old.per.map(q=> q.vlines), added.per.map(q=> q.vlines), 'its lines a new card\'s');
+    assert.ok(old.per.every(q=> q.vlines && Number.isFinite(q.vlines.v1)));
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
 /* v586: an XRPD project from before the cards (to v459: one Analysis's settings at the top
    level, the standard a sample named in standardName, a Rietveld at `rv`), a pattern whose
    intensities the project holds with their minimum subtracted (to v262), one whose instrument
@@ -166,10 +186,9 @@ test('XRPD: a project from before the cards, arrays and an instrument an older v
       st.files[2].instr = { lam1: 1.6, lam2: 1.61, ratio: 0.4, radius: 200, monochromator: false, monochromators: [], warnings: [] };
     });
     const s = await moduleState(page, 'xrd', true);
-    // (a sample's own settings in a Scherrer card made with the files there: none, the shared
-    // values, as in a card added to them; the first card of a tab, there before them, copies those)
-    const bare = cs => cs.map(c=> ({ ...c, states: Object.fromEntries(Object.entries(c.states).map(([k, v])=> [k, k === 'scherrer' ? { ...v, perParams: v.perParams.length } : v])) }));
-    assert.deepEqual(bare(s.cards), bare(now.cards), 'a new project\'s cards, its settings ignored');
+    // (v587: a sample's own settings in a Scherrer card made with the files there the shared
+    // values, as in the first card of a tab, there before them: the same state; to v586 {blOn: true})
+    assert.deepEqual(s.cards, now.cards, 'a new project\'s cards, its settings ignored');
     assert.deepEqual([s.std, s.files.map(f=> f.name)], [null, now.files.map(f=> f.name)], 'the standard named a sample');
     assert.deepEqual(s.files[0].y, now.files[0].y, 'read again from its bytes');
     assert.equal(await page.locator('#xrdAlerts .alert').count(), 0, 'nothing said');

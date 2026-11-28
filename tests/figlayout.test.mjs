@@ -607,7 +607,8 @@ test('the legends, the shared titles, the tiles, the colours, the symbols, the r
    stands, its imports handed in: figure-layout.js and figure-model.js themselves, plot.js's
    svgEl, niceRun, fmtTick, SUB_DROP and TILT_DY and utils.js's tiltFits, CP_PALETTES, esc
    and X_SVG from their source, db.js's own and setOwn (v583: v582's import of them made this
-   test throw), the rest (pickers, the tabs, v584's viewport) inert. The page: elements that
+   test throw), the rest (pickers, the tabs, v584's viewport, v587's row menus: their import
+   made this test throw, v588) inert. The page: elements that
    keep their attributes in the order they were set, their text and their children, and a
    canvas that measures text a fixed width a character. */
 class El {
@@ -634,7 +635,7 @@ function constDecl(file, name){
 const PLOT = new Function('document', ['niceStep', 'niceRun', 'fmtTick', 'svgEl'].map(n => decl('plot.js', n)).join('\n') + '\n'
   + ['SUB_DROP', 'TILT_DY'].map(n => constDecl('plot.js', n)).join('\n') + '\nreturn { niceRun, fmtTick, svgEl, SUB_DROP, TILT_DY };')(PAGE);
 const UTIL = new Function(decl('utils.js', 'tiltFits') + '\n' + ['esc', 'CP_PALETTES', 'X_SVG'].map(n => constDecl('utils.js', n)).join('\n')
-  + '\nreturn { tiltFits, esc, CP_PALETTES, X_SVG, colorPickerUI: {}, palettePickerUI: {}, flashFieldInvalid(){}, numRule(){ return \'\'; }, boxHtml(){ return \'\'; }, dropGap(){}, saveBlob(){}, viewport(){ return { w: 0, h: 0 }; } };')();
+  + '\nreturn { tiltFits, esc, CP_PALETTES, X_SVG, colorPickerUI: {}, palettePickerUI: {}, flashFieldInvalid(){}, numRule(){ return \'\'; }, boxHtml(){ return \'\'; }, dropGap(){}, saveBlob(){}, viewport(){ return { w: 0, h: 0 }; }, wireRowMenu(){}, ctlMenu(){ return {}; } };')();
 /* figure.js's source (or another's: an older version's, given as text), run with its imports
    handed in; gives its drawFigure and the model's setter. */
 function loadFigure(src = fs.readFileSync(new URL('../figure.js', import.meta.url), 'utf8')){

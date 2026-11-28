@@ -174,11 +174,14 @@ function restoreState(S, s, gone){
   // (a wake's or a reload's: the sample its tab showed, by its file's name, else its place)
   const next = S.sampleNext;
   if (next){ const k = S.files.findIndex(f=> f.name === next.name); S.currIndex = k >= 0 ? k : num(next.sample, 0, Number.isInteger); S.sampleNext = null; }
-  // (a project with no cards: one Tauc card made for it, a new card, its lines suggested on
-  // its files as a card added is: added)
+  /* (a card whose state is a new card's: the one made for a project with no cards, one an
+     older version saved with no lines and no flag, as an Urbach card whose lines were common,
+     to v568: its lines suggested on its files as a card added's are, the Tauc cards first,
+     the Urbach ones placed on their regions; v587: to v586 the one made alone, the others the
+     default lines) */
   const list = cardList(s.analyses, M.KINDS);
   loadAnalyses(S, list || [{ id: 1, type: 'tauc' }], gone);
-  if (!list && S.files.length) cards(S).forEach(a=> panelOf(S, a).autoSuggestAll());
+  if (S.files.length) ['tauc', 'urbach'].forEach(t=> cards(S).filter(a=> a.type === t && panelOf(S, a).fresh).forEach(a=> panelOf(S, a).autoSuggestAll()));
 }
 // A card of a kind there is no more (the debug defect band, taken out) is left out
 // (deck.load), as are the settings a card kept for one (readAnalysis). A card kept
@@ -245,7 +248,8 @@ function makePanel(S, spec, card){
   P.clear = ()=>{ P.per = []; P.sharedVlines = {}; };
   P.fit = ()=> M.fitPer(P, S.files);
   P.snapshot = ()=> M.panelSnapshot(P);
-  P.restore = s0 =>{ M.restorePanel(U, spec, P, s0, S.files); P.syncModeButton(); };
+  // (fresh: the state put back a new card's, tauc-model.js restorePanel: restoreState suggests its lines)
+  P.restore = s0 =>{ P.fresh = M.restorePanel(U, spec, P, s0, S.files); P.syncModeButton(); };
   wirePanel(S, P, V);
   return P;
 }
@@ -545,8 +549,8 @@ function buildPanel(S, a, card, prev){
   if (prev && was) a.states[prev] = was.panel.snapshot();
   guardNumberInputs(card);
   const panel = makePanel(S, SPECS[a.type](S, a), card);
-  if (a.states[a.type]) panel.restore(a.states[a.type]);
-  else panel.fit();
+  // (a kind it has no settings of yet: a new card's, the defaults, fitted to the files)
+  panel.restore(a.states[a.type] || {});
   S.live.set(a.id, { panel, res: was ? was.res : null, resPlots: was ? was.resPlots : null });
   const ref = card.querySelector('.an-ref');
   if (ref) listenRef(S, a, ref);

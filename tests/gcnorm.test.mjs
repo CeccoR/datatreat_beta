@@ -113,11 +113,11 @@ function x1000(mass, area){
 }
 /* A value of m or A refused (v585): an empty field, 0, below it, no number; each shaken, its
    rule in red under it, the field given its value back (`shown`), the state's (`get`, a key of
-   the card or a function of it) as it was (`was`), no step of the history. */
+   the card or a function of it) as it was (`was`), no step of the history. The field filled
+   where it is, Playwright scrolling it into view (v587: to v586 that scroll's event, a frame
+   late, took the rule away; v585 took the field into view first). */
 async function refused(page, sel, get, was, shown){
   const h = (await history(page, 'gc')).index, of = c => typeof get === 'function' ? get(c) : c[get + 'Shared'];
-  // (the field in view first: its scroll's event, a frame later, would take the rule away, utils.js flashFieldInvalid)
-  await page.locator(sel).scrollIntoViewIfNeeded(); await settle(page);
   for (const v of ['', '0', '-1', 'abc']){
     await page.fill(sel, v); await page.press(sel, 'Enter');
     assert.ok(await page.$eval(sel, e=> e.classList.contains('field-invalid')), `"${v}" shaken`);

@@ -16,7 +16,7 @@
    phase's reflections, and the Results chart the sizes by species. (v576) At its tube's Kα2
    too, a peak none names at λ; the boxes of one size seen, the reflections by their hkl.
 ========================================================= */
-import { esc, fmtNum, csvLine, linspace, interpLinear, meanArr, stdArr, boxStats, maxArr, minArr, X_SVG, guardNumericInput, guardNumberInputs, fitCsvIcons, barNames, barChipYmax, NORM_OPTIONS, normOf, keeper, boxHtml } from './utils.js';
+import { esc, fmtNum, csvLine, linspace, interpLinear, meanArr, stdArr, boxStats, maxArr, minArr, X_SVG, guardNumericInput, guardNumberInputs, fitCsvIcons, barNames, barChipYmax, NORM_OPTIONS, normOf, keeper, boxHtml, wireRowMenu, ctlMenu } from './utils.js';
 import { svgEl, Plot, axisReadout } from './plot.js';
 import { meanStep, widthText } from './smooth.js';
 import { PLOT_DL_ICON, CSV_ICON } from './modcharts.js';
@@ -815,6 +815,8 @@ function wirePeaks(S){
   S.$('Svg').addEventListener('click', ()=> onPlotClick(S));
   // Deselect when clicking anywhere in the table's box that isn't a peak row
   S.$('PeakBox').addEventListener('click', e=>{ if (!e.target.closest('.peak-row')) clearSelection(S); });
+  // A peak's row: a menu of its × (v587, utils.js wireRowMenu), named by its place and 2θ.
+  wireRowMenu(S.$('PeakTableWrap'), { rows: 'tr.peak-row', ...ctlMenu('.peak-del'), label: r => `Peak ${r.cells[0].textContent} at ${r.cells[1].textContent}°` });
 }
 function resetPeaks(S){
   const idx = curIdx(S);
