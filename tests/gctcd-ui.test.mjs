@@ -838,10 +838,11 @@ test('calibration: standards typed by hand, free and zero intercept, %mol and pp
     assert.ok(column(raw, 'H2 source [cal]').slice(1).every(s=> s === 'reintegrated, calibrated by the standards'));
     A.forEach((a, k)=> assert.ok(Math.abs(c[k] - (a - h.icpt)/h.slope) < 2e-5 + 1e-4*c[k], `injection ${k + 1}: ${c[k]} for (${a} − b)/s`));
     A.forEach((a, k)=> assert.ok(Math.abs(a - areas()[k][0]) < 0.01*areas()[k][0], `area ${k + 1}: ${a} for ${areas()[k][0]}`));
+    // (mean_rates.csv: each gas's rate as measured, then per g, v589)
     const mean = z['mean_rates.csv'][1], want = meanRate(truth.map(r=> r[0])), wantO = meanRate(truth.map(r=> r[1]));
-    assert.ok(Math.abs(num(mean[1]) - want) < 0.01*want, `H₂ mean ${mean[1]} for ${want} by hand`);
-    assert.ok(Math.abs(num(mean[2]) - wantO) < 0.02*wantO, `O₂ mean ${mean[2]} for ${wantO} by hand`);
-    assert.ok(Math.abs(num(mean[1]) - 1.1*want) > 0.05*want, 'not the table\'s');
+    assert.ok(Math.abs(num(mean[2]) - want) < 0.01*want, `H₂ mean ${mean[2]} for ${want} by hand`);
+    assert.ok(Math.abs(num(mean[4]) - wantO) < 0.02*wantO, `O₂ mean ${mean[4]} for ${wantO} by hand`);
+    assert.ok(Math.abs(num(mean[2]) - 1.1*want) > 0.05*want, 'not the table\'s');
     // ppm: the same standards typed in ppm, the same concentrations.
     await card.locator('.gci-cal').click(); await m.waitFor({ state: 'visible' });
     await m.locator('.gci-cal-unit-in').selectOption('ppm'); await settle(page);
@@ -850,7 +851,7 @@ test('calibration: standards typed by hand, free and zero intercept, %mol and pp
     assert.ok(Math.abs(hp.slope*1e4 - h.slope) < 1e-3*h.slope, `per ppm ${hp.slope}, per %mol ${h.slope}`);
     await m.locator('.xrd-std-x').click(); await settle(page);
     z = await zip(page);
-    assert.ok(Math.abs(num(z['mean_rates.csv'][1][1]) - num(mean[1])) < 1e-6*num(mean[1]) + 1e-9, 'the same rates');
+    assert.ok(Math.abs(num(z['mean_rates.csv'][1][2]) - num(mean[2])) < 1e-6*num(mean[2]) + 1e-9, 'the same rates');
     // Peaks: the concentration in the calibration's unit, said under the table.
     assert.equal(await card.locator('.gci-values-box .gci-units').textContent(), 'Conc. in ppm; GC table in %mol.');
     assert.equal(await card.locator('.gci-values-box .gci-from').count(), 0, 'standards: nothing taken from the software');
@@ -1092,7 +1093,7 @@ test('no standards: the GC software\'s scale taken over (k, the median of area/t
     assert.ok(ra.includes('H₂ by the GC software\'s scale (k = ') && ra.includes('The GC software\'s scale (k): its risks are in the instructions of '), ra);
     // Area / k: the table's scale, so the table's rates within the fit's noise.
     const mean = z['mean_rates.csv'][1], want = meanRate(tableRows(1.1).map(r=> r[0]));
-    assert.ok(Math.abs(num(mean[1]) - want) < 0.01*want, `H₂ ${mean[1]} for ${want}`);
+    assert.ok(Math.abs(num(mean[2]) - want) < 0.01*want, `H₂ ${mean[2]} for ${want}`);
     assert.deepEqual(errors, []); assert.deepEqual(await csp(), []);
   } finally { await close(); }
 });

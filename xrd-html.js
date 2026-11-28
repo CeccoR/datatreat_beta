@@ -8,6 +8,7 @@
    (utils.js's: xrd.js HU).
 ========================================================= */
 import { heldLine } from './alerts.js';
+import { scanOf } from './xrd-model.js';
 
 /* ---- The instrumental standard's windows ---- */
 // A window (its id, its title, its instructions): a head with its ×, what is under it
@@ -69,27 +70,35 @@ export const isReadNote = t => /: \d+ scans, |(^|: )counts over unequal counting
 export const dropAlerts = (invalid, already, u)=> ({
   load: u.fileAlertHtml('bad', invalid, 'xrd-dismiss-invalid'),
   upload: u.fileAlertHtml('dup', already, 'xrd-dismiss-upload') });
-/* What a project opened found in a pattern, to check, or '': no file kept, its data those the
-   project holds (U8; read again from its bytes, xrd-model.js readAgain, nothing to say). */
-export const openedNote = f => f.rawBytes instanceof Uint8Array ? '' : heldLine(null);
+/* What a project opened found in a pattern, to check, or '': no file kept, or bytes its scan
+   cannot be read from (`scans(f)`, xrd-model.js keptScans, scanOf: why, the reader's or a throw's,
+   alerts.js thrownWhy), its data those the project holds (U8, as every module says it: v589, to
+   v588 a scan of bytes that did not read said as a drop's, "scan 1 not read: …", its data
+   unsaid); read again from its bytes (xrd-model.js readAgain), nothing to say. */
+export function openedNote(f, scans){
+  if (!(f.rawBytes instanceof Uint8Array)) return heldLine(null);
+  const sc = scans(f), own = sc && scanOf(sc, f);
+  return own && own.error ? heldLine(own.error) : '';
+}
 /* What the reading of the files said (alerts.js notes, v572: worked out from the patterns in
    the list, each until its box's ×; to v571 the drop's words and the restore's, gone at the
    next undo and left when their file was removed): of each file, from the scans its bytes
    were read into (`scans(f)`, xrd-model.js keptScans), how many it holds, among them the
-   patterns in the list, and those not read (about all its patterns); of each pattern, its
-   scan's notes, to check or how it was read (isReadNote), and what a project opened found
-   in it (openedNote), the standard's (`std`) too. */
+   patterns in the list, and those not read (about all its patterns) but a pattern's own, which
+   a project opened holds (openedNote); of each pattern, its scan's notes, to check or how it
+   was read (isReadNote), and what a project opened found in it (openedNote), the standard's
+   (`std`) too. */
 export function fileNotes(all, std, scans, u){
-  const out = [], done = new Set(), opened = p =>{ const o = openedNote(p); if (o) out.push({ what: 'opened', line: u.esc(u.fileLine(p.label || p.name, o)), files: [p] }); };
+  const out = [], done = new Set(), opened = p =>{ const o = openedNote(p, scans); if (o) out.push({ what: 'opened', line: u.esc(u.fileLine(p.label || p.name, o)), files: [p] }); };
   for (const p of all){
     const sc = scans(p);
     if (sc && !done.has(p.rawBytes)){
       done.add(p.rawBytes);
-      const pats = all.filter(q=> q.rawBytes === p.rawBytes), name = p.src || p.name;
+      const pats = all.filter(q=> q.rawBytes === p.rawBytes), name = p.src || p.name, held = new Set(pats.map(q=> scanOf(sc, q)));
       if (sc.length > 1) out.push({ what: 'read', line: u.esc(scansNote(name, sc.length, pats.length)), files: pats });
-      sc.forEach((x, k)=>{ if (x.error) out.push({ what: 'check', line: u.esc(u.fileLine(name, `scan ${k+1} not read: ${x.error}`)), files: pats }); });
+      sc.forEach((x, k)=>{ if (x.error && !held.has(x)) out.push({ what: 'check', line: u.esc(u.fileLine(name, `scan ${k+1} not read: ${x.error}`)), files: pats }); });
     }
-    const own = sc && sc[Number.isInteger(p.scan) && p.scan >= 0 ? p.scan : 0];
+    const own = sc && scanOf(sc, p);
     for (const t of own && own.notes || []) out.push({ what: isReadNote(t) ? 'read' : 'check', line: u.esc(u.fileLine(p.name, t)), files: [p] });
     opened(p);
   }

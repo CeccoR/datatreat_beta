@@ -176,12 +176,10 @@ function restoreState(S, s, gone){
   if (next){ const k = S.files.findIndex(f=> f.name === next.name); S.currIndex = k >= 0 ? k : num(next.sample, 0, Number.isInteger); S.sampleNext = null; }
   /* (a card whose state is a new card's: the one made for a project with no cards, one an
      older version saved with no lines and no flag, as an Urbach card whose lines were common,
-     to v568: its lines suggested on its files as a card added's are, the Tauc cards first,
-     the Urbach ones placed on their regions; v587: to v586 the one made alone, the others the
-     default lines) */
+     to v568: its lines suggested as a card added's are, as the files are drawn, setupAnalysis;
+     v587: to v586 the one made alone, the others the default lines) */
   const list = cardList(s.analyses, M.KINDS);
   loadAnalyses(S, list || [{ id: 1, type: 'tauc' }], gone);
-  if (S.files.length) ['tauc', 'urbach'].forEach(t=> cards(S).filter(a=> a.type === t && panelOf(S, a).fresh).forEach(a=> panelOf(S, a).autoSuggestAll()));
 }
 // A card of a kind there is no more (the debug defect band, taken out) is left out
 // (deck.load), as are the settings a card kept for one (readAnalysis). A card kept
@@ -248,8 +246,8 @@ function makePanel(S, spec, card){
   P.clear = ()=>{ P.per = []; P.sharedVlines = {}; };
   P.fit = ()=> M.fitPer(P, S.files);
   P.snapshot = ()=> M.panelSnapshot(P);
-  // (fresh: the state put back a new card's, tauc-model.js restorePanel: restoreState suggests its lines)
-  P.restore = s0 =>{ P.fresh = M.restorePanel(U, spec, P, s0, S.files); P.syncModeButton(); };
+  // (a state of no lines a new card's: tauc-model.js awaiting, its lines suggested in setupAnalysis)
+  P.restore = s0 =>{ M.restorePanel(U, spec, P, s0, S.files); P.syncModeButton(); };
   wirePanel(S, P, V);
   return P;
 }
@@ -709,15 +707,20 @@ function slots(S){
 function stayOn(S, f){ const k = includedOf(S.allFiles).indexOf(f); if (k >= 0) S.currIndex = k; }
 
 /* ---- The files ---- */
+// The lines of the cards whose panel `which` takes suggested on the files there are, the Tauc
+// cards first: the Urbach ones are placed on their regions. → the cards.
+function suggestCards(S, which){
+  const got = ['tauc', 'urbach'].flatMap(t=> cards(S).filter(a=> a.type === t && which(panelOf(S, a))));
+  got.forEach(a=> panelOf(S, a).autoSuggestAll());
+  return got;
+}
 function filesDropped(S, had){
   S.allFiles.slice(had).forEach(fixedSpectrum);
-  afterFilesChange(S);
-  // Once, when the first data lands: propose optimal interval-line positions. The
-  // Tauc cards go first: the Urbach ones are placed on their regions.
+  afterFilesChange(S, !had);
+  // Once, when the first data lands: propose optimal interval-line positions, every card's (a
+  // step of its own, after the files').
   if (!had && S.files.length){
-    quietly(S, ()=> ['tauc', 'urbach'].forEach(t=> cards(S).filter(a=> a.type === t).forEach(a=>{
-      const P = panelOf(S, a); P.autoSuggestAll(); P.writeStoreToInputs(); P.update();
-    })));
+    quietly(S, ()=> suggestCards(S, ()=> true).forEach(a=>{ const P = panelOf(S, a); P.writeStoreToInputs(); P.update(); }));
     cards(S).forEach(a=> see(S, a));
     S.deck.refreshNames();
     renderResView(S);
@@ -726,22 +729,26 @@ function filesDropped(S, had){
 }
 
 const SHOWN = ['taucAnalyses','taucResults'];
-function afterFilesChange(S){
+// (`first`: the first files dropped, every card's lines suggested after them: filesDropped)
+function afterFilesChange(S, first){
   S.kit.showFiles();
-  if (S.files.length) setupAnalysis(S);
+  if (S.files.length) setupAnalysis(S, first);
   else { SHOWN.forEach(id=> S.$(id).style.display='none'); S.deck.refreshNames(); }
   S.kit.commit(); // baseline + file add/remove/reorder/palette
 }
 
 // Energy axis is hc/λ (tauc-model.js HC, hvOf) — each file stays on its own native grid.
-function setupAnalysis(S){
+function setupAnalysis(S, first){
   S.allFiles.forEach(M.withHv);
   if (S.currIndex >= S.files.length) S.currIndex = S.files.length-1;
   if (S.currIndex < 0) S.currIndex = 0;
   SHOWN.forEach(id=> S.$(id).style.display='block');
   // Every panel fitted to the files before any is drawn: an Urbach card's band is
-  // read off its reference, which may sit below it.
+  // read off its reference, which may sit below it. A card waiting for its lines (a card added,
+  // or a project opened, with every file left out: tauc-model.js awaiting) has them suggested
+  // as soon as there is a file, as a card added with files has (v589: to v588 the default lines).
   livePanels(S).forEach(p=> p.fit());
+  if (!first) suggestCards(S, P => M.awaiting(U, P));
   quietly(S, ()=> livePanels(S).forEach(p=>{
     p.writeStoreToInputs();      // reflect the current sample's params in the inputs
     p.syncModeButton();

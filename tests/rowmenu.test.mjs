@@ -571,6 +571,34 @@ test('v587: XRPD\'s peaks table: a row\'s menu of its ×, named by its peak; the
   } finally { await close(); }
 });
 
+/* v589: a manual peak's row (its grey tint, style.css) lit while its menu is open, as any peak's
+   row is (to v588 its tint won: the manual peak's rule more specific than the menu's), the
+   pointer away from both rows; its tint back as the menu closes. */
+test('v589: XRPD\'s peaks table: a manual peak\'s row lit while its menu is open, as any row\'s', async ()=>{
+  const { page, errors, close } = await env.page();
+  const T = '#xrdA1PeakTableWrap', bg = async loc =>{ await page.mouse.move(2, 2); await page.waitForTimeout(250); return loc.evaluate(r=> getComputedStyle(r).backgroundColor); };
+  try {
+    await load(page, 'xrd');
+    // A peak added by hand: + Add peak, a press on the plot.
+    await page.click('#xrdA1AddPeak');
+    const box = await page.locator('#xrdA1Svg').boundingBox();
+    await page.mouse.click(box.x + box.width*0.37, box.y + box.height*0.5); await settle(page);
+    const man = page.locator(`${T} tr.peak-row.manual-peak`), auto = page.locator(`${T} tr.peak-row:not(.manual-peak)`).first();
+    assert.equal(await man.count(), 1, 'a manual peak');
+    const tint = await bg(man), rest = await bg(auto);
+    assert.notEqual(tint, rest, 'its grey tint');
+    await auto.locator('td').nth(1).click({ button: 'right' });
+    const lit = await bg(auto);
+    assert.notEqual(lit, rest, 'a row lit while its menu is open');
+    await page.keyboard.press('Escape');
+    await man.locator('td').nth(1).click({ button: 'right' });
+    assert.deepEqual([await opened(page), await man.evaluate(r=> r.classList.contains('menu-on')), await bg(man)], [1, true, lit], 'the manual peak\'s: lit as any row\'s');
+    await page.keyboard.press('Escape');
+    assert.equal(await bg(man), tint, 'its tint back');
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
 test('v587: Iodometry\'s standards: a row\'s menu of its ×, red; the item removes the standard as its × does; Escape closes the menu, not the window', async ()=>{
   const { page, errors, close } = await env.page();
   const CAL = '.iodo-cal:not([style*="none"])', ROW = k => page.locator(`${CAL} .iodo-std tbody tr`).nth(k);

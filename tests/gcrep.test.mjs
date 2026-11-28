@@ -74,6 +74,19 @@ const rows = text => parseCsv(text.replace(/^﻿/, ''), ';');
 const mean = a => a.reduce((s, v)=> s + v, 0)/a.length;
 const sd = a =>{ const m = mean(a); return Math.sqrt(a.reduce((s, v)=> s + (v - m)**2, 0)/(a.length - 1)); };
 const near = (a, b, what, tol = 1e-9)=> assert.ok(Math.abs(a - b) <= tol*Math.abs(b), `${what}: ${a} for ${b}`);
+/* mean_rates.csv's rows without the rates as measured (µmol h⁻¹, v589: beside each normalised
+   one, its SD too), and those checked against them: every file at 15 mg, 0.015 times each. */
+const normed = rs => rs.map(x=> x.filter((_, j)=> !rs[0][j].endsWith(' (umol h^-1)')));
+function measured15(rs){
+  let n = 0;
+  rs[0].forEach((h, j)=>{
+    if (!h.endsWith(' (umol h^-1)')) return;
+    const k = rs[0].indexOf(h.replace('(umol h^-1)', '(umol g^-1 h^-1)'));
+    // (each to 6 decimals: within half the last of each)
+    for (const x of rs.slice(1)){ assert.equal(x[j] === '', x[k] === '', h); if (x[j] !== ''){ assert.ok(Math.abs(x[j] - 0.015*x[k]) <= 6e-7, `${h}: ${x[j]}, over 15 mg ${x[k]}`); n++; } }
+  });
+  assert.ok(n > 0, 'the rates as measured');
+}
 
 test('the Sample column: each file its own, a select of its own name and the heads\'; no chains; a group taken along; a head removed; a label renamed; undo and redo', async ()=>{
   const { page, errors, close } = await env.page();
@@ -191,7 +204,8 @@ test('the bars, one per sample: the mean of its files\' rates ± their standard 
     assert.match(await page.$eval('#tab-gc .an-instr', e=> e.textContent),
       /\. With replicates \(a sample of more than one included file\), mean_rates\.csv has a row per sample \(each gas's mean, ± and n\) and mean_rates_by_file\.csv a row per file, as mean_rates\.csv has without them\./);
     const T0 = z0['mean_rates.csv'];
-    assert.equal(rows(T0)[0].join('|'), 'Sample|Mean H2 Production Rate (umol g^-1 h^-1)|Mean O2 Production Rate (umol g^-1 h^-1)|Interval duration (h)|p (atm)|T (°C)');
+    assert.equal(rows(T0)[0].join('|'), 'Sample|Mean H2 Production Rate (umol h^-1)|Mean H2 Production Rate (umol g^-1 h^-1)|Mean O2 Production Rate (umol h^-1)|Mean O2 Production Rate (umol g^-1 h^-1)|Interval duration (h)|p (atm)|T (°C)');
+    measured15(rows(T0));
     // beta and gamma replicates of alpha.
     await pick(page, 1, 'alpha.csv'); await pick(page, 2, 'alpha.csv');
     const h2 = ['alpha.csv', 'beta.csv', 'gamma.csv'].map(k=> r[k].h2), o2 = ['alpha.csv', 'gamma.csv'].map(k=> r[k].o2);
@@ -205,12 +219,13 @@ test('the bars, one per sample: the mean of its files\' rates ± their standard 
     let z = await zip(page);
     assert.equal(z['mean_rates_by_file.csv'], T0, 'mean_rates_by_file.csv: mean_rates.csv as it was');
     let m = rows(z['mean_rates.csv']);
-    assert.deepEqual(m[0], ['Sample', 'Mean H2 Production Rate (umol g^-1 h^-1)', 'H2 SD (umol g^-1 h^-1)', 'H2 n',
-      'Mean O2 Production Rate (umol g^-1 h^-1)', 'O2 SD (umol g^-1 h^-1)', 'O2 n', 'Interval duration (h)', 'p (atm)', 'T (°C)']);
-    const dur = rows(T0)[1][3];
-    assert.deepEqual(m.slice(1), [
+    assert.deepEqual(m[0], ['Sample', 'Mean H2 Production Rate (umol h^-1)', 'H2 SD (umol h^-1)', 'Mean H2 Production Rate (umol g^-1 h^-1)', 'H2 SD (umol g^-1 h^-1)', 'H2 n',
+      'Mean O2 Production Rate (umol h^-1)', 'O2 SD (umol h^-1)', 'Mean O2 Production Rate (umol g^-1 h^-1)', 'O2 SD (umol g^-1 h^-1)', 'O2 n', 'Interval duration (h)', 'p (atm)', 'T (°C)']);
+    measured15(m);
+    const dur = rows(T0)[1][5];
+    assert.deepEqual(normed(m).slice(1), [
       ['alpha', mean(h2).toFixed(6), sd(h2).toFixed(6), '3', mean(o2).toFixed(6), sd(o2).toFixed(6), '2', dur, '1', '25'],
-      ['delta', r['delta.csv'].h2.toFixed(6), '', '1', r['delta.csv'].o2.toFixed(6), '', '1', rows(T0)[4][3], '1', '25']]);
+      ['delta', r['delta.csv'].h2.toFixed(6), '', '1', r['delta.csv'].o2.toFixed(6), '', '1', rows(T0)[4][5], '1', '25']]);
     // The composer: the bars with their error bars (a vertical line, a cap at each end).
     const whiskers = async ()=>{
       await page.locator('#gc1SvgBar').scrollIntoViewIfNeeded();
@@ -232,7 +247,7 @@ test('the bars, one per sample: the mean of its files\' rates ± their standard 
     near(b[0].bars[H2][0], mean(h2b), 'H₂ mean, gamma left out'); near(errOf(b[0], H2), sd(h2b), 'H₂ ± (n = 2)', 1e-7);
     assert.deepEqual([b[0].bars[O2][0], errOf(b[0], O2)], [r['alpha.csv'].o2, null], 'O₂ of alpha alone, no error bar');
     m = rows((await zip(page))['mean_rates.csv']);
-    assert.deepEqual(m[1].slice(0, 7), ['alpha', mean(h2b).toFixed(6), sd(h2b).toFixed(6), '2', r['alpha.csv'].o2.toFixed(6), '', '1']);
+    assert.deepEqual(normed(m)[1].slice(0, 7), ['alpha', mean(h2b).toFixed(6), sd(h2b).toFixed(6), '2', r['alpha.csv'].o2.toFixed(6), '', '1']);
     // The head left out: named after beta, its first included file.
     await flip(page, 2); await flip(page, 0);
     b = await bars(page);

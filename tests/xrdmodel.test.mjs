@@ -96,11 +96,11 @@ test('a file read again: by its bytes (once), its arrays theirs whatever it held
   assert.equal(read.n, 1, 'read once');
   // other arrays held: the bytes' (the scan's own, shared), nothing said
   const moved = M.readAgain(U, { name: 'a.XML', rawBytes: b, x: [1, 2, 3], y: [4, 5, 6] });
-  assert.deepEqual([moved.x, moved.y, moved.varMul, H.openedNote(moved)], [same.x, same.y, same.varMul, '']);
+  assert.deepEqual([moved.x, moved.y, moved.varMul, H.openedNote(moved, M.keptScans)], [same.x, same.y, same.varMul, '']);
   assert.equal(M.readAgain(U, { name: 'a.xrdml', rawBytes: b, scan: 1, x: [4, 5, 6, 7], y: [1, 2, 3, 4] }).y.join(), '1,2,3');
   assert.equal(M.readAgain(U, { name: 'a.xrdml', rawBytes: b, scan: 7, x: [3, 2], y: [1, 2] }).x.join(), '2,3');
   // no bytes: its arrays as held, said so
-  assert.equal(H.openedNote(M.readAgain(U, { name: 'a.txt', y: [0, 1], x: [1, 2] })), 'its bytes are not stored: its data are those the project holds');
+  assert.equal(H.openedNote(M.readAgain(U, { name: 'a.txt', y: [0, 1], x: [1, 2] }), M.keptScans), 'its bytes are not stored: its data are those the project holds');
   assert.equal(M.readAgain(U, { name: 'b.xrdml', rawBytes: enc('<no'), y: [1, 1], x: [1, 2] }).y.join(), '1,1');
   const bad = enc('q'); M.keepScans(bad, [{ error: 'x' }]); read.n = 0; M.readAgain(U, { name: 'c.xrdml', rawBytes: bad, x: [1, 2], y: [1, 2] }); assert.equal(read.n, 0);
   // as a restore takes it
@@ -150,7 +150,7 @@ test('an old project: bytes as numbers none, entries under an old key none (v583
   assert.doesNotThrow(()=>{ f = M.keptFile(U, { name: 'a.xrdml', label: 'mine', rawBytes: [...b], x: [1, 2, 3], y: [4, 5, 6], included: false, held: { 'kA1:params': { w: 3 } } }, 0, '#1'); });
   // no bytes: not read, its data the project's, said so; its label its own
   assert.deepEqual([f.rawBytes, f.x, f.y, f.label, read.n, M.keptScans(f)], [null, [1, 2, 3], [4, 5, 6], 'mine', 0, null]);
-  assert.equal(H.openedNote(f), 'its bytes are not stored: its data are those the project holds');
+  assert.equal(H.openedNote(f, M.keptScans), 'its bytes are not stored: its data are those the project holds');
   // its entries under the old key: none read (the slot's default made, a new one's: v587), those under the key of now kept
   const s = { perParams: [], manualPeaks: [], removedPeaks: [], shared: { pkHeight: 2 } }, [params] = M.keptSlots('A1', s);
   assert.deepEqual([params.make(f.held[params.key], f), params.make({ w: 5 }, f)], [{ pkHeight: 2, blOn: true }, { w: 5 }]);
@@ -172,7 +172,7 @@ test('an old project: before the cards, arrays read otherwise, no CIFs: a new pr
   // the files read again from their bytes, the arrays theirs; the standard named a sample; none of no bytes left out
   assert.deepEqual(R.reads.map(r=> [r.name, r.y.join(), 'oldData' in r]), [['a.xrdml', '5,6,7', false], ['std.xrdml', '5,6,7', false], ['c.xrdml', '0,4,5', false]]);
   assert.deepEqual([R.stdRead, R.lost, M.curIdxOf(old, R.gone, 3)], [null, 0, 1]);
-  assert.deepEqual(R.reads.map(H.openedNote), ['', '', 'its bytes are not stored: its data are those the project holds']);
+  assert.deepEqual(R.reads.map(r=> H.openedNote(r, M.keptScans)), ['', '', 'its bytes are not stored: its data are those the project holds']);
   // a new project's cards, of no settings: the old ones ignored
   assert.deepEqual(M.cardsIn(U, old), [{ id: 1, type: 'scherrer' }, { id: 2, type: 'rietveld' }]);
   assert.deepEqual(cards, [{ states: {} }, { states: {} }]);
@@ -186,19 +186,35 @@ test('an old project: before the cards, arrays read otherwise, no CIFs: a new pr
    measurement by what it holds (xrd.js readFile), so a file dropped under another name loaded
    (a .txt, none, an .xy, a .csv, a .raw, a .ras): its arrays its bytes', read once, kept by them.
    Bytes that do not read (columns of numbers, as an .xy holds): its arrays as held, why said
-   under the drop zone as of any file (fileNotes, the same check: "scan 1 not read: …"). To v586
-   a file not named .xrdml or .xml was not read again: its arrays as held, nothing said. */
-test('a file read again from its bytes whatever its name; bytes that do not read, its arrays as held and why said (v587)', ()=>{
+   under the drop zone (fileNotes). To v586 a file not named .xrdml or .xml was not read again:
+   its arrays as held, nothing said. v589: said as every module says a project's file whose bytes
+   no longer read (alerts.js heldLine, U8): why, and its data those the project holds (to v588
+   "scan 1 not read: …" as of a scan a drop left out, its data unsaid); a reader that throws, why
+   through alerts.js thrownWhy ("could not be read: …"); a file of several scans whose bytes do
+   not read at all, each pattern said so with its why (to v588 the others "no such scan"). */
+test('a file read again from its bytes whatever its name; bytes that do not read, its arrays as held, why and its data the project\'s said (v587, v589)', ()=>{
   const b = enc(JSON.stringify({ scans: [scan([1, 2, 3], [5, 6, 7])] })), xy = enc('10 5\n11 6\n');
   read.n = 0;
   for (const name of ['scan.txt', 'scan', 'scan.xy', 'scan.csv', 'scan.raw', 'scan.ras']){
     const f = M.readAgain(U, { name, rawBytes: b, x: [1, 2, 3], y: [4, 5, 6] });
-    assert.deepEqual([f.x, f.y, H.openedNote(f)], [[1, 2, 3], [5, 6, 7], ''], name);
+    assert.deepEqual([f.x, f.y, H.openedNote(f, M.keptScans)], [[1, 2, 3], [5, 6, 7], ''], name);
   }
   assert.equal(read.n, 1, 'read once, kept by its bytes');
   const g = M.readAgain(U, { name: 'p.xy', label: 'P', rawBytes: xy, x: [10, 11], y: [5, 6] });
-  assert.deepEqual([g.x, g.y, H.openedNote(g)], [[10, 11], [5, 6], '']);
-  assert.deepEqual(H.fileNotes([g], null, M.keptScans, HU).map(n=> [n.what, n.line]), [['check', 'p.xy: scan 1 not read: not well-formed XML.']]);
+  const held = why => `its bytes no longer read: ${why}: its data are those the project holds`;
+  assert.deepEqual([g.x, g.y, H.openedNote(g, M.keptScans)], [[10, 11], [5, 6], held('not well-formed XML')]);
+  assert.deepEqual(H.fileNotes([g], null, M.keptScans, HU).map(n=> [n.what, n.line]), [['opened', `P: ${held('not well-formed XML')}.`]]);
+  // A reader that throws: why, as a drop says it (thrownWhy), escaped where it is said.
+  const T = { ...U, scansOf: ()=>{ throw new Error('no <xrdMeasurements>'); } }, tb = enc('<thrown/>');
+  const t = M.readAgain(T, { name: 't.xrdml', label: 'T', rawBytes: tb, x: [10, 11], y: [1, 2] });
+  assert.deepEqual([t.y, H.openedNote(t, M.keptScans)], [[1, 2], held('could not be read: no <xrdMeasurements>')]);
+  assert.deepEqual(H.fileNotes([t], null, M.keptScans, HU).map(n=> n.line), [`T: ${held('could not be read: no &lt;xrdMeasurements&gt;')}.`]);
+  // A file of two scans whose bytes do not read at all: each pattern held, said with the file's why.
+  const two = enc('two scans, unread'), pats = [0, 1].map(k=> M.readAgain(U, { name: `w (scan ${k + 1}).xrdml`, label: `W ${k + 1}`, src: 'w.xrdml', scan: k, rawBytes: two, x: [1, 2], y: [k, k] }));
+  assert.deepEqual(H.fileNotes(pats, null, M.keptScans, HU).map(n=> [n.what, n.line]), [['opened', `W 1: ${held('not well-formed XML')}.`], ['opened', `W 2: ${held('not well-formed XML')}.`]]);
+  // (a scan of a file read that no pattern holds: said as a drop's, as ever)
+  const part = enc(JSON.stringify({ scans: [scan([1, 2], [3, 4]), { error: 'no scan data' }] })), p1 = M.readAgain(U, { name: 'q (scan 1).xrdml', label: 'Q', src: 'q.xrdml', scan: 0, rawBytes: part, x: [1, 2], y: [0, 0] });
+  assert.deepEqual(H.fileNotes([p1], null, M.keptScans, HU).map(n=> [n.what, n.line]), [['read', 'q.xrdml: 2 scans, 1 of them loaded, each a pattern of its own.'], ['check', 'q.xrdml: scan 2 not read: no scan data.']]);
 });
 
 test('the cards\' states: slots, a run\'s results patched in, what it shows', ()=>{

@@ -16,7 +16,7 @@
    parsed as XML, xrd-instr.js readXrdmlScans' scans, or why not).
 ========================================================= */
 import { fixed, own } from './db.js';
-import { keepSeen } from './alerts.js';
+import { keepSeen, thrownWhy } from './alerts.js';
 import { cifRef, cifIn, newEntry } from './xrd-peaks-model.js';
 
 /* A file's scans as read, kept by its bytes for every instance (the file's bytes are the
@@ -30,6 +30,10 @@ export const keepScans = (bytes, scans)=>{ reread.set(bytes, scans); };
 // The scans a pattern's file was read into, kept by its bytes (what the reading said of it,
 // xrd-html.js fileNotes); null where none are (no bytes).
 export const keptScans = f => f.rawBytes && typeof f.rawBytes === 'object' ? reread.get(f.rawBytes) || null : null;
+/* A pattern's scan among those its file was read into (`all`): its own (f.scan; the first,
+   none given), or why it has none (its file not read at all: why; v589: to v588 every pattern
+   but the first of such a file "no such scan"). */
+export const scanOf = (all, f)=> all[Number.isInteger(f.scan) && f.scan >= 0 ? f.scan : 0] || (all.length === 1 && all[0].error ? all[0] : { error: 'no such scan' });
 
 /* ---- A file read, and a state put back (pure: the module's, for every instance) ---- */
 // A scan run downwards (start above end) turned round: the plots, the peak search and
@@ -73,7 +77,9 @@ export const freshOf = (r, existing)=> r.pats.filter(q=> !(q.f.src && existing.h
 /* Restored, a file is read again from its own bytes (rawBytes), as a file loaded now is:
    its arrays those of its scan, whatever the project held; one whose bytes were not kept,
    or do not read as that scan, is used as it was (said under the drop zone: xrd-html.js
-   openedNote, fileNotes). The readings are kept by their bytes, so an undo does not read a
+   openedNote, fileNotes: its bytes no longer read, why, its data those the project holds). A
+   reader that throws gives why (alerts.js thrownWhy, as a drop's, v589: to v588 its message
+   alone). The readings are kept by their bytes, so an undo does not read a
    file again. A pattern is its scan of the file (f.scan; the first, none given), so a file
    of several gives its scans again, in their order. (reread: the module's, above) Whatever
    its name: the reader takes an XRDML measurement by what it holds (xrd.js readFile; v587: to
@@ -83,10 +89,10 @@ export function readAgain(U, f){
   if (!(b instanceof Uint8Array)) return fixedArrs(ascending({ ...f }));
   let all = reread.get(b);
   if (!all){
-    try { all = U.scansOf(b); } catch (e){ all = [{ error: String(e && e.message || e) }]; }
+    try { all = U.scansOf(b); } catch (e){ all = [{ error: thrownWhy(e) }]; }
     reread.set(b, all);
   }
-  const sc = all[Number.isInteger(f.scan) && f.scan >= 0 ? f.scan : 0] || { error: 'no such scan' };
+  const sc = scanOf(all, f);
   if (sc.error) return fixedArrs(ascending({ ...f }));
   const { varMul: _, ...rest } = f, a = scanArrays(sc);
   return { ...rest, x: a.x, y: a.y, ...(a.varMul ? { varMul: a.varMul } : {}) };

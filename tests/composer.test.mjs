@@ -92,18 +92,13 @@ const drawnFig = page => page.evaluate(()=> document.querySelector('.fig-backdro
 const tickLabels = page => page.evaluate(()=> [...document.querySelectorAll('.fig-backdrop .fig-svg text')].map(t=> t.textContent));
 const floatRule = page => page.evaluate(()=> { const r = document.querySelector('.field-rule-float'); return r ? r.textContent : null; });
 const shown = (page, at)=> page.locator(`.fig-backdrop input[${at}]`).inputValue();
-/* A control brought into view first, its scroll's event let go by: a scroll closes the
-   floating rule (utils.js flashFieldInvalid), and one Playwright makes as it clicks comes
-   after the click's handler has put the rule up. */
-async function inView(page, el){
-  await el.scrollIntoViewIfNeeded();
-  await settle(page);
-  return el;
-}
-// A number typed into a field and committed with Enter (bounded: to v565 the tab hung there);
-// then a pause past the history's 250 ms, so that each edit is a step of its own.
+/* A number typed into a field and committed with Enter (bounded: to v565 the tab hung there);
+   then a pause past the history's 250 ms, so that each edit is a step of its own. The field
+   where it is, Playwright scrolling it into view as it fills it (v589: to v588 brought into
+   view first, its scroll's event let go by, which a frame late took the floating rule away:
+   v587's utils.js movedSince keeps it through the scroll that brings its field into view). */
 async function commitNum(page, at, v){
-  const f = await inView(page, page.locator(`.fig-backdrop input[${at}]`));
+  const f = page.locator(`.fig-backdrop input[${at}]`);
   await f.fill(v);
   await f.press('Enter', { timeout: 10000 });
   await settle(page);
@@ -112,7 +107,7 @@ async function commitNum(page, at, v){
 // A checkbox or a button clicked (a series' own checkbox, drawn as an icon, by its label).
 async function tick(page, at, tag = 'input'){
   const box = page.locator(`.fig-backdrop ${tag}[${at}]`);
-  await (await inView(page, (await box.isVisible()) ? box : box.locator('xpath=..'))).click();
+  await ((await box.isVisible()) ? box : box.locator('xpath=..')).click();
   await settle(page);
   await page.waitForTimeout(300);
 }

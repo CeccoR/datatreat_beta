@@ -234,7 +234,17 @@ was proposed; nothing here is in the code yet.
   red under it, the value before kept, no step of the history), a sample with none takes the
   default, 15 mg (the masses' to v580) and 1 cm² (the areas' since v540), a project's value
   none or missing too. The not-normalised path, its info and the empty value's handling
-  (utils.js guardNumericInput's `blank`) are gone.
+  (utils.js guardNumericInput's `blank`) are gone. v589 (the user's decision, done): **None** in
+  the m column's header, the card's choice beside m and A: no normalisation, the plots and the
+  bars in µmol h⁻¹ and µmol, the column's cells — and taking nothing (disabled, nothing wired,
+  nothing refused: v585's required value applies with m or A alone), its all/one pill not
+  pressed; the masses and the areas kept, with their all/one, given back as m or A is chosen
+  again; one step, saved, a project of none m. And the rates as measured always in the CSVs:
+  `gc_raw.csv` and `gc_results.csv` each gas's `Production Rate (umol h^-1)` and `Production
+  (umol)` (gc_raw.csv's flow column, `H2 (umol h^-1)` to v588, renamed so), `mean_rates.csv` each
+  mean as measured (and its SD with replicates), the normalised columns beside them with m or A;
+  `gc_info.csv` with no m or A column with None. The Production Rate card has no table of results
+  on the page (its Results are plots and the bar chart): its results' tables are those CSVs.
 - **The parameter table's least width (v581, done in v582).** m's header a select of m or A
   (v581) took the table from 1000 px to 1060, the parameters scrolling sideways below it. From
   v582 its select is in a compact type (11 px) and the columns are shared again (m 132 px, the
@@ -279,7 +289,7 @@ was proposed; nothing here is in the code yet.
 
 ## General
 
-- **Backward compatibility under the rule (CLAUDE.md, v583, v586, v587 and v588: stages 1 to 3 of 4 done).**
+- **Backward compatibility under the rule (CLAUDE.md, v583, v586 to v589: stages 1 to 3 of 4 done).**
   An old project is opened by redoing the calculations with the current engine, from the
   parameters that still exist and the original data; no code is kept for old formats. An
   inventory of the code for old projects, made on v576 (outside the repository), staged it in
@@ -334,10 +344,21 @@ was proposed; nothing here is in the code yet.
   by an older version without its GC table", the standards named by column and a table naming them
   gone: normKey, noTrap, inCal, calNotes). With no standards the window keeps nothing of those
   removed, hidden or not (v585 left their rows under the drop zone). Kept as the current format:
-  the overview's gas saved as a list of one (every version from v544 writes it). Left: stage 4
-  (Rietveld's results recomputed at their refined parameters; with it the instruments' and
-  results' messages saved as words alone, xrd-rv-model.js msgOf, INSTR_INFO). Kept by decision: a
-  DRS card's lines saved without the `suggested` flag are the user's, not suggested again.
+  the overview's gas saved as a list of one (every version from v544 writes it). Done in v589,
+  what v587 left: a DRS card waiting for its lines (none placed, none suggested: one added, or a
+  project's opened, with every file left out; v587 saved such a card with its flag false) has them
+  suggested as soon as a file is in, as a card added with files (tauc-model.js `awaiting`, tauc.js
+  setupAnalysis, the Tauc cards first; to v588 the default lines once a file was taken back in,
+  restoreState suggesting only as the project opened); an XRPD pattern whose bytes no longer read
+  as its scan says so as every module does (`{file}: its bytes no longer read: {why}: its data are
+  those the project holds.`, in the box *Opened, to check*; why a reader's that throws through
+  alerts.js `thrownWhy`; to v588 "scan 1 not read: …" as of a scan a drop left out, its data
+  unsaid, and a pattern whose scan the bytes do not hold, a hand-edited one's, unsaid);
+  xrd-model.js `scanOf`, a pattern's scan of a file not read at all its file's why (to v588 "no
+  such scan" but for the first). Left: stage 4 (Rietveld's results recomputed at their refined
+  parameters; with it the instruments' and results' messages saved as words alone, xrd-rv-model.js
+  msgOf, INSTR_INFO). Kept by decision: a DRS card's lines saved without the `suggested` flag are
+  the user's, not suggested again.
 
 - **Warnings and errors, reviewed by kind.** The map of every message the app shows was
   made again from the code at v565 (331 entries) and the rules agreed (R1–R4: a kind for
@@ -1001,7 +1022,12 @@ was proposed; nothing here is in the code yet.
   moves its field, as the menu does (`movedSince`, shared: the offsets of the page and of the
   boxes the row or field is in, not its box, which a refused field's shake moves); to v586 the
   scroll that brought the field into view, its event a frame late, took it away at once
-  (gcnorm's refusals took their fields into view first). Left, with actions of their rows but
+  (gcnorm's refusals took their fields into view first; composer.test.mjs's own workaround,
+  `inView`, gone in v589: its tests pass without it, test 9 failing without it on v586). Seen
+  then, done in v589: a manual peak's row stayed grey with its menu open, its tint's rule more
+  specific than the menu's (`tr.peak-row.menu-on`): the peaks' rows' menu rule now in the peak
+  table's rules, as specific as the tint and its hover and after them (the row↔peak link, after
+  it, still wins, as on any row). Left, with actions of their rows but
   no ×: the composer's series rows (draw, legend, colour, fill: settings, as the trace list's
   colour and name, which its menu leaves out), SEM's groups (the scale, Figure composer, an
   empty one's Remove) and the pickers' own palettes (a × each, in a popup that a press outside
