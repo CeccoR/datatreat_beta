@@ -287,20 +287,42 @@ test('an old project: an Urbach sample of no lines beside common ones, the defau
 
 /* v587: an Urbach card's common lines (an older version's, to v568) are no parameter any more:
    not read (the panel's common set none, the state saved holds none), not counted as lines
-   placed. Its state with no flag and no lines of its samples' own is a new card's: restorePanel
-   says so, and the page suggests its lines as for a card added (tauc.js restoreState;
-   drspoints): the lines of a new card. To v586 kept and counted as placed: the default lines.
+   placed. Its state with no flag and no lines of its samples' own is a new card's: awaiting
+   says so (v589: to v588 restorePanel's return), and the page suggests its lines as for a card
+   added (tauc.js setupAnalysis; drspoints): the lines of a new card. To v586 kept and counted as placed: the default lines.
    A Tauc card's common lines read as ever; a flag saved, as it says. */
 test('an old project: an Urbach card\'s common lines not read, its state of no lines a new card\'s (v587)', ()=>{
   const files = [loaded('drs1.csv', drsCsv({ Eg: 3.2 })), loaded('drs2.csv', drsCsv({ Eg: 2.9, A: 45, seed: 4 }))], L = { v1: 2.5, v2: 2.7 }, T4 = { v1: 2, v2: 3, v3: 1.5, v4: 1.9 };
-  const W = panel('urbach', files), T = panel('tauc', files), N = panel('urbach', files);
-  assert.deepEqual([W.restore({ mode: 'shared', sharedVlines: L, per: [{}, {}] }), W.suggested, W.sharedVlines, W.snapshot().sharedVlines], [true, false, {}, {}]);
+  const W = panel('urbach', files), T = panel('tauc', files), N = panel('urbach', files), waits = P => M.awaiting(U, P);
+  W.restore({ mode: 'shared', sharedVlines: L, per: [{}, {}] });
+  assert.deepEqual([waits(W), W.suggested, W.sharedVlines, W.snapshot().sharedVlines], [true, false, {}, {}]);
   W.autoSuggestAll(); N.autoSuggestAll();
-  assert.deepEqual(W.snapshot(), N.snapshot(), 'suggested: a new card\'s lines');
-  assert.deepEqual([W.restore({ sharedVlines: L, per: [{ vlines: { v1: 2, v2: 2.8 } }, {}] }), W.suggested], [false, true], 'a sample\'s own lines: placed');
-  assert.deepEqual([W.restore({ sharedVlines: L, per: [{}, {}], suggested: false }), W.suggested], [false, false], 'a flag saved');
-  assert.deepEqual([T.restore({ sharedVlines: T4 }), T.suggested, T.sharedVlines], [false, true, T4], 'a Tauc card\'s common lines');
-  assert.deepEqual([T.restore({}), T.suggested], [true, false]);
+  assert.deepEqual([W.snapshot(), waits(W)], [N.snapshot(), false], 'suggested: a new card\'s lines');
+  W.restore({ sharedVlines: L, per: [{ vlines: { v1: 2, v2: 2.8 } }, {}] });
+  assert.deepEqual([waits(W), W.suggested], [false, true], 'a sample\'s own lines: placed');
+  T.restore({ sharedVlines: T4 });
+  assert.deepEqual([waits(T), T.suggested, T.sharedVlines], [false, true, T4], 'a Tauc card\'s common lines');
+  T.restore({});
+  assert.deepEqual([waits(T), T.suggested], [true, false]);
+});
+
+/* v589: a card waiting for its lines (tauc-model.js awaiting): none placed and none suggested,
+   flag or none (a card added, or a project's put back, with no file to suggest from: v587 saved
+   it so, its flag false), its lines suggested by the page as soon as a file is there (tauc.js
+   setupAnalysis; oldprojects). Lines placed, the flag false (a card of v587 drawn with the
+   default lines and moved by hand), or the flag true with no lines: none suggested. To v588 a
+   flag false said nothing of it (restorePanel's `fresh`, no flag alone, and only as the project
+   opened with a file in). */
+test('a card waiting for its lines: none placed, none suggested, whatever its flag (v589)', ()=>{
+  const files = [loaded('drs1.csv', drsCsv({ Eg: 3.2 })), loaded('drs2.csv', drsCsv({ Eg: 2.9, A: 45, seed: 4 }))], waits = P => M.awaiting(U, P);
+  const W = panel('urbach', files), T = panel('tauc', files);
+  assert.equal(waits(T), true, 'a card made');
+  for (const [s, w] of [[{ per: [{}, {}], suggested: false }, true], [{ per: [] }, true], [{ per: [{ vlines: { v1: 2, v2: 2.8 } }, {}], suggested: false }, false], [{ per: [{}, {}], suggested: true }, false]]){
+    W.restore(s); assert.equal(waits(W), w, JSON.stringify(s));
+  }
+  T.restore({ sharedVlines: {}, per: [], suggested: false }); assert.equal(waits(T), true);
+  T.autoSuggestAll(); assert.equal(waits(T), false, 'suggested');
+  T.restore({ sharedVlines: { v1: 2, v2: 3, v3: 1.5, v4: 1.9 }, suggested: false }); assert.equal(waits(T), false, 'lines placed, its flag false');
 });
 
 /* v586: a file whose reader throws on its bytes as a project opens (made here by bytes no decoder

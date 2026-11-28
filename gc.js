@@ -379,9 +379,9 @@ function wireUnit(S, C, wrap){
     S.kit.commit();
   });
 }
-// What the rates are normalised by, m or A (its header, v581): the column shown again as the
-// one in force, the rates and their labels worked out anew, a step; the focus kept on the
-// select (an arrow key on it is a change at once).
+// What the rates are normalised by, m, A or none (its header, v581; none v589): the column
+// shown again as the one in force (none: — and nothing to type), the rates and their labels
+// worked out anew, a step; the focus kept on the select (an arrow key on it is a change at once).
 function wireNorm(S, C, wrap){
   const P = C.P, normIn = wrap.querySelector('.gc-norm');
   normIn.addEventListener('change', ()=>{
@@ -421,7 +421,7 @@ function wireNums(S, C, wrap){
   const P = C.P, all = sel => wrap.querySelectorAll(sel);
   /* m, or A where it is in force (v540): at least 0.001, as Q; empty, 0, below or no number
      refused (v585, the user's decision: every sample its value; v581–v584 took empty as none,
-     the rates then not normalised). */
+     the rates then not normalised). With None (v589) neither has a field: nothing wired. */
   all('.gcShared[data-f="m"]').forEach(inp=> P.mMode==='all' && wireNum(S, C, inp, v=> P.mShared=v));
   all('.gcShared[data-f="q"]').forEach(inp=> P.qMode==='all' && wireNum(S, C, inp, v=> P.qShared=v));
   all('.gcCell[data-f="m"]').forEach(inp=>{ if(P.mMode==='one'){ const i=+inp.dataset.i; wireNum(S, C, inp, v=> P.ms[i]=v); }});
@@ -615,7 +615,7 @@ function onGasChip(S, C, e){
 }
 
 /* ---- The card's plots ---- */
-// What the card's rates are in (gc-model.js NORM): by mass or by area.
+// What the card's rates are in (gc-model.js NORM): by mass, by area or as measured (none).
 const units = C => M.NORM[C.P.normBy];
 /* One line per sample per gas, the sample's colour throughout and the gas told by
    the dash pattern, so a sample stays recognisable across both gases. The name

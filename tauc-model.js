@@ -656,12 +656,20 @@ export const fitsOf = (U, spec, p, vl, c, hv)=> spec.windows.map(w=> scanRegr(U,
 export const fitPer = (P, files)=>{ if (P.per.length !== files.length) P.per = files.map((_,i)=> P.per[i] || {}); };
 const clonePer = p => ({...p, vlines: p && p.vlines ? {...p.vlines} : undefined});
 export const panelSnapshot = P =>({ mode: P.mode, shared: {...P.shared}, sharedVlines: {...P.sharedVlines}, per: P.per.map(clonePer), suggested: P.suggested });
+// Whether a card's lines were placed: the common ones, or a sample's own.
+const placedIn = (U, P)=> isFinite(P.sharedVlines.v1) || P.per.some(q=> U.isObj(q) && U.isObj(q.vlines));
+/* A card waiting for its lines: none placed, none suggested (a card added, or put back from a
+   state of none, while no file was there to suggest from, v589; a new card's state an older
+   version saved, v587). tauc.js setupAnalysis suggests them as soon as a file is there, as for
+   a card added with files (to v588 a card added with every file left out, or a project's
+   opened so, kept the default lines once a file was taken back in). */
+export const awaiting = (U, P)=> !P.suggested && !placedIn(U, P);
 /* A card's settings put back (each value as paramsIn, linesIn and perIn take it: a
    project read in may hold anything), the per-sample list then fitted to the files. A spec
    whose lines are each sample's own (Urbach) has no common set: one an older state holds (to
    v568 an Urbach card's lines were common) is no parameter any more, not read (v587: to v586
-   kept, and counted as lines placed). → whether the state is a new card's: no lines placed
-   and no flag saying so (tauc.js restoreState suggests them, as for a card added). */
+   kept, and counted as lines placed). A state of no lines placed and no flag saying so is a
+   new card's (awaiting its lines); one of lines and no flag, the user's (placed, kept). */
 export function restorePanel(U, spec, P, s0, files){
   const s = U.isObj(s0) ? s0 : {};
   P.mode = s.mode === 'per' ? 'per' : 'shared';   // older snapshots stored a per-field object
@@ -670,10 +678,8 @@ export function restorePanel(U, spec, P, s0, files){
   P.per = Array.isArray(s.per) ? s.per.map(q=> perIn(U, spec, q)) : files.map(()=>({}));
   // A state with no flag: the lines it holds, the common ones or a sample's own, are the
   // user's, placed (kept, not suggested again); none, not placed yet.
-  const placed = isFinite(P.sharedVlines.v1) || P.per.some(q=> U.isObj(q) && U.isObj(q.vlines));
-  P.suggested = s.suggested != null ? !!s.suggested : placed;
+  P.suggested = s.suggested != null ? !!s.suggested : placedIn(U, P);
   fitPer(P, files);
-  return s.suggested == null && !placed;
 }
 
 // The values of the parameters' fields (`raw(k)` a field's text), as they are taken:

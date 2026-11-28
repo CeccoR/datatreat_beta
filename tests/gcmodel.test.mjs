@@ -216,16 +216,19 @@ test('the flow, the rates and the production by hand, by mass and by area; the m
   const Pa = { ...M.newParams([f]), normBy: 'A', aShared: 2.5 };
   near(M.tablesOf(U, Pa, f, 0, Pa.lightOnDates[0]).gas.h2.Fm[3], flow/2.5, 1e-14, 'by area');
   /* v585 (the user's decision): m or A chosen (normBy), each its own values, every sample
-     its value: the rates always normalised by it, never as they flow (v581–v584's none gone,
-     its info, its µmol h⁻¹ and µmol). A value missing (a project's null or none, a sample
-     added) takes the default, 15 mg and 1 cm² (the masses' to v580). */
-  assert.deepEqual([M.PER, Object.keys(M.NORM)], [['m', 'A'], ['m', 'A']]);
+     its value: the rates normalised by it (v581–v584's none of a sample gone, its info). A
+     value missing (a project's null or none, a sample added) takes the default, 15 mg and 1
+     cm² (the masses' to v580). v589 (the user's decision): or none, the card's choice, the
+     rates as measured (µmol h⁻¹, µmol), the masses and the areas kept. */
+  assert.deepEqual([M.PER, Object.keys(M.NORM)], [['m', 'A', 'none'], ['m', 'A', 'none']]);
   assert.deepEqual([M.NORM.m.rateCsv, M.NORM.A.cumCsv, M.NORM.A.unitCsv], ['Production Rate (umol g^-1 h^-1)', 'Production (umol cm^-2)', 'umol cm^-2 h^-1']);
+  assert.deepEqual([M.NORM.none.rateCsv, M.NORM.none.cumCsv, M.NORM.none.unitCsv, M.NORM.none.col, M.NORM.none.rateSvg, M.NORM.none.cumSvg],
+    ['Production Rate (umol h^-1)', 'Production (umol)', 'umol h^-1', 'None', 'Production Rate (µmol h<tspan baseline-shift="super" font-size="8">-1</tspan>)', 'Production (µmol)']);
   const Pn = M.newParams([f, f]);
   M.restoreParams(U, Pn, { normBy: 'A', aMode: 'one', As: [2, null], startShared: 0.5, endShared: 1 }, [f, f]);
   assert.deepEqual([Pn.As, M.valOf(Pn, 1)], [[2, 1], 1], 'an area none: 1 cm²');
   const cn = card(Pn, [f, f]), info = csvOf(cn, 'gc_info.csv'), mr = csvOf(cn, 'mean_rates.csv');
-  assert.deepEqual([info[0][1], info[1][1], info[2][1], mr[0][1]], ['A (cm^2)', '2', '1', 'Mean H2 Production Rate (umol cm^-2 h^-1)']);
+  assert.deepEqual([info[0][1], info[1][1], info[2][1], mr[0].slice(1, 4)], ['A (cm^2)', '2', '1', ['Mean H2 Production Rate (umol h^-1)', 'H2 SD (umol h^-1)', 'Mean H2 Production Rate (umol cm^-2 h^-1)']]);
   near(cn.costResults[0].rate.h2, flow/2, 1e-9, 'its mean rate: the flow over its 2 cm²');
   near(cn.costResults[1].rate.h2, flow, 1e-9, 'the other\'s over 1 cm²');
   // The mean rate over [0.5, 1] h: the line integrated exactly, over the length.
@@ -241,12 +244,40 @@ test('the flow, the rates and the production by hand, by mass and by area; the m
   assert.equal(M.cumAt([0, 1], [1, 1], [0, 1], -1), 0); assert.equal(M.cumAt([0, 1], [1, 1], [0, 1], 5), 1);
   assert.equal(M.lineAt([0, 1, 2], [0, 10, 20], 1.5), 15);
   assert.deepEqual(M.spanOf(P, [0, 0.7, 2], 0), [0.5, 1]); assert.deepEqual(M.spanOf(P, [3], 0), [NaN, NaN]);
-  // The CSVs: the rates, the duration, p and T; the inputs as set.
+  // The CSVs: the rates, the duration, p and T; the inputs as set. Each gas's rate as measured
+  // (µmol h⁻¹), the normalised beside it (v589: to v588 the normalised alone).
   const mean = csvOf(c, 'mean_rates.csv');
-  assert.deepEqual(mean[0], ['Sample', 'Mean H2 Production Rate (umol g^-1 h^-1)', 'Mean O2 Production Rate (umol g^-1 h^-1)', 'Interval duration (h)', 'p (atm)', 'T (°C)']);
-  assert.deepEqual(mean[1].slice(3), ['0.5000', '1', '25']);
-  assert.equal(+mean[1][1], +rate.toFixed(6));
+  assert.deepEqual(mean[0], ['Sample', 'Mean H2 Production Rate (umol h^-1)', 'Mean H2 Production Rate (umol g^-1 h^-1)', 'Mean O2 Production Rate (umol h^-1)', 'Mean O2 Production Rate (umol g^-1 h^-1)', 'Interval duration (h)', 'p (atm)', 'T (°C)']);
+  assert.deepEqual(mean[1].slice(5), ['0.5000', '1', '25']);
+  assert.deepEqual([+mean[1][1], +mean[1][2]], [+flow.toFixed(6), +rate.toFixed(6)]);
+  near(c.costResults[0].raw.h2, flow, 1e-12, 'the mean rate as measured');
   assert.deepEqual(csvOf(c, 'gc_info.csv')[1], ['c', '15', '2', '25', '1', '2026-11-13 10:00', '0.5', '1', '60.6']);
+  // gc_raw.csv and gc_results.csv: each gas's rate and production as measured, the normalised
+  // beside them (v589: to v588 gc_raw.csv's flow alone, "H2 (umol h^-1)"); the production as
+  // measured from the interval's start, as the normalised one.
+  const L = '[c]', both = g => [`${g} Production Rate (umol h^-1) ${L}`, `${g} Production (umol) ${L}`, `${g} Production Rate (umol g^-1 h^-1) ${L}`, `${g} Production (umol g^-1) ${L}`];
+  assert.deepEqual(csvOf(c, 'gc_raw.csv')[0], [`Time (h) ${L}`, `H2 (%mol) ${L}`, ...both('H2'), `O2 (%mol) ${L}`, ...both('O2')]);
+  assert.deepEqual(csvOf(c, 'gc_results.csv')[0], [`Time (h) ${L}`, ...both('H2'), ...both('O2')]);
+  const cutF = M.cutTables(P, c.dataTables)[0].gas.h2;
+  assert.deepEqual([cutF.FInt[0], cutF.flow[0]], [0, cutF.flow[1]]);
+  near(cutF.FInt[cutF.FInt.length - 1], flow*0.5, 1e-12, 'the production as measured over the interval');
+  /* None (v589): the rates as measured, no normalised column; gc_info.csv names no m or A. The
+     same rates and production as the columns as measured with m (the same bits: over 1, times
+     1); the masses and the areas kept. */
+  const Pz = { ...M.newParams([f]), normBy: 'none', mShared: 7, aShared: 3, startShared: 0.5, endShared: 1 };
+  assert.deepEqual([M.normOf(Pz), M.valOf(Pz, 0), M.normOf(P) === M.NORM.m], [null, 1, true]);
+  const z = card(Pz, [f]), zq = z.dataTables[0].gas.h2;
+  assert.deepEqual([zq.Fm, zq.cum, zq.FmInt, z.costResults[0].rate], [zq.flow, zq.cumF, zq.FInt, z.costResults[0].raw], 'as measured');
+  near(z.costResults[0].rate.h2, flow, 1e-12, 'the flow\'s mean');
+  const zm = csvOf(z, 'mean_rates.csv'), mz = csvOf(c, 'gc_raw.csv'), mzc = csvOf(c, 'gc_results.csv');
+  assert.deepEqual(zm[0], ['Sample', 'Mean H2 Production Rate (umol h^-1)', 'Mean O2 Production Rate (umol h^-1)', 'Interval duration (h)', 'p (atm)', 'T (°C)']);
+  assert.deepEqual(zm[1], [mean[1][0], mean[1][1], mean[1][3], ...mean[1].slice(5)], 'mean_rates.csv: the rates as measured with m');
+  for (const [k, wm] of [['gc_raw.csv', mz], ['gc_results.csv', mzc]]){
+    const zr = csvOf(z, k), keep = wm[0].map((h, j)=> /g\^-1/.test(h) ? -1 : j).filter(j=> j >= 0);
+    assert.deepEqual(zr, wm.map(r=> keep.map(j=> r[j])), k + ': the columns as measured with m, none normalised');
+  }
+  assert.deepEqual(csvOf(z, 'gc_info.csv'), [['Sample', 'Q (mL/min)', 'T (°C)', 'p (atm)', 'Light-on', 'Interval start (h)', 'Interval end (h)', 'Injection delay (s)'], ['c', '2', '25', '1', '2026-11-13 10:00', '0.5', '1', '60.6']]);
+  assert.ok(!z.csvs.some(e=> /g\^-1|cm\^-2/.test(e.text)), 'no unit of m or A');
   // The ranges and the interval lines.
   const shown = M.shownGases(P, [f], 'a');
   assert.deepEqual(M.dataRange(U, P, c.dataTables, shown), [0, tEnd, 0, rate*1.05]);
@@ -257,9 +288,11 @@ test('the flow, the rates and the production by hand, by mass and by area; the m
   assert.equal(M.yTop([{ gas: { h2: { t: [-1, 0, 1], Fm: [9, 1, 2] } } }], [M.GASES[0]], 'Fm'), 2, 'from light-on on');
   assert.equal(M.yTop([{ gas: { h2: { t: [-2, -1], Fm: [9, 1] } } }], [M.GASES[0]], 'Fm'), 9, 'all, none after');
   // The mean by sample: the files' means, their SD (n − 1), n; one file: no ±.
-  const cr = [{ rate: { h2: 1 } }, { rate: { h2: 3 } }, { rate: { o2: 5 } }];
-  const sr = M.sampleRates(U, cr, [{ name: 'a', label: 'A', ks: [0, 1] }, { name: 'c', label: 'C', ks: [2] }]);
+  const cr = [{ rate: { h2: 1 }, raw: { h2: 10 } }, { rate: { h2: 3 }, raw: { h2: 30 } }, { rate: { o2: 5 }, raw: { o2: 50 } }], sams = [{ name: 'a', label: 'A', ks: [0, 1] }, { name: 'c', label: 'C', ks: [2] }];
+  const sr = M.sampleRates(U, cr, sams);
   assert.deepEqual(sr.map(s=> [s.rate.h2, s.err.h2, s.n.h2, s.rate.o2, s.err.o2, s.n.o2]), [[2, Math.SQRT2, 2, undefined, undefined, 0], [undefined, undefined, 0, 5, NaN, 1]]);
+  // (v589: those of the rates as measured)
+  assert.deepEqual(M.sampleRates(U, cr, sams, 'raw').map(s=> [s.rate.h2, s.err.h2, s.n.h2, s.rate.o2, s.n.o2]), [[20, 10*Math.SQRT2, 2, undefined, 0], [undefined, undefined, 0, 50, 1]]);
   assert.deepEqual(M.barSeries(M.GASES, sr).map(s=> [s.name, s.color, s.vals, s.errs]), [['H₂', '#3aa0ff', [2, undefined], [Math.SQRT2, undefined]], ['O₂', '#ff7a59', [undefined, 5], [undefined, NaN]]]);
   assert.equal(M.seriesName('A', M.GASES[1], M.GASES), 'A O₂'); assert.equal(M.seriesName('A', M.GASES[1], [M.GASES[1]]), 'A');
 });
@@ -464,10 +497,10 @@ test('the cards\' markup, the parameter table and the alerts, every label escape
   P.lightOnDates[0] = new Date(2026, 0, 1, 9);
   const t = H.paramTableHtml(P, [f], HU);
   assert.ok(t.includes('title="&lt;b&gt;&amp;&quot;">&lt;b&gt;&amp;&quot;</td>') && !t.includes('<b>&"'), 'the label escaped');
-  assert.equal((t.match(/<option /g) || []).length, 8, 'm/A and six units');
-  // (v581: m or A chosen in the m column's header, its options the column's names; no "Normalize by" on the delay's row)
-  assert.ok(t.includes('<option value="atm" selected>') && t.includes('<option value="m" selected>m (mg)</option><option value="A">A (cm²)</option>') && t.includes('class="gcDelayAuto" checked'));
-  assert.ok(t.includes('<th rowspan="2"><div class="gc-th"><span><select class="gc-norm" aria-label="Normalize the rates by m or A"') && !t.includes('Normalize by'), 'in the header, accessible by its name');
+  assert.equal((t.match(/<option /g) || []).length, 9, 'm/A/None and six units');
+  // (v581: m or A chosen in the m column's header, its options the column's names; no "Normalize by" on the delay's row; v589: None too)
+  assert.ok(t.includes('<option value="atm" selected>') && t.includes('<option value="m" selected>m (mg)</option><option value="A">A (cm²)</option><option value="none">None</option>') && t.includes('class="gcDelayAuto" checked'));
+  assert.ok(t.includes('<th rowspan="2"><div class="gc-th"><span><select class="gc-norm" aria-label="Normalize the rates by m, A or none"') && !t.includes('Normalize by'), 'in the header, accessible by its name');
   // (v582: in a compact type, its column 132 px, the table's least width 1000 px: gcp.test.mjs; to v581 136 px at 1060)
   assert.ok(t.includes('<col style="width:132px">') && /<select class="gc-norm"[^>]*font-size:11px/.test(t), 'its column wide enough for it, its type compact');
   assert.equal((t.match(/class="mode-chip gc-toggle"/g) || []).length, 6);
@@ -483,6 +516,16 @@ test('the cards\' markup, the parameter table and the alerts, every label escape
   // where one had none, the rates not normalised)
   assert.ok(H.paramTableHtml(P, [f], HU).includes('<input class="gcShared" data-f="a" type="text" inputmode="decimal" value="1"'), 'its 1 cm²');
   assert.ok(!H.cardBody({ id: 4 }, HU).includes('NormInfo') && !('normInfoHtml' in H) && !/not normalised|none \(/.test(H.gcInfo('') + H.paramTableHtml(P, [f], HU)));
+  /* v589: None: — in the column's every row, a field that takes nothing (disabled, no data-f:
+     gc.js wires none), its pill not pressed (m's, disabled), the select on None; the masses and
+     the areas as they were. */
+  P.normBy = 'none';
+  const tn = H.paramTableHtml(P, [f], HU), nCells = tn.match(/<input class="gc(Shared|Cell)" title="Not normalised: None is chosen in the header" type="text" inputmode="decimal" value="—" disabled/g) || [];
+  assert.equal(nCells.length, 2, 'the All row and the sample\'s');
+  assert.ok(!/data-f="[ma]"/.test(tn) && tn.includes('<option value="none" selected>None</option>'), 'no m or A field');
+  assert.ok(tn.includes('<button type="button" class="mode-chip gc-toggle" data-pair="m" title="No value to share or set per sample with None" disabled>all</button>'), 'its pill not pressed');
+  assert.equal((tn.match(/class="mode-chip gc-toggle"[^>]*title="Switch all \/ one">/g) || []).length, 5, 'the others as ever');
+  assert.match(H.gcInfo(''), /or <b>None<\/b>: the rates as measured, in µmol h⁻¹, and the production in µmol/);
   // The drop zone's alerts (v567, utils.js FILE ALERTS): one box to check (the pairs, the rows
   // left out, the empty cells), one of how the files were read (day/month, the alternative
   // export); each file's until its box's × marks it seen (v572, alerts.js).
@@ -588,8 +631,10 @@ test('the fixtures as v556\'s page analysed them, and 60 cases as v556\'s gc.js 
   const s = pageSession(), page = {};
   for (const [k, list] of Object.entries(s)) page[k] = list.map(e=> [e.name, sha(e.text)]);
   const got = { page, cases: cases().map(c=> sha(runCase(c))) };
-  // (the fixtures' mean rates to the digit, as v556's page wrote them)
-  assert.equal(s.two.find(e=> e.name.endsWith(' - mean_rates.csv')).text, 'Sample;Mean H2 Production Rate (umol g^-1 h^-1);Mean O2 Production Rate (umol g^-1 h^-1);Interval duration (h);p (atm);T (°C)\nalpha;1285.615928;534.818268;5.7668;1;25\nbeta;915.239971;;5.7668;1;25\n');
+  // (the fixtures' mean rates to the digit, as v556's page wrote them; v589: each as measured
+  // beside it, over 15 mg: 0.015 times it)
+  assert.equal(s.two.find(e=> e.name.endsWith(' - mean_rates.csv')).text, 'Sample;Mean H2 Production Rate (umol h^-1);Mean H2 Production Rate (umol g^-1 h^-1);Mean O2 Production Rate (umol h^-1);Mean O2 Production Rate (umol g^-1 h^-1);Interval duration (h);p (atm);T (°C)\n'
+    + 'alpha;19.284239;1285.615928;8.022274;534.818268;5.7668;1;25\nbeta;13.728600;915.239971;;;5.7668;1;25\n');
   if (UPDATE){ fs.writeFileSync(GOLDEN, JSON.stringify(got, null, 1) + '\n'); return; }
   const want = JSON.parse(fs.readFileSync(GOLDEN, 'utf8'));
   assert.deepEqual(got.page, want.page, 'the CSVs as v556\'s page wrote them');

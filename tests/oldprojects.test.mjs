@@ -12,7 +12,8 @@
    project from before the cards, the standard named among the samples, arrays an older version
    read, an instrument an older reader read; a Scherrer card's widths in points, the steps'
    note, no CIFs): a new project's cards, the arrays and the instrument read from the bytes,
-   the default widths, nothing said of the old ones. */
+   the default widths, nothing said of the old ones. v589: a DRS project opened with every file
+   left out, its cards waiting for their lines: suggested as a file is taken in. */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { start, openModule, loadFiles, settle, moduleState, exportProject, projectFile, importProject, openProject, download, readZip, banner, answer } from './helpers.mjs';
@@ -158,6 +159,34 @@ test('DRS: an Urbach card of common lines (to v568): its lines suggested as a ca
     assert.deepEqual([a.map(k=> [k.type, k.ref]), old.sharedVlines, old.suggested], [[['tauc', null], ['urbach', 1], ['urbach', 1]], {}, true]);
     assert.deepEqual(old.per.map(q=> q.vlines), added.per.map(q=> q.vlines), 'its lines a new card\'s');
     assert.ok(old.per.every(q=> q.vlines && Number.isFinite(q.vlines.v1)));
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+/* v589: a DRS project opened with every file left out, its cards waiting for their lines: the
+   Tauc card's state a new card's (no lines, no flag: the one made for a project with none, or an
+   older version's), an Urbach card's as v587 saved a card added with no file there (no lines, its
+   flag false). Hidden while no file is in; a file taken back in, their lines suggested as those
+   of the cards added now (to v588 the default lines: their suggestion only as the project
+   opened, with no file to suggest from). */
+test('DRS: a project opened with every file left out, its cards waiting for their lines: suggested as a file is taken in, as cards added now (v589)', async ()=>{
+  const { page, errors, close } = await env.page();
+  try {
+    await reopenOld(page, 'tauc', env.fx.files.tauc, 'DRS left out', st=>{
+      st.files.forEach(f=>{ f.included = false; f.held = {}; });
+      const t = st.analyses[0];
+      t.states = { tauc: { mode: 'shared', shared: {}, sharedVlines: {}, per: [] } };
+      st.analyses.push({ ...t, id: 2, type: 'urbach', ref: 1, refAuto: true, states: { urbach: { mode: 'shared', shared: {}, per: [], suggested: false } } });
+    });
+    assert.equal(await page.locator('#taucAnalyses').isVisible(), false, 'no file in: the cards hidden');
+    await page.locator('#taucFileTableWrap .incl-all').click(); await settle(page);
+    // Cards added now, on the same files: a Tauc card (3), an Urbach card read against it (4).
+    for (const k of ['tauc', 'urbach']){ await page.click('#taucAddAn'); await page.click(`.an-menu:not([hidden]) [data-kind="${k}"]`); await settle(page); }
+    const a = (await moduleState(page, 'tauc')).analyses, st = (i, k)=> a[i].states[k];
+    assert.deepEqual(a.map(x=> [x.id, x.type, x.ref]), [[1, 'tauc', null], [2, 'urbach', 1], [3, 'tauc', null], [4, 'urbach', 3]]);
+    assert.ok(Number.isFinite(st(2, 'tauc').sharedVlines.v1) && st(3, 'urbach').per.every(q=> q.vlines && Number.isFinite(q.vlines.v1)), 'the cards added: lines');
+    assert.deepEqual([st(0, 'tauc').suggested, st(0, 'tauc').sharedVlines], [true, st(2, 'tauc').sharedVlines], 'the Tauc card: a card added\'s lines');
+    assert.deepEqual([st(1, 'urbach').suggested, st(1, 'urbach').per.map(q=> q.vlines)], [true, st(3, 'urbach').per.map(q=> q.vlines)], 'the Urbach card: a card added\'s lines');
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });

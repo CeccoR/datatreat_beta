@@ -1672,7 +1672,7 @@ button.an-add:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .row-menu button[aria-disabled="true"] { opacity: .45; cursor: default; }
 .row-menu button[aria-disabled="true"]:hover { background: none; color: var(--text); }
 .file-row.menu-on > td { background: var(--panel2); }
-.rv-cif.menu-on, tr.peak-row.menu-on { background: var(--panel); }
+.rv-cif.menu-on { background: var(--panel); }
 .sess-row.menu-on { background: var(--line); }
 .xrd-std-row.menu-on { border-color: var(--accent); }
 :is(table.iodo-std tr, .fig-ser, .fig-panel, .fig-dgroup-h).menu-on { background: var(--panel2); border-radius: 6px; }
@@ -2445,6 +2445,12 @@ h5.instr-math-head { margin-top: 14px; padding-top: 10px; border-top: 1px solid 
 /* Manually added peaks: neutral grey tint (order matters: before hovering/selected) */
 .xrd-peak-wrap .peak-row.manual-peak, .peak-row.manual-peak { background: rgba(160, 170, 185, 0.14); }
 .xrd-peak-wrap .peak-row.manual-peak:hover, .peak-row.manual-peak:hover { background: rgba(160, 170, 185, 0.22); }
+/* The row whose menu is open (utils.js wireRowMenu, menu-on), lit as a row under the pointer, a
+   manual peak's too: as specific as its tint and its hover, after them (v589: to v588 one rule
+   with the other lists', tr.peak-row.menu-on, the manual peak's tint winning). The row↔peak
+   link, after it, still wins, as on any row. */
+.xrd-peak-wrap .peak-row.menu-on, .peak-row.menu-on,
+.xrd-peak-wrap .peak-row.manual-peak.menu-on, .peak-row.manual-peak.menu-on { background: var(--panel); }
 /* Temporary hover link (row↔peak): green, coherent with the hovered peak colour */
 .xrd-peak-wrap .peak-row.hovering, .peak-row.hovering,
 .xrd-peak-wrap .peak-row.manual-peak.hovering, .peak-row.manual-peak.hovering { background: rgba(95, 207, 106, 0.20); }

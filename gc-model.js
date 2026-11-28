@@ -6,7 +6,8 @@
    alternative .txt export, ppm as %mol; raw chromatograms told by what they hold); a file as
    a project holds it (a table, raw chromatograms, a pair); the replicates' links and
    samples; the pairs' rows; a card's parameters (all and one, the injection delay, mass or
-   area), its tables (each gas's times, flows, rates and production), its mean rates over
+   area or none), its tables (each gas's times, flows, rates and production, as measured and
+   normalised), its mean rates over
    the interval and by sample, the Results' series cut to the interval, what its plots draw
    (the ranges, the interval lines, the bars), its CSVs, its state saved and read back (a
    table read again from its bytes). Taken out of v556's gc.js with their operations in
@@ -20,7 +21,7 @@
    per-sample arrays ms, As, Qs, Ts, Ps, startArr, endArr, lightOnDates, aligned with the
    included samples (`files`), a mass or an area always above 0 (v585: to v584 null where its
    field was left empty, none); each parameter's all/one mode and shared value; what the rates
-   are normalised by (normBy, m or A), p's unit, the injection delay, and the gases each
+   are normalised by (normBy, m, A or none), p's unit, the injection delay, and the gases each
    section draws (gasSel).
 ========================================================= */
 import { textLines, readTable, parseNum, width, commonWidth, decodeText } from './textdata.js';
@@ -34,26 +35,31 @@ import { keepSeen, inKeys, heldLine, thrownWhy } from './alerts.js';
 // the matching CSV header.
 const SUP1 = '<tspan baseline-shift="super" font-size="8">-1</tspan>';
 const SUP2 = '<tspan baseline-shift="super" font-size="8">-2</tspan>';
-/* What a card's rates are normalised by (v540; v581 chosen in the m column's header, m or
-   A, its values each its own), one choice a card so that its plots and its bar chart never
-   mix units: the photocatalyst's mass m (mg), the rate in µmol g⁻¹ h⁻¹ and the production in
-   µmol g⁻¹, or, for a film, its area A (cm²), in µmol cm⁻² h⁻¹ and µmol cm⁻². Always one of
-   the two (v585, the user's decision: every sample has its value, a field refused empty; v581–
-   v584 left the rates in µmol h⁻¹ where a sample had none). All in µmol (from v541; by mass
-   mmol g⁻¹ h⁻¹ and mmol g⁻¹ to v540, the same quantity, its numbers now 1000 times those): a
-   gas's flow in µmol/h over the parameter as typed, times `per`, the parameter's units in one
-   of the rate's denominator — 1000 mg in a g (m mg is m/1000 g), 1 cm² in a cm². Each with its
+/* What a card's rates are normalised by (v540; v581 chosen in the m column's header, its
+   values each its own), one choice a card so that its plots and its bar chart never mix units:
+   the photocatalyst's mass m (mg), the rate in µmol g⁻¹ h⁻¹ and the production in µmol g⁻¹,
+   or, for a film, its area A (cm²), in µmol cm⁻² h⁻¹ and µmol cm⁻², or none (v589, the user's
+   decision: the rates as measured, µmol h⁻¹ and µmol; v585–v588 always m or A, v581–v584 not
+   normalised where a sample had no value). All in µmol (from v541; by mass mmol g⁻¹ h⁻¹ and
+   mmol g⁻¹ to v540, the same quantity, its numbers now 1000 times those): a gas's flow in
+   µmol/h over the parameter as typed, times `per`, the parameter's units in one of the rate's
+   denominator — 1000 mg in a g (m mg is m/1000 g), 1 cm² in a cm², 1 with none. Each with its
    labels, made alike: the axis titles (SVG), the CSV headers, the column of the parameter
-   table and of gc_info.csv. */
-const normOf = (per, svg, csv, col, colCsv)=> ({ per, col, colCsv,
-  rateSvg: `Production Rate (µmol ${svg} h${SUP1})`, cumSvg: `Production (µmol ${svg})`,
-  rateCsv: `Production Rate (umol ${csv} h^-1)`, cumCsv: `Production (umol ${csv})`, unitCsv: `umol ${csv} h^-1` });
-export const NORM = {
-  m: normOf(1000, `g${SUP1}`, 'g^-1', 'm (mg)', 'm (mg)'),
-  A: normOf(1, `cm${SUP2}`, 'cm^-2', 'A (cm²)', 'A (cm^2)'),
+   table (its select's option) and of gc_info.csv (none with none). */
+const unitsOf = (per, svg, csv, col, colCsv)=>{
+  const s = svg && ' ' + svg, c = csv && ' ' + csv;
+  return { per, col, colCsv, rateSvg: `Production Rate (µmol${s} h${SUP1})`, cumSvg: `Production (µmol${s})`,
+    rateCsv: `Production Rate (umol${c} h^-1)`, cumCsv: `Production (umol${c})`, unitCsv: `umol${c} h^-1` };
 };
-// The quantities the m column's header chooses between.
+export const NORM = {
+  m: unitsOf(1000, `g${SUP1}`, 'g^-1', 'm (mg)', 'm (mg)'),
+  A: unitsOf(1, `cm${SUP2}`, 'cm^-2', 'A (cm²)', 'A (cm^2)'),
+  none: unitsOf(1, '', '', 'None', ''),
+};
+// The choices of the m column's header (m first: a choice none or of no such name, m).
 export const PER = Object.keys(NORM);
+// The normalisation in force, null with none: the rates as measured (v589).
+export const normOf = P => P.normBy === 'none' ? null : NORM[P.normBy];
 /* A sample's mass (mg) and area (cm²) where it has none yet (a sample added, a project that
    holds none: v585, the defaults to v580, 15 mg and 1 cm²). */
 const M_NEW = 15, A_NEW = 1;
@@ -485,9 +491,9 @@ export function newParams(files){
     mMode: 'all', aMode: 'all', qMode: 'all', tMode: 'all', pMode: 'all', startMode: 'all', endMode: 'all',
     mShared: M_NEW, aShared: A_NEW, qShared: 2, tShared: T_NEW, pShared: P_ATM, startShared: 0, endShared: 24,
     /* What the rates are normalised by (NORM, v540; v581 the m column's header): 'm' (the
-       mass, as to v539) or 'A' (the area, a film's), the card's one choice. The masses and
-       the areas are both kept, each with its all/one, whichever is in force: switching back
-       and forth loses neither, nor reads one as the other. */
+       mass, as to v539), 'A' (the area, a film's) or 'none' (v589: as measured), the card's
+       one choice. The masses and the areas are both kept, each with its all/one, whichever is
+       in force: switching back and forth loses neither, nor reads one as the other. */
     normBy: 'm',
     pUnit: 'atm',
     delayAuto: true, delayMan: INJ_DELAY_AUTO,
@@ -500,8 +506,8 @@ export const injectedAt = (P, d)=> new Date(+d + injDelay(P)*1000);
 // Effective per-sample values (respect each parameter's all/one mode).
 export const mOf     = (P, k)=> P.mMode==='all'     ? P.mShared     : P.ms[k];
 export const aOf     = (P, k)=> P.aMode==='all'     ? P.aShared     : P.As[k];   // cm²
-// What sample k's rates are divided by (normBy): its mass in mg, or its area in cm².
-export const valOf   = (P, k)=> P.normBy==='A' ? aOf(P, k) : mOf(P, k);
+// What sample k's rates are divided by (normBy): its mass in mg, its area in cm², or 1 (none).
+export const valOf   = (P, k)=> P.normBy==='A' ? aOf(P, k) : P.normBy==='m' ? mOf(P, k) : 1;
 export const qOf     = (P, k)=> P.qMode==='all'     ? P.qShared     : P.Qs[k];
 export const tOf     = (P, k)=> P.tMode==='all'     ? P.tShared     : P.Ts[k];
 export const pOf     = (P, k)=> P.pMode==='all'     ? P.pShared     : P.Ps[k];   // Pa
@@ -600,21 +606,23 @@ export function tablesOf(U, P, f, h, lightOn, G = f.gas){
     const tHours = pts.map(p=> hours(p.d));
     const pct = pts.map(p=> p.v);
     const flow = pct.map(v=> v/100*F*1e6);             // umol/h of this gas
-    const flowM = flow.map(v=> v/valOf(P, h)*NORM[P.normBy].per);   // per g: µmol/(g h); per cm²: µmol/(cm² h)
-    // From the first injection on; FmInt, from the interval's start (computeRates).
-    const cum = U.cumtrapz(tHours, flowM);
-    gas[k] = { t: tHours, pct, flow, Fm: flowM, cum, inj: pts.map(p=> p.i) };
+    const flowM = flow.map(v=> v/valOf(P, h)*NORM[P.normBy].per);   // per g: µmol/(g h); per cm²: µmol/(cm² h); none: µmol/h
+    /* The production from the first injection on, normalised (`cum`) and as measured
+       (`cumF`, µmol: v589, the CSVs always carry it); FmInt and FInt, from the interval's
+       start (computeRates). */
+    const cum = U.cumtrapz(tHours, flowM), cumF = U.cumtrapz(tHours, flow);
+    gas[k] = { t: tHours, pct, flow, Fm: flowM, cum, cumF, inj: pts.map(p=> p.i) };
   }
   return {t, gas};
 }
 /* A sample's table as the card holds it: the tables as made (kept, shared: nothing writes
-   into them), each gas on a copy that takes the integral from the interval's start (FmInt,
-   computeRates), and the sample's name, label, colour, whether its file was the alternative
+   into them), each gas on a copy that takes the integrals from the interval's start (FmInt
+   and FInt, computeRates), and the sample's name, label, colour, whether its file was the alternative
    export's (ppm: its concentrations written in its unit, gc_raw.csv), and its source (`src`,
    with its table's own values, `tab`). */
 export function dataTable(made, f, src){
   const gas = {};
-  for (const k in made.gas) gas[k] = { ...made.gas[k], FmInt: made.gas[k].cum };
+  for (const k in made.gas) gas[k] = { ...made.gas[k], FmInt: made.gas[k].cum, FInt: made.gas[k].cumF };
   return {t: made.t, gas, name:f.name, label:f.label, color:f.color, ppm: f.altExport === true, ...(src ? { src, tab: f.gas } : {})};
 }
 
@@ -641,8 +649,9 @@ export function spanOf(P, t, k){
   if (n < 2) return [NaN, NaN];
   return [Math.max(Math.min(startOf(P, k), endOf(P, k)), t[0]), Math.min(Math.max(startOf(P, k), endOf(P, k)), t[n-1])];
 }
-/* The rates over the interval, from the card's tables (`dataTables`), each gas's FmInt
-   set on them. → the mean rates, a sample each (costResults). */
+/* The rates over the interval, from the card's tables (`dataTables`), each gas's FmInt and
+   FInt set on them. → the mean rates, a sample each (costResults): normalised (`rate`) and as
+   measured (`raw`, µmol h⁻¹: v589). */
 export function computeRates(P, dataTables){
   /* The production is what was made between the interval's lines: none yet at its
      start, wherever that is moved to. Integrated from the first injection it carried
@@ -650,7 +659,10 @@ export function computeRates(P, dataTables){
      point. The mean rate below, a difference, is the same either way. */
   dataTables.forEach((d,k)=>{
     const t0 = Math.min(startOf(P, k), endOf(P, k));
-    for (const key in d.gas){ const q = d.gas[key], c0 = cumAt(q.t, q.Fm, q.cum, t0); q.FmInt = q.cum.map(v=> v - c0); }
+    for (const key in d.gas){
+      const q = d.gas[key], c0 = cumAt(q.t, q.Fm, q.cum, t0), f0 = cumAt(q.t, q.flow, q.cumF, t0);
+      q.FmInt = q.cum.map(v=> v - c0); q.FInt = q.cumF.map(v=> v - f0);
+    }
   });
   /* Mean rate over the interval: the rate taken as the straight line between each
      pair of injections, integrated exactly from the interval's start to its end — an
@@ -660,14 +672,15 @@ export function computeRates(P, dataTables){
      each gas's own data, so its duration `dt` is the gas's too (one with an empty
      cell at the interval's edge reaches less far). `span`, what all the sample's
      times cover, is the duration given for a sample with none of the gases shown. */
+  const mean = (t, f, cum, a, b)=> (cumAt(t, f, cum, b) - cumAt(t, f, cum, a)) / (b - a);
   return dataTables.map((d,k)=>{
-    const rate = {}, dt = {};
+    const rate = {}, raw = {}, dt = {};
     for (const key in d.gas){
       const q = d.gas[key], [a, b] = spanOf(P, q.t, k);
-      if (b > a){ rate[key] = (cumAt(q.t, q.Fm, q.cum, b) - cumAt(q.t, q.Fm, q.cum, a)) / (b - a); dt[key] = b - a; }
+      if (b > a){ rate[key] = mean(q.t, q.Fm, q.cum, a, b); raw[key] = mean(q.t, q.flow, q.cumF, a, b); dt[key] = b - a; }
     }
     const [a0, b0] = spanOf(P, d.t, k);
-    return {name:d.name, label:d.label, rate, dt, span: b0 > a0 ? b0 - a0 : NaN};
+    return {name:d.name, label:d.label, rate, raw, dt, span: b0 > a0 ? b0 - a0 : NaN};
   });
 }
 export const hasResults = costResults => costResults.some(c=> GASES.some(g=>isFinite(c.rate[g.key])));
@@ -680,27 +693,27 @@ export function cutTables(P, dataTables){
     const gas = {};
     for (const key in d.gas){
       const q = d.gas[key], [a, b] = spanOf(P, q.t, k);
-      if (!(b > a)){ gas[key] = { ...q, t:[], Fm:[], FmInt:[], pct:[], flow:[] }; continue; }
+      if (!(b > a)){ gas[key] = { ...q, t:[], Fm:[], FmInt:[], pct:[], flow:[], FInt:[] }; continue; }
       const inner = q.t.map((_, i)=> i).filter(i=> q.t[i] > a && q.t[i] < b);
       const take = arr => [lineAt(q.t, arr, a), ...inner.map(i=> arr[i]), lineAt(q.t, arr, b)];
-      const t = [a, ...inner.map(i=> q.t[i]), b], c0 = q.cum[0] - q.FmInt[0];   // FmInt = cum − c0
+      const t = [a, ...inner.map(i=> q.t[i]), b], c0 = q.cum[0] - q.FmInt[0], f0 = q.cumF[0] - q.FInt[0];   // FmInt = cum − c0, FInt = cumF − f0
       gas[key] = { ...q, t, Fm: take(q.Fm), pct: take(q.pct), flow: take(q.flow),
-                   FmInt: t.map(x=> cumAt(q.t, q.Fm, q.cum, x) - c0) };
+                   FmInt: t.map(x=> cumAt(q.t, q.Fm, q.cum, x) - c0), FInt: t.map(x=> cumAt(q.t, q.flow, q.cumF, x) - f0) };
     }
     return {...d, t: Object.values(gas).flatMap(q=> q.t).sort((x,y)=> x-y), gas};
   });
 }
 /* The mean rates per sample (samplesOf: `samples`), of each gas: the mean over the
    sample's files of each one's mean rate (costResults: worked out with its own m, Q, T, p,
-   light-on and interval), `n` the files with one, and its ± (`err`) the files' standard
-   deviation (n − 1 under it); none for one file. To v511 a bar per file, with no ±; in
-   v512 the ± was the half-width of the 99 % confidence interval of the mean,
-   t(0.995, n − 1)·s/√n. */
-export function sampleRates(U, costResults, samples){
+   light-on and interval; `of` its normalised 'rate', or 'raw', as measured), `n` the files
+   with one, and its ± (`err`) the files' standard deviation (n − 1 under it); none for one
+   file. To v511 a bar per file, with no ±; in v512 the ± was the half-width of the 99 %
+   confidence interval of the mean, t(0.995, n − 1)·s/√n. */
+export function sampleRates(U, costResults, samples, of = 'rate'){
   return samples.map(s=>{
     const rate = {}, err = {}, n = {};
     for (const g of GASES){
-      const v = s.ks.map(k=> costResults[k] && costResults[k].rate[g.key]).filter(Number.isFinite);
+      const v = s.ks.map(k=> costResults[k] && costResults[k][of][g.key]).filter(Number.isFinite);
       n[g.key] = v.length;
       if (!v.length) continue;
       rate[g.key] = U.meanArr(v);
@@ -778,13 +791,16 @@ export const seriesName = (label, g, shown)=> shown.length > 1 ? `${label} ${gas
 const asSet = (U, v)=> String(v).replace('.', U.settings.decimal);
 /* gc_raw.csv, gc_results.csv, mean_rates.csv (and mean_rates_by_file.csv with
    replicates), gc_info.csv, of the card's tables (`dataTables`), its mean rates
-   (`costResults`) and samples (`samples`, samplesOf), `files` the included. */
+   (`costResults`) and samples (`samples`, samplesOf), `files` the included. Every rate and
+   production as measured, in µmol h⁻¹ and µmol, whatever the card is normalised by; with m
+   or A (`N`, normOf) the normalised beside it (v589, the user's decision: to v588 the
+   normalised alone, but for gc_raw.csv's flow in µmol h⁻¹, named "H2 (umol h^-1)"). */
 export function csvEntries(U, P, n, dataTables, costResults, samples, files){
   if (!dataTables.length) return [];
-  const entries = [], N = NORM[P.normBy];
+  const entries = [], N = normOf(P);
   // One block of columns per sample (each keeps its own time axis). gc_raw.csv carries
-  // the full series with every intermediate quantity; gc_results.csv keeps only the
-  // three plotted columns, between the interval's lines as plotted.
+  // the full series with every intermediate quantity; gc_results.csv keeps the time and
+  // each gas's rate and production, between the interval's lines as plotted.
   /* Every gas the samples have, whichever the chips show (v530): the chips are a view of
      the plots alone (no change unsaved, v528), so the CSVs never follow them; to v529
      they held only the gases the Results plots showed. */
@@ -827,10 +843,13 @@ function seriesCsv(U, N, shown, tables, full){
            which value the concentration column holds (`source`), the table's and the
            re-integrated one beside it, and the fitted area, at each injection. */
         if (d.src) cols.push(...sourceCols(U, d, g, q, j, rows));
-        cols.push({h:`${g.csv} (umol h^-1) [${d.label}]`, v:col(j, q.flow)});
       }
-      cols.push({h:`${g.csv} ${N.rateCsv} [${d.label}]`, v:col(j, q.Fm)});
-      cols.push({h:`${g.csv} ${N.cumCsv} [${d.label}]`,  v:col(j, q.FmInt)});
+      cols.push({h:`${g.csv} ${NORM.none.rateCsv} [${d.label}]`, v:col(j, q.flow)});
+      cols.push({h:`${g.csv} ${NORM.none.cumCsv} [${d.label}]`,  v:col(j, q.FInt)});
+      if (N){
+        cols.push({h:`${g.csv} ${N.rateCsv} [${d.label}]`, v:col(j, q.Fm)});
+        cols.push({h:`${g.csv} ${N.cumCsv} [${d.label}]`,  v:col(j, q.FmInt)});
+      }
     });
   });
   return U.wideCsv(cols);
@@ -863,21 +882,24 @@ function meanCsvs(U, P, n, N, shown, costResults, samples){
   // The columns after the rates, and file k's.
   const tailHead = [...(perGas ? shown.map(g=>`${g.csv} interval duration (h)`) : ['Interval duration (h)']), `p (${P.pUnit})`, 'T (°C)'];
   const tail = k =>{ const c = costResults[k]; return [...(perGas ? durs(c) : [durs(c).find(Boolean) || U.fmtNum(c.span,4)]), asSet(U, inUnit(pOf(P, k), P.pUnit)), asSet(U, tOf(P, k))]; };
-  let t2 = U.csvLine(['Sample', ...shown.map(g=>`Mean ${g.csv} ${N.rateCsv}`), ...tailHead]);
-  costResults.forEach((c, k)=> t2 += U.csvLine([c.label, ...shown.map(g=>U.fmtNum(c.rate[g.key],6)), ...tail(k)]));
+  // Each gas's mean rate as measured, then normalised (`N`, none with none): its units and
+  // its key among the mean rates (computeRates).
+  const kinds = [[NORM.none, 'raw'], ...(N ? [[N, 'rate']] : [])];
+  let t2 = U.csvLine(['Sample', ...shown.flatMap(g=> kinds.map(([u])=> `Mean ${g.csv} ${u.rateCsv}`)), ...tailHead]);
+  costResults.forEach((c, k)=> t2 += U.csvLine([c.label, ...shown.flatMap(g=> kinds.map(([, of])=> U.fmtNum(c[of][g.key],6))), ...tail(k)]));
   /* With replicates (a sample of more than one included file), mean_rates.csv has a row
      per sample: its name (its bar's), each gas's mean, ± and n (sampleRates), then its
      files' durations, p and T, each one value where they agree, else all of them in
      list order joined by '/' (a gas's duration, of the files that have it); the rows per
      file above are mean_rates_by_file.csv. With none, mean_rates.csv is those, as to
      v511. */
-  const sm = sampleRates(U, costResults, samples);
+  const sms = kinds.map(([, of])=> sampleRates(U, costResults, samples, of)), sm = sms[0];
   if (sm.some(s=> s.ks.length > 1)){
     const one = vs =>{ const w = vs.filter(v=> v !== ''); return w.every(v=> v === w[0]) ? (w[0] || '') : w.join('/'); };
-    let t4 = U.csvLine(['Sample', ...shown.flatMap(g=> [`Mean ${g.csv} ${N.rateCsv}`, `${g.csv} SD (${N.unitCsv})`, `${g.csv} n`]), ...tailHead]);
-    sm.forEach(s=>{
+    let t4 = U.csvLine(['Sample', ...shown.flatMap(g=> [...kinds.flatMap(([u])=> [`Mean ${g.csv} ${u.rateCsv}`, `${g.csv} SD (${u.unitCsv})`]), `${g.csv} n`]), ...tailHead]);
+    sm.forEach((s, i)=>{
       const tails = s.ks.map(tail);
-      t4 += U.csvLine([s.label, ...shown.flatMap(g=> [U.fmtNum(s.rate[g.key],6), U.fmtNum(s.err[g.key],6), String(s.n[g.key])]), ...tailHead.map((_, j)=> one(tails.map(t=> t[j])))]);
+      t4 += U.csvLine([s.label, ...shown.flatMap(g=> [...sms.flatMap(x=> [U.fmtNum(x[i].rate[g.key],6), U.fmtNum(x[i].err[g.key],6)]), String(s.n[g.key])]), ...tailHead.map((_, j)=> one(tails.map(t=> t[j])))]);
     });
     return [{name:`${n} - mean_rates.csv`, text:t4}, {name:`${n} - mean_rates_by_file.csv`, text:t2}];
   }
@@ -890,9 +912,10 @@ function infoCsv(U, P, dataTables){
   const pad = n => String(n).padStart(2, '0');
   const fmtDate = v =>{ if (!v) return ''; const d = new Date(v);
     return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
-  // (the mass, or the area where the card normalises by it: its column, v540)
-  let t3 = U.csvLine(['Sample',NORM[P.normBy].colCsv,'Q (mL/min)','T (°C)',`p (${P.pUnit})`,'Light-on','Interval start (h)','Interval end (h)','Injection delay (s)']);
-  dataTables.forEach((d,k)=> t3 += U.csvLine([d.label, asSet(U, valOf(P, k)), asSet(U, qOf(P, k)), asSet(U, tOf(P, k)), asSet(U, inUnit(pOf(P, k), P.pUnit)), fmtDate(P.lightOnDates[k]), asSet(U, startOf(P, k)), asSet(U, endOf(P, k)), asSet(U, injDelay(P))]));
+  // (the mass, or the area where the card normalises by it: its column, v540; none with none, v589)
+  const N = normOf(P);
+  let t3 = U.csvLine(['Sample', ...(N ? [N.colCsv] : []), 'Q (mL/min)','T (°C)',`p (${P.pUnit})`,'Light-on','Interval start (h)','Interval end (h)','Injection delay (s)']);
+  dataTables.forEach((d,k)=> t3 += U.csvLine([d.label, ...(N ? [asSet(U, valOf(P, k))] : []), asSet(U, qOf(P, k)), asSet(U, tOf(P, k)), asSet(U, inUnit(pOf(P, k), P.pUnit)), fmtDate(P.lightOnDates[k]), asSet(U, startOf(P, k)), asSet(U, endOf(P, k)), asSet(U, injDelay(P))]));
   return t3;
 }
 
@@ -922,8 +945,9 @@ export function snapshotOf(P){
 }
 /* Each value as it should be (modkit RESTORED): a mode 'all' or 'one', a mass and an area
    above 0, else the default (M_NEW, A_NEW: a value missing, none of v581–v584's included,
-   v585), a flow above 0, what the rates are normalised by 'm' or 'A' (m
-   when none: v581, the `norm` of v540–v580 a parameter no longer, ignored), a pressure as
+   v585; kept with none in force too, for a switch back), a flow above 0, what the rates are
+   normalised by 'm', 'A' or 'none' (m when none is said: v581, the `norm` of v540–v580 a
+   parameter no longer, ignored), a pressure as
    the fields take it (okP), a temperature from −273 °C,
    p's unit one of its own, a bound and the delay numbers, a light-on a date (else the sample's first injection),
    every per-sample array one entry a sample (to v500 an array that was none threw, a
@@ -945,8 +969,8 @@ export function restoreParams(U, P, s0, files){
   // One from before the pressure was worked out at 1 atm, where a new card starts too.
   P.pMode = mode(s.pMode); P.pShared = U.num(s.pShared, P_ATM, okP); P.Ps = U.arrOf(s.Ps, n, v=> U.num(v, P.pShared, okP));
   P.pUnit = U.oneOf(s.pUnit, Object.keys(P_UNITS));
-  // What the rates are normalised by (v581): m where none is said; the areas, 1 cm² where
-  // none is, kept for a switch to them.
+  // What the rates are normalised by (v581; none, v589): m where none is said; the areas, 1
+  // cm² where none is, kept for a switch to them.
   P.normBy = U.oneOf(s.normBy, PER);
   P.aMode = mode(s.aMode); P.aShared = U.num(s.aShared, A_NEW, pos); P.As = U.arrOf(s.As, n, v=> U.num(v, A_NEW, pos));
 }
